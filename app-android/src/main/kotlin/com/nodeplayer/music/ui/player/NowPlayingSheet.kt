@@ -49,6 +49,7 @@ fun NowPlayingSheet(
     onSeekTo: (Long) -> Unit,
     onDismiss: () -> Unit,
     onOpenEq: () -> Unit,
+    rmsLevel: Float = 0.0f,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -196,6 +197,12 @@ fun NowPlayingSheet(
                                 ),
                             contentAlignment = Alignment.Center
                         ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Album,
+                                contentDescription = null,
+                                tint = accent.copy(alpha = 0.40f),
+                                modifier = Modifier.size(96.dp)
+                            )
                             AsyncImage(
                                 model = "content://media/external/audio/albumart/${track.albumId}",
                                 contentDescription = track.album,
@@ -234,6 +241,12 @@ fun NowPlayingSheet(
                                 .background(Color(0xFF1B1D28)),
                             contentAlignment = Alignment.Center
                         ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MusicNote,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.35f),
+                                modifier = Modifier.size(24.dp)
+                            )
                             AsyncImage(
                                 model = "content://media/external/audio/albumart/${track.albumId}",
                                 contentDescription = track.album,
@@ -269,8 +282,8 @@ fun NowPlayingSheet(
 
                         Spacer(modifier = Modifier.width(8.dp))
 
-                        // Animated soundwave visualizer bars
-                        SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent, maxHeight = 22.dp)
+                        // Real audio reactive soundwave visualizer bars
+                        SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent, maxHeight = 22.dp, rmsLevel = rmsLevel)
                     }
 
                     Spacer(modifier = Modifier.height(18.dp))

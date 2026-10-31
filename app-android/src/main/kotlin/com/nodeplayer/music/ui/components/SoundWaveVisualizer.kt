@@ -18,7 +18,8 @@ fun SoundWaveVisualizer(
     isPlaying: Boolean,
     modifier: Modifier = Modifier,
     barColor: Color = Color.White,
-    maxHeight: Dp = 20.dp
+    maxHeight: Dp = 20.dp,
+    rmsLevel: Float = 0.0f
 ) {
     val transition = rememberInfiniteTransition(label = "WaveAnimation")
 
@@ -47,12 +48,23 @@ fun SoundWaveVisualizer(
         label = "h4"
     )
 
+    // Modulate with real audio RMS level from DspAudioProcessor when playing
+    val audioGain = if (rmsLevel > 0.001f) (rmsLevel * 4.0f).coerceIn(0.2f, 1.0f) else 1.0f
+
     Row(
         modifier = modifier.height(maxHeight),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val heights = if (isPlaying) listOf(h1, h2, h3, h4) else listOf(0.4f, 0.6f, 0.3f, 0.5f)
+        val heights = if (isPlaying) {
+            listOf(
+                (h1 * audioGain).coerceIn(0.15f, 1f),
+                (h2 * audioGain).coerceIn(0.25f, 1f),
+                (h3 * audioGain).coerceIn(0.20f, 1f),
+                (h4 * audioGain).coerceIn(0.15f, 1f)
+            )
+        } else listOf(0.25f, 0.4f, 0.25f, 0.35f)
+
         heights.forEach { frac ->
             Box(
                 modifier = Modifier

@@ -202,9 +202,15 @@ fun SongsList(
                         modifier = Modifier
                             .size(48.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF222433)),
+                            .background(Color(0xFF1E2130)),
                         contentAlignment = Alignment.Center
                     ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MusicNote,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.35f),
+                            modifier = Modifier.size(24.dp)
+                        )
                         AsyncImage(
                             model = "content://media/external/audio/albumart/${track.albumId}",
                             contentDescription = track.album,

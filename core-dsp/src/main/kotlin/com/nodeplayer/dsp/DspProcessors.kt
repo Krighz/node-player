@@ -70,6 +70,7 @@ class SoftLimiter {
  * Preamp gain stage in dB.
  */
 class PreampGain {
+    var enabled: Boolean = true
     var gainDb: Float = 0.0f
         set(value) {
             field = value
@@ -78,7 +79,7 @@ class PreampGain {
     var linearGain: Float = 1.0f
         private set
 
-    fun process(sample: Float): Float = sample * linearGain
+    fun process(sample: Float): Float = if (enabled) sample * linearGain else sample
 }
 
 /**

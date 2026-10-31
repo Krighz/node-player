@@ -16,8 +16,8 @@ class DspChainTest {
         limiter.enabled = true
         limiter.threshold = 0.9885f
 
-        // Feed signals ranging from -5.0f to +5.0f (massive overload)
-        val step = 0.01f
+        // Feed signals ranging from -5.0f to +5.0f (massive +14 dBFS overload)
+        val step = 0.005f
         var maxPeak = 0.0f
         var input = -5.0f
         while (input <= 5.0f) {
@@ -30,6 +30,22 @@ class DspChainTest {
             input += step
         }
         assertTrue("Max peak under limiter should reach near 1.0f without clipping. Was: $maxPeak", maxPeak > 0.98f)
+    }
+
+    @Test
+    fun testPreampLinearGainAccuracy() {
+        val preamp = PreampGain()
+        preamp.enabled = true
+        preamp.gainDb = 6.0206f // Exactly 2.0x linear gain
+
+        val sample = 0.25f
+        val out = preamp.process(sample)
+        assertEquals(0.50f, out, 0.001f)
+
+        // Preamp attenuation -6 dB
+        preamp.gainDb = -6.0206f
+        val outAttenuated = preamp.process(sample)
+        assertEquals(0.125f, outAttenuated, 0.001f)
     }
 
     @Test
@@ -46,18 +62,18 @@ class DspChainTest {
         val processed = rp.process(sample)
         assertEquals(sample * expectedGain, processed, 0.001f)
 
-        // Album mode
+        // Album mode: -2.0 dB
         rp.setOffset(trackGain = 3.0f, albumGain = -2.0f, mode = ReplayGainMode.ALBUM, preampDb = 0.0f)
         val expectedAlbumGain = 10.0.pow(-2.0 / 20.0).toFloat()
         assertEquals(expectedAlbumGain, rp.linearGain, 0.001f)
 
-        // Mode OFF
+        // Mode OFF: exactly 1.0f (0 dB)
         rp.setOffset(trackGain = 3.0f, albumGain = -2.0f, mode = ReplayGainMode.OFF, preampDb = 0.0f)
         assertEquals(1.0f, rp.linearGain, 0.001f)
     }
 
     @Test
-    fun testParametricEqSineBoost() {
+    fun testParametricEqSineBoostAt1kHz() {
         val sampleRate = 44100
         val centerFreq = 1000.0f
         val boostDb = 6.0f
@@ -96,6 +112,85 @@ class DspChainTest {
 
         // Expect approximately +6 dB boost at center frequency
         assertEquals(boostDb.toDouble(), measuredGainDb, 0.7) // Within 0.7 dB accuracy for biquad peak
+    }
+
+    @Test
+    fun testParametricEqSineBoostAtLowAndHighFreqs() {
+        val sampleRate = 44100
+        val eq = ParametricEqualizer()
+        eq.setSampleRate(sampleRate.toFloat())
+        eq.enabled = true
+
+        // Test Bass (125 Hz) boost
+        val bassFreq = 125.0f
+        val bassBoost = 4.0f
+        eq.updateBands(listOf(EqBandConfig(index = 2, centerFreq = bassFreq, gainDb = bassBoost, q = 1.414f)))
+
+        var inPeak = 0.0f
+        var outPeak = 0.0f
+        for (i in 0 until 4410) {
+            val t = i.toDouble() / sampleRate
+            val s = sin(2.0 * Math.PI * bassFreq * t).toFloat() * 0.2f
+            val out = eq.processStereoSample(s, s).first
+            if (i > 2000) {
+                inPeak = max(inPeak, abs(s))
+                outPeak = max(outPeak, abs(out))
+            }
+        }
+        val bassGainDb = 20.0 * log10((outPeak / inPeak).toDouble())
+        assertEquals(bassBoost.toDouble(), bassGainDb, 0.8)
+
+        // Test Treble (8000 Hz) cut (-6 dB)
+        val trebleFreq = 8000.0f
+        val trebleCut = -6.0f
+        eq.updateBands(listOf(EqBandConfig(index = 8, centerFreq = trebleFreq, gainDb = trebleCut, q = 1.414f)))
+
+        inPeak = 0.0f
+        outPeak = 0.0f
+        for (i in 0 until 4410) {
+            val t = i.toDouble() / sampleRate
+            val s = sin(2.0 * Math.PI * trebleFreq * t).toFloat() * 0.2f
+            val out = eq.processStereoSample(s, s).first
+            if (i > 2000) {
+                inPeak = max(inPeak, abs(s))
+                outPeak = max(outPeak, abs(out))
+            }
+        }
+        val trebleGainDb = 20.0 * log10((outPeak / inPeak).toDouble())
+        assertEquals(trebleCut.toDouble(), trebleGainDb, 0.8)
+    }
+
+    @Test
+    fun testFullDspChainOverloadProtection() {
+        val chain = DspChain()
+        chain.sampleRate = 44100
+
+        // Configure aggressive boost: +6 dB preamp, +10 dB EQ at 1 kHz, +4 dB ReplayGain
+        val config = AudioEffectConfig(
+            eqEnabled = true,
+            bands = listOf(EqBandConfig(index = 5, centerFreq = 1000f, gainDb = 10.0f, q = 1.414f)),
+            preampGainDb = 6.0f,
+            limiterEnabled = true,
+            replayGainMode = ReplayGainMode.TRACK,
+            replayGainPreampDb = 4.0f
+        )
+        chain.applyConfig(config)
+
+        // Feed full scale 0 dBFS 1 kHz sine wave
+        val numSamples = 2000
+        val buffer = FloatArray(numSamples)
+        for (i in 0 until numSamples) {
+            val t = i.toDouble() / 44100
+            buffer[i] = sin(2.0 * Math.PI * 1000.0 * t).toFloat() * 1.0f // 1.0f peak
+        }
+
+        chain.processInterleavedFloat(buffer, 0, buffer.size)
+
+        // Limiter must strictly ensure no sample ever exceeds 1.0f despite massive +20 dB internal boost!
+        for (sample in buffer) {
+            assertTrue("Sample must not exceed 1.0f under limiter protection! Was: $sample", abs(sample) <= 1.00001f)
+            assertTrue("Sample must not be NaN or Infinity! Was: $sample", !sample.isNaN() && !sample.isInfinite())
+        }
     }
 
     @Test

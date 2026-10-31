@@ -37,9 +37,18 @@ class LibraryScanner(private val context: Context) {
             MediaStore.Audio.Media.DATE_ADDED
         )
 
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} >= ?"
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 " +
+                "AND ${MediaStore.Audio.Media.IS_RINGTONE} == 0 " +
+                "AND ${MediaStore.Audio.Media.IS_NOTIFICATION} == 0 " +
+                "AND ${MediaStore.Audio.Media.IS_ALARM} == 0 " +
+                "AND ${MediaStore.Audio.Media.DURATION} >= ?"
         val selectionArgs = arrayOf(minDurationMs.toString())
         val sortOrder = "${MediaStore.Audio.Media.TITLE} COLLATE NOCASE ASC"
+
+        val defaultNonMusicKeywords = listOf(
+            "/call", "/recording", "/recordings", "/voice", "/whatsapp",
+            "/telegram", "/notifications", "/ringtones", "/alarms", "/podcast", "/podcasts"
+        )
 
         try {
             context.contentResolver.query(uri, projection, selection, selectionArgs, sortOrder)?.use { cursor ->
@@ -59,9 +68,13 @@ class LibraryScanner(private val context: Context) {
 
                 while (cursor.moveToNext()) {
                     val path = cursor.getString(dataCol) ?: ""
+                    val lowerPath = path.lowercase().replace('\\', '/')
                     
-                    // Folder filtering
+                    // Folder filtering: user exclusions + automatic non-music keyword exclusion
                     if (excludedFolders.any { path.startsWith(it, ignoreCase = true) }) {
+                        continue
+                    }
+                    if (defaultNonMusicKeywords.any { lowerPath.contains(it) } && !includedFolders.any { path.startsWith(it, ignoreCase = true) }) {
                         continue
                     }
                     if (includedFolders.isNotEmpty() && !includedFolders.any { path.startsWith(it, ignoreCase = true) }) {

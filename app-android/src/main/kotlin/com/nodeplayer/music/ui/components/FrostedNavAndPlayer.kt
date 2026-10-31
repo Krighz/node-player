@@ -34,6 +34,7 @@ fun FrostedMiniPlayer(
     onSkipNextClick: () -> Unit,
     onClick: () -> Unit,
     hazeState: HazeState? = null,
+    rmsLevel: Float = 0.0f,
     modifier: Modifier = Modifier
 ) {
     if (currentTrack == null) return
@@ -45,6 +46,7 @@ fun FrostedMiniPlayer(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 6.dp)
+            .background(Color(0xF2121422), shape)
             .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.88f)
             .clickable(onClick = onClick)
     ) {
@@ -63,13 +65,20 @@ fun FrostedMiniPlayer(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Artwork thumbnail
+            // Artwork thumbnail with fallback
             Box(
                 modifier = Modifier
                     .size(46.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF222433))
+                    .background(Color(0xFF222433)),
+                contentAlignment = Alignment.Center
             ) {
+                Icon(
+                    imageVector = Icons.Rounded.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.35f),
+                    modifier = Modifier.size(24.dp)
+                )
                 AsyncImage(
                     model = "content://media/external/audio/albumart/${currentTrack.albumId}",
                     contentDescription = "Album Art",
@@ -105,8 +114,8 @@ fun FrostedMiniPlayer(
                 )
             }
 
-            // Soundwave visualizer in mini player
-            SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent, maxHeight = 16.dp)
+            // Soundwave visualizer in mini player (real audio reactive)
+            SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent, maxHeight = 16.dp, rmsLevel = rmsLevel)
             Spacer(modifier = Modifier.width(6.dp))
 
             // Play / Pause
@@ -152,6 +161,7 @@ fun FrostedBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 6.dp)
+            .background(Color(0xF50C0E18), shape)
             .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.92f)
     ) {
         Row(

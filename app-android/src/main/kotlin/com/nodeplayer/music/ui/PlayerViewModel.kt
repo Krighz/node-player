@@ -3,6 +3,8 @@ package com.nodeplayer.music.ui
 import android.app.Application
 import android.content.ComponentName
 import android.content.ContentUris
+import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.BitmapFactory
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -38,6 +40,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val app = application as NodePlayerApplication
     private val dao = app.database.playerDao()
     private val scanner = app.libraryScanner
+    private val prefs: SharedPreferences = app.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     var mediaController: MediaController? = null
@@ -86,6 +89,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _themeConfig = MutableStateFlow(GlassThemeConfig())
     val themeConfig: StateFlow<GlassThemeConfig> = _themeConfig.asStateFlow()
 
+    // Real audio amplitude tracking from DSP processor
+    private val _currentRms = MutableStateFlow(0.0f)
+    val currentRms: StateFlow<Float> = _currentRms.asStateFlow()
+
     // Folder Filtering & Library Preferences
     private val _minDurationSeconds = MutableStateFlow(30)
     val minDurationSeconds: StateFlow<Int> = _minDurationSeconds.asStateFlow()
@@ -102,6 +109,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         initMediaController()
         refreshLibrary()
         detectAudioOutput()
+        restoreLastPlaybackSession()
+    }
+
+    private fun restoreLastPlaybackSession() {
+        viewModelScope.launch {
+            val lastTrackId = prefs.getLong("last_track_id", -1L)
+            val lastPos = prefs.getLong("last_pos", 0L)
+            if (lastTrackId > 0) {
+                val track = dao.getTrackById(lastTrackId)?.toTrack()
+                if (track != null) {
+                    _currentTrack.value = track
+                    _currentPositionMs.value = lastPos
+                    updatePaletteAccent(track)
+                    updateSignalPath(track)
+                }
+            }
+        }
     }
 
     private fun initMediaController() {
@@ -216,14 +240,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         controller.clearMediaItems()
 
         // ALWAYS use ContentUris with MediaStore Content URI for scoped storage compatibility
+        val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
         val mediaItems = newQueue.map {
             val contentUri = ContentUris.withAppendedId(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 it.id
             )
+            val artworkUri = ContentUris.withAppendedId(albumArtBaseUri, it.albumId)
+            val metadata = androidx.media3.common.MediaMetadata.Builder()
+                .setTitle(it.title)
+                .setArtist(it.artist)
+                .setAlbumTitle(it.album)
+                .setArtworkUri(artworkUri)
+                .build()
+
             MediaItem.Builder()
                 .setMediaId(it.id.toString())
                 .setUri(contentUri)
+                .setMediaMetadata(metadata)
                 .build()
         }
         val targetIndex = newQueue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
@@ -235,6 +269,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun togglePlayPause() {
         val controller = mediaController ?: return
+        if (controller.mediaItemCount == 0 && _currentTrack.value != null) {
+            playTrack(_currentTrack.value!!)
+            return
+        }
         if (controller.isPlaying) {
             controller.pause()
         } else {
@@ -253,6 +291,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun seekTo(positionMs: Long) {
         _currentPositionMs.value = positionMs
         mediaController?.seekTo(positionMs)
+        _currentTrack.value?.let {
+            prefs.edit().putLong("last_pos", positionMs).putLong("last_track_id", it.id).apply()
+        }
     }
 
     private fun startPositionTracking() {
@@ -260,9 +301,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         progressJob = viewModelScope.launch {
             while (isActive) {
                 mediaController?.let {
-                    _currentPositionMs.value = it.currentPosition
+                    val pos = it.currentPosition
+                    _currentPositionMs.value = pos
+                    _currentTrack.value?.let { track ->
+                        prefs.edit().putLong("last_pos", pos).putLong("last_track_id", track.id).apply()
+                    }
                 }
-                delay(250)
+                // Read real RMS audio level from DSP engine
+                _currentRms.value = PlaybackService.instance?.dspAudioProcessor?.currentRms ?: 0.0f
+                delay(120)
             }
         }
     }
@@ -324,11 +371,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun updateSignalPath(track: Track) {
         val currentInfo = _audioOutputInfo.value
-        val isResampled = currentInfo.sampleRate != track.sampleRate && !currentInfo.isBitPerfect
+        val dsp = PlaybackService.instance?.dspAudioProcessor
+        val actualSinkRate = dsp?.actualSampleRate ?: if (currentInfo.isBitPerfect) track.sampleRate else 48000
+        val isResampled = actualSinkRate != track.sampleRate && !currentInfo.isBitPerfect
         _audioOutputInfo.value = currentInfo.copy(
             originalSampleRate = track.sampleRate,
             originalBitDepth = track.bitDepth,
-            sampleRate = if (currentInfo.isBitPerfect) track.sampleRate else 48000,
+            sampleRate = actualSinkRate,
             bitDepth = if (currentInfo.isBitPerfect) track.bitDepth else 16,
             format = if (track.isLossless) "FLAC/PCM" else "AAC/MP3",
             isResampled = isResampled

@@ -13,6 +13,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.nodeplayer.dsp.DspChain
@@ -38,6 +39,13 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         instance = this
         createNotificationChannel()
+
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this)
+                .setChannelId(CHANNEL_ID)
+                .setChannelName(R.string.notification_channel_name)
+                .build()
+        )
 
         dspAudioProcessor = DspAudioProcessor(dspChain)
 

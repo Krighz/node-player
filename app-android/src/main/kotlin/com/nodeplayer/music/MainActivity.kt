@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
                 val currentTrack by viewModel.currentTrack.collectAsState()
                 val isPlaying by viewModel.isPlaying.collectAsState()
                 val currentPositionMs by viewModel.currentPositionMs.collectAsState()
+                val currentRms by viewModel.currentRms.collectAsState()
                 val audioOutputInfo by viewModel.audioOutputInfo.collectAsState()
                 val effectConfig by viewModel.effectConfig.collectAsState()
 
@@ -161,7 +162,8 @@ class MainActivity : ComponentActivity() {
                                 onPlayPauseClick = { viewModel.togglePlayPause() },
                                 onSkipNextClick = { viewModel.skipNext() },
                                 onClick = { isNowPlayingExpanded = true },
-                                hazeState = hazeState
+                                hazeState = hazeState,
+                                rmsLevel = currentRms
                             )
                         }
 
@@ -192,7 +194,8 @@ class MainActivity : ComponentActivity() {
                                 onOpenEq = {
                                     isNowPlayingExpanded = false
                                     currentRoute = "equalizer"
-                                }
+                                },
+                                rmsLevel = currentRms
                             )
                         }
                     }

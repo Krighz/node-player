@@ -10,15 +10,29 @@ import java.nio.ByteOrder
 /**
  * Robust 32-bit Float DSP Audio Processor for Media3.
  * Supports both PCM Float and PCM 16-bit (Mono and Stereo).
- * Never drops or fails playback.
+ * Extracts real RMS audio levels for visualizers and live signal path metrics.
  */
 class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
+
+    @Volatile
+    var currentRms: Float = 0.0f
+        private set
+
+    @Volatile
+    var actualSampleRate: Int = 44100
+        private set
+
+    @Volatile
+    var actualEncoding: String = "PCM_16BIT"
+        private set
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT && inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             return AudioProcessor.AudioFormat.NOT_SET
         }
         dspChain.sampleRate = inputAudioFormat.sampleRate
+        actualSampleRate = inputAudioFormat.sampleRate
+        actualEncoding = if (inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT) "PCM_FLOAT (32-bit)" else "PCM_16BIT (16-bit)"
         // Keep output format identical to input format to avoid any sink negotiation issues
         return inputAudioFormat
     }
@@ -38,6 +52,13 @@ class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
             val floatCount = remaining / 4
             val floatArray = FloatArray(floatCount)
             inputBuffer.asFloatBuffer().get(floatArray)
+
+            // Compute real RMS amplitude of audio buffer
+            var sumSq = 0.0
+            for (s in floatArray) {
+                sumSq += (s * s).toDouble()
+            }
+            currentRms = kotlin.math.sqrt(sumSq / floatCount.coerceAtLeast(1)).toFloat()
 
             if (channels == 2) {
                 dspChain.processInterleavedFloat(floatArray, 0, floatCount)
@@ -64,10 +85,14 @@ class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
             val floatArray = FloatArray(sampleCount)
 
             var idx = 0
+            var sumSq = 0.0
             while (inputBuffer.hasRemaining()) {
                 val shortSample = inputBuffer.short
-                floatArray[idx++] = shortSample / 32768.0f
+                val norm = shortSample / 32768.0f
+                floatArray[idx++] = norm
+                sumSq += (norm * norm).toDouble()
             }
+            currentRms = kotlin.math.sqrt(sumSq / sampleCount.coerceAtLeast(1)).toFloat()
 
             if (channels == 2) {
                 dspChain.processInterleavedFloat(floatArray, 0, sampleCount)
