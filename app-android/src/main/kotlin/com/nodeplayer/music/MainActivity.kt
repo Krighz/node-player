@@ -25,13 +25,13 @@ import androidx.core.view.WindowCompat
 import com.nodeplayer.music.ui.PlayerViewModel
 import com.nodeplayer.music.ui.components.FrostedBottomBar
 import com.nodeplayer.music.ui.components.FrostedMiniPlayer
+import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.player.NowPlayingSheet
 import com.nodeplayer.music.ui.screens.EqualizerScreen
 import com.nodeplayer.music.ui.screens.LibraryScreen
 import com.nodeplayer.music.ui.screens.SettingsScreen
 import com.nodeplayer.music.ui.theme.NodePlayerTheme
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
 
 class MainActivity : ComponentActivity() {
 
@@ -77,32 +77,22 @@ class MainActivity : ComponentActivity() {
                 val allTracks by viewModel.allTracks.collectAsState()
                 val albums by viewModel.albums.collectAsState()
                 val artists by viewModel.artists.collectAsState()
+                val folders by viewModel.folders.collectAsState()
+                val excludedFolders by viewModel.excludedFolders.collectAsState()
+                val minDurationSeconds by viewModel.minDurationSeconds.collectAsState()
 
                 Box(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // 1. Ambient Background Layer (This is the ONLY layer tagged with haze)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                if (themeConfig.isOledBlack) {
-                                    Brush.verticalGradient(listOf(Color.Black, Color.Black))
-                                } else {
-                                    Brush.radialGradient(
-                                        colors = listOf(
-                                            accentColor.copy(alpha = 0.18f),
-                                            Color(0xFF0F101A),
-                                            Color(0xFF090A10)
-                                        ),
-                                        radius = 1600f
-                                    )
-                                }
-                            )
-                            .haze(hazeState)
+                    // 1. Dribbble-inspired Liquid Glass Organic Chrome & Obsidian Background
+                    LiquidGlassBackground(
+                        hazeState = hazeState,
+                        accentColor = accentColor,
+                        isOled = themeConfig.isOledBlack,
+                        isPlaying = isPlaying
                     )
 
-                    // 2. Foreground Interactive Content (Not inside haze source!)
+                    // 2. Foreground Interactive UI
                     Box(
                         modifier = Modifier.fillMaxSize()
                     ) {
@@ -111,6 +101,7 @@ class MainActivity : ComponentActivity() {
                                 tracks = allTracks,
                                 albums = albums,
                                 artists = artists,
+                                folders = folders,
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
                                 onTrackClick = { track, queue ->
@@ -130,6 +121,12 @@ class MainActivity : ComponentActivity() {
                             "settings" -> SettingsScreen(
                                 outputInfo = audioOutputInfo,
                                 themeConfig = themeConfig,
+                                allFolders = folders,
+                                excludedFolders = excludedFolders,
+                                minDurationSeconds = minDurationSeconds,
+                                onMinDurationChange = { viewModel.setMinDurationSeconds(it) },
+                                onToggleExcludeFolder = { viewModel.toggleFolderExclusion(it) },
+                                onAddCustomFolder = { viewModel.addCustomFolder(it) },
                                 onThemeConfigChange = { viewModel.updateThemeConfig(it) },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
                                 hazeState = hazeState
@@ -137,10 +134,20 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // 3. Floating Mini-Player & Bottom Navigation
+                    // 3. Floating Mini-Player & Bottom Navigation with gradient scrim
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color(0xD9080910),
+                                        Color(0xFA080910)
+                                    )
+                                )
+                            )
                             .navigationBarsPadding()
                     ) {
                         if (currentTrack != null) {
@@ -165,7 +172,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // 4. Full Now Playing Sheet
+                    // 4. Full Now Playing Sheet (Smooth slide animation)
                     AnimatedVisibility(
                         visible = isNowPlayingExpanded && currentTrack != null,
                         enter = slideInVertically(initialOffsetY = { it }),

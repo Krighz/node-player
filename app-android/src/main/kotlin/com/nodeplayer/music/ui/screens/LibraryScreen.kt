@@ -26,18 +26,22 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
+import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
+import com.nodeplayer.music.ui.components.SoundWaveVisualizer
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
 import dev.chrisbanes.haze.HazeState
+import java.io.File
 
 @Composable
 fun LibraryScreen(
     tracks: List<Track>,
     albums: List<Album>,
     artists: List<Artist>,
+    folders: List<MusicFolder>,
     currentTrack: Track?,
     isPlaying: Boolean,
     onTrackClick: (Track, List<Track>) -> Unit,
@@ -46,8 +50,9 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Songs", "Albums", "Artists")
+    val tabs = listOf("Songs", "Albums", "Artists", "Folders")
     val accent = LocalAccentColor.current
+    var viewingFolder by remember { mutableStateOf<MusicFolder?>(null) }
 
     Column(
         modifier = modifier
@@ -55,11 +60,13 @@ fun LibraryScreen(
             .statusBarsPadding()
             .padding(horizontal = 16.dp)
     ) {
+        Spacer(modifier = Modifier.height(8.dp))
+
         // App Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -68,13 +75,13 @@ fun LibraryScreen(
                     text = "Node Player",
                     style = MaterialTheme.typography.headlineMedium.copy(
                         fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onBackground
+                        color = Color.White
                     )
                 )
                 Text(
-                    text = "${tracks.size} tracks in library",
+                    text = "${tracks.size} tracks • ${folders.size} folders",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        color = Color.White.copy(alpha = 0.65f)
                     )
                 )
             }
@@ -88,41 +95,56 @@ fun LibraryScreen(
             }
         }
 
-        // Tab Row with Glass Pills
+        // Tab Selector Pills (Liquid Glass look)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             tabs.forEachIndexed { index, tabTitle ->
-                val isSelected = selectedTab == index
+                val isSelected = selectedTab == index && viewingFolder == null
                 Box(
                     modifier = Modifier
                         .glassSurface(
                             hazeState = hazeState,
                             shape = RoundedCornerShape(GlassTokens.pillCornerRadius),
-                            tintAlpha = if (isSelected) 0.9f else 0.4f,
-                            customTint = if (isSelected) accent.copy(alpha = 0.35f) else null
+                            tintAlpha = if (isSelected) 0.85f else 0.35f,
+                            customTint = if (isSelected) accent.copy(alpha = 0.4f) else null
                         )
-                        .clickable { selectedTab = index }
-                        .padding(horizontal = 18.dp, vertical = 8.dp)
+                        .clickable {
+                            viewingFolder = null
+                            selectedTab = index
+                        }
+                        .padding(horizontal = 16.dp, vertical = 7.dp)
                 ) {
                     Text(
                         text = tabTitle,
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) accent else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f)
+                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
+                            fontSize = 13.sp
                         )
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Tab Content
-        if (tracks.isEmpty()) {
+        if (viewingFolder != null) {
+            val folderTracks = tracks.filter { File(it.path).parent == viewingFolder!!.path }
+            FolderDetailView(
+                folder = viewingFolder!!,
+                tracks = folderTracks,
+                currentTrack = currentTrack,
+                isPlaying = isPlaying,
+                onBack = { viewingFolder = null },
+                onTrackClick = onTrackClick,
+                hazeState = hazeState
+            )
+        } else if (tracks.isEmpty()) {
             EmptyLibraryView(onRescanClick)
         } else {
             when (selectedTab) {
@@ -135,6 +157,11 @@ fun LibraryScreen(
                 )
                 1 -> AlbumsGrid(albums = albums, onAlbumClick = {})
                 2 -> ArtistsList(artists = artists, onArtistClick = {})
+                3 -> FoldersList(
+                    folders = folders,
+                    onFolderClick = { viewingFolder = it },
+                    hazeState = hazeState
+                )
             }
         }
     }
@@ -152,7 +179,7 @@ fun SongsList(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 120.dp),
+        contentPadding = PaddingValues(bottom = 190.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(tracks, key = { it.id }) { track ->
@@ -162,7 +189,7 @@ fun SongsList(
                 modifier = Modifier.fillMaxWidth(),
                 hazeState = hazeState,
                 onClick = { onTrackClick(track, tracks) },
-                tintAlpha = if (isCurrent) 0.75f else 0.45f
+                tintAlpha = if (isCurrent) 0.70f else 0.40f
             ) {
                 Row(
                     modifier = Modifier
@@ -174,7 +201,7 @@ fun SongsList(
                     Box(
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(RoundedCornerShape(12.dp))
                             .background(Color(0xFF222433)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -193,8 +220,8 @@ fun SongsList(
                         Text(
                             text = track.title,
                             style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isCurrent) accent else MaterialTheme.colorScheme.onBackground
+                                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
+                                color = if (isCurrent) accent else Color.White
                             ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -205,13 +232,13 @@ fun SongsList(
                                 FormatBadge("Hi-Res", Color(0xFF10B981))
                                 Spacer(modifier = Modifier.width(6.dp))
                             } else if (track.isLossless) {
-                                FormatBadge("Lossless", Color(0xFF6366F1))
+                                FormatBadge("Lossless", Color(0xFF818CF8))
                                 Spacer(modifier = Modifier.width(6.dp))
                             }
                             Text(
                                 text = "${track.artist} • ${track.durationFormatted}",
                                 style = MaterialTheme.typography.bodySmall.copy(
-                                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                                    color = Color.White.copy(alpha = 0.65f)
                                 ),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -219,14 +246,9 @@ fun SongsList(
                         }
                     }
 
-                    // Playing indicator icon
+                    // Playing indicator soundwave bars
                     if (isCurrent) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Rounded.GraphicEq else Icons.Rounded.Pause,
-                            contentDescription = null,
-                            tint = accent,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent)
                     }
                 }
             }
@@ -235,12 +257,155 @@ fun SongsList(
 }
 
 @Composable
+fun FoldersList(
+    folders: List<MusicFolder>,
+    onFolderClick: (MusicFolder) -> Unit,
+    hazeState: HazeState?
+) {
+    val accent = LocalAccentColor.current
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 190.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(folders, key = { it.path }) { folder ->
+            GlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                hazeState = hazeState,
+                onClick = { onFolderClick(folder) }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(accent.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Folder,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(14.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = folder.name,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "${folder.trackCount} songs • ${folder.path}",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color.White.copy(alpha = 0.60f)
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.4f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FolderDetailView(
+    folder: MusicFolder,
+    tracks: List<Track>,
+    currentTrack: Track?,
+    isPlaying: Boolean,
+    onBack: () -> Unit,
+    onTrackClick: (Track, List<Track>) -> Unit,
+    hazeState: HazeState?
+) {
+    val accent = LocalAccentColor.current
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onBack) {
+                Icon(
+                    imageVector = Icons.Rounded.ArrowBack,
+                    contentDescription = "Back",
+                    tint = Color.White
+                )
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = folder.name,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "${tracks.size} tracks",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = Color.White.copy(alpha = 0.65f)
+                    )
+                )
+            }
+            if (tracks.isNotEmpty()) {
+                Button(
+                    onClick = { onTrackClick(tracks.first(), tracks) },
+                    colors = ButtonDefaults.buttonColors(containerColor = accent),
+                    shape = RoundedCornerShape(GlassTokens.pillCornerRadius)
+                ) {
+                    Icon(imageVector = Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Play All", fontSize = 12.sp)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SongsList(
+            tracks = tracks,
+            currentTrack = currentTrack,
+            isPlaying = isPlaying,
+            onTrackClick = onTrackClick,
+            hazeState = hazeState
+        )
+    }
+}
+
+@Composable
 fun FormatBadge(label: String, color: Color) {
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(4.dp))
-            .background(color.copy(alpha = 0.2f))
-            .padding(horizontal = 5.dp, vertical = 1.dp)
+            .background(color.copy(alpha = 0.22f))
+            .padding(horizontal = 6.dp, vertical = 1.5.dp)
     ) {
         Text(
             text = label,
@@ -258,7 +423,7 @@ fun AlbumsGrid(albums: List<Album>, onAlbumClick: (Album) -> Unit) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 120.dp),
+        contentPadding = PaddingValues(bottom = 190.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -272,7 +437,7 @@ fun AlbumsGrid(albums: List<Album>, onAlbumClick: (Album) -> Unit) {
                         modifier = Modifier
                             .fillMaxWidth()
                             .aspectRatio(1f)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(Color(0xFF222433))
                     ) {
                         AsyncImage(
@@ -285,14 +450,17 @@ fun AlbumsGrid(albums: List<Album>, onAlbumClick: (Album) -> Unit) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = album.title,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "${album.artist} • ${album.trackCount} songs",
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                            color = Color.White.copy(alpha = 0.65f)
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -307,7 +475,7 @@ fun AlbumsGrid(albums: List<Album>, onAlbumClick: (Album) -> Unit) {
 fun ArtistsList(artists: List<Artist>, onArtistClick: (Artist) -> Unit) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 120.dp),
+        contentPadding = PaddingValues(bottom = 190.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(artists, key = { it.id }) { artist ->
@@ -325,7 +493,7 @@ fun ArtistsList(artists: List<Artist>, onArtistClick: (Artist) -> Unit) {
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .background(LocalAccentColor.current.copy(alpha = 0.2f)),
+                            .background(LocalAccentColor.current.copy(alpha = 0.25f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -338,12 +506,15 @@ fun ArtistsList(artists: List<Artist>, onArtistClick: (Artist) -> Unit) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = artist.name,
-                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
                         )
                         Text(
                             text = "${artist.trackCount} songs • ${artist.albumCount} albums",
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                                color = Color.White.copy(alpha = 0.65f)
                             )
                         )
                     }
@@ -366,19 +537,19 @@ fun EmptyLibraryView(onRescanClick: () -> Unit) {
             Icon(
                 imageVector = Icons.Rounded.MusicOff,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                tint = Color.White.copy(alpha = 0.4f),
                 modifier = Modifier.size(64.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "No Music Found",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 text = "Add audio files to your device storage or rescan your library.",
                 style = MaterialTheme.typography.bodySmall.copy(
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
+                    color = Color.White.copy(alpha = 0.65f),
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
             )

@@ -2,17 +2,19 @@ package com.nodeplayer.music.ui
 
 import android.app.Application
 import android.content.ComponentName
-import android.graphics.Bitmap
+import android.content.ContentUris
 import android.graphics.BitmapFactory
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
+import android.util.Log
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -30,7 +32,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -52,8 +53,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val artists = allTracks.map { scanner.extractArtists(it) }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    val folders = allTracks.map { scanner.extractFolders(it) }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
     val playlists = dao.getAllPlaylists()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    private val _selectedFolder = MutableStateFlow<MusicFolder?>(null)
+    val selectedFolder: StateFlow<MusicFolder?> = _selectedFolder.asStateFlow()
 
     private val _currentTrack = MutableStateFlow<Track?>(null)
     val currentTrack: StateFlow<Track?> = _currentTrack.asStateFlow()
@@ -79,6 +86,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _themeConfig = MutableStateFlow(GlassThemeConfig())
     val themeConfig: StateFlow<GlassThemeConfig> = _themeConfig.asStateFlow()
 
+    // Folder Filtering & Library Preferences
+    private val _minDurationSeconds = MutableStateFlow(30)
+    val minDurationSeconds: StateFlow<Int> = _minDurationSeconds.asStateFlow()
+
+    private val _excludedFolders = MutableStateFlow<Set<String>>(emptySet())
+    val excludedFolders: StateFlow<Set<String>> = _excludedFolders.asStateFlow()
+
+    private val _customFolders = MutableStateFlow<Set<String>>(emptySet())
+    val customFolders: StateFlow<Set<String>> = _customFolders.asStateFlow()
+
     private var progressJob: Job? = null
 
     init {
@@ -98,7 +115,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 mediaController = controllerFuture?.get()
                 setupPlayerListener()
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("NodePlayer", "MediaController connect failed", e)
             }
         }, MoreExecutors.directExecutor())
     }
@@ -108,6 +125,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             override fun onIsPlayingChanged(playing: Boolean) {
                 _isPlaying.value = playing
                 if (playing) startPositionTracking() else stopPositionTracking()
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                Log.e("NodePlayer", "ExoPlayer error occurred: ${error.errorCodeName} - ${error.message}", error)
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
@@ -126,13 +147,57 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         })
     }
 
-    fun refreshLibrary() {
+    fun refreshLibrary(
+        includedFolders: Set<String> = _customFolders.value,
+        excludedFolders: Set<String> = _excludedFolders.value,
+        minDurationSec: Int = _minDurationSeconds.value
+    ) {
         viewModelScope.launch {
-            val tracks = scanner.scanTracks()
+            val minMs = minDurationSec * 1000L
+            val tracks = scanner.scanTracks(
+                minDurationMs = minMs,
+                includedFolders = includedFolders,
+                excludedFolders = excludedFolders
+            )
+            dao.clearTracks()
             if (tracks.isNotEmpty()) {
                 dao.insertTracks(tracks.map { TrackEntity.fromTrack(it) })
             }
         }
+    }
+
+    fun setMinDurationSeconds(seconds: Int) {
+        _minDurationSeconds.value = seconds
+        refreshLibrary(minDurationSec = seconds)
+    }
+
+    fun toggleFolderExclusion(folderPath: String) {
+        val current = _excludedFolders.value.toMutableSet()
+        if (current.contains(folderPath)) {
+            current.remove(folderPath)
+        } else {
+            current.add(folderPath)
+        }
+        _excludedFolders.value = current
+        refreshLibrary(excludedFolders = current)
+    }
+
+    fun addCustomFolder(folderPath: String) {
+        val current = _customFolders.value.toMutableSet()
+        current.add(folderPath)
+        _customFolders.value = current
+        refreshLibrary(includedFolders = current)
+    }
+
+    fun removeCustomFolder(folderPath: String) {
+        val current = _customFolders.value.toMutableSet()
+        current.remove(folderPath)
+        _customFolders.value = current
+        refreshLibrary(includedFolders = current)
+    }
+
+    fun selectFolder(folder: MusicFolder?) {
+        _selectedFolder.value = folder
     }
 
     fun playTrack(track: Track, newQueue: List<Track> = listOf(track)) {
@@ -141,14 +206,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         updatePaletteAccent(track)
         updateSignalPath(track)
 
-        val controller = mediaController ?: return
+        val controller = mediaController
+        if (controller == null) {
+            Log.e("NodePlayer", "Cannot play track: mediaController is null")
+            return
+        }
+
         controller.stop()
         controller.clearMediaItems()
 
+        // ALWAYS use ContentUris with MediaStore Content URI for scoped storage compatibility
         val mediaItems = newQueue.map {
+            val contentUri = ContentUris.withAppendedId(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                it.id
+            )
             MediaItem.Builder()
                 .setMediaId(it.id.toString())
-                .setUri(it.path)
+                .setUri(contentUri)
                 .build()
         }
         val targetIndex = newQueue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
@@ -187,7 +262,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 mediaController?.let {
                     _currentPositionMs.value = it.currentPosition
                 }
-                delay(300)
+                delay(250)
             }
         }
     }
@@ -200,7 +275,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val albumArtUri = Uri.parse("content://media/external/audio/albumart")
-                val artUri = android.content.ContentUris.withAppendedId(albumArtUri, track.albumId)
+                val artUri = ContentUris.withAppendedId(albumArtUri, track.albumId)
                 val inputStream = getApplication<Application>().contentResolver.openInputStream(artUri)
                 val bitmap = BitmapFactory.decodeStream(inputStream)
                 inputStream?.close()
@@ -212,7 +287,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     }
                 }
             } catch (_: Exception) {
-                // Fallback to default accent
                 _accentColor.value = DefaultAccent
             }
         }

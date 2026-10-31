@@ -251,6 +251,6 @@ fun EqualizerScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(140.dp))
+        Spacer(modifier = Modifier.height(200.dp))
     }
 }

@@ -3,6 +3,7 @@ package com.nodeplayer.music.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -43,8 +44,8 @@ fun FrostedMiniPlayer(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.94f)
+            .padding(horizontal = 14.dp, vertical = 6.dp)
+            .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.88f)
             .clickable(onClick = onClick)
     ) {
         // Progress track at bottom
@@ -65,9 +66,9 @@ fun FrostedMiniPlayer(
             // Artwork thumbnail
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Color.DarkGray)
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF222433))
             ) {
                 AsyncImage(
                     model = "content://media/external/audio/albumart/${currentTrack.albumId}",
@@ -86,7 +87,8 @@ fun FrostedMiniPlayer(
                 Text(
                     text = currentTrack.title,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
                         fontSize = 14.sp
                     ),
                     maxLines = 1,
@@ -95,7 +97,7 @@ fun FrostedMiniPlayer(
                 Text(
                     text = currentTrack.artist,
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                        color = Color.White.copy(alpha = 0.65f),
                         fontSize = 12.sp
                     ),
                     maxLines = 1,
@@ -103,12 +105,16 @@ fun FrostedMiniPlayer(
                 )
             }
 
+            // Soundwave visualizer in mini player
+            SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent, maxHeight = 16.dp)
+            Spacer(modifier = Modifier.width(6.dp))
+
             // Play / Pause
             IconButton(onClick = onPlayPauseClick) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = accent,
+                    tint = Color.White,
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -118,7 +124,7 @@ fun FrostedMiniPlayer(
                 Icon(
                     imageVector = Icons.Rounded.SkipNext,
                     contentDescription = "Skip Next",
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    tint = Color.White.copy(alpha = 0.85f),
                     modifier = Modifier.size(26.dp)
                 )
             }
@@ -139,25 +145,25 @@ fun FrostedBottomBar(
         Triple("settings", "Settings", Icons.Rounded.Settings)
     )
 
-    val shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    val shape = RoundedCornerShape(32.dp)
     val accent = LocalAccentColor.current
 
-    Surface(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.82f),
-        color = Color.Transparent
+            .padding(horizontal = 24.dp, vertical = 6.dp)
+            .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.92f)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceAround,
             verticalAlignment = Alignment.CenterVertically
         ) {
             items.forEach { (route, label, icon) ->
                 val isSelected = selectedRoute == route
-                val itemColor = if (isSelected) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                val itemColor = if (isSelected) accent else Color.White.copy(alpha = 0.55f)
 
                 Column(
                     modifier = Modifier

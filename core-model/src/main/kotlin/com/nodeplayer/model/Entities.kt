@@ -17,6 +17,12 @@ data class Artist(
     val albumCount: Int = 0
 )
 
+data class MusicFolder(
+    val name: String,
+    val path: String,
+    val trackCount: Int = 0
+)
+
 data class Playlist(
     val id: Long,
     val name: String,

@@ -14,6 +14,9 @@ interface PlayerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTracks(tracks: List<TrackEntity>)
 
+    @Query("DELETE FROM tracks")
+    suspend fun clearTracks()
+
     @Query("UPDATE tracks SET playCount = playCount + 1 WHERE id = :id")
     suspend fun incrementPlayCount(id: Long)
 

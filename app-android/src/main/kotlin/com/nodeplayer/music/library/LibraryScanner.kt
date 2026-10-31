@@ -6,13 +6,19 @@ import android.net.Uri
 import android.provider.MediaStore
 import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
+import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class LibraryScanner(private val context: Context) {
 
-    suspend fun scanTracks(minDurationMs: Long = 10_000L): List<Track> = withContext(Dispatchers.IO) {
+    suspend fun scanTracks(
+        minDurationMs: Long = 10_000L,
+        includedFolders: Set<String> = emptySet(),
+        excludedFolders: Set<String> = emptySet()
+    ): List<Track> = withContext(Dispatchers.IO) {
         val tracks = mutableListOf<Track>()
         val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(
@@ -52,6 +58,16 @@ class LibraryScanner(private val context: Context) {
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
 
                 while (cursor.moveToNext()) {
+                    val path = cursor.getString(dataCol) ?: ""
+                    
+                    // Folder filtering
+                    if (excludedFolders.any { path.startsWith(it, ignoreCase = true) }) {
+                        continue
+                    }
+                    if (includedFolders.isNotEmpty() && !includedFolders.any { path.startsWith(it, ignoreCase = true) }) {
+                        continue
+                    }
+
                     val id = cursor.getLong(idCol)
                     val title = cursor.getString(titleCol) ?: "Unknown Title"
                     val artist = cursor.getString(artistCol) ?: "Unknown Artist"
@@ -59,7 +75,6 @@ class LibraryScanner(private val context: Context) {
                     val album = cursor.getString(albumCol) ?: "Unknown Album"
                     val albumId = cursor.getLong(albumIdCol)
                     val duration = cursor.getLong(durCol)
-                    val path = cursor.getString(dataCol) ?: ""
                     val size = cursor.getLong(sizeCol)
                     val mime = cursor.getString(mimeCol) ?: "audio/*"
                     val rawTrackNo = cursor.getInt(trackCol)
@@ -75,7 +90,6 @@ class LibraryScanner(private val context: Context) {
                             path.endsWith(".wav", ignoreCase = true) ||
                             path.endsWith(".alac", ignoreCase = true)
 
-                    // Baseline sample rate / bit depth detection
                     val sampleRate = if (isLossless && (path.contains("96k") || path.contains("192k"))) 96000 else 44100
                     val bitDepth = if (isLossless && (path.contains("24bit") || path.contains("24b"))) 24 else 16
                     val isHiRes = sampleRate > 48000 || bitDepth > 16
@@ -137,6 +151,20 @@ class LibraryScanner(private val context: Context) {
                 name = first.artist,
                 trackCount = artistTracks.size,
                 albumCount = albumCount
+            )
+        }.sortedBy { it.name.lowercase() }
+    }
+
+    fun extractFolders(tracks: List<Track>): List<MusicFolder> {
+        return tracks.groupBy { track ->
+            val parent = File(track.path).parent
+            parent ?: "Internal Storage"
+        }.map { (folderPath, folderTracks) ->
+            val folderName = File(folderPath).name.ifEmpty { "Music" }
+            MusicFolder(
+                name = folderName,
+                path = folderPath,
+                trackCount = folderTracks.size
             )
         }.sortedBy { it.name.lowercase() }
     }
