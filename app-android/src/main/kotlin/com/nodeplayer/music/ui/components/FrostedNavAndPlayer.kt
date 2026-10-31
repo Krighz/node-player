@@ -1,0 +1,190 @@
+package com.nodeplayer.music.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.nodeplayer.model.Track
+import com.nodeplayer.music.ui.theme.GlassTokens
+import com.nodeplayer.music.ui.theme.LocalAccentColor
+import com.nodeplayer.music.ui.theme.glassSurface
+import dev.chrisbanes.haze.HazeState
+
+@Composable
+fun FrostedMiniPlayer(
+    currentTrack: Track?,
+    isPlaying: Boolean,
+    progressFraction: Float,
+    onPlayPauseClick: () -> Unit,
+    onSkipNextClick: () -> Unit,
+    onClick: () -> Unit,
+    hazeState: HazeState? = null,
+    modifier: Modifier = Modifier
+) {
+    if (currentTrack == null) return
+
+    val shape = RoundedCornerShape(GlassTokens.cardCornerRadius)
+    val accent = LocalAccentColor.current
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.75f)
+            .clickable(onClick = onClick)
+    ) {
+        // Progress track at bottom
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                .height(2.5.dp)
+                .background(accent)
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Artwork thumbnail
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color.DarkGray)
+            ) {
+                AsyncImage(
+                    model = "content://media/external/audio/albumart/${currentTrack.albumId}",
+                    contentDescription = "Album Art",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Title & Artist
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = currentTrack.title,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = currentTrack.artist,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                        fontSize = 12.sp
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // Play / Pause
+            IconButton(onClick = onPlayPauseClick) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    tint = accent,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            // Skip Next
+            IconButton(onClick = onSkipNextClick) {
+                Icon(
+                    imageVector = Icons.Rounded.SkipNext,
+                    contentDescription = "Skip Next",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun FrostedBottomBar(
+    selectedRoute: String,
+    onRouteChange: (String) -> Unit,
+    hazeState: HazeState? = null,
+    modifier: Modifier = Modifier
+) {
+    val items = listOf(
+        Triple("library", "Library", Icons.Rounded.LibraryMusic),
+        Triple("equalizer", "Equalizer", Icons.Rounded.Tune),
+        Triple("settings", "Settings", Icons.Rounded.Settings)
+    )
+
+    val shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    val accent = LocalAccentColor.current
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.82f),
+        color = Color.Transparent
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceAround,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEach { (route, label, icon) ->
+                val isSelected = selectedRoute == route
+                val itemColor = if (isSelected) accent else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+
+                Column(
+                    modifier = Modifier
+                        .clickable(
+                            indication = null,
+                            interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
+                        ) { onRouteChange(route) }
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = label,
+                        tint = itemColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = itemColor,
+                            fontSize = 11.sp
+                        )
+                    )
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Node Player</string>
+    <string name="notification_channel_name">Node Player Playback</string>
+    <string name="notification_channel_desc">Playback controls for Node Player</string>
+</resources>
