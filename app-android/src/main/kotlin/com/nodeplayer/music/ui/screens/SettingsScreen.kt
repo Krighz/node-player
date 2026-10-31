@@ -18,11 +18,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.AudioOutputInfo
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.model.MusicFolder
+import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import dev.chrisbanes.haze.HazeState
@@ -34,10 +36,12 @@ fun SettingsScreen(
     themeConfig: GlassThemeConfig,
     allFolders: List<MusicFolder> = emptyList(),
     excludedFolders: Set<String> = emptySet(),
+    excludedTracks: List<Track> = emptyList(),
     minDurationSeconds: Int = 30,
     onMinDurationChange: (Int) -> Unit = {},
     onToggleExcludeFolder: (String) -> Unit = {},
     onAddCustomFolder: (String) -> Unit = {},
+    onRestoreTrack: (Long) -> Unit = {},
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
     onRescanLibrary: () -> Unit,
     hazeState: HazeState? = null,
@@ -51,6 +55,7 @@ fun SettingsScreen(
     var crossfadeSeconds by remember { mutableFloatStateOf(2.0f) }
     var lrclibOptIn by remember { mutableStateOf(false) }
     var isFoldersExpanded by remember { mutableStateOf(true) }
+    var isExcludedTracksExpanded by remember { mutableStateOf(false) }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -324,6 +329,96 @@ fun SettingsScreen(
                                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Excluded Audio & Voice Notes Review Screen
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isExcludedTracksExpanded = !isExcludedTracksExpanded },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Excluded Tracks & Voice Notes",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                        )
+                        Text(
+                            text = "${excludedTracks.size} items excluded • Tap to review & restore",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    IconButton(onClick = { isExcludedTracksExpanded = !isExcludedTracksExpanded }) {
+                        Icon(
+                            imageVector = if (isExcludedTracksExpanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                            contentDescription = null,
+                            tint = accent
+                        )
+                    }
+                }
+
+                if (isExcludedTracksExpanded) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (excludedTracks.isEmpty()) {
+                            Text(
+                                "No tracks are currently excluded.",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.5f))
+                            )
+                        } else {
+                            for (track in excludedTracks.take(30)) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = track.title,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White
+                                            ),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${track.artist} • ${track.durationFormatted} • ${track.path.takeLast(35)}",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontSize = 11.sp,
+                                                color = Color.White.copy(alpha = 0.50f)
+                                            ),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    TextButton(
+                                        onClick = { onRestoreTrack(track.id) },
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Text("Restore", fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                            if (excludedTracks.size > 30) {
+                                Text(
+                                    "+ ${excludedTracks.size - 30} more excluded voice notes/files",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.45f))
+                                )
                             }
                         }
                     }

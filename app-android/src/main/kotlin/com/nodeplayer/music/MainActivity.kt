@@ -28,6 +28,7 @@ import com.nodeplayer.music.ui.components.FrostedMiniPlayer
 import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.player.NowPlayingSheet
 import com.nodeplayer.music.ui.screens.EqualizerScreen
+import dev.chrisbanes.haze.haze
 import com.nodeplayer.music.ui.screens.LibraryScreen
 import com.nodeplayer.music.ui.screens.SettingsScreen
 import com.nodeplayer.music.ui.theme.NodePlayerTheme
@@ -55,7 +56,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeConfig by viewModel.themeConfig.collectAsState()
             val accentColor by viewModel.accentColor.collectAsState()
-            val hazeState = remember { HazeState() }
+            val dockHazeState = remember { HazeState() }
 
             NodePlayerTheme(
                 accentColor = if (themeConfig.useDynamicAccent) accentColor else Color(themeConfig.fixedAccentColorArgb),
@@ -80,23 +81,26 @@ class MainActivity : ComponentActivity() {
                 val artists by viewModel.artists.collectAsState()
                 val folders by viewModel.folders.collectAsState()
                 val excludedFolders by viewModel.excludedFolders.collectAsState()
+                val excludedTracks by viewModel.excludedTracks.collectAsState()
                 val minDurationSeconds by viewModel.minDurationSeconds.collectAsState()
 
                 Box(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // 1. Dribbble-inspired Liquid Glass Organic Chrome & Obsidian Background
-                    LiquidGlassBackground(
-                        hazeState = hazeState,
-                        accentColor = accentColor,
-                        isOled = themeConfig.isOledBlack,
-                        isPlaying = isPlaying
-                    )
-
-                    // 2. Foreground Interactive UI
+                    // Blur Source Container: Encloses both background AND scrolling screen content
                     Box(
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .haze(dockHazeState)
                     ) {
+                        // 1. Dribbble-inspired Liquid Glass Organic Chrome & Obsidian Background
+                        LiquidGlassBackground(
+                            accentColor = accentColor,
+                            isOled = themeConfig.isOledBlack,
+                            isPlaying = isPlaying
+                        )
+
+                        // 2. Foreground Interactive UI (Cards use clean translucent glass; no recursive blur)
                         when (currentRoute) {
                             "library" -> LibraryScreen(
                                 tracks = allTracks,
@@ -112,43 +116,36 @@ class MainActivity : ComponentActivity() {
                                     checkAndRequestPermissions()
                                     viewModel.refreshLibrary()
                                 },
-                                hazeState = hazeState
+                                hazeState = null
                             )
                             "equalizer" -> EqualizerScreen(
                                 config = effectConfig,
                                 onConfigChange = { viewModel.updateEffectConfig(it) },
-                                hazeState = hazeState
+                                hazeState = null
                             )
                             "settings" -> SettingsScreen(
                                 outputInfo = audioOutputInfo,
                                 themeConfig = themeConfig,
                                 allFolders = folders,
                                 excludedFolders = excludedFolders,
+                                excludedTracks = excludedTracks,
                                 minDurationSeconds = minDurationSeconds,
                                 onMinDurationChange = { viewModel.setMinDurationSeconds(it) },
                                 onToggleExcludeFolder = { viewModel.toggleFolderExclusion(it) },
                                 onAddCustomFolder = { viewModel.addCustomFolder(it) },
+                                onRestoreTrack = { viewModel.restoreExcludedTrack(it) },
                                 onThemeConfigChange = { viewModel.updateThemeConfig(it) },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
-                                hazeState = hazeState
+                                hazeState = null
                             )
                         }
                     }
 
-                    // 3. Floating Mini-Player & Bottom Navigation with gradient scrim
+                    // 3. Floating Mini-Player & Bottom Navigation (Frosted glass dock sampling dockHazeState)
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color(0xD9080910),
-                                        Color(0xFA080910)
-                                    )
-                                )
-                            )
                             .navigationBarsPadding()
                     ) {
                         if (currentTrack != null) {
@@ -162,7 +159,7 @@ class MainActivity : ComponentActivity() {
                                 onPlayPauseClick = { viewModel.togglePlayPause() },
                                 onSkipNextClick = { viewModel.skipNext() },
                                 onClick = { isNowPlayingExpanded = true },
-                                hazeState = hazeState,
+                                hazeState = dockHazeState,
                                 rmsLevel = currentRms
                             )
                         }
@@ -170,7 +167,7 @@ class MainActivity : ComponentActivity() {
                         FrostedBottomBar(
                             selectedRoute = currentRoute,
                             onRouteChange = { currentRoute = it },
-                            hazeState = hazeState
+                            hazeState = dockHazeState
                         )
                     }
 

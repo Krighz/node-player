@@ -520,15 +520,17 @@ fun SyncedLyricsGlassView(
 
 @Composable
 fun SignalPathBadge(info: AudioOutputInfo) {
+    val sampleRateKhz = if (info.originalSampleRate > 0) info.originalSampleRate / 1000.0 else 44.1
+    val bitDepth = if (info.originalBitDepth > 0) info.originalBitDepth else 16
+    val rateText = if (sampleRateKhz % 1.0 == 0.0) "${sampleRateKhz.toInt()}kHz" else "%.1fkHz".format(sampleRateKhz)
+
     val badgeText = buildString {
         append(info.format)
         append(" • ")
-        append("${info.originalSampleRate / 1000}kHz/${info.originalBitDepth}bit")
+        append("$rateText/${bitDepth}bit")
         append(" ➔ ")
         if (info.isBitPerfect) {
-            append("Bit-Perfect Direct")
-        } else if (info.isResampled) {
-            append("Resampled (${info.sampleRate / 1000}kHz)")
+            append("Bit-Perfect (${info.outputDeviceName})")
         } else {
             append(info.outputDeviceName)
         }

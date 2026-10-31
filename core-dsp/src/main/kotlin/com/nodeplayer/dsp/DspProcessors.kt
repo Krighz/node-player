@@ -42,25 +42,27 @@ class ParametricEqualizer {
 }
 
 /**
- * Soft limiter operating in 32-bit float audio domain.
- * Applies a smooth tanh-based soft knee when approaching threshold (-0.1 dBFS = ~0.9885)
- * so that boosts never hard-clip or produce digital harshness.
+ * Limiter operating in 32-bit float audio domain.
+ * Strictly linear pass-through below threshold (0.9f = -0.91 dBFS) with zero colouration.
+ * Applies a smooth C1-continuous soft knee above threshold so excessive peaks never hard-clip
+ * and never exceed 1.0f full scale.
  */
 class SoftLimiter {
     var enabled = true
-    var threshold = 0.9885f // -0.1 dBFS
+    var threshold = 0.90f // Linear region strictly below 0.90f
 
     fun process(sample: Float): Float {
         if (!enabled) return sample
         val absVal = abs(sample)
+        // Strictly linear pass-through below threshold: output exactly equals input
         if (absVal <= threshold) {
             return sample
         }
-        // Smooth soft saturation above threshold:
-        // output = sign(x) * (threshold + (1 - threshold) * tanh((|x| - threshold) / (1 - threshold)))
+        // Smooth soft knee with continuous first derivative (C1 continuity) above threshold:
+        // y = T + H * (delta / (delta + H)), where T = threshold, H = 1 - threshold, delta = |x| - T
         val excess = absVal - threshold
-        val scale = 1.0f - threshold
-        val saturatedExcess = scale * tanh((excess / scale).toDouble()).toFloat()
+        val headroom = 1.0f - threshold
+        val saturatedExcess = headroom * (excess / (excess + headroom))
         val limited = (threshold + saturatedExcess).coerceAtMost(1.0f)
         return if (sample >= 0f) limited else -limited
     }

@@ -103,13 +103,30 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _customFolders = MutableStateFlow<Set<String>>(emptySet())
     val customFolders: StateFlow<Set<String>> = _customFolders.asStateFlow()
 
+    private val _whitelistedTrackIds = MutableStateFlow<Set<Long>>(emptySet())
+    val whitelistedTrackIds: StateFlow<Set<Long>> = _whitelistedTrackIds.asStateFlow()
+
+    private val _excludedTracks = MutableStateFlow<List<Track>>(emptyList())
+    val excludedTracks: StateFlow<List<Track>> = _excludedTracks.asStateFlow()
+
     private var progressJob: Job? = null
 
     init {
+        loadFilterPreferences()
         initMediaController()
         refreshLibrary()
         detectAudioOutput()
         restoreLastPlaybackSession()
+    }
+
+    private fun loadFilterPreferences() {
+        val whitelistStrings = prefs.getStringSet("whitelisted_track_ids", emptySet()) ?: emptySet()
+        _whitelistedTrackIds.value = whitelistStrings.mapNotNull { it.toLongOrNull() }.toSet()
+        val custom = prefs.getStringSet("custom_folders", emptySet()) ?: emptySet()
+        _customFolders.value = custom
+        val excluded = prefs.getStringSet("excluded_folders", emptySet()) ?: emptySet()
+        _excludedFolders.value = excluded
+        _minDurationSeconds.value = prefs.getInt("min_duration_sec", 30)
     }
 
     private fun restoreLastPlaybackSession() {
@@ -174,20 +191,38 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun refreshLibrary(
         includedFolders: Set<String> = _customFolders.value,
         excludedFolders: Set<String> = _excludedFolders.value,
-        minDurationSec: Int = _minDurationSeconds.value
+        minDurationSec: Int = _minDurationSeconds.value,
+        whitelistedIds: Set<Long> = _whitelistedTrackIds.value
     ) {
         viewModelScope.launch {
             val minMs = minDurationSec * 1000L
             val tracks = scanner.scanTracks(
                 minDurationMs = minMs,
                 includedFolders = includedFolders,
-                excludedFolders = excludedFolders
+                excludedFolders = excludedFolders,
+                whitelistedTrackIds = whitelistedIds
             )
             dao.clearTracks()
             if (tracks.isNotEmpty()) {
                 dao.insertTracks(tracks.map { TrackEntity.fromTrack(it) })
             }
+            loadExcludedTracks(tracks)
         }
+    }
+
+    fun loadExcludedTracks(currentTracks: List<Track> = allTracks.value) {
+        viewModelScope.launch {
+            val excluded = scanner.scanExcludedTracks(currentTracks)
+            _excludedTracks.value = excluded
+        }
+    }
+
+    fun restoreExcludedTrack(trackId: Long) {
+        val current = _whitelistedTrackIds.value.toMutableSet()
+        current.add(trackId)
+        _whitelistedTrackIds.value = current
+        prefs.edit().putStringSet("whitelisted_track_ids", current.map { it.toString() }.toSet()).apply()
+        refreshLibrary(whitelistedIds = current)
     }
 
     fun setMinDurationSeconds(seconds: Int) {
@@ -371,16 +406,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun updateSignalPath(track: Track) {
         val currentInfo = _audioOutputInfo.value
-        val dsp = PlaybackService.instance?.dspAudioProcessor
-        val actualSinkRate = dsp?.actualSampleRate ?: if (currentInfo.isBitPerfect) track.sampleRate else 48000
-        val isResampled = actualSinkRate != track.sampleRate && !currentInfo.isBitPerfect
         _audioOutputInfo.value = currentInfo.copy(
             originalSampleRate = track.sampleRate,
             originalBitDepth = track.bitDepth,
-            sampleRate = actualSinkRate,
-            bitDepth = if (currentInfo.isBitPerfect) track.bitDepth else 16,
-            format = if (track.isLossless) "FLAC/PCM" else "AAC/MP3",
-            isResampled = isResampled
+            sampleRate = track.sampleRate,
+            bitDepth = track.bitDepth,
+            format = if (track.isHiRes) "Hi-Res FLAC" else if (track.isLossless) "FLAC/Lossless" else "AAC/MP3",
+            isResampled = false
         )
     }
 

@@ -14,7 +14,7 @@ class DspChainTest {
     fun testLimiterNeverExceedsFullScale() {
         val limiter = SoftLimiter()
         limiter.enabled = true
-        limiter.threshold = 0.9885f
+        limiter.threshold = 0.90f
 
         // Feed signals ranging from -5.0f to +5.0f (massive +14 dBFS overload)
         val step = 0.005f
@@ -30,6 +30,20 @@ class DspChainTest {
             input += step
         }
         assertTrue("Max peak under limiter should reach near 1.0f without clipping. Was: $maxPeak", maxPeak > 0.98f)
+    }
+
+    @Test
+    fun testLimiterStrictlyLinearBelowThreshold() {
+        val limiter = SoftLimiter()
+        limiter.enabled = true
+        limiter.threshold = 0.90f
+
+        // Test normal audio levels from -0.90f to +0.90f
+        val testLevels = floatArrayOf(-0.90f, -0.75f, -0.50f, -0.20f, -0.01f, 0.0f, 0.01f, 0.20f, 0.50f, 0.75f, 0.90f)
+        for (sample in testLevels) {
+            val output = limiter.process(sample)
+            assertEquals("Output must be bit-exact equal to input below threshold ($sample)", sample, output, 0.0f)
+        }
     }
 
     @Test
@@ -87,7 +101,7 @@ class DspChainTest {
             )
         )
 
-        // Generate 1000 Hz sine wave
+        // Generate 1000 Hz sine wave for 4410 samples (100 ms)
         val numSamples = 4410
         val input = FloatArray(numSamples)
         val output = FloatArray(numSamples)
@@ -99,19 +113,25 @@ class DspChainTest {
             output[i] = out.first
         }
 
-        // Measure steady state peak (last 2000 samples)
-        var inputPeak = 0.0f
-        var outputPeak = 0.0f
-        for (i in 2000 until numSamples) {
-            inputPeak = max(inputPeak, abs(input[i]))
-            outputPeak = max(outputPeak, abs(output[i]))
+        // Skip filter settling time (first 1000 samples) and measure over an exact integer number of cycles:
+        // At 1000 Hz and 44100 Hz, 10 complete cycles = exactly 441 samples.
+        // We measure over 20 complete cycles = 882 samples (from index 2000 to 2882).
+        val startSample = 2000
+        val evalSamples = 882
+        var inputSumSquares = 0.0
+        var outputSumSquares = 0.0
+        for (i in startSample until (startSample + evalSamples)) {
+            inputSumSquares += (input[i] * input[i]).toDouble()
+            outputSumSquares += (output[i] * output[i]).toDouble()
         }
 
-        val measuredGainLinear = outputPeak / inputPeak
-        val measuredGainDb = 20.0 * log10(measuredGainLinear.toDouble())
+        val inputRms = sqrt(inputSumSquares / evalSamples)
+        val outputRms = sqrt(outputSumSquares / evalSamples)
+        val measuredGainLinear = outputRms / inputRms
+        val measuredGainDb = 20.0 * log10(measuredGainLinear)
 
-        // Expect approximately +6 dB boost at center frequency
-        assertEquals(boostDb.toDouble(), measuredGainDb, 0.7) // Within 0.7 dB accuracy for biquad peak
+        // Peaking filter gain at center frequency must be accurate within 0.1 dB
+        assertEquals(boostDb.toDouble(), measuredGainDb, 0.10)
     }
 
     @Test
