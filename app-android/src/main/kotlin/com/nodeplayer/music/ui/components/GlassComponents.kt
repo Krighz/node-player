@@ -6,8 +6,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -34,16 +36,26 @@ fun GlassCard(
 
     Box(
         modifier = modifier
-            .glassSurface(
-                hazeState = hazeState,
-                shape = shape,
-                isOled = isOled,
-                isDark = isDark,
-                tintAlpha = tintAlpha
-            )
-            .then(clickModifier),
-        content = content
-    )
+            .clip(shape)
+            .then(clickModifier)
+    ) {
+        // 1. Frosted Glass Background Layer
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .glassSurface(
+                    hazeState = hazeState,
+                    shape = shape,
+                    isOled = isOled,
+                    isDark = isDark,
+                    tintAlpha = tintAlpha
+                )
+        )
+        // 2. High-contrast Crisp Foreground Content
+        CompositionLocalProvider(LocalContentColor provides Color.White) {
+            content()
+        }
+    }
 }
 
 @Composable
@@ -53,20 +65,26 @@ fun GlassIconButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     hazeState: HazeState? = null,
-    tint: Color = MaterialTheme.colorScheme.onSurface,
+    tint: Color = Color.White,
     size: Dp = 44.dp
 ) {
+    val shape = CircleShape
     Box(
         modifier = modifier
             .size(size)
-            .glassSurface(
-                hazeState = hazeState,
-                shape = CircleShape,
-                tintAlpha = 0.5f
-            )
+            .clip(shape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .glassSurface(
+                    hazeState = hazeState,
+                    shape = shape,
+                    tintAlpha = 0.5f
+                )
+        )
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,

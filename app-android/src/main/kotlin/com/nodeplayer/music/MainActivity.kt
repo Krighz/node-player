@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -14,10 +15,10 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -63,6 +64,10 @@ class MainActivity : ComponentActivity() {
                 var currentRoute by remember { mutableStateOf("library") }
                 var isNowPlayingExpanded by remember { mutableStateOf(false) }
 
+                BackHandler(enabled = isNowPlayingExpanded) {
+                    isNowPlayingExpanded = false
+                }
+
                 val currentTrack by viewModel.currentTrack.collectAsState()
                 val isPlaying by viewModel.isPlaying.collectAsState()
                 val currentPositionMs by viewModel.currentPositionMs.collectAsState()
@@ -74,15 +79,32 @@ class MainActivity : ComponentActivity() {
                 val artists by viewModel.artists.collectAsState()
 
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background)
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    // Main Screen Area with Haze blur provider
+                    // 1. Ambient Background Layer (This is the ONLY layer tagged with haze)
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .background(
+                                if (themeConfig.isOledBlack) {
+                                    Brush.verticalGradient(listOf(Color.Black, Color.Black))
+                                } else {
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            accentColor.copy(alpha = 0.18f),
+                                            Color(0xFF0F101A),
+                                            Color(0xFF090A10)
+                                        ),
+                                        radius = 1600f
+                                    )
+                                }
+                            )
                             .haze(hazeState)
+                    )
+
+                    // 2. Foreground Interactive Content (Not inside haze source!)
+                    Box(
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         when (currentRoute) {
                             "library" -> LibraryScreen(
@@ -115,7 +137,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // Floating Mini-Player and Frosted Bottom Bar Container
+                    // 3. Floating Mini-Player & Bottom Navigation
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -143,7 +165,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Full Now Playing Sheet (Smooth slide animation)
+                    // 4. Full Now Playing Sheet
                     AnimatedVisibility(
                         visible = isNowPlayingExpanded && currentTrack != null,
                         enter = slideInVertically(initialOffsetY = { it }),

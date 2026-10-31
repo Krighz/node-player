@@ -16,8 +16,9 @@ private val DarkColorScheme = darkColorScheme(
     background = Color(0xFF0C0D14),
     surface = Color(0xFF141622),
     onPrimary = Color.White,
-    onBackground = Color(0xFFEDEDF5),
-    onSurface = Color(0xFFEDEDF5)
+    onBackground = Color.White,
+    onSurface = Color.White,
+    onSurfaceVariant = Color(0xFFB0B3C7)
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -26,14 +27,15 @@ private val LightColorScheme = lightColorScheme(
     surface = Color(0xFFFFFFFF),
     onPrimary = Color.White,
     onBackground = Color(0xFF14151F),
-    onSurface = Color(0xFF14151F)
+    onSurface = Color(0xFF14151F),
+    onSurfaceVariant = Color(0xFF5A5D72)
 )
 
 val LocalAccentColor = staticCompositionLocalOf { DefaultAccent }
 
 @Composable
 fun NodePlayerTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = true, // Default to sleek dark glass
     accentColor: Color = DefaultAccent,
     isOled: Boolean = false,
     content: @Composable () -> Unit

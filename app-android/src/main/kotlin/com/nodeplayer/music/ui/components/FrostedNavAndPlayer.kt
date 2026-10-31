@@ -44,7 +44,7 @@ fun FrostedMiniPlayer(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.75f)
+            .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.94f)
             .clickable(onClick = onClick)
     ) {
         // Progress track at bottom
