@@ -83,6 +83,7 @@ class MainActivity : ComponentActivity() {
                 val excludedFolders by viewModel.excludedFolders.collectAsState()
                 val excludedTracks by viewModel.excludedTracks.collectAsState()
                 val minDurationSeconds by viewModel.minDurationSeconds.collectAsState()
+                val crossfadeConfig by viewModel.crossfadeConfig.collectAsState()
 
                 Box(
                     modifier = Modifier.fillMaxSize()
@@ -126,6 +127,8 @@ class MainActivity : ComponentActivity() {
                             "settings" -> SettingsScreen(
                                 outputInfo = audioOutputInfo,
                                 themeConfig = themeConfig,
+                                crossfadeConfig = crossfadeConfig,
+                                onCrossfadeConfigChange = { viewModel.updateCrossfadeConfig(it) },
                                 allFolders = folders,
                                 excludedFolders = excludedFolders,
                                 excludedTracks = excludedTracks,

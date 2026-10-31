@@ -25,9 +25,18 @@ import com.nodeplayer.music.audio.DspAudioProcessor
 class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
-    lateinit var player: ExoPlayer
-    val dspChain = DspChain()
-    lateinit var dspAudioProcessor: DspAudioProcessor
+    lateinit var crossfadeManager: com.nodeplayer.music.audio.CrossfadePlayerManager
+
+    val player: ExoPlayer
+        get() = crossfadeManager.activePlayer
+
+    val dspChain: DspChain
+        get() = crossfadeManager.activeDspChain
+
+    val dspAudioProcessor: DspAudioProcessor
+        get() = crossfadeManager.activeDspProcessor
+
+    var onTrackTransitionCallback: ((com.nodeplayer.model.Track) -> Unit)? = null
 
     companion object {
         const val CHANNEL_ID = "node_player_playback_channel"
@@ -47,35 +56,15 @@ class PlaybackService : MediaSessionService() {
                 .build()
         )
 
-        dspAudioProcessor = DspAudioProcessor(dspChain)
-
-        val customAudioSink = DefaultAudioSink.Builder(this)
-            .setAudioProcessors(arrayOf(dspAudioProcessor))
-            .build()
-
-        val renderersFactory = object : DefaultRenderersFactory(this) {
-            override fun buildAudioSink(
-                context: Context,
-                enableFloatOutput: Boolean,
-                enableAudioTrackPlaybackParams: Boolean
-            ): AudioSink {
-                return customAudioSink
+        crossfadeManager = com.nodeplayer.music.audio.CrossfadePlayerManager(
+            context = this,
+            onTrackTransition = { track ->
+                onTrackTransitionCallback?.invoke(track)
+            },
+            onMediaSessionPlayerSwapped = { newPlayer ->
+                mediaSession?.setPlayer(newPlayer)
             }
-        }.apply {
-            setEnableAudioFloatOutput(true)
-            setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
-        }
-
-        player = ExoPlayer.Builder(this, renderersFactory)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .setUsage(C.USAGE_MEDIA)
-                    .build(),
-                true // handle audio focus automatically
-            )
-            .setHandleAudioBecomingNoisy(true) // Pause when headphones unplugged
-            .build()
+        )
 
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
@@ -85,7 +74,7 @@ class PlaybackService : MediaSessionService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        mediaSession = MediaSession.Builder(this, player)
+        mediaSession = MediaSession.Builder(this, crossfadeManager.activePlayer)
             .setSessionActivity(pendingIntent)
             .build()
     }
@@ -93,6 +82,12 @@ class PlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
         return mediaSession
     }
+
+    fun setSessionPlayer(newPlayer: ExoPlayer) {
+        mediaSession?.setPlayer(newPlayer)
+    }
+
+
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -110,11 +105,12 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         instance = null
-        mediaSession?.run {
-            player.release()
-            release()
-            mediaSession = null
+        onTrackTransitionCallback = null
+        if (::crossfadeManager.isInitialized) {
+            crossfadeManager.release()
         }
+        mediaSession?.release()
+        mediaSession = null
         super.onDestroy()
     }
 

@@ -22,6 +22,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.AudioOutputInfo
+import com.nodeplayer.model.CrossfadeConfig
+import com.nodeplayer.model.FadeCurve
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
@@ -29,11 +31,14 @@ import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import dev.chrisbanes.haze.HazeState
 import java.io.File
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
     outputInfo: AudioOutputInfo,
     themeConfig: GlassThemeConfig,
+    crossfadeConfig: CrossfadeConfig = CrossfadeConfig(),
+    onCrossfadeConfigChange: (CrossfadeConfig) -> Unit = {},
     allFolders: List<MusicFolder> = emptyList(),
     excludedFolders: Set<String> = emptySet(),
     excludedTracks: List<Track> = emptyList(),
@@ -160,6 +165,130 @@ fun SettingsScreen(
                         Text("Active in ExoPlayer DefaultAudioSink", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                     }
                     Text("ACTIVE", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color(0xFF10B981)))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Crossfade & Playback Engine Section
+        Text(
+            text = "CROSSFADE & PLAYBACK",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Crossfade Main Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Dual-Player Crossfade", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text(
+                            "Seamless blend using secondary ExoPlayer with isolated DSP filter states",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    Switch(
+                        checked = crossfadeConfig.enabled,
+                        onCheckedChange = { onCrossfadeConfigChange(crossfadeConfig.copy(enabled = it)) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                if (crossfadeConfig.enabled) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // Duration Slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Crossfade Duration", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                            Text("Clamped to half duration on short tracks", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                        }
+                        Text(
+                            "%.1fs".format(crossfadeConfig.durationSeconds),
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = accent)
+                        )
+                    }
+                    Slider(
+                        value = crossfadeConfig.durationSeconds,
+                        onValueChange = { onCrossfadeConfigChange(crossfadeConfig.copy(durationSeconds = (it * 2).roundToInt() / 2f)) },
+                        valueRange = 1.0f..12.0f,
+                        steps = 21,
+                        colors = SliderDefaults.colors(
+                            thumbColor = accent,
+                            activeTrackColor = accent,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.15f)
+                        )
+                    )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // Curve Picker
+                    Text("Volume Fade Curve", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text(
+                        when (crossfadeConfig.curve) {
+                            FadeCurve.EQUAL_POWER -> "Equal Power (Constant acoustic power, cos/sin curve)"
+                            FadeCurve.LINEAR -> "Linear (Direct linear amplitude ramp)"
+                            FadeCurve.LOGARITHMIC -> "Logarithmic (Hermite S-curve, smooth endpoints)"
+                        },
+                        style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FadeCurve.values().forEach { curve ->
+                            val isSelected = crossfadeConfig.curve == curve
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { onCrossfadeConfigChange(crossfadeConfig.copy(curve = curve)) },
+                                label = { Text(curve.displayName, fontSize = 12.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = accent.copy(alpha = 0.25f),
+                                    selectedLabelColor = accent
+                                )
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // Auto Gapless Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Auto-Disable for Gapless Albums", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                            Text(
+                                "Preserves seamless continuous mix without crossfade for consecutive album tracks or live mixes",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                            )
+                        }
+                        Switch(
+                            checked = crossfadeConfig.autoGapless,
+                            onCheckedChange = { onCrossfadeConfigChange(crossfadeConfig.copy(autoGapless = it)) },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
+                    }
                 }
             }
         }

@@ -53,6 +53,19 @@ data class AudioEffectConfig(
     }
 }
 
+enum class FadeCurve(val displayName: String) {
+    LINEAR("Linear"),
+    EQUAL_POWER("Equal Power"),
+    LOGARITHMIC("Logarithmic")
+}
+
+data class CrossfadeConfig(
+    val enabled: Boolean = true,
+    val durationSeconds: Float = 4.0f,
+    val curve: FadeCurve = FadeCurve.EQUAL_POWER,
+    val autoGapless: Boolean = true
+)
+
 data class GlassThemeConfig(
     val blurRadiusDp: Float = 24.0f,
     val tintAlpha: Float = 0.65f,

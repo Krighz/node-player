@@ -93,6 +93,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _currentRms = MutableStateFlow(0.0f)
     val currentRms: StateFlow<Float> = _currentRms.asStateFlow()
 
+    // Crossfade configuration
+    private val _crossfadeConfig = MutableStateFlow(CrossfadeConfig())
+    val crossfadeConfig: StateFlow<CrossfadeConfig> = _crossfadeConfig.asStateFlow()
+
     // Folder Filtering & Library Preferences
     private val _minDurationSeconds = MutableStateFlow(30)
     val minDurationSeconds: StateFlow<Int> = _minDurationSeconds.asStateFlow()
@@ -127,6 +131,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val excluded = prefs.getStringSet("excluded_folders", emptySet()) ?: emptySet()
         _excludedFolders.value = excluded
         _minDurationSeconds.value = prefs.getInt("min_duration_sec", 30)
+
+        val cfEnabled = prefs.getBoolean("crossfade_enabled", true)
+        val cfDuration = prefs.getFloat("crossfade_duration", 4.0f)
+        val cfCurveStr = prefs.getString("crossfade_curve", FadeCurve.EQUAL_POWER.name) ?: FadeCurve.EQUAL_POWER.name
+        val cfCurve = try { FadeCurve.valueOf(cfCurveStr) } catch (_: Exception) { FadeCurve.EQUAL_POWER }
+        val cfAutoGapless = prefs.getBoolean("crossfade_auto_gapless", true)
+        _crossfadeConfig.value = CrossfadeConfig(
+            enabled = cfEnabled,
+            durationSeconds = cfDuration,
+            curve = cfCurve,
+            autoGapless = cfAutoGapless
+        )
     }
 
     private fun restoreLastPlaybackSession() {
@@ -162,6 +178,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun setupPlayerListener() {
+        PlaybackService.instance?.let { service ->
+            service.onTrackTransitionCallback = { track ->
+                viewModelScope.launch {
+                    _currentTrack.value = track
+                    updatePaletteAccent(track)
+                    updateSignalPath(track)
+                    dao.incrementPlayCount(track.id)
+                }
+            }
+            service.crossfadeManager.crossfadeConfig = _crossfadeConfig.value
+            service.crossfadeManager.applyEffectConfig(_effectConfig.value)
+        }
+
         mediaController?.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
                 _isPlaying.value = playing
@@ -265,6 +294,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         updatePaletteAccent(track)
         updateSignalPath(track)
 
+        val targetIndex = newQueue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.crossfadeConfig = _crossfadeConfig.value
+            service.crossfadeManager.playQueue(newQueue, targetIndex, 0L)
+            _isPlaying.value = true
+            startPositionTracking()
+            return
+        }
+
         val controller = mediaController
         if (controller == null) {
             Log.e("NodePlayer", "Cannot play track: mediaController is null")
@@ -295,7 +334,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 .setMediaMetadata(metadata)
                 .build()
         }
-        val targetIndex = newQueue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
 
         controller.setMediaItems(mediaItems, targetIndex, 0L)
         controller.prepare()
@@ -303,6 +341,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun togglePlayPause() {
+        val service = PlaybackService.instance
+        if (service != null) {
+            if (service.crossfadeManager.currentQueue.isEmpty() && _currentTrack.value != null) {
+                playTrack(_currentTrack.value!!)
+                return
+            }
+            service.crossfadeManager.togglePlayPause()
+            _isPlaying.value = service.crossfadeManager.activePlayer.isPlaying
+            if (_isPlaying.value) startPositionTracking() else stopPositionTracking()
+            return
+        }
+
         val controller = mediaController ?: return
         if (controller.mediaItemCount == 0 && _currentTrack.value != null) {
             playTrack(_currentTrack.value!!)
@@ -316,16 +366,31 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun skipNext() {
-        mediaController?.seekToNextMediaItem()
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.skipNext()
+        } else {
+            mediaController?.seekToNextMediaItem()
+        }
     }
 
     fun skipPrevious() {
-        mediaController?.seekToPreviousMediaItem()
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.skipPrevious()
+        } else {
+            mediaController?.seekToPreviousMediaItem()
+        }
     }
 
     fun seekTo(positionMs: Long) {
         _currentPositionMs.value = positionMs
-        mediaController?.seekTo(positionMs)
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.seekTo(positionMs)
+        } else {
+            mediaController?.seekTo(positionMs)
+        }
         _currentTrack.value?.let {
             prefs.edit().putLong("last_pos", positionMs).putLong("last_track_id", it.id).apply()
         }
@@ -335,15 +400,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         progressJob?.cancel()
         progressJob = viewModelScope.launch {
             while (isActive) {
-                mediaController?.let {
-                    val pos = it.currentPosition
-                    _currentPositionMs.value = pos
-                    _currentTrack.value?.let { track ->
-                        prefs.edit().putLong("last_pos", pos).putLong("last_track_id", track.id).apply()
-                    }
+                val service = PlaybackService.instance
+                val pos = service?.player?.currentPosition ?: mediaController?.currentPosition ?: 0L
+                val playing = service?.player?.isPlaying ?: mediaController?.isPlaying ?: false
+                _isPlaying.value = playing
+                _currentPositionMs.value = pos
+                _currentTrack.value?.let { track ->
+                    prefs.edit().putLong("last_pos", pos).putLong("last_track_id", track.id).apply()
                 }
                 // Read real RMS audio level from DSP engine
-                _currentRms.value = PlaybackService.instance?.dspAudioProcessor?.currentRms ?: 0.0f
+                _currentRms.value = service?.dspAudioProcessor?.currentRms ?: 0.0f
                 delay(120)
             }
         }
@@ -418,7 +484,34 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateEffectConfig(newConfig: AudioEffectConfig) {
         _effectConfig.value = newConfig
-        PlaybackService.instance?.dspChain?.applyConfig(newConfig)
+        PlaybackService.instance?.crossfadeManager?.applyEffectConfig(newConfig)
+    }
+
+    fun updateCrossfadeConfig(newConfig: CrossfadeConfig) {
+        _crossfadeConfig.value = newConfig
+        prefs.edit()
+            .putBoolean("crossfade_enabled", newConfig.enabled)
+            .putFloat("crossfade_duration", newConfig.durationSeconds)
+            .putString("crossfade_curve", newConfig.curve.name)
+            .putBoolean("crossfade_auto_gapless", newConfig.autoGapless)
+            .apply()
+        PlaybackService.instance?.crossfadeManager?.crossfadeConfig = newConfig
+    }
+
+    fun setCrossfadeEnabled(enabled: Boolean) {
+        updateCrossfadeConfig(_crossfadeConfig.value.copy(enabled = enabled))
+    }
+
+    fun setCrossfadeDuration(seconds: Float) {
+        updateCrossfadeConfig(_crossfadeConfig.value.copy(durationSeconds = seconds))
+    }
+
+    fun setCrossfadeCurve(curve: FadeCurve) {
+        updateCrossfadeConfig(_crossfadeConfig.value.copy(curve = curve))
+    }
+
+    fun setAutoGapless(enabled: Boolean) {
+        updateCrossfadeConfig(_crossfadeConfig.value.copy(autoGapless = enabled))
     }
 
     fun updateThemeConfig(newConfig: GlassThemeConfig) {
