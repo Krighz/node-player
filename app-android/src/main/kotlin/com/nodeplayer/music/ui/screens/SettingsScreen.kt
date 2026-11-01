@@ -128,6 +128,9 @@ fun SettingsScreen(
     var showLicensesDialog by remember { mutableStateOf(false) }
     var isFoldersExpanded by remember { mutableStateOf(true) }
     var isExcludedTracksExpanded by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var showTopMenu by remember { mutableStateOf(false) }
+    var showAdvancedSettings by remember { mutableStateOf(sharedPrefs.getBoolean("show_advanced_settings", false)) }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -148,23 +151,105 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Header
-        Column(modifier = Modifier.padding(vertical = 12.dp)) {
-            Text(
-                text = "Settings",
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.White
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Settings",
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White
+                    )
                 )
-            )
-            Text(
-                text = "Audio output, aesthetics & folder engine",
-                style = MaterialTheme.typography.bodySmall.copy(
-                    color = Color.White.copy(alpha = 0.65f)
+                Text(
+                    text = "Audio output, aesthetics & folder engine",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = Color.White.copy(alpha = 0.65f)
+                    )
                 )
-            )
+            }
+
+            Box {
+                IconButton(onClick = { showTopMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "Quick Jump",
+                        tint = accent
+                    )
+                }
+                DropdownMenu(
+                    expanded = showTopMenu,
+                    onDismissRequest = { showTopMenu = false },
+                    modifier = Modifier.background(Color(0xFF1E2130))
+                ) {
+                    listOf(
+                        "Audio Output" to 0,
+                        "UI & Glassmorphism" to 380,
+                        "Folders & Engine" to 800,
+                        "Playback & Crossfade" to 1200,
+                        "Battery & ColorOS Guide" to 1600,
+                        "Quality Tools & Analysis" to 1950,
+                        "Widgets & Scrobbler" to 2300,
+                        "About & System" to 2800
+                    ).forEach { (label, scrollTarget) ->
+                        DropdownMenuItem(
+                            text = { Text(label, color = Color.White) },
+                            onClick = {
+                                showTopMenu = false
+                                coroutineScope.launch {
+                                    scrollState.animateScrollTo(scrollTarget)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        // Search Bar
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search settings...", color = Color.White.copy(alpha = 0.45f), fontSize = 14.sp) },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = "Search",
+                    tint = accent,
+                    modifier = Modifier.size(20.dp)
+                )
+            },
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Clear",
+                            tint = Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            },
+            shape = RoundedCornerShape(14.dp),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color.White.copy(alpha = 0.08f),
+                unfocusedContainerColor = Color.White.copy(alpha = 0.04f),
+                focusedBorderColor = accent.copy(alpha = 0.5f),
+                unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         // 1. Audio Output Section
         Text(
@@ -1104,6 +1189,129 @@ fun SettingsScreen(
                     Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Reset UI & Glass to Defaults")
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Dedicated ColorOS & realme Battery Guide
+        Text(
+            text = "COLOROS & REALME BATTERY GUIDE",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(accent.copy(alpha = 0.20f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.BatteryChargingFull,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Uninterrupted Playback on realme / ColorOS",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                        )
+                        Text(
+                            text = "Prevent ColorOS from freezing Node Player during screen-off",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                val steps = listOf(
+                    "1. Battery Usage" to "Set Node Player battery usage to 'Don't optimize' (or 'Unrestricted' in Android 14).",
+                    "2. Allow Background Activity" to "Enable 'Allow background activity' in App Info > Battery.",
+                    "3. Auto-Launch & Secondary Launch" to "Enable 'Allow auto-launch' so Bluetooth and media buttons can start playback.",
+                    "4. Lock in Recent Apps" to "Open Recent Apps, tap the three dots or swipe down on Node Player and select 'Lock'."
+                )
+
+                steps.forEach { (title, desc) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF10B981),
+                            modifier = Modifier.size(16.dp).padding(top = 2.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = title,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                            )
+                            Text(
+                                text = desc,
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f))
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(AndroidSettings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "Open Settings > Battery manually", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = accent.copy(alpha = 0.25f), contentColor = Color.White)
+                    ) {
+                        Text("Battery Settings", fontSize = 11.sp, maxLines = 1)
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            try {
+                                val intent = Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.fromParts("package", context.packageName, null)
+                                }
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "Open Settings > Apps manually", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color.White.copy(alpha = 0.10f), contentColor = Color.White)
+                    ) {
+                        Text("App Details", fontSize = 11.sp, maxLines = 1)
+                    }
                 }
             }
         }
