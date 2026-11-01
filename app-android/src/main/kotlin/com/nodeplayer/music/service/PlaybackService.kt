@@ -48,8 +48,36 @@ class PlaybackService : MediaSessionService() {
 
     companion object {
         const val CHANNEL_ID = "node_player_playback_channel"
+        const val ACTION_PLAY_PAUSE = "com.nodeplayer.music.action.PLAY_PAUSE"
+        const val ACTION_NEXT = "com.nodeplayer.music.action.NEXT"
+        const val ACTION_PREV = "com.nodeplayer.music.action.PREV"
         var instance: PlaybackService? = null
             private set
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_PLAY_PAUSE -> {
+                if (::crossfadeManager.isInitialized) {
+                    val p = player
+                    if (p.isPlaying) p.pause() else p.play()
+                    com.nodeplayer.music.widget.NodePlayerWidget.updateWidget(this, crossfadeManager.currentPlayingTrack, p.isPlaying)
+                }
+            }
+            ACTION_NEXT -> {
+                if (::crossfadeManager.isInitialized) {
+                    crossfadeManager.skipNext()
+                    com.nodeplayer.music.widget.NodePlayerWidget.updateWidget(this, crossfadeManager.currentPlayingTrack, player.isPlaying)
+                }
+            }
+            ACTION_PREV -> {
+                if (::crossfadeManager.isInitialized) {
+                    crossfadeManager.skipPrevious()
+                    com.nodeplayer.music.widget.NodePlayerWidget.updateWidget(this, crossfadeManager.currentPlayingTrack, player.isPlaying)
+                }
+            }
+        }
+        return super.onStartCommand(intent, flags, startId)
     }
 
     override fun onCreate() {
@@ -68,6 +96,7 @@ class PlaybackService : MediaSessionService() {
             context = this,
             onTrackTransition = { track ->
                 onTrackTransitionCallback?.invoke(track)
+                com.nodeplayer.music.widget.NodePlayerWidget.updateWidget(this, track, player.isPlaying)
             },
             onMediaSessionPlayerSwapped = { newPlayer ->
                 mediaSession?.setPlayer(newPlayer)

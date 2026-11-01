@@ -77,6 +77,9 @@ class CrossfadePlayerManager(
     var currentQueueIndex: Int = 0
         private set
 
+    val currentPlayingTrack: Track?
+        get() = currentQueue.getOrNull(currentQueueIndex)
+
     @Volatile
     var isCrossfading: Boolean = false
         private set

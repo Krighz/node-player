@@ -514,9 +514,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (dev.type == AudioDeviceInfo.TYPE_USB_DEVICE || dev.type == AudioDeviceInfo.TYPE_USB_HEADSET) {
                     deviceName = "USB DAC (${dev.productName})"
                     deviceType = OutputDeviceType.USB
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-                        isBitPerfect = true
-                    }
+                    isBitPerfect = false
                     break
                 } else if (dev.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || dev.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES) {
                     deviceName = "Wired Headphones"
