@@ -50,6 +50,7 @@ fun LibraryScreen(
     onAddToQueue: (Track) -> Unit = {},
     qualityBadgeMode: String = "DETAILED",
     hazeState: HazeState? = null,
+    audioOutputInfo: com.nodeplayer.model.AudioOutputInfo = com.nodeplayer.model.AudioOutputInfo(),
     onAnalyzeTrack: ((Track) -> Unit)? = null,
     analyzingTrackId: Long? = null,
     modifier: Modifier = Modifier
@@ -194,6 +195,7 @@ fun LibraryScreen(
         val targetTrack = tracks.find { it.id == inspectingTrack!!.id } ?: inspectingTrack!!
         com.nodeplayer.music.ui.components.TrackDetailsSheet(
             track = targetTrack,
+            audioOutputInfo = audioOutputInfo,
             onDismiss = { inspectingTrack = null },
             hazeState = hazeState,
             onAnalyzeSong = onAnalyzeTrack,

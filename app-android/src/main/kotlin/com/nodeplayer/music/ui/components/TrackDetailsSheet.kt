@@ -3,6 +3,7 @@ package com.nodeplayer.music.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -90,7 +91,98 @@ fun TrackDetailsSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Truthful Signal Path (Section 1)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "TRUTHFUL SIGNAL PATH",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp,
+                        color = accent
+                    )
+                )
+                val isDirect = audioOutputInfo.isBitPerfect || (audioOutputInfo.isTrackInitialized && audioOutputInfo.sampleRate == track.sampleRate && track.sampleRate > 0)
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(if (isDirect) Color(0xFF10B981).copy(alpha = 0.2f) else Color(0xFF38BDF8).copy(alpha = 0.2f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = if (isDirect) "Direct Stream" else if (audioOutputInfo.isTrackInitialized) "Resampled" else "Pending Playback",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = if (isDirect) Color(0xFF10B981) else Color(0xFF38BDF8),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+
+            GlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                hazeState = hazeState,
+                tintAlpha = 0.45f
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Node 1: Source
+                    SignalPathStep(
+                        icon = Icons.Rounded.AudioFile,
+                        title = "Source Format",
+                        primary = track.formatBadgeText.ifBlank { track.mimeType.substringAfterLast("/").uppercase() },
+                        secondary = if (track.sampleRate > 0) "${track.sampleRate} Hz • ${if (track.bitDepth > 0) "${track.bitDepth}-bit" else "${track.bitrateKbps} kbps"}" else "Metadata parsed from file header",
+                        statusColor = Color(0xFF10B981)
+                    )
+
+                    SignalPathConnector()
+
+                    // Node 2: DSP Processing
+                    SignalPathStep(
+                        icon = Icons.Rounded.Tune,
+                        title = "DSP Audio Engine",
+                        primary = "32-bit Float Processing",
+                        secondary = "EQ • Reverb & Ambience • Dynamic Limiter",
+                        statusColor = accent
+                    )
+
+                    SignalPathConnector()
+
+                    // Node 3: AudioTrack / Media3 Sink
+                    val outEnc = if (audioOutputInfo.isTrackInitialized && audioOutputInfo.format.isNotBlank() && audioOutputInfo.format != "—") {
+                        "${audioOutputInfo.format} • ${audioOutputInfo.sampleRate} Hz"
+                    } else "Media3 AudioSink (Standby)"
+                    val isBitPerfect = audioOutputInfo.isBitPerfect || (audioOutputInfo.isTrackInitialized && audioOutputInfo.sampleRate == track.sampleRate && track.sampleRate > 0)
+                    SignalPathStep(
+                        icon = Icons.Rounded.VolumeUp,
+                        title = "AudioTrack Sink",
+                        primary = outEnc,
+                        secondary = if (isBitPerfect) "Bit-perfect direct stream" else if (audioOutputInfo.isTrackInitialized) "System resampler active (${audioOutputInfo.sampleRate} Hz)" else "AnalyticsListener awaiting playback initialization",
+                        statusColor = if (isBitPerfect) Color(0xFF10B981) else if (audioOutputInfo.isTrackInitialized) Color(0xFFF59E0B) else Color.White.copy(alpha = 0.4f)
+                    )
+
+                    SignalPathConnector()
+
+                    // Node 4: Output Device
+                    val devName = if (audioOutputInfo.outputDeviceName.isNotBlank() && audioOutputInfo.outputDeviceName != "—") audioOutputInfo.outputDeviceName else "System Audio Endpoint"
+                    SignalPathStep(
+                        icon = Icons.Rounded.Speaker,
+                        title = "Physical Output",
+                        primary = devName,
+                        secondary = "Android Audio HAL / Kernel routing",
+                        statusColor = Color(0xFF38BDF8),
+                        isLast = true
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
 
             // Audio Analysis Card (Section A)
             Text(
@@ -341,4 +433,85 @@ private fun SpecRow(
             modifier = Modifier.padding(vertical = 2.dp)
         )
     }
+}
+
+@Composable
+private fun SignalPathStep(
+    icon: ImageVector,
+    title: String,
+    primary: String,
+    secondary: String,
+    statusColor: Color,
+    isLast: Boolean = false
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(statusColor.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = statusColor,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 11.sp
+                    )
+                )
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(statusColor)
+                )
+            }
+            Text(
+                text = primary,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                ),
+                maxLines = 1
+            )
+            Text(
+                text = secondary,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = Color.White.copy(alpha = 0.60f),
+                    fontSize = 11.sp
+                ),
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun SignalPathConnector() {
+    Box(
+        modifier = Modifier
+            .padding(start = 17.dp, top = 2.dp, bottom = 2.dp)
+            .width(2.dp)
+            .height(14.dp)
+            .background(Color.White.copy(alpha = 0.15f))
+    )
 }

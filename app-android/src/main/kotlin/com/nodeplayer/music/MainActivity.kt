@@ -189,6 +189,7 @@ class MainActivity : ComponentActivity() {
                                 onAddToQueue = { viewModel.addToQueue(it) },
                                 qualityBadgeMode = appSettings.qualityBadgesMode,
                                 hazeState = null,
+                                audioOutputInfo = audioOutputInfo,
                                 onAnalyzeTrack = { viewModel.analyzeTrack(it) },
                                 analyzingTrackId = analyzingTrackId
                             )
