@@ -322,6 +322,7 @@ class LibraryScanner(private val context: Context) {
         excluded
     }
 
+    @Suppress("UNUSED_PARAMETER")
     private fun resolveAudioFormat(
         path: String,
         mime: String,

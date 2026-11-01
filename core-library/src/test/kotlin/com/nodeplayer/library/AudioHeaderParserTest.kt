@@ -216,4 +216,48 @@ class AudioHeaderParserTest {
         assertFalse(info.isLossless)
         assertEquals("MP3 320 kbps", info.formatDescription)
     }
+
+    @Test
+    fun testOpusHeader() {
+        val bytes = ByteArray(64)
+        // OggS magic
+        bytes[0] = 0x4F.toByte()
+        bytes[1] = 0x67.toByte()
+        bytes[2] = 0x67.toByte()
+        bytes[3] = 0x53.toByte()
+        bytes[26] = 1 // 1 segment
+        bytes[27] = 19 // segment length
+
+        // OpusHead at payload offset 28
+        "OpusHead".toByteArray().copyInto(bytes, destinationOffset = 28)
+        bytes[37] = 2 // channels = 2
+        // sample rate 48000 (0x0000BB80) at payloadOffset + 12 (offset 40)
+        bytes[40] = 0x80.toByte()
+        bytes[41] = 0xBB.toByte()
+        bytes[42] = 0x00
+        bytes[43] = 0x00
+
+        val info = AudioHeaderParser.parseBytes(bytes)
+        assertNotNull(info)
+        assertEquals("Opus", info.formatName)
+        assertEquals(48000, info.sampleRate)
+        assertEquals(0, info.bitDepth)
+        assertFalse(info.isLossless)
+        assertEquals("Opus 48 kHz", info.formatDescription)
+    }
+
+    @Test
+    fun testM3uParserBasic() {
+        val content = """
+            #EXTM3U
+            #EXTINF:240,Artist - Song 1
+            /storage/emulated/0/Music/song1.mp3
+            #EXTINF:180,Artist - Song 2
+            /storage/emulated/0/Music/song2.flac
+        """.trimIndent()
+        val paths = M3uParser.parse(content)
+        assertEquals(2, paths.size)
+        assertEquals("/storage/emulated/0/Music/song1.mp3", paths[0])
+        assertEquals("/storage/emulated/0/Music/song2.flac", paths[1])
+    }
 }

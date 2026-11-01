@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -98,20 +99,15 @@ fun SettingsScreen(
     var targetLufs by remember { mutableFloatStateOf(sharedPrefs.getFloat("loudness_target_lufs", -14.0f)) }
     var clipGuard by remember { mutableStateOf(sharedPrefs.getBoolean("loudness_clip_guard", true)) }
     var drMeter by remember { mutableStateOf(sharedPrefs.getBoolean("dr_meter_enabled", true)) }
-    var smartPlaylists by remember { mutableStateOf(sharedPrefs.getBoolean("smart_playlists_enabled", true)) }
-    var duplicateFinder by remember { mutableStateOf(sharedPrefs.getBoolean("duplicate_finder_enabled", true)) }
     var genreCrossfade by remember { mutableStateOf(sharedPrefs.getBoolean("genre_crossfade_enabled", true)) }
     var sleepFinishTrack by remember { mutableStateOf(sharedPrefs.getBoolean("sleep_timer_finish_track", true)) }
     var sleepFadeSec by remember { mutableIntStateOf(sharedPrefs.getInt("sleep_timer_fade_seconds", 10)) }
     var sleepShake by remember { mutableStateOf(sharedPrefs.getBoolean("sleep_timer_shake_extend", true)) }
     var badgeMode by remember { mutableStateOf(sharedPrefs.getString("quality_badges_mode", "DETAILED") ?: "DETAILED") }
-    var spectrogramEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("spectrogram_enabled", true)) }
-    var soundLabEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("sound_lab_enabled", true)) }
     var miniGestures by remember { mutableStateOf(sharedPrefs.getBoolean("mini_player_gestures_enabled", true)) }
     var lastFmSessionKey by remember { mutableStateOf(sharedPrefs.getString("lastfm_session_key", "") ?: "") }
     var lastFmUsername by remember { mutableStateOf(sharedPrefs.getString("lastfm_username", "") ?: "") }
     var lastFmScrobbleEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("lastfm_scrobble_enabled", false)) }
-    var lastFmPendingCount by remember { mutableIntStateOf(0) }
     var lastFmAuthToken by remember { mutableStateOf<String?>(null) }
     var customApiKey by remember { mutableStateOf(sharedPrefs.getString("custom_lastfm_api_key", "").orEmpty()) }
     var customApiSecret by remember { mutableStateOf(sharedPrefs.getString("custom_lastfm_api_secret", "").orEmpty()) }
@@ -190,6 +186,21 @@ fun SettingsScreen(
                     onDismissRequest = { showTopMenu = false },
                     modifier = Modifier.background(Color(0xFF1E2130))
                 ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                if (showAdvancedSettings) "Simplify Settings (Hide Advanced)" else "Show Advanced Settings",
+                                color = accent,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        onClick = {
+                            showTopMenu = false
+                            showAdvancedSettings = !showAdvancedSettings
+                            sharedPrefs.edit().putBoolean("show_advanced_settings", showAdvancedSettings).apply()
+                        }
+                    )
+                    HorizontalDivider(color = Color.White.copy(alpha = 0.12f))
                     listOf(
                         "Audio Output" to 0,
                         "UI & Glassmorphism" to 380,
@@ -2720,7 +2731,7 @@ fun SettingsScreen(
                         )
                     }
                     Icon(
-                        imageVector = Icons.Rounded.OpenInNew,
+                        imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                         contentDescription = "Open Link",
                         tint = Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.size(18.dp)
