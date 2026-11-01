@@ -90,7 +90,7 @@ class MainActivity : ComponentActivity() {
                 themeConfig = themeConfig,
                 artworkAccentColor = accentColor
             ) {
-                var currentRoute by remember { mutableStateOf("library") }
+                var currentRoute by remember { mutableStateOf("home") }
                 var isNowPlayingExpanded by remember { mutableStateOf(false) }
 
                 val appSettings by viewModel.appSettings.collectAsState()
@@ -102,7 +102,7 @@ class MainActivity : ComponentActivity() {
                     if (isNowPlayingExpanded) {
                         isNowPlayingExpanded = false
                     } else if (isSubRoute) {
-                        currentRoute = "more"
+                        currentRoute = "home"
                     }
                 }
 
@@ -156,6 +156,19 @@ class MainActivity : ComponentActivity() {
 
                         // 2. Foreground Interactive UI (Cards use clean translucent glass; no recursive blur)
                         when (currentRoute) {
+                            "home" -> com.nodeplayer.music.ui.screens.HomeScreen(
+                                allTracks = allTracks,
+                                currentTrack = currentTrack,
+                                isPlaying = isPlaying,
+                                onTrackClick = { track, queue ->
+                                    viewModel.playTrack(track, queue)
+                                },
+                                onPlayPauseClick = { viewModel.togglePlayPause() },
+                                onOpenSmartPlaylists = { currentRoute = "smart_playlists" },
+                                onOpenStats = { currentRoute = "stats" },
+                                onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
+                                hazeState = null
+                            )
                             "library" -> LibraryScreen(
                                 tracks = allTracks,
                                 albums = albums,

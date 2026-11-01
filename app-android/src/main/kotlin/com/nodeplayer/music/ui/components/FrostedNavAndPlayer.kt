@@ -198,9 +198,9 @@ fun FrostedBottomBar(
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
+        Triple("home", "Home", Icons.Rounded.Home),
         Triple("library", "Library", Icons.Rounded.LibraryMusic),
-        Triple("equalizer", "Sound Lab", Icons.Rounded.GraphicEq),
-        Triple("more", "More", Icons.Rounded.MoreHoriz),
+        Triple("equalizer", "Equalizer", Icons.Rounded.GraphicEq),
         Triple("settings", "Settings", Icons.Rounded.Settings)
     )
 
