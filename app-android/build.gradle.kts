@@ -164,7 +164,7 @@ dependencies {
     ksp("androidx.room:room-compiler:$roomVersion")
 
     // DataStore
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.3.0")
 
     // WorkManager for background audio analysis
     implementation("androidx.work:work-runtime-ktx:2.9.0")
