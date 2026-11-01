@@ -1,7 +1,10 @@
 package com.nodeplayer.music.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -25,6 +28,8 @@ import dev.chrisbanes.haze.HazeState
 fun EqualizerScreen(
     config: AudioEffectConfig,
     onConfigChange: (AudioEffectConfig) -> Unit,
+    systemEqActive: Boolean = false,
+    systemSessionCount: Int = 0,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
@@ -55,7 +60,7 @@ fun EqualizerScreen(
                     )
                 )
                 Text(
-                    text = "32-bit float biquad pipeline",
+                    text = "32-bit float biquad & DynamicsProcessing",
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
                     )
@@ -68,6 +73,73 @@ fun EqualizerScreen(
                 onCheckedChange = { onConfigChange(config.copy(eqEnabled = it)) },
                 colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
             )
+        }
+
+        if (systemEqActive) {
+            Spacer(modifier = Modifier.height(6.dp))
+            GlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                hazeState = hazeState
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(Color(0xFF10B981), CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "System-Wide EQ Active ($systemSessionCount session${if (systemSessionCount == 1) "" else "s"})",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
+                        )
+                        Text(
+                            text = "Applying DynamicsProcessing. In-app biquad EQ is bypassed to prevent double equalization.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Presets Chips Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AudioEffectConfig.PRESETS.keys.forEach { preset ->
+                val isSelected = config.presetName == preset
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        val gains = AudioEffectConfig.PRESETS[preset] ?: return@FilterChip
+                        val updatedBands = config.bands.mapIndexed { idx, band ->
+                            band.copy(gainDb = gains.getOrElse(idx) { 0f })
+                        }
+                        onConfigChange(config.copy(presetName = preset, bands = updatedBands, eqEnabled = true))
+                    },
+                    label = { Text(preset, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = accent.copy(alpha = 0.25f),
+                        selectedLabelColor = accent
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSelected,
+                        borderColor = if (isSelected) accent else Color.White.copy(alpha = 0.2f),
+                        selectedBorderColor = accent
+                    )
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -108,10 +180,20 @@ fun EqualizerScreen(
             hazeState = hazeState
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "10-Band Parametric EQ",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "10-Band Parametric EQ",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Text(
+                        text = "Preset: ${config.presetName}",
+                        style = MaterialTheme.typography.labelSmall.copy(color = accent, fontWeight = FontWeight.Bold)
+                    )
+                }
                 Spacer(modifier = Modifier.height(12.dp))
 
                 config.bands.forEachIndexed { index, band ->
@@ -132,7 +214,7 @@ fun EqualizerScreen(
                             onValueChange = { newGain ->
                                 val updatedBands = config.bands.toMutableList()
                                 updatedBands[index] = band.copy(gainDb = newGain)
-                                onConfigChange(config.copy(bands = updatedBands))
+                                onConfigChange(config.copy(presetName = "Custom", bands = updatedBands))
                             },
                             valueRange = -12f..12f,
                             enabled = config.eqEnabled,

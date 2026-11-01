@@ -77,6 +77,13 @@ class PlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, crossfadeManager.activePlayer)
             .setSessionActivity(pendingIntent)
             .build()
+
+        SystemWideEqService.onStateChanged = { running ->
+            crossfadeManager.onSystemEqStateChanged(running)
+        }
+        if (SystemWideEqService.isRunning) {
+            crossfadeManager.onSystemEqStateChanged(true)
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -104,6 +111,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        SystemWideEqService.onStateChanged = null
         instance = null
         onTrackTransitionCallback = null
         if (::crossfadeManager.isInitialized) {

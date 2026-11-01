@@ -39,6 +39,9 @@ fun SettingsScreen(
     themeConfig: GlassThemeConfig,
     crossfadeConfig: CrossfadeConfig = CrossfadeConfig(),
     onCrossfadeConfigChange: (CrossfadeConfig) -> Unit = {},
+    systemEqEnabled: Boolean = false,
+    systemEqSessions: List<com.nodeplayer.music.service.SystemWideEqService.SessionInfo> = emptyList(),
+    onToggleSystemEq: (Boolean) -> Unit = {},
     allFolders: List<MusicFolder> = emptyList(),
     excludedFolders: Set<String> = emptySet(),
     excludedTracks: List<Track> = emptyList(),
@@ -287,6 +290,117 @@ fun SettingsScreen(
                             checked = crossfadeConfig.autoGapless,
                             onCheckedChange = { onCrossfadeConfigChange(crossfadeConfig.copy(autoGapless = it)) },
                             colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // System-Wide Equalizer Section
+        Text(
+            text = "SYSTEM-WIDE AUDIO EFFECTS",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Main Switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("System-Wide EQ (All Apps)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text(
+                            "Applies 10-band EQ & dynamics limiter to other apps broadcasting AudioEffect sessions",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    Switch(
+                        checked = systemEqEnabled,
+                        onCheckedChange = onToggleSystemEq,
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                if (systemEqEnabled) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // Live Sessions Telemetry
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Active Sessions", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                            Text(
+                                if (systemEqSessions.isNotEmpty())
+                                    "${systemEqSessions.size} app session(s) intercepted"
+                                else
+                                    "Standby: Waiting for media apps to broadcast session",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                            )
+                        }
+                        Text(
+                            if (systemEqSessions.isNotEmpty()) "INTERCEPTING" else "LISTENING",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = if (systemEqSessions.isNotEmpty()) Color(0xFF10B981) else accent
+                            )
+                        )
+                    }
+
+                    if (systemEqSessions.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        systemEqSessions.forEach { session ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 2.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    session.packageName,
+                                    style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Medium),
+                                    maxLines = 1
+                                )
+                                Text(
+                                    "Session ${session.sessionId}",
+                                    style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.6f))
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // Anti-Double-EQ Note
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF10B981),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "In-app biquad EQ is bypassed automatically to prevent double-EQ processing.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
                         )
                     }
                 }

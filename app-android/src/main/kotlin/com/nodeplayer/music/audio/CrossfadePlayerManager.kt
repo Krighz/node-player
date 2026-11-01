@@ -180,9 +180,38 @@ class CrossfadePlayerManager(
         }
     }
 
+    var currentEffectConfig: AudioEffectConfig = AudioEffectConfig()
+        private set
+
     fun applyEffectConfig(config: AudioEffectConfig) {
+        currentEffectConfig = config
         dspChainA.applyConfig(config)
         dspChainB.applyConfig(config)
+        if (com.nodeplayer.music.service.SystemWideEqService.isRunning) {
+            // Bypass internal equalizer to prevent double equalization
+            dspChainA.equalizer.enabled = false
+            dspChainB.equalizer.enabled = false
+        }
+    }
+
+    fun onSystemEqStateChanged(running: Boolean) {
+        if (running) {
+            dspChainA.equalizer.enabled = false
+            dspChainB.equalizer.enabled = false
+            val sA = playerA.audioSessionId
+            val sB = playerB.audioSessionId
+            if (sA > 0) com.nodeplayer.music.service.SystemWideEqService.instance?.attachSession(sA, context.packageName)
+            if (sB > 0) com.nodeplayer.music.service.SystemWideEqService.instance?.attachSession(sB, context.packageName)
+            Log.i(TAG, "[SystemEQ] Active -> Bypassed internal software EQ to prevent double EQ (sessions $sA, $sB)")
+        } else {
+            dspChainA.equalizer.enabled = currentEffectConfig.eqEnabled
+            dspChainB.equalizer.enabled = currentEffectConfig.eqEnabled
+            val sA = playerA.audioSessionId
+            val sB = playerB.audioSessionId
+            if (sA > 0) com.nodeplayer.music.service.SystemWideEqService.instance?.releaseSession(sA)
+            if (sB > 0) com.nodeplayer.music.service.SystemWideEqService.instance?.releaseSession(sB)
+            Log.i(TAG, "[SystemEQ] Inactive -> Restored internal software EQ (eqEnabled=${currentEffectConfig.eqEnabled})")
+        }
     }
 
     fun playQueue(queue: List<Track>, startIndex: Int, startPositionMs: Long = 0L) {
@@ -205,6 +234,13 @@ class CrossfadePlayerManager(
         }
         player.prepare()
         player.play()
+
+        if (com.nodeplayer.music.service.SystemWideEqService.isRunning) {
+            val s = player.audioSessionId
+            if (s > 0) com.nodeplayer.music.service.SystemWideEqService.instance?.attachSession(s, context.packageName)
+            dspChainA.equalizer.enabled = false
+            dspChainB.equalizer.enabled = false
+        }
 
         Log.d(TAG, "[Playback] Playing track [idx=$startIndex]: \"${track.title}\" on ${if (activeIndex == 0) "PlayerA" else "PlayerB"}")
         onTrackTransition(track)
@@ -384,6 +420,10 @@ class CrossfadePlayerManager(
         currentQueueIndex++
 
         onMediaSessionPlayerSwapped(activePlayer)
+        if (com.nodeplayer.music.service.SystemWideEqService.isRunning) {
+            val s = activePlayer.audioSessionId
+            if (s > 0) com.nodeplayer.music.service.SystemWideEqService.instance?.attachSession(s, context.packageName)
+        }
         if (newTrack != null) {
             onTrackTransition(newTrack)
         }

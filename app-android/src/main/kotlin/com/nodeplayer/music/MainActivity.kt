@@ -75,6 +75,8 @@ class MainActivity : ComponentActivity() {
                 val currentRms by viewModel.currentRms.collectAsState()
                 val audioOutputInfo by viewModel.audioOutputInfo.collectAsState()
                 val effectConfig by viewModel.effectConfig.collectAsState()
+                val systemEqEnabled by viewModel.systemEqEnabled.collectAsState()
+                val systemEqSessions by viewModel.systemEqSessions.collectAsState()
 
                 val allTracks by viewModel.allTracks.collectAsState()
                 val albums by viewModel.albums.collectAsState()
@@ -122,6 +124,8 @@ class MainActivity : ComponentActivity() {
                             "equalizer" -> EqualizerScreen(
                                 config = effectConfig,
                                 onConfigChange = { viewModel.updateEffectConfig(it) },
+                                systemEqActive = systemEqEnabled,
+                                systemSessionCount = systemEqSessions.size,
                                 hazeState = null
                             )
                             "settings" -> SettingsScreen(
@@ -129,6 +133,9 @@ class MainActivity : ComponentActivity() {
                                 themeConfig = themeConfig,
                                 crossfadeConfig = crossfadeConfig,
                                 onCrossfadeConfigChange = { viewModel.updateCrossfadeConfig(it) },
+                                systemEqEnabled = systemEqEnabled,
+                                systemEqSessions = systemEqSessions,
+                                onToggleSystemEq = { viewModel.setSystemEqEnabled(it) },
                                 allFolders = folders,
                                 excludedFolders = excludedFolders,
                                 excludedTracks = excludedTracks,

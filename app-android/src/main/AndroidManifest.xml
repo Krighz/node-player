@@ -30,6 +30,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.media.action.DISPLAY_AUDIO_EFFECT_CONTROL_PANEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <service
@@ -42,6 +46,23 @@
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- System-Wide Audio Effects Foreground Service -->
+        <service
+            android:name=".service.SystemWideEqService"
+            android:enabled="true"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback" />
+
+        <!-- BroadcastReceiver for System Audio Sessions -->
+        <receiver
+            android:name=".service.AudioSessionReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.media.action.OPEN_AUDIO_EFFECT_CONTROL_SESSION" />
+                <action android:name="android.media.action.CLOSE_AUDIO_EFFECT_CONTROL_SESSION" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

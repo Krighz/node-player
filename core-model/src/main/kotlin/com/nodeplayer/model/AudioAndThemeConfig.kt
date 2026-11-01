@@ -27,6 +27,7 @@ data class EqBandConfig(
 
 data class AudioEffectConfig(
     val eqEnabled: Boolean = false,
+    val presetName: String = "Flat",
     val bands: List<EqBandConfig> = default10Bands(),
     val preampGainDb: Float = 0.0f,
     val limiterEnabled: Boolean = true,
@@ -50,6 +51,28 @@ data class AudioEffectConfig(
             EqBandConfig(8, 8000f, 0f, 1.414f),
             EqBandConfig(9, 16000f, 0f, 1.414f)
         )
+
+        val PRESETS: Map<String, List<Float>> = mapOf(
+            "Flat" to listOf(0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f),
+            "Bass Boost" to listOf(5.5f, 4.5f, 3.2f, 1.5f, 0f, 0f, 0f, 0f, 0f, 0f),
+            "Treble Boost" to listOf(0f, 0f, 0f, 0f, 0f, 0.5f, 2.0f, 3.8f, 5.0f, 6.0f),
+            "Vocal" to listOf(-2.0f, -1.0f, 0f, 1.5f, 3.0f, 3.5f, 2.8f, 1.0f, 0f, -1.0f),
+            "Electronic" to listOf(4.5f, 4.0f, 2.0f, 0f, -1.0f, 0.5f, 2.0f, 3.5f, 4.5f, 4.0f),
+            "Rock" to listOf(4.0f, 2.5f, -0.5f, -1.5f, -0.5f, 1.0f, 2.5f, 3.5f, 4.0f, 4.0f),
+            "Acoustic" to listOf(2.5f, 2.0f, 1.0f, 0.5f, 1.5f, 1.5f, 2.0f, 2.5f, 3.0f, 2.5f)
+        )
+
+        fun createPreset(name: String): AudioEffectConfig {
+            val gains = PRESETS[name] ?: PRESETS["Flat"]!!
+            val bands = default10Bands().mapIndexed { idx, band ->
+                band.copy(gainDb = gains.getOrElse(idx) { 0f })
+            }
+            return AudioEffectConfig(
+                eqEnabled = true,
+                presetName = name,
+                bands = bands
+            )
+        }
     }
 }
 

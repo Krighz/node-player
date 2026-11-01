@@ -113,6 +113,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _excludedTracks = MutableStateFlow<List<Track>>(emptyList())
     val excludedTracks: StateFlow<List<Track>> = _excludedTracks.asStateFlow()
 
+    // System-Wide Equalizer
+    private val _systemEqEnabled = MutableStateFlow(false)
+    val systemEqEnabled: StateFlow<Boolean> = _systemEqEnabled.asStateFlow()
+    val systemEqSessions: StateFlow<List<com.nodeplayer.music.service.SystemWideEqService.SessionInfo>> =
+        com.nodeplayer.music.service.SystemWideEqService.activeSessionsState
+
     private var progressJob: Job? = null
 
     init {
@@ -143,6 +149,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             curve = cfCurve,
             autoGapless = cfAutoGapless
         )
+
+        val sysEq = prefs.getBoolean("system_eq_enabled", false)
+        _systemEqEnabled.value = sysEq
+        if (sysEq) {
+            com.nodeplayer.music.service.SystemWideEqService.start(getApplication(), _effectConfig.value)
+        }
     }
 
     private fun restoreLastPlaybackSession() {
@@ -485,6 +497,31 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun updateEffectConfig(newConfig: AudioEffectConfig) {
         _effectConfig.value = newConfig
         PlaybackService.instance?.crossfadeManager?.applyEffectConfig(newConfig)
+        com.nodeplayer.music.service.SystemWideEqService.updateConfig(newConfig)
+    }
+
+    fun applyEqPreset(presetName: String) {
+        val preset = AudioEffectConfig.createPreset(presetName).copy(
+            preampGainDb = _effectConfig.value.preampGainDb,
+            limiterEnabled = _effectConfig.value.limiterEnabled,
+            limiterThresholdDb = _effectConfig.value.limiterThresholdDb,
+            replayGainMode = _effectConfig.value.replayGainMode,
+            stereoWidth = _effectConfig.value.stereoWidth,
+            crossfeedEnabled = _effectConfig.value.crossfeedEnabled
+        )
+        updateEffectConfig(preset)
+    }
+
+    fun setSystemEqEnabled(enabled: Boolean) {
+        _systemEqEnabled.value = enabled
+        prefs.edit().putBoolean("system_eq_enabled", enabled).apply()
+        if (enabled) {
+            com.nodeplayer.music.service.SystemWideEqService.start(getApplication(), _effectConfig.value)
+            PlaybackService.instance?.crossfadeManager?.onSystemEqStateChanged(true)
+        } else {
+            com.nodeplayer.music.service.SystemWideEqService.stop(getApplication())
+            PlaybackService.instance?.crossfadeManager?.onSystemEqStateChanged(false)
+        }
     }
 
     fun updateCrossfadeConfig(newConfig: CrossfadeConfig) {
