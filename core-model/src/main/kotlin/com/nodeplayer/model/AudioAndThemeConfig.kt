@@ -2,15 +2,22 @@ package com.nodeplayer.model
 
 data class AudioOutputInfo(
     val outputDeviceName: String = "Internal Speaker",
-    val sampleRate: Int = 44100,
-    val bitDepth: Int = 16,
-    val channels: Int = 2,
-    val format: String = "PCM_16BIT",
+    val sampleRate: Int = 0,
+    val bitDepth: Int = 0,
+    val channels: Int = 0,
+    val format: String = "—",
     val isBitPerfect: Boolean = false,
     val isResampled: Boolean = false,
-    val originalSampleRate: Int = 44100,
-    val originalBitDepth: Int = 16
-)
+    val originalSampleRate: Int = 0,
+    val originalBitDepth: Int = 0,
+    val isTrackInitialized: Boolean = false
+) {
+    val sampleRateDisplay: String
+        get() = if (sampleRate > 0) "${sampleRate} Hz" else "—"
+
+    val encodingDisplay: String
+        get() = if (format.isNotBlank() && format != "—") format else "—"
+}
 
 enum class ReplayGainMode {
     OFF,

@@ -262,6 +262,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun setupPlayerListener() {
+        PlaybackService.onAudioTrackConfigChangedCallback = { sampleRate, encoding, channels ->
+            _audioOutputInfo.value = _audioOutputInfo.value.copy(
+                sampleRate = sampleRate,
+                format = encoding,
+                channels = channels,
+                isTrackInitialized = true,
+                isResampled = _currentTrack.value?.let { it.sampleRate > 0 && it.sampleRate != sampleRate } ?: false
+            )
+        }
+
         PlaybackService.instance?.let { service ->
             service.onTrackTransitionCallback = { track ->
                 viewModelScope.launch {
@@ -800,13 +810,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun updateSignalPath(track: Track) {
         val currentInfo = _audioOutputInfo.value
+        val isResampled = if (currentInfo.isTrackInitialized && currentInfo.sampleRate > 0 && track.sampleRate > 0) {
+            currentInfo.sampleRate != track.sampleRate
+        } else false
         _audioOutputInfo.value = currentInfo.copy(
             originalSampleRate = track.sampleRate,
             originalBitDepth = track.bitDepth,
-            sampleRate = track.sampleRate,
-            bitDepth = track.bitDepth,
-            format = if (track.isHiRes) "Hi-Res FLAC" else if (track.isLossless) "FLAC/Lossless" else "AAC/MP3",
-            isResampled = false
+            isResampled = isResampled
         )
     }
 

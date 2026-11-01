@@ -2,8 +2,11 @@ package com.nodeplayer.music.library
 
 import android.content.ContentUris
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.MediaStore
+import com.nodeplayer.library.AudioFormatInfo
+import com.nodeplayer.library.AudioHeaderParser
 import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
 import com.nodeplayer.model.MusicFolder
@@ -126,9 +129,8 @@ class LibraryScanner(private val context: Context) {
                             path.endsWith(".wav", ignoreCase = true) ||
                             path.endsWith(".alac", ignoreCase = true)
 
-                    val sampleRate = if (isLossless && (path.contains("96k") || path.contains("192k"))) 96000 else 44100
-                    val bitDepth = if (isLossless && (path.contains("24bit") || path.contains("24b"))) 24 else 16
-                    val isHiRes = sampleRate > 48000 || bitDepth > 16
+                    val formatInfo = resolveAudioFormat(path, mime, size, duration, isLossless)
+                    val isHiRes = formatInfo.sampleRate > 48000 || formatInfo.bitDepth > 16
 
                     tracks.add(
                         Track(
@@ -142,13 +144,16 @@ class LibraryScanner(private val context: Context) {
                             path = path,
                             size = size,
                             mimeType = mime,
-                            sampleRate = sampleRate,
-                            bitDepth = bitDepth,
+                            sampleRate = formatInfo.sampleRate,
+                            bitDepth = formatInfo.bitDepth,
+                            channels = formatInfo.channels,
+                            bitrateKbps = formatInfo.bitrateKbps,
+                            formatDescription = formatInfo.formatDescription,
                             trackNumber = trackNo,
                             discNumber = discNo,
                             year = year,
                             dateAdded = dateAdded,
-                            isLossless = isLossless,
+                            isLossless = formatInfo.isLossless,
                             isHiRes = isHiRes
                         )
                     )
@@ -260,6 +265,16 @@ class LibraryScanner(private val context: Context) {
                     val year = cursor.getInt(yearCol)
                     val dateAdded = cursor.getLong(dateCol)
 
+                    val isLossless = mime.contains("flac", ignoreCase = true) ||
+                            mime.contains("alac", ignoreCase = true) ||
+                            mime.contains("wav", ignoreCase = true) ||
+                            path.endsWith(".flac", ignoreCase = true) ||
+                            path.endsWith(".wav", ignoreCase = true) ||
+                            path.endsWith(".alac", ignoreCase = true)
+
+                    val formatInfo = resolveAudioFormat(path, mime, size, duration, isLossless)
+                    val isHiRes = formatInfo.sampleRate > 48000 || formatInfo.bitDepth > 16
+
                     excluded.add(
                         Track(
                             id = id,
@@ -272,14 +287,17 @@ class LibraryScanner(private val context: Context) {
                             path = path,
                             size = size,
                             mimeType = mime,
-                            sampleRate = 44100,
-                            bitDepth = 16,
+                            sampleRate = formatInfo.sampleRate,
+                            bitDepth = formatInfo.bitDepth,
+                            channels = formatInfo.channels,
+                            bitrateKbps = formatInfo.bitrateKbps,
+                            formatDescription = formatInfo.formatDescription,
                             trackNumber = trackNo,
                             discNumber = 1,
                             year = year,
                             dateAdded = dateAdded,
-                            isLossless = false,
-                            isHiRes = false
+                            isLossless = formatInfo.isLossless,
+                            isHiRes = isHiRes
                         )
                     )
                 }
@@ -288,5 +306,70 @@ class LibraryScanner(private val context: Context) {
             e.printStackTrace()
         }
         excluded
+    }
+
+    private fun resolveAudioFormat(
+        path: String,
+        mime: String,
+        size: Long,
+        durationMs: Long,
+        isLossless: Boolean
+    ): AudioFormatInfo {
+        val file = java.io.File(path)
+        val parsed = AudioHeaderParser.parseFile(file, durationMs)
+        if (parsed != null) return parsed
+
+        var sampleRate = 44100
+        var bitrateKbps = 0
+
+        try {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(path)
+            val srStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)
+            val brStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
+            srStr?.toIntOrNull()?.let { if (it > 0) sampleRate = it }
+            brStr?.toIntOrNull()?.let { if (it > 0) bitrateKbps = it / 1000 }
+            retriever.release()
+        } catch (_: Exception) {}
+
+        val ext = path.substringAfterLast('.', "").uppercase()
+        val formatName = when {
+            mime.contains("aac", ignoreCase = true) || ext == "M4A" || ext == "AAC" -> "AAC"
+            mime.contains("mp3", ignoreCase = true) || ext == "MP3" -> "MP3"
+            mime.contains("flac", ignoreCase = true) || ext == "FLAC" -> "FLAC"
+            mime.contains("wav", ignoreCase = true) || ext == "WAV" -> "WAV"
+            mime.contains("ogg", ignoreCase = true) || ext == "OGG" -> "OGG"
+            mime.contains("opus", ignoreCase = true) || ext == "OPUS" -> "Opus"
+            else -> ext.ifBlank { mime.substringAfterLast("/").uppercase() }
+        }
+
+        return if (isLossless) {
+            val bitDepth = 16
+            val rateFormatted = AudioHeaderParser.formatSampleRate(sampleRate)
+            AudioFormatInfo(
+                formatName = formatName,
+                sampleRate = sampleRate,
+                bitDepth = bitDepth,
+                bitrateKbps = 0,
+                channels = 2,
+                isLossless = true,
+                formatDescription = "$formatName $bitDepth-bit / $rateFormatted"
+            )
+        } else {
+            if (bitrateKbps == 0 && size > 0 && durationMs > 0) {
+                val durSec = durationMs / 1000.0
+                bitrateKbps = ((size * 8) / (durSec * 1000.0)).toInt()
+            }
+            val desc = if (bitrateKbps > 0) "$formatName $bitrateKbps kbps" else formatName
+            AudioFormatInfo(
+                formatName = formatName,
+                sampleRate = sampleRate,
+                bitDepth = 0, // Lossy files have NO bit depth
+                bitrateKbps = bitrateKbps,
+                channels = 2,
+                isLossless = false,
+                formatDescription = desc
+            )
+        }
     }
 }

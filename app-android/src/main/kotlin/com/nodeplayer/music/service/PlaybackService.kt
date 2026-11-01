@@ -108,6 +108,8 @@ class PlaybackService : MediaSessionService() {
         const val EXTRA_SLEEP_MINUTES = "extra_sleep_minutes"
         const val EXTRA_SLEEP_FINISH_TRACK = "extra_sleep_finish_track"
         const val EXTRA_SLEEP_FADE_SECONDS = "extra_sleep_fade_seconds"
+
+        var onAudioTrackConfigChangedCallback: ((sampleRate: Int, encoding: String, channels: Int) -> Unit)? = null
         const val EXTRA_SLEEP_STOP_TRACKS = "extra_sleep_stop_tracks"
         const val EXTRA_SLEEP_SHAKE_EXTEND = "extra_sleep_shake_extend"
         const val EXTRA_SEEK_FRACTION = "extra_seek_fraction"
@@ -282,6 +284,9 @@ class PlaybackService : MediaSessionService() {
                 newPlayer.addListener(playerListener)
             }
         )
+        crossfadeManager.onAudioTrackConfigChanged = { sr, enc, ch ->
+            onAudioTrackConfigChangedCallback?.invoke(sr, enc, ch)
+        }
         crossfadeManager.activePlayer.addListener(playerListener)
 
         sleepTimerManager = SleepTimerManager(
@@ -513,6 +518,7 @@ class PlaybackService : MediaSessionService() {
         SystemWideEqService.onStateChanged = null
         instance = null
         onTrackTransitionCallback = null
+        onAudioTrackConfigChangedCallback = null
         if (::crossfadeManager.isInitialized) {
             crossfadeManager.release()
         }

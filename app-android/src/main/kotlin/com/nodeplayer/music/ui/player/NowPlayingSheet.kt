@@ -213,6 +213,21 @@ fun NowPlayingSheet(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    val landscapeOutputDisplay = if (audioOutputInfo.isTrackInitialized) {
+                        val dev = if (audioOutputInfo.outputDeviceName.isNotBlank() && audioOutputInfo.outputDeviceName != "—") " • ${audioOutputInfo.outputDeviceName}" else ""
+                        "${audioOutputInfo.format} • ${audioOutputInfo.sampleRate} Hz$dev"
+                    } else "—"
+                    Text(
+                        text = "${track.formatBadgeText}  |  Output: $landscapeOutputDisplay",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = accent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
                     Spacer(modifier = Modifier.height(20.dp))
 
@@ -380,6 +395,22 @@ fun NowPlayingSheet(
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center
                     )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    val portraitOutputDisplay = if (audioOutputInfo.isTrackInitialized) {
+                        val dev = if (audioOutputInfo.outputDeviceName.isNotBlank() && audioOutputInfo.outputDeviceName != "—") " • ${audioOutputInfo.outputDeviceName}" else ""
+                        "${audioOutputInfo.format} • ${audioOutputInfo.sampleRate} Hz$dev"
+                    } else "—"
+                    Text(
+                        text = "${track.formatBadgeText}  |  Output: $portraitOutputDisplay",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = accent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -447,6 +478,7 @@ fun NowPlayingSheet(
     if (showTrackDetailsSheet) {
         com.nodeplayer.music.ui.components.TrackDetailsSheet(
             track = track,
+            audioOutputInfo = audioOutputInfo,
             onDismiss = { showTrackDetailsSheet = false }
         )
     }
@@ -513,7 +545,6 @@ private fun HeroArtwork(
 
 @Composable
 private fun SignalPathBadge(audioOutputInfo: AudioOutputInfo, track: Track, accent: Color) {
-    val rateText = if (track.sampleRate >= 1000) "${track.sampleRate / 1000} kHz" else "${track.sampleRate} Hz"
     Row(
         modifier = Modifier
             .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
@@ -527,7 +558,7 @@ private fun SignalPathBadge(audioOutputInfo: AudioOutputInfo, track: Track, acce
         )
         Spacer(modifier = Modifier.width(6.dp))
         Text(
-            text = "${if (track.isHiRes) "Hi-Res" else "FLAC"} • $rateText",
+            text = track.formatBadgeText.ifBlank { if (track.isHiRes) "Hi-Res" else if (track.isLossless) "FLAC" else "MP3" },
             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 11.sp)
         )
     }

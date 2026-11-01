@@ -250,15 +250,8 @@ fun SongsList(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (qualityBadgeMode != "OFF") {
                                 if (qualityBadgeMode == "DETAILED") {
-                                    val formatStr = track.mimeType.substringAfterLast("/").uppercase()
-                                    FormatBadge(formatStr, Color(0xFF94A3B8))
+                                    FormatBadge(track.formatBadgeText.ifBlank { track.mimeType.substringAfterLast("/").uppercase() }, Color(0xFF38BDF8))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    if (track.sampleRate > 0) {
-                                        val rateStr = "${track.sampleRate / 1000}k"
-                                        val depthStr = if (track.bitDepth > 0) "${track.bitDepth}b " else ""
-                                        FormatBadge("$depthStr$rateStr", Color(0xFF38BDF8))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                    }
                                     when (track.hiResStatus) {
                                         com.nodeplayer.model.HiResStatus.GENUINE -> {
                                             FormatBadge("Genuine", Color(0xFF10B981))
@@ -285,6 +278,9 @@ fun SongsList(
                                         Spacer(modifier = Modifier.width(4.dp))
                                     } else if (track.isLossless) {
                                         FormatBadge("Lossless", Color(0xFF818CF8))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    } else {
+                                        FormatBadge(track.formatBadgeText.ifBlank { "Audio" }, Color(0xFF94A3B8))
                                         Spacer(modifier = Modifier.width(4.dp))
                                     }
                                     if (track.dynamicRangeScore != null) {

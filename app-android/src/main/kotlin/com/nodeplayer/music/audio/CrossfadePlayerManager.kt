@@ -65,6 +65,8 @@ class CrossfadePlayerManager(
     val standbyPlayer: ExoPlayer
         get() = if (activeIndex == 0) playerB else playerA
 
+    var onAudioTrackConfigChanged: ((sampleRate: Int, encoding: String, channels: Int) -> Unit)? = null
+
     val activeDspProcessor: DspAudioProcessor
         get() = if (activeIndex == 0) dspAudioProcessorA else dspAudioProcessorB
 
@@ -129,7 +131,7 @@ class CrossfadePlayerManager(
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
         }
 
-        return ExoPlayer.Builder(context, renderersFactory)
+        val player = ExoPlayer.Builder(context, renderersFactory)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -139,6 +141,24 @@ class CrossfadePlayerManager(
             )
             .setHandleAudioBecomingNoisy(true)
             .build()
+
+        player.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
+            override fun onAudioTrackInitialized(
+                eventTime: androidx.media3.exoplayer.analytics.AnalyticsListener.EventTime,
+                audioTrackConfig: AudioSink.AudioTrackConfig
+            ) {
+                val encStr = when (audioTrackConfig.encoding) {
+                    C.ENCODING_PCM_16BIT -> "16-bit PCM"
+                    C.ENCODING_PCM_24BIT -> "24-bit PCM"
+                    C.ENCODING_PCM_32BIT -> "32-bit PCM"
+                    C.ENCODING_PCM_FLOAT -> "32-bit Float"
+                    else -> "PCM (${audioTrackConfig.encoding})"
+                }
+                onAudioTrackConfigChanged?.invoke(audioTrackConfig.sampleRate, encStr, audioTrackConfig.channelConfig)
+            }
+        })
+
+        return player
     }
 
     private fun setupPlayerListeners() {

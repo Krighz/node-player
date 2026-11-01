@@ -31,6 +31,7 @@ import java.util.Locale
 @Composable
 fun TrackDetailsSheet(
     track: Track,
+    audioOutputInfo: com.nodeplayer.model.AudioOutputInfo = com.nodeplayer.model.AudioOutputInfo(),
     onDismiss: () -> Unit,
     hazeState: HazeState? = null
 ) {
@@ -230,9 +231,20 @@ fun TrackDetailsSheet(
                 tintAlpha = 0.35f
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    SpecRow(Icons.Rounded.AudioFile, "Format", track.mimeType.substringAfterLast("/"))
-                    SpecRow(Icons.Rounded.GraphicEq, "Sample Rate", "${track.sampleRate} Hz (${if (track.isHiRes) "Hi-Res" else "Standard"})")
-                    SpecRow(Icons.Rounded.Layers, "Bit Depth", "${track.bitDepth}-bit")
+                    SpecRow(Icons.Rounded.AudioFile, "Source Format", track.formatBadgeText.ifBlank { "—" })
+                    if (track.isLossless && track.bitDepth > 0) {
+                        SpecRow(Icons.Rounded.Layers, "Bit Depth", "${track.bitDepth}-bit")
+                    }
+                    if (track.bitrateKbps > 0) {
+                        SpecRow(Icons.Rounded.Speed, "Bitrate", "${track.bitrateKbps} kbps")
+                    }
+                    SpecRow(Icons.Rounded.GraphicEq, "Sample Rate", if (track.sampleRate > 0) "${track.sampleRate} Hz (${if (track.isHiRes) "Hi-Res" else "Standard"})" else "—")
+                    val outEnc = if (audioOutputInfo.isTrackInitialized && audioOutputInfo.format.isNotBlank() && audioOutputInfo.format != "—") {
+                        "${audioOutputInfo.format} • ${audioOutputInfo.sampleRate} Hz"
+                    } else "—"
+                    SpecRow(Icons.Rounded.VolumeUp, "Media3 Output", outEnc)
+                    val devName = if (audioOutputInfo.outputDeviceName.isNotBlank() && audioOutputInfo.outputDeviceName != "—") audioOutputInfo.outputDeviceName else "—"
+                    SpecRow(Icons.Rounded.Speaker, "Output Device", devName)
                     SpecRow(Icons.Rounded.Timer, "Duration", track.durationFormatted)
                     SpecRow(Icons.Rounded.Storage, "File Size", "%.2f MB".format(track.size / (1024.0 * 1024.0)))
                     SpecRow(Icons.Rounded.PlayArrow, "Play Count", "${track.playCount} plays")
