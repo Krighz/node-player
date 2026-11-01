@@ -18,6 +18,8 @@ class NodePlayerApplication : Application() {
         super.onCreate()
         instance = this
 
+        com.nodeplayer.music.diagnostics.LocalCrashLogger.init(this)
+
         if (BuildConfig.DEBUG) {
             android.os.StrictMode.setThreadPolicy(
                 android.os.StrictMode.ThreadPolicy.Builder()

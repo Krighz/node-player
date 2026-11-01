@@ -22,7 +22,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -83,6 +85,7 @@ fun SettingsScreen(
     val accent = LocalAccentColor.current
     val scrollState = rememberScrollState()
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
 
     var gaplessEnabled by remember { mutableStateOf(true) }
     var crossfadeSeconds by remember { mutableFloatStateOf(2.0f) }
@@ -2353,6 +2356,161 @@ fun SettingsScreen(
         }
 
         Spacer(modifier = Modifier.height(20.dp))
+
+        // Diagnostics & Local Crash Logger Card
+        Text(
+            text = "DIAGNOSTICS & LOCAL CRASH LOGS",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        var showCrashLogDialog by remember { mutableStateOf(false) }
+        val hasCrash = remember { com.nodeplayer.music.diagnostics.LocalCrashLogger.hasCrashLog(context) }
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Local Crash Recorder",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                        )
+                        Text(
+                            text = if (hasCrash) "Recorded crash detected on device" else "Zero crashes recorded (System healthy)",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = if (hasCrash) Color(0xFFF59E0B) else Color(0xFF10B981)
+                            )
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (hasCrash) Color(0xFFF59E0B).copy(alpha = 0.2f) else Color(0xFF10B981).copy(alpha = 0.2f))
+                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    ) {
+                        Text(
+                            text = if (hasCrash) "Log Present" else "Healthy",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (hasCrash) Color(0xFFF59E0B) else Color(0xFF10B981),
+                                fontWeight = FontWeight.Bold
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = "Strictly private. Logs are kept on your phone only and never transmitted anywhere.",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f), fontSize = 11.sp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = { showCrashLogDialog = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = accent.copy(alpha = 0.25f), contentColor = Color.White)
+                    ) {
+                        Icon(imageVector = Icons.Rounded.BugReport, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("View Log", fontSize = 11.sp)
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            val log = com.nodeplayer.music.diagnostics.LocalCrashLogger.getCrashLogs(context)
+                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Node Player Crash Log")
+                                putExtra(Intent.EXTRA_TEXT, log)
+                            }
+                            context.startActivity(Intent.createChooser(sendIntent, "Share Crash Log"))
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color.White.copy(alpha = 0.10f), contentColor = Color.White)
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Export Log", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        if (showCrashLogDialog) {
+            val logText = remember { com.nodeplayer.music.diagnostics.LocalCrashLogger.getCrashLogs(context) }
+            AlertDialog(
+                onDismissRequest = { showCrashLogDialog = false },
+                title = { Text("Local Crash Log") },
+                text = {
+                    Column {
+                        Text(
+                            text = "Stored privately in app directory without external network transmission.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Black.copy(alpha = 0.4f))
+                                .padding(8.dp)
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = logText,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontSize = 11.sp,
+                                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                                )
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        clipboardManager.setText(AnnotatedString(logText))
+                        Toast.makeText(context, "Log copied to clipboard", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Text("Copy")
+                    }
+                },
+                dismissButton = {
+                    Row {
+                        if (hasCrash) {
+                            TextButton(onClick = {
+                                com.nodeplayer.music.diagnostics.LocalCrashLogger.clearCrashLogs(context)
+                                Toast.makeText(context, "Crash log cleared", Toast.LENGTH_SHORT).show()
+                                showCrashLogDialog = false
+                            }) {
+                                Text("Clear Log", color = Color(0xFFEF4444))
+                            }
+                        }
+                        TextButton(onClick = { showCrashLogDialog = false }) {
+                            Text("Close")
+                        }
+                    }
+                }
+            )
+        }
 
         Spacer(modifier = Modifier.height(20.dp))
 
