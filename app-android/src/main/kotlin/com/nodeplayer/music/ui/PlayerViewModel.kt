@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.ComponentName
 import android.content.ContentUris
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.BitmapFactory
 import android.media.AudioDeviceCallback
@@ -36,6 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -225,24 +227,42 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    data class PendingPlayRequest(
+        val track: Track,
+        val queue: List<Track>,
+        val targetIndex: Int,
+        val timestamp: Long = System.currentTimeMillis()
+    )
+    private var pendingPlayRequest: PendingPlayRequest? = null
+
+    private fun processPendingPlayRequest() {
+        val pending = pendingPlayRequest ?: return
+        pendingPlayRequest = null
+        val waitTime = System.currentTimeMillis() - pending.timestamp
+        Log.i("PlayerViewModel", "Executing queued tap for '${pending.track.title}' (queued ${waitTime}ms ago)")
+        playTrack(pending.track, pending.queue)
+    }
+
     private fun restoreLastPlaybackSession() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val lastTrackId = prefs.getLong("last_track_id", -1L)
             val lastPos = prefs.getLong("last_pos", 0L)
             val allList = dao.getAllTracksList().map { it.toTrack() }
-            if (allList.isNotEmpty()) {
-                _queue.value = allList
-            }
-            if (lastTrackId > 0) {
-                val track = dao.getTrackById(lastTrackId)?.toTrack()
-                if (track != null) {
-                    _currentTrack.value = track
-                    _currentPositionMs.value = lastPos
-                    updatePaletteAccent(track)
-                    updateSignalPath(track)
-                    if (allList.isNotEmpty()) {
-                        val targetIdx = allList.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
-                        PlaybackService.instance?.crossfadeManager?.setQueueIfEmpty(allList, targetIdx)
+            withContext(Dispatchers.Main) {
+                if (allList.isNotEmpty()) {
+                    _queue.value = allList
+                }
+                if (lastTrackId > 0) {
+                    val track = allList.find { it.id == lastTrackId }
+                    if (track != null) {
+                        _currentTrack.value = track
+                        _currentPositionMs.value = lastPos
+                        updatePaletteAccent(track)
+                        updateSignalPath(track)
+                        if (allList.isNotEmpty()) {
+                            val targetIdx = allList.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+                            PlaybackService.instance?.crossfadeManager?.setQueueIfEmpty(allList, targetIdx)
+                        }
                     }
                 }
             }
@@ -250,6 +270,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun initMediaController() {
+        PlaybackService.onServiceCreated = { _ ->
+            viewModelScope.launch(Dispatchers.Main) {
+                setupPlayerListener()
+                processPendingPlayRequest()
+            }
+        }
+
         val sessionToken = SessionToken(
             getApplication(),
             ComponentName(getApplication(), PlaybackService::class.java)
@@ -259,6 +286,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 mediaController = controllerFuture?.get()
                 setupPlayerListener()
+                processPendingPlayRequest()
             } catch (e: Exception) {
                 Log.e("NodePlayer", "MediaController connect failed", e)
             }
@@ -324,7 +352,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         minDurationSec: Int = _minDurationSeconds.value,
         whitelistedIds: Set<Long> = _whitelistedTrackIds.value
     ) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val minMs = minDurationSec * 1000L
             val scannedTracks = scanner.scanAllTracks(
                 minDurationMs = minMs,
@@ -357,7 +385,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun loadExcludedTracks(currentTracks: List<Track> = allTracks.value) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val excluded = scanner.scanExcludedTracks(currentTracks)
             _excludedTracks.value = excluded
         }
@@ -377,7 +405,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun toggleFolderExclusion(folderPath: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val current = _excludedFolders.value.toMutableSet()
             val willBeExcluded = !current.contains(folderPath)
             if (willBeExcluded) {
@@ -415,6 +443,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun playTrack(track: Track, newQueue: List<Track> = listOf(track)) {
+        val tapTime = System.currentTimeMillis()
         val effectiveQueue = if (newQueue.size <= 1 && allTracks.value.isNotEmpty()) {
             allTracks.value
         } else {
@@ -422,6 +451,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
         _queue.value = effectiveQueue
         _currentTrack.value = track
+        _isPlaying.value = true
         updatePaletteAccent(track)
         updateSignalPath(track)
 
@@ -434,43 +464,54 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             _isPlaying.value = true
             startPositionTracking()
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
+            Log.d("PlayerViewModel", "Play dispatched directly to service in ${System.currentTimeMillis() - tapTime}ms")
             return
         }
 
         val controller = mediaController
-        if (controller == null) {
-            Log.e("NodePlayer", "Cannot play track: mediaController is null")
+        if (controller != null) {
+            viewModelScope.launch(Dispatchers.Default) {
+                val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
+                val mediaItems = effectiveQueue.map {
+                    val contentUri = ContentUris.withAppendedId(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        it.id
+                    )
+                    val artworkUri = ContentUris.withAppendedId(albumArtBaseUri, it.albumId)
+                    val metadata = androidx.media3.common.MediaMetadata.Builder()
+                        .setTitle(it.title)
+                        .setArtist(it.artist)
+                        .setAlbumTitle(it.album)
+                        .setArtworkUri(artworkUri)
+                        .build()
+
+                    MediaItem.Builder()
+                        .setMediaId(it.id.toString())
+                        .setUri(contentUri)
+                        .setMediaMetadata(metadata)
+                        .build()
+                }
+                withContext(Dispatchers.Main) {
+                    controller.stop()
+                    controller.clearMediaItems()
+                    controller.setMediaItems(mediaItems, targetIndex, 0L)
+                    controller.prepare()
+                    controller.play()
+                    Log.d("PlayerViewModel", "Play dispatched to MediaController in ${System.currentTimeMillis() - tapTime}ms")
+                }
+            }
             return
         }
 
-        controller.stop()
-        controller.clearMediaItems()
-
-        // ALWAYS use ContentUris with MediaStore Content URI for scoped storage compatibility
-        val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
-        val mediaItems = effectiveQueue.map {
-            val contentUri = ContentUris.withAppendedId(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                it.id
-            )
-            val artworkUri = ContentUris.withAppendedId(albumArtBaseUri, it.albumId)
-            val metadata = androidx.media3.common.MediaMetadata.Builder()
-                .setTitle(it.title)
-                .setArtist(it.artist)
-                .setAlbumTitle(it.album)
-                .setArtworkUri(artworkUri)
-                .build()
-
-            MediaItem.Builder()
-                .setMediaId(it.id.toString())
-                .setUri(contentUri)
-                .setMediaMetadata(metadata)
-                .build()
+        // Neither service nor mediaController is ready yet: QUEUE IT, NEVER DROP IT
+        Log.i("PlayerViewModel", "Playback service/controller not ready; queued tap for '${track.title}'. Starting service eagerly...")
+        pendingPlayRequest = PendingPlayRequest(track, effectiveQueue, targetIndex, tapTime)
+        try {
+            val serviceIntent = Intent(getApplication(), PlaybackService::class.java)
+            getApplication<Application>().startService(serviceIntent)
+        } catch (e: Exception) {
+            Log.e("PlayerViewModel", "Error starting PlaybackService for pending play", e)
         }
-
-        controller.setMediaItems(mediaItems, targetIndex, 0L)
-        controller.prepare()
-        controller.play()
     }
 
     fun togglePlayPause() {
@@ -490,20 +531,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        val controller = mediaController ?: return
-        if (controller.mediaItemCount == 0 && _currentTrack.value != null) {
-            playTrack(_currentTrack.value!!, allTracks.value)
+        val controller = mediaController
+        if (controller != null) {
+            if (controller.mediaItemCount == 0 && _currentTrack.value != null) {
+                playTrack(_currentTrack.value!!, allTracks.value)
+                return
+            }
+            if (controller.isPlaying) {
+                controller.pause()
+            } else {
+                if (controller.playbackState == Player.STATE_ENDED ||
+                    (controller.duration > 0 && controller.currentPosition >= controller.duration)
+                ) {
+                    controller.seekTo(0L)
+                }
+                controller.play()
+            }
             return
         }
-        if (controller.isPlaying) {
-            controller.pause()
-        } else {
-            if (controller.playbackState == Player.STATE_ENDED ||
-                (controller.duration > 0 && controller.currentPosition >= controller.duration)
-            ) {
-                controller.seekTo(0L)
-            }
-            controller.play()
+
+        val trackToPlay = _currentTrack.value ?: allTracks.value.firstOrNull()
+        if (trackToPlay != null) {
+            playTrack(trackToPlay, allTracks.value)
         }
     }
 
@@ -725,7 +774,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun saveAsTrackPreset(track: Track, name: String = "Track Preset") {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val json = AudioProfileSerializer.toJson(_effectConfig.value)
             dao.insertAudioPreset(
                 com.nodeplayer.music.data.AudioPresetEntity(
@@ -740,7 +789,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun saveAsAlbumPreset(track: Track, name: String = "Album Preset") {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val json = AudioProfileSerializer.toJson(_effectConfig.value)
             dao.insertAudioPreset(
                 com.nodeplayer.music.data.AudioPresetEntity(
@@ -755,7 +804,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun clearTrackOrAlbumPreset(track: Track) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             dao.deleteAudioPresetById("track_${track.id}")
             dao.deleteAudioPresetById("album_${track.albumId}")
             _activePresetLabel.value = null

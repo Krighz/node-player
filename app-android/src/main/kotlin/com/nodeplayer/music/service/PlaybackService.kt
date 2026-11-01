@@ -119,6 +119,7 @@ class PlaybackService : MediaSessionService() {
 
         var instance: PlaybackService? = null
             private set
+        var onServiceCreated: ((PlaybackService) -> Unit)? = null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -254,6 +255,7 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        onServiceCreated?.invoke(this)
         createNotificationChannel()
 
         setMediaNotificationProvider(
@@ -391,11 +393,12 @@ class PlaybackService : MediaSessionService() {
             crossfadeManager.onSystemEqStateChanged(true)
         }
 
-        val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
-        val shuffle = prefs.getBoolean("shuffle_enabled", false)
-        crossfadeManager.setShuffle(shuffle)
-
         serviceScope.launch(Dispatchers.IO) {
+            val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+            val shuffle = prefs.getBoolean("shuffle_enabled", false)
+            kotlinx.coroutines.withContext(Dispatchers.Main) {
+                crossfadeManager.setShuffle(shuffle)
+            }
             try {
                 val db = (application as? com.nodeplayer.music.NodePlayerApplication)?.database
                 val tracks = db?.playerDao()?.getAllTracksList()?.map { it.toTrack() } ?: emptyList()
