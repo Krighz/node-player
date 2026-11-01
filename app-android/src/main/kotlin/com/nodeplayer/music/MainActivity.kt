@@ -90,6 +90,11 @@ class MainActivity : ComponentActivity() {
                 themeConfig = themeConfig,
                 artworkAccentColor = accentColor
             ) {
+                val prefs = remember { getSharedPreferences("node_player_prefs", android.content.Context.MODE_PRIVATE) }
+                var showOnboarding by remember {
+                    mutableStateOf(!prefs.getBoolean("onboarding_completed", false))
+                }
+
                 var currentRoute by remember { mutableStateOf("home") }
                 var isNowPlayingExpanded by remember { mutableStateOf(false) }
 
@@ -352,6 +357,18 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         }
+                    }
+
+                    if (showOnboarding) {
+                        com.nodeplayer.music.ui.components.FirstRunOnboardingDialog(
+                            accentColor = accentColor,
+                            onRequestPermissions = { checkAndRequestPermissions() },
+                            onStartScan = { viewModel.refreshLibrary() },
+                            onDismiss = {
+                                prefs.edit().putBoolean("onboarding_completed", true).apply()
+                                showOnboarding = false
+                            }
+                        )
                     }
                 }
             }

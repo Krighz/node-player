@@ -2749,6 +2749,62 @@ fun SettingsScreen(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 
+                // Audio Engine Architecture Specs
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Text(
+                        text = "Audio Architecture Specs",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "• 32-bit Float low-latency audio processing pipeline\n• Freeverb 4-comb 2-allpass diffusion reverb\n• Truthful real-time bit-perfect / resampled sink inspector\n• 10-band biquad parametric & graphic equalizer\n• Dynamic Room caching & off-main-thread parser",
+                        style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f), lineHeight = 18.sp)
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Replay Welcome Tour
+                var showTourDialog by remember { mutableStateOf(false) }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showTourDialog = true }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.Explore,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Replay Welcome Tour",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = "Replay",
+                        tint = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                if (showTourDialog) {
+                    com.nodeplayer.music.ui.components.FirstRunOnboardingDialog(
+                        accentColor = accent,
+                        onRequestPermissions = { },
+                        onStartScan = { },
+                        onDismiss = { showTourDialog = false }
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
                 // Open Source Licenses Button
                 Row(
                     modifier = Modifier
