@@ -135,6 +135,7 @@ data class SmartPlaylist(
 
             return listOf(
                 SmartPlaylist(
+                    id = 1L,
                     name = "Recently Added",
                     ruleGroup = SmartRuleGroup(
                         operator = LogicalOperator.AND,
@@ -146,6 +147,7 @@ data class SmartPlaylist(
                     sortAscending = false
                 ),
                 SmartPlaylist(
+                    id = 2L,
                     name = "Lossless Only",
                     ruleGroup = SmartRuleGroup(
                         operator = LogicalOperator.AND,
@@ -155,6 +157,7 @@ data class SmartPlaylist(
                     )
                 ),
                 SmartPlaylist(
+                    id = 3L,
                     name = "Not Played in 3 Months",
                     ruleGroup = SmartRuleGroup(
                         operator = LogicalOperator.AND,
@@ -164,6 +167,7 @@ data class SmartPlaylist(
                     )
                 ),
                 SmartPlaylist(
+                    id = 4L,
                     name = "Long Tracks (>6 min)",
                     ruleGroup = SmartRuleGroup(
                         operator = LogicalOperator.AND,

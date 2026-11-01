@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -136,7 +137,7 @@ fun SmartPlaylistsScreen(
                 contentPadding = PaddingValues(bottom = 190.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(matching, key = { it.id }) { track ->
+                itemsIndexed(matching, key = { index, track -> "${track.id}_$index" }) { _, track ->
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         hazeState = hazeState,
@@ -168,7 +169,7 @@ fun SmartPlaylistsScreen(
                 contentPadding = PaddingValues(bottom = 190.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(smartPlaylists, key = { it.id }) { playlist ->
+                itemsIndexed(smartPlaylists, key = { index, playlist -> "${playlist.id}_$index" }) { _, playlist ->
                     val matchedCount = remember(allTracks, playlist) {
                         playlist.filterTracks(allTracks).size
                     }

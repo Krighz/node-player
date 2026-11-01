@@ -307,7 +307,7 @@ class PlaybackService : MediaSessionService() {
         }
 
         // Periodic stats ticker & scrobble eligibility checker (every 3s)
-        serviceScope.launch(Dispatchers.IO) {
+        serviceScope.launch(Dispatchers.Main) {
             while (isActive) {
                 delay(3000L)
                 if (::crossfadeManager.isInitialized && crossfadeManager.activePlayer.isPlaying) {
@@ -321,12 +321,14 @@ class PlaybackService : MediaSessionService() {
                             val sk = prefs.getString("lastfm_session_key", "") ?: ""
                             val enabled = prefs.getBoolean("lastfm_scrobble_enabled", false)
                             if (enabled && sk.isNotBlank()) {
-                                com.nodeplayer.music.library.LastFmClient.scrobble(
-                                    track = track,
-                                    timestampSec = System.currentTimeMillis() / 1000L,
-                                    sessionKey = sk,
-                                    context = this@PlaybackService
-                                )
+                                kotlinx.coroutines.withContext(Dispatchers.IO) {
+                                    com.nodeplayer.music.library.LastFmClient.scrobble(
+                                        track = track,
+                                        timestampSec = System.currentTimeMillis() / 1000L,
+                                        sessionKey = sk,
+                                        context = this@PlaybackService
+                                    )
+                                }
                             }
                         }
                     }
