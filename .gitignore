@@ -1,12 +1,33 @@
-*.iml
-.gradle
-/local.properties
-/.idea
-.DS_Store
+# Gradle
+.gradle/
 build/
 */build/
-captures/
-.externalNativeBuild
-.cxx
+
+# Local configuration & environment
+local.properties
+.env
+.env.*
+
+# Keystores & Signing Keys
 *.keystore
 *.jks
+*.p12
+
+# Crash dumps & logs
+*.log
+hs_err_pid*
+replay_pid*
+
+# IDE & Editor
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.swp
+*~
+
+# Android studio captures & external native builds
+captures/
+.externalNativeBuild/
+.cxx/
+*.hprof

@@ -12,6 +12,7 @@
     
     <!-- Opt-in Network for Lyrics only -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:name=".NodePlayerApplication"
@@ -36,6 +37,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Floating Transparent Scrub Sheet Activity -->
+        <activity
+            android:name=".widget.ScrubSheetActivity"
+            android:exported="true"
+            android:theme="@style/Theme.NodePlayer.TranslucentDialog"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="" />
+
         <service
             android:name=".service.PlaybackService"
             android:enabled="true"
@@ -54,6 +64,13 @@
             android:exported="true"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- Live Draggable Floating Overlay Mini Player -->
+        <service
+            android:name=".widget.FloatingOverlayService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <!-- BroadcastReceiver for System Audio Sessions -->
         <receiver
             android:name=".service.AudioSessionReceiver"
@@ -64,9 +81,72 @@
             </intent-filter>
         </receiver>
 
-        <!-- Home Screen App Widget -->
+        <!-- Dedicated BroadcastReceiver for Instant Widget Remote Actions -->
+        <receiver
+            android:name=".widget.WidgetActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.nodeplayer.music.action.PLAY_PAUSE" />
+                <action android:name="com.nodeplayer.music.action.NEXT" />
+                <action android:name="com.nodeplayer.music.action.PREV" />
+                <action android:name="com.nodeplayer.music.action.SEEK_BACK_10" />
+                <action android:name="com.nodeplayer.music.action.SEEK_FORWARD_30" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Home Screen App Widgets (Liquid Glass Variants) -->
+        <receiver
+            android:name=".widget.WidgetCard4x2Provider"
+            android:label="Node Player Card"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_card_4x2_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.WidgetLyrics4x3Provider"
+            android:label="Node Player Lyrics"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_lyrics_4x3_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.WidgetSlim4x1Provider"
+            android:label="Node Player Slim"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_slim_4x1_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.WidgetSquare2x2Provider"
+            android:label="Node Player Square"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_square_2x2_info" />
+        </receiver>
+
+        <!-- Legacy App Widget -->
         <receiver
             android:name=".widget.NodePlayerWidget"
+            android:label="Node Player Classic"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

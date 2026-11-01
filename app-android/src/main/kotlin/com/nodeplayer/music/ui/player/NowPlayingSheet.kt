@@ -60,6 +60,8 @@ fun NowPlayingSheet(
     onSeekTo: (Long) -> Unit,
     onDismiss: () -> Unit,
     onOpenEq: () -> Unit,
+    isShuffle: Boolean = false,
+    onToggleShuffle: () -> Unit = {},
     rmsLevel: Float = 0.0f,
     isPerformanceMode: Boolean = false,
     modifier: Modifier = Modifier
@@ -232,6 +234,8 @@ fun NowPlayingSheet(
                         onPlayPause = onPlayPauseClick,
                         onSkipNext = onSkipNextClick,
                         onSkipPrevious = onSkipPreviousClick,
+                        isShuffle = isShuffle,
+                        onToggleShuffle = onToggleShuffle,
                         rmsLevel = rmsLevel,
                         isPerformanceMode = isPerformanceMode
                     )
@@ -371,6 +375,8 @@ fun NowPlayingSheet(
                     onPlayPause = onPlayPauseClick,
                     onSkipNext = onSkipNextClick,
                     onSkipPrevious = onSkipPreviousClick,
+                    isShuffle = isShuffle,
+                    onToggleShuffle = onToggleShuffle,
                     rmsLevel = rmsLevel,
                     isPerformanceMode = isPerformanceMode
                 )
@@ -536,6 +542,8 @@ private fun PlayerControlButtons(
     onPlayPause: () -> Unit,
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
+    isShuffle: Boolean = false,
+    onToggleShuffle: () -> Unit = {},
     rmsLevel: Float = 0.0f,
     isPerformanceMode: Boolean = false
 ) {
@@ -595,11 +603,19 @@ private fun PlayerControlButtons(
             Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(36.dp))
         }
 
-        // Shuffle / Repeat Icon
+        // Shuffle Icon
         IconButton(
-            onClick = { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                onToggleShuffle()
+            }
         ) {
-            Icon(Icons.Rounded.Shuffle, contentDescription = "Shuffle", tint = Color.White.copy(alpha = 0.50f), modifier = Modifier.size(24.dp))
+            Icon(
+                Icons.Rounded.Shuffle,
+                contentDescription = "Shuffle",
+                tint = if (isShuffle) accent else Color.White.copy(alpha = 0.40f),
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }

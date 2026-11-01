@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
                 val excludedTracks by viewModel.excludedTracks.collectAsState()
                 val minDurationSeconds by viewModel.minDurationSeconds.collectAsState()
                 val crossfadeConfig by viewModel.crossfadeConfig.collectAsState()
+                val isShuffleEnabled by viewModel.isShuffleEnabled.collectAsState()
 
                 val currentDeviceType by viewModel.currentDeviceType.collectAsState()
                 val convolverCpuPercent by viewModel.convolverCpuPercent.collectAsState()
@@ -232,6 +233,8 @@ class MainActivity : ComponentActivity() {
                                     isNowPlayingExpanded = false
                                     currentRoute = "equalizer"
                                 },
+                                isShuffle = isShuffleEnabled,
+                                onToggleShuffle = { viewModel.toggleShuffle() },
                                 rmsLevel = currentRms,
                                 isPerformanceMode = themeConfig.isPerformanceMode
                             )

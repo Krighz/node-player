@@ -72,9 +72,13 @@ class CrossfadePlayerManager(
         get() = if (activeIndex == 0) dspChainA else dspChainB
 
     var crossfadeConfig: CrossfadeConfig = CrossfadeConfig()
+    var originalQueue: List<Track> = emptyList()
+        private set
     var currentQueue: List<Track> = emptyList()
         private set
     var currentQueueIndex: Int = 0
+        private set
+    var isShuffleEnabled: Boolean = false
         private set
 
     val currentPlayingTrack: Track?
@@ -179,6 +183,9 @@ class CrossfadePlayerManager(
             } else if (currentQueueIndex + 1 < currentQueue.size) {
                 Log.d(TAG, "[Gapless] Natural end of track reached, advancing gapless to track ${currentQueueIndex + 1}")
                 playIndex(currentQueueIndex + 1, 0L)
+            } else if (currentQueue.isNotEmpty()) {
+                Log.d(TAG, "[Gapless] Natural end of queue reached, wrapping around to track 0")
+                playIndex(0, 0L)
             }
         }
     }
@@ -265,9 +272,20 @@ class CrossfadePlayerManager(
         if (isCrossfading) {
             abortCrossfade(restoreActive = false)
         }
-        currentQueue = queue
-        currentQueueIndex = startIndex
-        val track = queue[startIndex]
+        originalQueue = queue
+        val targetTrack = queue[startIndex]
+        if (isShuffleEnabled && queue.size > 1) {
+            val shuffled = queue.toMutableList()
+            shuffled.removeAt(startIndex)
+            shuffled.shuffle()
+            shuffled.add(0, targetTrack)
+            currentQueue = shuffled
+            currentQueueIndex = 0
+        } else {
+            currentQueue = queue
+            currentQueueIndex = startIndex
+        }
+        val track = currentQueue[currentQueueIndex]
 
         val player = activePlayer
         player.stop()
@@ -292,6 +310,46 @@ class CrossfadePlayerManager(
         onTrackTransition(track)
     }
 
+    fun setShuffle(enabled: Boolean) {
+        if (isShuffleEnabled == enabled) return
+        isShuffleEnabled = enabled
+        if (currentQueue.isEmpty()) return
+        val currentTrack = currentPlayingTrack ?: return
+        if (enabled && originalQueue.size > 1) {
+            val shuffled = originalQueue.toMutableList()
+            val currentIdx = shuffled.indexOfFirst { it.id == currentTrack.id }
+            if (currentIdx >= 0) shuffled.removeAt(currentIdx)
+            shuffled.shuffle()
+            shuffled.add(0, currentTrack)
+            currentQueue = shuffled
+            currentQueueIndex = 0
+            Log.d(TAG, "[Shuffle] Enabled: ${shuffled.size} tracks shuffled with '${currentTrack.title}' first")
+        } else if (!enabled && originalQueue.isNotEmpty()) {
+            currentQueue = originalQueue
+            currentQueueIndex = originalQueue.indexOfFirst { it.id == currentTrack.id }.coerceAtLeast(0)
+            Log.d(TAG, "[Shuffle] Disabled: Original queue restored at index $currentQueueIndex")
+        }
+    }
+
+    fun setQueueIfEmpty(queue: List<Track>, initialIndex: Int = 0) {
+        if (currentQueue.isEmpty() && queue.isNotEmpty()) {
+            originalQueue = queue
+            val targetIdx = initialIndex.coerceIn(0, queue.size - 1)
+            val targetTrack = queue[targetIdx]
+            if (isShuffleEnabled && queue.size > 1) {
+                val shuffled = queue.toMutableList()
+                shuffled.removeAt(targetIdx)
+                shuffled.shuffle()
+                shuffled.add(0, targetTrack)
+                currentQueue = shuffled
+                currentQueueIndex = 0
+            } else {
+                currentQueue = queue
+                currentQueueIndex = targetIdx
+            }
+        }
+    }
+
     fun playIndex(index: Int, startPositionMs: Long = 0L) {
         if (index !in currentQueue.indices) return
         playQueue(currentQueue, index, startPositionMs)
@@ -307,6 +365,11 @@ class CrossfadePlayerManager(
     }
 
     fun play() {
+        if (activePlayer.playbackState == Player.STATE_ENDED ||
+            (activePlayer.duration > 0 && activePlayer.currentPosition >= activePlayer.duration)
+        ) {
+            activePlayer.seekTo(0L)
+        }
         if (isCrossfading && fadePaused) {
             fadePaused = false
             val pausedDuration = SystemClock.uptimeMillis() - fadePauseTimestamp
@@ -355,6 +418,9 @@ class CrossfadePlayerManager(
             completeCrossfade()
         } else if (currentQueueIndex + 1 < currentQueue.size) {
             playIndex(currentQueueIndex + 1, 0L)
+        } else if (currentQueue.isNotEmpty()) {
+            Log.d(TAG, "[Playback] End of queue reached in skipNext. Looping back to start.")
+            playIndex(0, 0L)
         }
     }
 
@@ -367,6 +433,9 @@ class CrossfadePlayerManager(
             activePlayer.seekTo(0L)
         } else if (currentQueueIndex > 0) {
             playIndex(currentQueueIndex - 1, 0L)
+        } else if (currentQueue.isNotEmpty()) {
+            Log.d(TAG, "[Playback] Beginning of queue reached in skipPrevious. Wrapping to end.")
+            playIndex(currentQueue.size - 1, 0L)
         } else {
             activePlayer.seekTo(0L)
         }
@@ -400,26 +469,36 @@ class CrossfadePlayerManager(
         }
 
         // Check whether to initiate crossfade
-        if (crossfadeConfig.enabled && currentQueueIndex + 1 < currentQueue.size) {
-            val currentTrack = currentQueue[currentQueueIndex]
-            val nextTrack = currentQueue[currentQueueIndex + 1]
-            val duration = if (primary.duration > 0) primary.duration else currentTrack.durationMs
-            val position = primary.currentPosition
-            if (duration > 0) {
-                val remaining = duration - position
+        if (crossfadeConfig.enabled && currentQueue.isNotEmpty()) {
+            val hasNext = currentQueueIndex + 1 < currentQueue.size
+            val nextTrack = if (hasNext) {
+                currentQueue[currentQueueIndex + 1]
+            } else if (currentQueue.size > 1) {
+                currentQueue[0]
+            } else {
+                null
+            }
 
-                val isGaplessDetected = crossfadeConfig.autoGapless && isGaplessTransition(currentTrack, nextTrack)
-                if (isGaplessDetected) {
-                    // Suppress crossfade for gapless albums
-                    return
-                }
+            if (nextTrack != null) {
+                val currentTrack = currentQueue[currentQueueIndex]
+                val duration = if (primary.duration > 0) primary.duration else currentTrack.durationMs
+                val position = primary.currentPosition
+                if (duration > 0) {
+                    val remaining = duration - position
 
-                val requestedFadeMs = (crossfadeConfig.durationSeconds * 1000).toLong()
-                // Edge case: if track is shorter than fade length, clamp to at most half track duration
-                val effectiveFadeMs = min(requestedFadeMs, (duration / 2)).coerceAtLeast(500L)
+                    val isGaplessDetected = crossfadeConfig.autoGapless && isGaplessTransition(currentTrack, nextTrack)
+                    if (isGaplessDetected) {
+                        // Suppress crossfade for gapless albums
+                        return
+                    }
 
-                if (remaining <= effectiveFadeMs && remaining > 0) {
-                    startCrossfade(nextTrack, effectiveFadeMs)
+                    val requestedFadeMs = (crossfadeConfig.durationSeconds * 1000).toLong()
+                    // Edge case: if track is shorter than fade length, clamp to at most half track duration
+                    val effectiveFadeMs = min(requestedFadeMs, (duration / 2)).coerceAtLeast(500L)
+
+                    if (remaining <= effectiveFadeMs && remaining > 0) {
+                        startCrossfade(nextTrack, effectiveFadeMs)
+                    }
                 }
             }
         }
@@ -447,8 +526,9 @@ class CrossfadePlayerManager(
     }
 
     private fun completeCrossfade() {
-        val newTrack = currentQueue.getOrNull(currentQueueIndex + 1)
-        Log.d(TAG, "[Crossfade] <<< COMPLETED CROSSFADE <<< Swapping active player")
+        val nextIdx = if (currentQueueIndex + 1 < currentQueue.size) currentQueueIndex + 1 else 0
+        val newTrack = currentQueue.getOrNull(nextIdx)
+        Log.d(TAG, "[Crossfade] <<< COMPLETED CROSSFADE <<< Swapping active player to idx $nextIdx")
 
         isCrossfading = false
         fadePaused = false
@@ -463,7 +543,7 @@ class CrossfadePlayerManager(
 
         // Swap active index
         activeIndex = 1 - activeIndex
-        currentQueueIndex++
+        currentQueueIndex = nextIdx
 
         onMediaSessionPlayerSwapped(activePlayer)
         if (com.nodeplayer.music.service.SystemWideEqService.isRunning) {

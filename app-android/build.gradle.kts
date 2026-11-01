@@ -1,3 +1,6 @@
+import java.util.Base64
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -13,11 +16,36 @@ android {
         minSdk = 26
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "0.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            val envKeystoreFile = System.getenv("KEYSTORE_FILE")?.let { file(it) }
+            val envKeystoreBase64 = System.getenv("KEYSTORE_BASE64")
+            val envStorePass = System.getenv("KEYSTORE_PASSWORD")
+            val envKeyAlias = System.getenv("KEY_ALIAS")
+            val envKeyPass = System.getenv("KEY_PASSWORD")
+
+            if (envKeystoreFile != null && envKeystoreFile.exists()) {
+                storeFile = envKeystoreFile
+                storePassword = envStorePass
+                keyAlias = envKeyAlias
+                keyPassword = envKeyPass
+            } else if (!envKeystoreBase64.isNullOrEmpty()) {
+                val decodedKeystore = File(layout.buildDirectory.asFile.get(), "release.keystore")
+                decodedKeystore.parentFile?.mkdirs()
+                decodedKeystore.writeBytes(Base64.getDecoder().decode(envKeystoreBase64))
+                storeFile = decodedKeystore
+                storePassword = envStorePass
+                keyAlias = envKeyAlias
+                keyPassword = envKeyPass
+            }
         }
     }
 
@@ -28,6 +56,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            val releaseSigning = signingConfigs.findByName("release")
+            if (releaseSigning?.storeFile != null && releaseSigning.storeFile!!.exists()) {
+                signingConfig = releaseSigning
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
     compileOptions {

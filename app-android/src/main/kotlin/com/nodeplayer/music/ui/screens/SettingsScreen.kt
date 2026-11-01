@@ -29,6 +29,18 @@ import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.theme.LocalAccentColor
+import com.nodeplayer.music.widget.FloatingOverlayService
+import com.nodeplayer.music.widget.WidgetCard4x2Provider
+import com.nodeplayer.music.widget.WidgetLyrics4x3Provider
+import com.nodeplayer.music.widget.WidgetPreferences
+import com.nodeplayer.music.widget.WidgetSlim4x1Provider
+import com.nodeplayer.music.widget.WidgetSquare2x2Provider
+import com.nodeplayer.music.widget.WidgetUpdateManager
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings as AndroidSettings
 import dev.chrisbanes.haze.HazeState
 import java.io.File
 import kotlin.math.roundToInt
@@ -69,6 +81,10 @@ fun SettingsScreen(
     var gaplessEnabled by remember { mutableStateOf(true) }
     var crossfadeSeconds by remember { mutableFloatStateOf(2.0f) }
     var lrclibOptIn by remember { mutableStateOf(false) }
+    val sharedPrefs = remember { context.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE) }
+    var lastFmApiKey by remember { mutableStateOf(sharedPrefs.getString("lastfm_api_key", "") ?: "") }
+    var lastFmSecret by remember { mutableStateOf(sharedPrefs.getString("lastfm_secret", "") ?: "") }
+    var showLicensesDialog by remember { mutableStateOf(false) }
     var isFoldersExpanded by remember { mutableStateOf(true) }
     var isExcludedTracksExpanded by remember { mutableStateOf(false) }
 
@@ -922,6 +938,193 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+        // Home Screen Widgets & Liquid Glass Section
+        Text(
+            text = "HOME SCREEN WIDGETS & LIQUID GLASS",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            var widgetSettings by remember { mutableStateOf(WidgetPreferences.getSettings(context)) }
+            var isOverlayRunning by remember { mutableStateOf(FloatingOverlayService.isRunning) }
+
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Add Widget to Home Screen",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                )
+                Text(
+                    text = "One-tap pin to launcher with real AGSL liquid glass background",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Pin buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            val manager = AppWidgetManager.getInstance(context)
+                            if (manager.isRequestPinAppWidgetSupported) {
+                                val provider = ComponentName(context, WidgetCard4x2Provider::class.java)
+                                manager.requestPinAppWidget(provider, null, null)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.25f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Card 4x2", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            val manager = AppWidgetManager.getInstance(context)
+                            if (manager.isRequestPinAppWidgetSupported) {
+                                val provider = ComponentName(context, WidgetLyrics4x3Provider::class.java)
+                                manager.requestPinAppWidget(provider, null, null)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.25f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Lyrics 4x3", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            val manager = AppWidgetManager.getInstance(context)
+                            if (manager.isRequestPinAppWidgetSupported) {
+                                val provider = ComponentName(context, WidgetSlim4x1Provider::class.java)
+                                manager.requestPinAppWidget(provider, null, null)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.25f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Slim 4x1", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+
+                    Button(
+                        onClick = {
+                            val manager = AppWidgetManager.getInstance(context)
+                            if (manager.isRequestPinAppWidgetSupported) {
+                                val provider = ComponentName(context, WidgetSquare2x2Provider::class.java)
+                                manager.requestPinAppWidget(provider, null, null)
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.25f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Square 2x2", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Floating Overlay Mini-Player
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Live Floating Mini-Player", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text(
+                            "Draggable floating glass card over other apps.\nNote for realme GT 6T: Allow Background Activity in Battery settings if dismissed.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    Switch(
+                        checked = isOverlayRunning,
+                        onCheckedChange = { enabled ->
+                            if (enabled) {
+                                if (AndroidSettings.canDrawOverlays(context)) {
+                                    FloatingOverlayService.start(context)
+                                    isOverlayRunning = true
+                                } else {
+                                    val overlayIntent = Intent(
+                                        AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                    context.startActivity(overlayIntent)
+                                }
+                            } else {
+                                FloatingOverlayService.stop(context)
+                                isOverlayRunning = false
+                            }
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Glass Opacity Slider
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Widget Glass Opacity", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("${(widgetSettings.glassOpacity * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
+                }
+                Slider(
+                    value = widgetSettings.glassOpacity,
+                    onValueChange = {
+                        widgetSettings = widgetSettings.copy(glassOpacity = it)
+                        WidgetPreferences.saveSettings(context, widgetSettings)
+                        WidgetUpdateManager.updateAllWidgets(context)
+                    },
+                    valueRange = 0.40f..0.95f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Corner Radius Slider
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Widget Corner Radius", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("${widgetSettings.cornerRadiusDp.toInt()} dp", color = accent, fontWeight = FontWeight.Bold)
+                }
+                Slider(
+                    value = widgetSettings.cornerRadiusDp,
+                    onValueChange = {
+                        widgetSettings = widgetSettings.copy(cornerRadiusDp = it)
+                        WidgetPreferences.saveSettings(context, widgetSettings)
+                        WidgetUpdateManager.updateAllWidgets(context)
+                    },
+                    valueRange = 16f..36f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         // 5. Lyrics & Privacy Section
         Text(
             text = "LYRICS & PRIVACY",
@@ -959,6 +1162,248 @@ fun SettingsScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // 6. Last.fm Scrobbling Section
+        Text(
+            text = "LAST.FM SCROBBLING",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "API Credentials",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                )
+                Text(
+                    text = "Enter your own Last.fm API credentials to enable scrobbling. Keys are stored locally on your device and are never shared or hardcoded.",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = lastFmApiKey,
+                    onValueChange = {
+                        lastFmApiKey = it
+                        sharedPrefs.edit().putString("lastfm_api_key", it).apply()
+                    },
+                    label = { Text("API Key", color = Color.White.copy(alpha = 0.7f)) },
+                    placeholder = { Text("Enter your Last.fm API key", color = Color.White.copy(alpha = 0.4f)) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = accent,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = lastFmSecret,
+                    onValueChange = {
+                        lastFmSecret = it
+                        sharedPrefs.edit().putString("lastfm_secret", it).apply()
+                    },
+                    label = { Text("Shared Secret", color = Color.White.copy(alpha = 0.7f)) },
+                    placeholder = { Text("Enter your Last.fm shared secret", color = Color.White.copy(alpha = 0.4f)) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = accent,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // 7. About Section
+        Text(
+            text = "ABOUT",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Node Player",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                        )
+                        Text(
+                            text = "Version 0.1.0",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    Surface(
+                        color = accent.copy(alpha = 0.2f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "v0.1.0",
+                            color = accent,
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Source Code Link
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Krighz/node-player"))
+                            context.startActivity(intent)
+                        }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.Code,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Source Code on GitHub",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Rounded.OpenInNew,
+                        contentDescription = "Open Link",
+                        tint = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // License
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "License",
+                        style = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+                    )
+                    Text(
+                        text = "Apache-2.0",
+                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, color = accent)
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Open Source Licenses Button
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showLicensesDialog = true }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.Info,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Open Source Licenses",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Rounded.ChevronRight,
+                        contentDescription = "View",
+                        tint = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(200.dp))
+    }
+
+    if (showLicensesDialog) {
+        AlertDialog(
+            onDismissRequest = { showLicensesDialog = false },
+            title = {
+                Text(
+                    text = "Open Source Licenses",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    val licenses = listOf(
+                        "AndroidX Media3 (ExoPlayer)" to "Apache-2.0 (Google LLC)",
+                        "Jetpack Compose & Material 3" to "Apache-2.0 (Google LLC)",
+                        "Haze Glassmorphism" to "Apache-2.0 (Chris Banes)",
+                        "Coil Image Loading" to "Apache-2.0 (Colin White)",
+                        "AndroidX Room Database" to "Apache-2.0 (Google LLC)",
+                        "AndroidX Palette" to "Apache-2.0 (Google LLC)",
+                        "Kotlin & Kotlinx Coroutines" to "Apache-2.0 (JetBrains s.r.o.)"
+                    )
+                    licenses.forEach { (lib, lic) ->
+                        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+                            Text(lib, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                            Text(lic, style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.6f)))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLicensesDialog = false }) {
+                    Text("Close", color = accent, fontWeight = FontWeight.Bold)
+                }
+            },
+            containerColor = Color(0xFF16181F),
+            shape = RoundedCornerShape(20.dp)
+        )
     }
 }

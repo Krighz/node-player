@@ -70,10 +70,10 @@ class NodePlayerWidget : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_root, openAppPendingIntent)
 
             // Play/Pause Action
-            val playPauseIntent = Intent(context, PlaybackService::class.java).apply {
+            val playPauseIntent = Intent(context, WidgetActionReceiver::class.java).apply {
                 action = PlaybackService.ACTION_PLAY_PAUSE
             }
-            val playPausePendingIntent = PendingIntent.getService(
+            val playPausePendingIntent = PendingIntent.getBroadcast(
                 context,
                 1,
                 playPauseIntent,
@@ -82,10 +82,10 @@ class NodePlayerWidget : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_btn_play_pause, playPausePendingIntent)
 
             // Previous Action
-            val prevIntent = Intent(context, PlaybackService::class.java).apply {
+            val prevIntent = Intent(context, WidgetActionReceiver::class.java).apply {
                 action = PlaybackService.ACTION_PREV
             }
-            val prevPendingIntent = PendingIntent.getService(
+            val prevPendingIntent = PendingIntent.getBroadcast(
                 context,
                 2,
                 prevIntent,
@@ -94,10 +94,10 @@ class NodePlayerWidget : AppWidgetProvider() {
             views.setOnClickPendingIntent(R.id.widget_btn_prev, prevPendingIntent)
 
             // Next Action
-            val nextIntent = Intent(context, PlaybackService::class.java).apply {
+            val nextIntent = Intent(context, WidgetActionReceiver::class.java).apply {
                 action = PlaybackService.ACTION_NEXT
             }
-            val nextPendingIntent = PendingIntent.getService(
+            val nextPendingIntent = PendingIntent.getBroadcast(
                 context,
                 3,
                 nextIntent,

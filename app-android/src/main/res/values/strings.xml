@@ -3,4 +3,8 @@
     <string name="notification_channel_name">Node Player Playback</string>
     <string name="notification_channel_desc">Playback controls for Node Player</string>
     <string name="widget_description">Frosted glass playback controller</string>
+    <string name="widget_card_desc">Liquid Glass Reference Card with Tap-to-Seek</string>
+    <string name="widget_lyrics_desc">Liquid Glass Synced Lyrics Card</string>
+    <string name="widget_slim_desc">Liquid Glass Compact Slim Banner</string>
+    <string name="widget_square_desc">Liquid Glass Album Art Square</string>
 </resources>

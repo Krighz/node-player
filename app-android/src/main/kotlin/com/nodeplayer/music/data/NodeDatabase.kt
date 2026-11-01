@@ -8,6 +8,9 @@ interface PlayerDao {
     @Query("SELECT * FROM tracks ORDER BY title COLLATE NOCASE ASC")
     fun getAllTracks(): Flow<List<TrackEntity>>
 
+    @Query("SELECT * FROM tracks ORDER BY title COLLATE NOCASE ASC")
+    suspend fun getAllTracksList(): List<TrackEntity>
+
     @Query("SELECT * FROM tracks WHERE id = :id")
     suspend fun getTrackById(id: Long): TrackEntity?
 

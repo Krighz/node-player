@@ -99,6 +99,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _crossfadeConfig = MutableStateFlow(CrossfadeConfig())
     val crossfadeConfig: StateFlow<CrossfadeConfig> = _crossfadeConfig.asStateFlow()
 
+    // Shuffle state
+    private val _isShuffleEnabled = MutableStateFlow(false)
+    val isShuffleEnabled: StateFlow<Boolean> = _isShuffleEnabled.asStateFlow()
+
     // Folder Filtering & Library Preferences
     private val _minDurationSeconds = MutableStateFlow(30)
     val minDurationSeconds: StateFlow<Int> = _minDurationSeconds.asStateFlow()
@@ -177,6 +181,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             curve = cfCurve,
             autoGapless = cfAutoGapless
         )
+        _isShuffleEnabled.value = prefs.getBoolean("shuffle_enabled", false)
 
         val sysEq = prefs.getBoolean("system_eq_enabled", false)
         _systemEqEnabled.value = sysEq
@@ -208,6 +213,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             val lastTrackId = prefs.getLong("last_track_id", -1L)
             val lastPos = prefs.getLong("last_pos", 0L)
+            val allList = dao.getAllTracksList().map { it.toTrack() }
+            if (allList.isNotEmpty()) {
+                _queue.value = allList
+            }
             if (lastTrackId > 0) {
                 val track = dao.getTrackById(lastTrackId)?.toTrack()
                 if (track != null) {
@@ -215,6 +224,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     _currentPositionMs.value = lastPos
                     updatePaletteAccent(track)
                     updateSignalPath(track)
+                    if (allList.isNotEmpty()) {
+                        val targetIdx = allList.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+                        PlaybackService.instance?.crossfadeManager?.setQueueIfEmpty(allList, targetIdx)
+                    }
                 }
             }
         }
@@ -248,6 +261,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
             service.crossfadeManager.crossfadeConfig = _crossfadeConfig.value
+            service.crossfadeManager.setShuffle(_isShuffleEnabled.value)
             service.crossfadeManager.applyEffectConfig(_effectConfig.value)
         }
 
@@ -350,18 +364,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun playTrack(track: Track, newQueue: List<Track> = listOf(track)) {
-        _queue.value = newQueue
+        val effectiveQueue = if (newQueue.size <= 1 && allTracks.value.isNotEmpty()) {
+            allTracks.value
+        } else {
+            newQueue
+        }
+        _queue.value = effectiveQueue
         _currentTrack.value = track
         updatePaletteAccent(track)
         updateSignalPath(track)
 
-        val targetIndex = newQueue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
+        val targetIndex = effectiveQueue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.crossfadeConfig = _crossfadeConfig.value
-            service.crossfadeManager.playQueue(newQueue, targetIndex, 0L)
+            service.crossfadeManager.setShuffle(_isShuffleEnabled.value)
+            service.crossfadeManager.playQueue(effectiveQueue, targetIndex, 0L)
             _isPlaying.value = true
             startPositionTracking()
+            com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
             return
         }
 
@@ -376,7 +397,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         // ALWAYS use ContentUris with MediaStore Content URI for scoped storage compatibility
         val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
-        val mediaItems = newQueue.map {
+        val mediaItems = effectiveQueue.map {
             val contentUri = ContentUris.withAppendedId(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 it.id
@@ -404,24 +425,33 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun togglePlayPause() {
         val service = PlaybackService.instance
         if (service != null) {
-            if (service.crossfadeManager.currentQueue.isEmpty() && _currentTrack.value != null) {
-                playTrack(_currentTrack.value!!)
-                return
+            if (service.crossfadeManager.currentQueue.isEmpty()) {
+                val trackToPlay = _currentTrack.value ?: allTracks.value.firstOrNull()
+                if (trackToPlay != null) {
+                    playTrack(trackToPlay, allTracks.value)
+                    return
+                }
             }
             service.crossfadeManager.togglePlayPause()
             _isPlaying.value = service.crossfadeManager.activePlayer.isPlaying
             if (_isPlaying.value) startPositionTracking() else stopPositionTracking()
+            com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
             return
         }
 
         val controller = mediaController ?: return
         if (controller.mediaItemCount == 0 && _currentTrack.value != null) {
-            playTrack(_currentTrack.value!!)
+            playTrack(_currentTrack.value!!, allTracks.value)
             return
         }
         if (controller.isPlaying) {
             controller.pause()
         } else {
+            if (controller.playbackState == Player.STATE_ENDED ||
+                (controller.duration > 0 && controller.currentPosition >= controller.duration)
+            ) {
+                controller.seekTo(0L)
+            }
             controller.play()
         }
     }
@@ -429,18 +459,40 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun skipNext() {
         val service = PlaybackService.instance
         if (service != null) {
+            if (service.crossfadeManager.currentQueue.isEmpty() && allTracks.value.isNotEmpty()) {
+                val idx = _currentTrack.value?.let { t -> allTracks.value.indexOfFirst { it.id == t.id } } ?: 0
+                service.crossfadeManager.setQueueIfEmpty(allTracks.value, idx)
+            }
             service.crossfadeManager.skipNext()
         } else {
             mediaController?.seekToNextMediaItem()
         }
+        com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
     }
 
     fun skipPrevious() {
         val service = PlaybackService.instance
         if (service != null) {
+            if (service.crossfadeManager.currentQueue.isEmpty() && allTracks.value.isNotEmpty()) {
+                val idx = _currentTrack.value?.let { t -> allTracks.value.indexOfFirst { it.id == t.id } } ?: 0
+                service.crossfadeManager.setQueueIfEmpty(allTracks.value, idx)
+            }
             service.crossfadeManager.skipPrevious()
         } else {
             mediaController?.seekToPreviousMediaItem()
+        }
+        com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
+    }
+
+    fun toggleShuffle() {
+        val newShuffle = !_isShuffleEnabled.value
+        _isShuffleEnabled.value = newShuffle
+        prefs.edit().putBoolean("shuffle_enabled", newShuffle).apply()
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.setShuffle(newShuffle)
+            _queue.value = service.crossfadeManager.currentQueue
+            com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
         }
     }
 
@@ -455,6 +507,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _currentTrack.value?.let {
             prefs.edit().putLong("last_pos", positionMs).putLong("last_track_id", it.id).apply()
         }
+        com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
     }
 
     private fun startPositionTracking() {
