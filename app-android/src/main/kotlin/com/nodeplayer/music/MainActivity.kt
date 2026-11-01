@@ -91,6 +91,7 @@ class MainActivity : ComponentActivity() {
                 val albums by viewModel.albums.collectAsState()
                 val artists by viewModel.artists.collectAsState()
                 val folders by viewModel.folders.collectAsState()
+                val allScannedFolders by viewModel.allScannedFolders.collectAsState()
                 val excludedFolders by viewModel.excludedFolders.collectAsState()
                 val excludedTracks by viewModel.excludedTracks.collectAsState()
                 val minDurationSeconds by viewModel.minDurationSeconds.collectAsState()
@@ -214,7 +215,7 @@ class MainActivity : ComponentActivity() {
                                 onToggleResumeOnHeadsetConnect = { viewModel.setResumeOnHeadsetConnect(it) },
                                 resamplerRateChoice = resamplerRateChoice,
                                 onResamplerRateChange = { viewModel.setResamplerRateChoice(it) },
-                                allFolders = folders,
+                                allFolders = if (allScannedFolders.isNotEmpty()) allScannedFolders else folders,
                                 excludedFolders = excludedFolders,
                                 excludedTracks = excludedTracks,
                                 minDurationSeconds = minDurationSeconds,

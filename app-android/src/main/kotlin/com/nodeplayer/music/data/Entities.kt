@@ -37,7 +37,8 @@ data class TrackEntity(
     val hiResCutoffHz: Float? = null,
     val loudnessLufs: Float? = null,
     val dynamicRangeScore: Int? = null,
-    val dynamicRangeLabel: String? = null
+    val dynamicRangeLabel: String? = null,
+    val isHidden: Boolean = false
 ) {
     fun toTrack(): Track = Track(
         id = id,
@@ -70,7 +71,8 @@ data class TrackEntity(
         hiResCutoffHz = hiResCutoffHz ?: 0f,
         loudnessLufs = loudnessLufs,
         dynamicRangeScore = dynamicRangeScore,
-        dynamicRangeLabel = dynamicRangeLabel
+        dynamicRangeLabel = dynamicRangeLabel,
+        isHidden = isHidden
     )
 
     companion object {
@@ -105,9 +107,24 @@ data class TrackEntity(
             hiResCutoffHz = track.hiResCutoffHz,
             loudnessLufs = track.loudnessLufs,
             dynamicRangeScore = track.dynamicRangeScore,
-            dynamicRangeLabel = track.dynamicRangeLabel
+            dynamicRangeLabel = track.dynamicRangeLabel,
+            isHidden = track.isHidden
         )
     }
+}
+
+@Entity(tableName = "scanned_folders")
+data class ScannedFolderEntity(
+    @PrimaryKey val path: String,
+    val name: String,
+    val trackCount: Int,
+    val isEnabled: Boolean = true
+) {
+    fun toMusicFolder(): com.nodeplayer.model.MusicFolder = com.nodeplayer.model.MusicFolder(
+        name = name,
+        path = path,
+        trackCount = trackCount
+    )
 }
 
 @Entity(tableName = "smart_playlists")

@@ -5,11 +5,32 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PlayerDao {
-    @Query("SELECT * FROM tracks ORDER BY title COLLATE NOCASE ASC")
+    @Query("SELECT * FROM tracks WHERE isHidden = 0 ORDER BY title COLLATE NOCASE ASC")
     fun getAllTracks(): Flow<List<TrackEntity>>
 
     @Query("SELECT * FROM tracks ORDER BY title COLLATE NOCASE ASC")
+    fun getAllRawTracks(): Flow<List<TrackEntity>>
+
+    @Query("SELECT * FROM tracks WHERE isHidden = 0 ORDER BY title COLLATE NOCASE ASC")
     suspend fun getAllTracksList(): List<TrackEntity>
+
+    @Query("SELECT * FROM tracks ORDER BY title COLLATE NOCASE ASC")
+    suspend fun getAllRawTracksList(): List<TrackEntity>
+
+    @Query("UPDATE tracks SET isHidden = :isHidden WHERE path LIKE :folderPrefix || '%'")
+    suspend fun setTracksHiddenForFolder(folderPrefix: String, isHidden: Boolean)
+
+    @Query("SELECT * FROM scanned_folders ORDER BY name COLLATE NOCASE ASC")
+    fun getAllScannedFolders(): Flow<List<ScannedFolderEntity>>
+
+    @Query("SELECT * FROM scanned_folders ORDER BY name COLLATE NOCASE ASC")
+    suspend fun getAllScannedFoldersList(): List<ScannedFolderEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertScannedFolders(folders: List<ScannedFolderEntity>)
+
+    @Query("UPDATE scanned_folders SET isEnabled = :isEnabled WHERE path = :path")
+    suspend fun setFolderEnabled(path: String, isEnabled: Boolean)
 
     @Query("SELECT * FROM tracks WHERE id = :id")
     suspend fun getTrackById(id: Long): TrackEntity?
@@ -140,9 +161,10 @@ interface PlayerDao {
         AudioPresetEntity::class,
         SmartPlaylistEntity::class,
         DailyListeningStatEntity::class,
-        ScrobbleQueueEntity::class
+        ScrobbleQueueEntity::class,
+        ScannedFolderEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class NodeDatabase : RoomDatabase() {

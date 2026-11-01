@@ -35,7 +35,8 @@ data class Track(
     val dynamicRangeLabel: String? = null,
     val lastPlayedTimestamp: Long = 0L,
     val playCount: Int = 0,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val isHidden: Boolean = false
 ) {
     val durationFormatted: String
         get() {

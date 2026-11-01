@@ -23,6 +23,21 @@ class LibraryScanner(private val context: Context) {
         excludedFolders: Set<String> = emptySet(),
         whitelistedTrackIds: Set<Long> = emptySet()
     ): List<Track> = withContext(Dispatchers.IO) {
+        scanAllTracks(
+            minDurationMs = minDurationMs,
+            includedFolders = includedFolders,
+            whitelistedTrackIds = whitelistedTrackIds
+        ).map { track ->
+            val isExcluded = excludedFolders.any { track.path.startsWith(it, ignoreCase = true) }
+            track.copy(isHidden = isExcluded)
+        }
+    }
+
+    suspend fun scanAllTracks(
+        minDurationMs: Long = 10_000L,
+        includedFolders: Set<String> = emptySet(),
+        whitelistedTrackIds: Set<Long> = emptySet()
+    ): List<Track> = withContext(Dispatchers.IO) {
         val tracks = mutableListOf<Track>()
         val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         val projection = arrayOf(
@@ -84,11 +99,6 @@ class LibraryScanner(private val context: Context) {
                     val isWhitelisted = whitelistedTrackIds.contains(id)
 
                     if (!isWhitelisted) {
-                        // User folder exclusions
-                        if (excludedFolders.any { path.startsWith(it, ignoreCase = true) }) {
-                            continue
-                        }
-
                         // Automatic voice note / recording directory exclusion unless explicitly included
                         val isNonMusicDir = defaultNonMusicKeywords.any { lowerPath.contains(it) }
                         val isExplicitlyIncluded = includedFolders.any { path.startsWith(it, ignoreCase = true) }

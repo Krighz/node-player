@@ -61,6 +61,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val folders = allTracks.map { scanner.extractFolders(it) }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    val allScannedFolders = dao.getAllScannedFolders()
+        .map { list -> list.map { it.toMusicFolder() } }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
     val playlists = dao.getAllPlaylists()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -322,17 +326,33 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     ) {
         viewModelScope.launch {
             val minMs = minDurationSec * 1000L
-            val tracks = scanner.scanTracks(
+            val scannedTracks = scanner.scanAllTracks(
                 minDurationMs = minMs,
                 includedFolders = includedFolders,
-                excludedFolders = excludedFolders,
                 whitelistedTrackIds = whitelistedIds
             )
-            dao.clearTracks()
-            if (tracks.isNotEmpty()) {
-                dao.insertTracks(tracks.map { TrackEntity.fromTrack(it) })
+
+            // Index all detected folders in the separate folder index
+            val detectedFolders = scanner.extractFolders(scannedTracks)
+            val folderEntities = detectedFolders.map { f ->
+                com.nodeplayer.music.data.ScannedFolderEntity(
+                    path = f.path,
+                    name = f.name,
+                    trackCount = f.trackCount,
+                    isEnabled = !excludedFolders.contains(f.path)
+                )
             }
-            loadExcludedTracks(tracks)
+            dao.insertScannedFolders(folderEntities)
+
+            // Mark tracks in excluded folders as hidden (do NOT delete them)
+            val entities = scannedTracks.map { track ->
+                val isHidden = excludedFolders.any { excludedPath ->
+                    track.path.startsWith(excludedPath, ignoreCase = true)
+                }
+                TrackEntity.fromTrack(track).copy(isHidden = isHidden)
+            }
+            dao.insertTracks(entities)
+            loadExcludedTracks(scannedTracks.filter { !it.isHidden })
         }
     }
 
@@ -357,14 +377,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun toggleFolderExclusion(folderPath: String) {
-        val current = _excludedFolders.value.toMutableSet()
-        if (current.contains(folderPath)) {
-            current.remove(folderPath)
-        } else {
-            current.add(folderPath)
+        viewModelScope.launch {
+            val current = _excludedFolders.value.toMutableSet()
+            val willBeExcluded = !current.contains(folderPath)
+            if (willBeExcluded) {
+                current.add(folderPath)
+            } else {
+                current.remove(folderPath)
+            }
+            _excludedFolders.value = current
+            prefs.edit().putStringSet("excluded_folders", current).apply()
+
+            // Update tracks isHidden without deleting them
+            val prefix = if (folderPath.endsWith("/")) folderPath else "$folderPath/"
+            dao.setTracksHiddenForFolder(prefix, isHidden = willBeExcluded)
+            dao.setTracksHiddenForFolder(folderPath, isHidden = willBeExcluded)
+            dao.setFolderEnabled(folderPath, isEnabled = !willBeExcluded)
         }
-        _excludedFolders.value = current
-        refreshLibrary(excludedFolders = current)
     }
 
     fun addCustomFolder(folderPath: String) {
