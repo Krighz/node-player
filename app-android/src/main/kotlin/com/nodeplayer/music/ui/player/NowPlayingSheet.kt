@@ -1,9 +1,15 @@
 package com.nodeplayer.music.ui.player
 
+import android.content.res.Configuration
+import android.view.HapticFeedbackConstants
+import android.widget.Toast
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -19,7 +25,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,6 +46,7 @@ import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
 import java.io.File
+import kotlin.math.abs
 
 @Composable
 fun NowPlayingSheet(
@@ -50,12 +61,19 @@ fun NowPlayingSheet(
     onDismiss: () -> Unit,
     onOpenEq: () -> Unit,
     rmsLevel: Float = 0.0f,
+    isPerformanceMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val view = LocalView.current
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE || configuration.screenWidthDp > 600
+
     var isSeeking by remember { mutableStateOf(false) }
     var sliderPosition by remember { mutableFloatStateOf(0f) }
     var showLyrics by remember { mutableStateOf(false) }
+    var showQuickActionDialog by remember { mutableStateOf(false) }
 
     val currentMs = if (isSeeking) sliderPosition.toLong() else currentPositionMs
     val totalMs = track.durationMs.coerceAtLeast(1L)
@@ -79,494 +97,564 @@ fun NowPlayingSheet(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF07080E))
+            .pointerInput(Unit) {
+                // Vertical drag down to close gesture
+                detectDragGestures { change, dragAmount ->
+                    if (dragAmount.y > 35f && abs(dragAmount.y) > abs(dragAmount.x) * 1.5f) {
+                        change.consume()
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        onDismiss()
+                    }
+                }
+            }
     ) {
-        // 1. Dribbble-inspired Liquid Glass Organic Chrome & Obsidian Background
+        // 1. Fluid Background
         LiquidGlassBackground(
             accentColor = accent,
-            isPlaying = isPlaying
+            isPlaying = isPlaying,
+            isPerformanceMode = isPerformanceMode
         )
 
-        // 2. Fluid Ambient Album Art Overlay (soft 30% blend)
-        AsyncImage(
-            model = "content://media/external/audio/albumart/${track.albumId}",
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            alpha = 0.28f,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // 3. Subtle Liquid Scrim
+        // 2. High-Contrast Darkening Scrim (guarantees text contrast even for pure white album art)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.35f),
-                            Color(0xFF090A12).copy(alpha = 0.50f),
-                            Color(0xFF040508).copy(alpha = 0.75f)
+                            Color.Black.copy(alpha = 0.55f),
+                            Color(0xFF07080E).copy(alpha = 0.70f),
+                            Color(0xFF030407).copy(alpha = 0.90f)
                         )
                     )
                 )
         )
 
-        // 4. Main Player Content
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // Top Bar
+        // 3. Player Layout (Adaptive Portrait vs Landscape)
+        if (isLandscape) {
+            // LANDSCAPE / TABLET LAYOUT: 2-Column Side-by-Side
             Row(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onDismiss) {
-                    Icon(
-                        imageVector = Icons.Rounded.KeyboardArrowDown,
-                        contentDescription = "Collapse",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
+                // Left Column: Hero Artwork
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    HeroArtwork(
+                        track = track,
+                        accent = accent,
+                        view = view,
+                        onSkipNext = onSkipNextClick,
+                        onSkipPrevious = onSkipPreviousClick,
+                        onLongPress = { showQuickActionDialog = true },
+                        modifier = Modifier
+                            .fillMaxHeight(0.85f)
+                            .aspectRatio(1f)
                     )
                 }
 
-                Text(
-                    text = "NOW PLAYING",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        letterSpacing = 2.5.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White.copy(alpha = 0.85f)
-                    )
-                )
+                Spacer(modifier = Modifier.width(32.dp))
 
-                Row {
-                    IconButton(onClick = { showLyrics = !showLyrics }) {
-                        Icon(
-                            imageVector = if (showLyrics) Icons.Rounded.Album else Icons.Rounded.Lyrics,
-                            contentDescription = "Toggle Lyrics",
-                            tint = if (showLyrics) accent else Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    IconButton(onClick = onOpenEq) {
-                        Icon(
-                            imageVector = Icons.Rounded.Tune,
-                            contentDescription = "Equalizer",
-                            tint = accent,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Upper View: Hero Album Art OR Synced Glass Lyrics
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Crossfade(targetState = showLyrics, label = "HeroCrossfade") { isLyrics ->
-                    if (isLyrics) {
-                        SyncedLyricsGlassView(
-                            lyrics = lyrics,
-                            currentPositionMs = currentMs,
-                            accentColor = accent,
-                            onSeekTo = onSeekTo
-                        )
-                    } else {
-                        // Hero Artwork with Liquid Glass framing
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.85f)
-                                .aspectRatio(1f)
-                                .glassSurface(
-                                    shape = RoundedCornerShape(28.dp),
-                                    tintAlpha = 0.20f
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Album,
-                                contentDescription = null,
-                                tint = accent.copy(alpha = 0.40f),
-                                modifier = Modifier.size(96.dp)
-                            )
-                            AsyncImage(
-                                model = "content://media/external/audio/albumart/${track.albumId}",
-                                contentDescription = track.album,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(28.dp))
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // 4. FLOATING LIQUID GLASS PLAYER CARD (Faithful to Dribbble reference)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .glassSurface(
-                        shape = RoundedCornerShape(26.dp),
-                        tintAlpha = 0.65f
-                    )
-                    .padding(horizontal = 18.dp, vertical = 18.dp)
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    // Header inside card: Artwork thumbnail + Title/Artist + SoundWaveVisualizer
+                // Right Column: Info, Seekbar, Controls
+                Column(
+                    modifier = Modifier
+                        .weight(1.2f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    // Header bar
                     Row(
                         modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(52.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0xFF1B1D28)),
-                            contentAlignment = Alignment.Center
-                        ) {
+                        IconButton(onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            onDismiss()
+                        }) {
+                            Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp))
+                        }
+
+                        // Signal Path Badge
+                        SignalPathBadge(audioOutputInfo = audioOutputInfo, track = track, accent = accent)
+
+                        IconButton(onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            onOpenEq()
+                        }) {
+                            Icon(Icons.Rounded.Tune, contentDescription = "Equalizer", tint = accent)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = track.title,
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = Color.White),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${track.artist} • ${track.album}",
+                        style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.70f)),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Seekbar
+                    PlayerSeekBar(
+                        currentMs = currentMs,
+                        totalMs = totalMs,
+                        progress = progress,
+                        accent = accent,
+                        onSeek = { isSeeking = true; sliderPosition = it * totalMs },
+                        onSeekFinished = { isSeeking = false; onSeekTo(sliderPosition.toLong()) }
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // Playback Controls
+                    PlayerControlButtons(
+                        isPlaying = isPlaying,
+                        accent = accent,
+                        view = view,
+                        onPlayPause = onPlayPauseClick,
+                        onSkipNext = onSkipNextClick,
+                        onSkipPrevious = onSkipPreviousClick,
+                        rmsLevel = rmsLevel,
+                        isPerformanceMode = isPerformanceMode
+                    )
+                }
+            }
+        } else {
+            // PORTRAIT LAYOUT: Clean Vertical Hierarchy
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Top Header Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        onDismiss()
+                    }) {
+                        Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse", tint = Color.White, modifier = Modifier.size(34.dp))
+                    }
+
+                    SignalPathBadge(audioOutputInfo = audioOutputInfo, track = track, accent = accent)
+
+                    Row {
+                        IconButton(onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            showLyrics = !showLyrics
+                        }) {
                             Icon(
-                                imageVector = Icons.Rounded.MusicNote,
-                                contentDescription = null,
-                                tint = Color.White.copy(alpha = 0.35f),
+                                if (showLyrics) Icons.Rounded.Album else Icons.Rounded.Lyrics,
+                                contentDescription = "Lyrics",
+                                tint = if (showLyrics) accent else Color.White.copy(alpha = 0.85f),
                                 modifier = Modifier.size(24.dp)
                             )
-                            AsyncImage(
-                                model = "content://media/external/audio/albumart/${track.albumId}",
-                                contentDescription = track.album,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
                         }
-
-                        Spacer(modifier = Modifier.width(14.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = track.title,
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 18.sp,
-                                    color = Color.White
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = track.artist,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    color = Color.White.copy(alpha = 0.70f),
-                                    fontSize = 13.sp
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                        IconButton(onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            onOpenEq()
+                        }) {
+                            Icon(Icons.Rounded.Tune, contentDescription = "Equalizer", tint = accent, modifier = Modifier.size(24.dp))
                         }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        // Real audio reactive soundwave visualizer bars
-                        SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent, maxHeight = 22.dp, rmsLevel = rmsLevel)
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                    // Liquid Glass Seekbar with inline time labels (0:48 ---O--- 2:32)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = formatTime(currentMs),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp
+                // Hero Center Stage (Artwork or Synced Lyrics)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Crossfade(targetState = showLyrics, label = "HeroCrossfade") { isLyrics ->
+                        if (isLyrics) {
+                            SyncedLyricsGlassView(
+                                lyrics = lyrics,
+                                currentPositionMs = currentMs,
+                                accentColor = accent,
+                                onSeekTo = onSeekTo
                             )
-                        )
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Slider(
-                            value = progress,
-                            onValueChange = { frac ->
-                                isSeeking = true
-                                sliderPosition = frac * totalMs
-                            },
-                            onValueChangeFinished = {
-                                isSeeking = false
-                                onSeekTo(sliderPosition.toLong())
-                            },
-                            colors = SliderDefaults.colors(
-                                thumbColor = Color.White,
-                                activeTrackColor = Color.White.copy(alpha = 0.85f),
-                                inactiveTrackColor = Color.White.copy(alpha = 0.20f)
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-
-                        Spacer(modifier = Modifier.width(10.dp))
-
-                        Text(
-                            text = formatTime(totalMs),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color.White.copy(alpha = 0.75f),
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 12.sp
-                            )
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Playback Controls Row (Liquid Glass style)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = { /* Shuffle */ }) {
-                            Icon(
-                                imageVector = Icons.Rounded.Shuffle,
-                                contentDescription = "Shuffle",
-                                tint = Color.White.copy(alpha = 0.50f),
-                                modifier = Modifier.size(22.dp)
-                            )
-                        }
-
-                        // Previous
-                        IconButton(onClick = onSkipPreviousClick) {
-                            Icon(
-                                imageVector = Icons.Rounded.FastRewind,
-                                contentDescription = "Previous",
-                                tint = Color.White,
-                                modifier = Modifier.size(34.dp)
-                            )
-                        }
-
-                        // Circular Liquid Glass Play/Pause Disc with illuminated specular border
-                        Box(
-                            modifier = Modifier
-                                .size(68.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    Brush.radialGradient(
-                                        colors = listOf(
-                                            Color(0xFF2E3146),
-                                            Color(0xFF161827),
-                                            Color(0xFF0C0D18)
-                                        )
-                                    )
-                                )
-                                .border(
-                                    width = 1.3.dp,
-                                    brush = Brush.verticalGradient(
-                                        listOf(
-                                            Color(0xCCFFFFFF),
-                                            Color(0x35FFFFFF),
-                                            Color(0x08FFFFFF)
-                                        )
-                                    ),
-                                    shape = CircleShape
-                                )
-                                .clickable(onClick = onPlayPauseClick),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                                tint = Color.White,
-                                modifier = Modifier.size(34.dp)
-                            )
-                        }
-
-                        // Next
-                        IconButton(onClick = onSkipNextClick) {
-                            Icon(
-                                imageVector = Icons.Rounded.FastForward,
-                                contentDescription = "Next",
-                                tint = Color.White,
-                                modifier = Modifier.size(34.dp)
-                            )
-                        }
-
-                        IconButton(onClick = { /* Repeat */ }) {
-                            Icon(
-                                imageVector = Icons.Rounded.Repeat,
-                                contentDescription = "Repeat",
-                                tint = Color.White.copy(alpha = 0.50f),
-                                modifier = Modifier.size(22.dp)
+                        } else {
+                            HeroArtwork(
+                                track = track,
+                                accent = accent,
+                                view = view,
+                                onSkipNext = onSkipNextClick,
+                                onSkipPrevious = onSkipPreviousClick,
+                                onLongPress = { showQuickActionDialog = true },
+                                modifier = Modifier
+                                    .fillMaxWidth(0.88f)
+                                    .aspectRatio(1f)
                             )
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Track Title & Artist (High contrast, single clear hero)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = track.title,
+                        style = MaterialTheme.typography.headlineSmall.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            fontSize = 22.sp
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${track.artist} — ${track.album}",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = Color.White.copy(alpha = 0.70f),
+                            fontSize = 14.sp
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Seekbar
+                PlayerSeekBar(
+                    currentMs = currentMs,
+                    totalMs = totalMs,
+                    progress = progress,
+                    accent = accent,
+                    onSeek = { isSeeking = true; sliderPosition = it * totalMs },
+                    onSeekFinished = { isSeeking = false; onSeekTo(sliderPosition.toLong()) }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Playback Controls Row
+                PlayerControlButtons(
+                    isPlaying = isPlaying,
+                    accent = accent,
+                    view = view,
+                    onPlayPause = onPlayPauseClick,
+                    onSkipNext = onSkipNextClick,
+                    onSkipPrevious = onSkipPreviousClick,
+                    rmsLevel = rmsLevel,
+                    isPerformanceMode = isPerformanceMode
+                )
+
+                Spacer(modifier = Modifier.height(28.dp))
             }
+        }
+    }
 
-            Spacer(modifier = Modifier.height(14.dp))
+    // Quick Action Dialog (Triggered on Long Press)
+    if (showQuickActionDialog) {
+        AlertDialog(
+            onDismissRequest = { showQuickActionDialog = false },
+            title = { Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            text = {
+                Column {
+                    Text("Artist: ${track.artist}", style = MaterialTheme.typography.bodyMedium)
+                    Text("Album: ${track.album}", style = MaterialTheme.typography.bodyMedium)
+                    Text("Format: ${track.sampleRate} Hz • ${track.bitDepth}-bit", style = MaterialTheme.typography.bodySmall.copy(color = accent))
+                    Text("Path: ${track.path}", style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showQuickActionDialog = false
+                    onOpenEq()
+                }) {
+                    Text("DSP & EQ")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showQuickActionDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+}
 
-            // 5. Live Signal Path Badge
-            SignalPathBadge(audioOutputInfo)
+@Composable
+private fun HeroArtwork(
+    track: Track,
+    accent: Color,
+    view: android.view.View,
+    onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit,
+    onLongPress: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .glassSurface(
+                shape = RoundedCornerShape(28.dp),
+                tintAlpha = 0.25f
+            )
+            .pointerInput(track.id) {
+                // Horizontal swipe to skip track + Long press for quick actions
+                detectTapGestures(
+                    onLongPress = {
+                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        onLongPress()
+                    }
+                )
+            }
+            .pointerInput(track.id) {
+                detectHorizontalDragGestures { change, dragAmount ->
+                    if (abs(dragAmount) > 28f) {
+                        change.consume()
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        if (dragAmount < 0) {
+                            onSkipNext()
+                        } else {
+                            onSkipPrevious()
+                        }
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        // Fallback Obsidian placeholder for track with no artwork
+        Icon(
+            imageVector = Icons.Rounded.MusicNote,
+            contentDescription = null,
+            tint = accent.copy(alpha = 0.40f),
+            modifier = Modifier.size(96.dp)
+        )
+        // High-resolution artwork
+        AsyncImage(
+            model = "content://media/external/audio/albumart/${track.albumId}",
+            contentDescription = track.album,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(28.dp))
+        )
+    }
+}
 
-            Spacer(modifier = Modifier.height(10.dp))
+@Composable
+private fun SignalPathBadge(audioOutputInfo: AudioOutputInfo, track: Track, accent: Color) {
+    val rateText = if (track.sampleRate >= 1000) "${track.sampleRate / 1000} kHz" else "${track.sampleRate} Hz"
+    Row(
+        modifier = Modifier
+            .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(6.dp)
+                .background(if (audioOutputInfo.isBitPerfect) Color(0xFF10B981) else accent, CircleShape)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "${if (track.isHiRes) "Hi-Res" else "FLAC"} • $rateText",
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color.White, fontSize = 11.sp)
+        )
+    }
+}
+
+@Composable
+private fun PlayerSeekBar(
+    currentMs: Long,
+    totalMs: Long,
+    progress: Float,
+    accent: Color,
+    onSeek: (Float) -> Unit,
+    onSeekFinished: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Slider(
+            value = progress,
+            onValueChange = onSeek,
+            onValueChangeFinished = onSeekFinished,
+            colors = SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = accent,
+                inactiveTrackColor = Color.White.copy(alpha = 0.20f)
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = formatTime(currentMs),
+                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.70f), fontSize = 12.sp)
+            )
+            Text(
+                text = formatTime(totalMs),
+                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.70f), fontSize = 12.sp)
+            )
         }
     }
 }
 
 @Composable
-fun SyncedLyricsGlassView(
+private fun PlayerControlButtons(
+    isPlaying: Boolean,
+    accent: Color,
+    view: android.view.View,
+    onPlayPause: () -> Unit,
+    onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit,
+    rmsLevel: Float = 0.0f,
+    isPerformanceMode: Boolean = false
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Visualizer indicator
+        SoundWaveVisualizer(
+            isPlaying = isPlaying,
+            barColor = accent,
+            maxHeight = 22.dp,
+            rmsLevel = rmsLevel,
+            isPerformanceMode = isPerformanceMode
+        )
+
+        // Previous
+        IconButton(
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                onSkipPrevious()
+            },
+            modifier = Modifier.size(54.dp)
+        ) {
+            Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(36.dp))
+        }
+
+        // Hero Play / Pause Button with tactile glow
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(accent)
+                .clickable {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    onPlayPause()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                contentDescription = if (isPlaying) "Pause" else "Play",
+                tint = Color.White,
+                modifier = Modifier.size(38.dp)
+            )
+        }
+
+        // Next
+        IconButton(
+            onClick = {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                onSkipNext()
+            },
+            modifier = Modifier.size(54.dp)
+        ) {
+            Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(36.dp))
+        }
+
+        // Shuffle / Repeat Icon
+        IconButton(
+            onClick = { view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) }
+        ) {
+            Icon(Icons.Rounded.Shuffle, contentDescription = "Shuffle", tint = Color.White.copy(alpha = 0.50f), modifier = Modifier.size(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun SyncedLyricsGlassView(
     lyrics: Lyrics?,
     currentPositionMs: Long,
     accentColor: Color,
     onSeekTo: (Long) -> Unit
 ) {
-    if (lyrics == null || !lyrics.isSynced || lyrics.lines.isEmpty()) {
+    if (lyrics == null || lyrics.lines.isEmpty()) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp)
-                .glassSurface(shape = RoundedCornerShape(26.dp), tintAlpha = 0.35f),
+            modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Rounded.Lyrics,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.40f),
-                    modifier = Modifier.size(48.dp)
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = "No Synced Lyrics Found",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Place a matching .lrc file in the music folder or enable LRCLIB in Settings.",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = Color.White.copy(alpha = 0.60f),
-                        textAlign = TextAlign.Center
-                    ),
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
-            }
+            Text("No lyrics available", color = Color.White.copy(alpha = 0.50f))
         }
         return
     }
 
-    val activeIndex = remember(lyrics, currentPositionMs) {
-        lyrics.lines.indexOfLast { it.timestampMs <= currentPositionMs }
-    }
-
     val listState = rememberLazyListState()
+    val activeIndex = lyrics.lines.indexOfLast { it.timestampMs <= currentPositionMs }.coerceAtLeast(0)
 
     LaunchedEffect(activeIndex) {
-        if (activeIndex >= 0) {
-            listState.animateScrollToItem((activeIndex - 2).coerceAtLeast(0))
-        }
+        listState.animateScrollToItem((activeIndex - 2).coerceAtLeast(0))
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .glassSurface(shape = RoundedCornerShape(26.dp), tintAlpha = 0.40f)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(vertical = 40.dp)
     ) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(vertical = 40.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            itemsIndexed(lyrics.lines) { index, line ->
-                val isActive = index == activeIndex
-
-                Text(
-                    text = line.text,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Medium,
-                        fontSize = if (isActive) 22.sp else 16.sp,
-                        color = if (isActive) Color.White else Color.White.copy(alpha = 0.40f)
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSeekTo(line.timestampMs) }
-                        .padding(vertical = 4.dp),
-                    textAlign = TextAlign.Start
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun SignalPathBadge(info: AudioOutputInfo) {
-    val sampleRateKhz = if (info.originalSampleRate > 0) info.originalSampleRate / 1000.0 else 44.1
-    val bitDepth = if (info.originalBitDepth > 0) info.originalBitDepth else 16
-    val rateText = if (sampleRateKhz % 1.0 == 0.0) "${sampleRateKhz.toInt()}kHz" else "%.1fkHz".format(sampleRateKhz)
-
-    val badgeText = buildString {
-        append(info.format)
-        append(" • ")
-        append("$rateText/${bitDepth}bit")
-        append(" ➔ ")
-        if (info.isBitPerfect) {
-            append("Bit-Perfect (${info.outputDeviceName})")
-        } else {
-            append(info.outputDeviceName)
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .glassSurface(
-                shape = RoundedCornerShape(14.dp),
-                tintAlpha = 0.40f
-            )
-            .padding(horizontal = 14.dp, vertical = 7.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(if (info.isBitPerfect) Color(0xFF10B981) else Color(0xFFFFB800))
-            )
-            Spacer(modifier = Modifier.width(8.dp))
+        itemsIndexed(lyrics.lines) { index, line ->
+            val isActive = index == activeIndex
             Text(
-                text = badgeText,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White.copy(alpha = 0.90f)
-                )
+                text = line.text,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                    fontSize = if (isActive) 20.sp else 16.sp,
+                    color = if (isActive) accentColor else Color.White.copy(alpha = 0.40f)
+                ),
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp)
+                    .clickable { onSeekTo(line.timestampMs) }
             )
         }
     }
 }
 
 private fun formatTime(ms: Long): String {
-    val totalSec = ms / 1000
-    val min = totalSec / 60
-    val sec = totalSec % 60
-    return "%d:%02d".format(min, sec)
+    val totalSeconds = (ms / 1000).toInt()
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d".format(minutes, seconds)
 }

@@ -19,8 +19,29 @@ fun SoundWaveVisualizer(
     modifier: Modifier = Modifier,
     barColor: Color = Color.White,
     maxHeight: Dp = 20.dp,
-    rmsLevel: Float = 0.0f
+    rmsLevel: Float = 0.0f,
+    isPerformanceMode: Boolean = false
 ) {
+    if (isPerformanceMode) {
+        // Performance Mode: Draw static minimal dots without running GPU transition animations
+        Row(
+            modifier = modifier.height(maxHeight),
+            horizontalArrangement = Arrangement.spacedBy(2.5.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            repeat(4) {
+                Box(
+                    modifier = Modifier
+                        .width(3.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(1.5.dp))
+                        .background(barColor.copy(alpha = 0.35f))
+                )
+            }
+        }
+        return
+    }
+
     val transition = rememberInfiniteTransition(label = "WaveAnimation")
 
     val h1 by transition.animateFloat(

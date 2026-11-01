@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -28,18 +30,23 @@ fun LiquidGlassBackground(
     accentColor: Color = Color(0xFF6366F1),
     isOled: Boolean = false,
     isPlaying: Boolean = false,
+    isPerformanceMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "LiquidAnimation")
-    val pulse by infiniteTransition.animateFloat(
-        initialValue = 0.95f,
-        targetValue = 1.05f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(4000, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "Pulse"
-    )
+    val pulse by if (isPerformanceMode) {
+        remember { mutableFloatStateOf(1.0f) }
+    } else {
+        infiniteTransition.animateFloat(
+            initialValue = 0.95f,
+            targetValue = 1.05f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(4000, easing = FastOutSlowInEasing),
+                repeatMode = RepeatMode.Reverse
+            ),
+            label = "Pulse"
+        )
+    }
 
     val hazeModifier = if (hazeState != null) Modifier.haze(hazeState) else Modifier
 
@@ -67,6 +74,11 @@ fun LiquidGlassBackground(
                     )
                 )
             )
+
+            // Performance Mode: Skip heavy liquid contours and chromatic specular highlights to drastically minimize GPU load
+            if (isPerformanceMode) {
+                return@Canvas
+            }
 
             // 2. Liquid Fluid Contours (inspired by Viktor Sheen / Liquid Glass UI)
             // Upper fluid curve (velvety charcoal with white specular crest)

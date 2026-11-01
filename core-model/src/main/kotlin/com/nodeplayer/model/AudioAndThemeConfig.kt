@@ -156,5 +156,7 @@ data class GlassThemeConfig(
     val isOledBlack: Boolean = false,
     val useDynamicAccent: Boolean = true,
     val fixedAccentColorArgb: Long = 0xFF6366F1, // Indigo default
-    val cornerRadiusDp: Float = 20.0f
+    val cornerRadiusDp: Float = 20.0f,
+    val isPerformanceMode: Boolean = false,
+    val refractionShaderEnabled: Boolean = true
 )

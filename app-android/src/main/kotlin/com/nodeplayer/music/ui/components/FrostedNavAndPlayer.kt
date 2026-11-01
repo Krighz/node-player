@@ -145,6 +145,7 @@ fun FrostedBottomBar(
     selectedRoute: String,
     onRouteChange: (String) -> Unit,
     hazeState: HazeState? = null,
+    isPerformanceMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
@@ -160,6 +161,7 @@ fun FrostedBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 6.dp)
+            .glassRefractionDock(enabled = !isPerformanceMode, refractionIndex = 0.85f)
             .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.70f)
     ) {
         Row(

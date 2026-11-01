@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.*
 import com.nodeplayer.music.ui.components.GlassCard
+import com.nodeplayer.music.ui.components.ParametricEqCurveGraph
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import dev.chrisbanes.haze.HazeState
 
@@ -45,6 +46,8 @@ fun EqualizerScreen(
     onSaveAlbumPreset: () -> Unit = {},
     onClearPreset: () -> Unit = {},
     onLoadConvolverPreset: (String) -> Unit = {},
+    rmsLevel: Float = 0.0f,
+    isPerformanceMode: Boolean = false,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
@@ -321,7 +324,21 @@ fun EqualizerScreen(
                         style = MaterialTheme.typography.labelSmall.copy(color = accent, fontWeight = FontWeight.Bold)
                     )
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Interactive Draggable Glass Graph with Live Spectrum
+                ParametricEqCurveGraph(
+                    bands = config.bands,
+                    onBandsChange = { updatedBands ->
+                        onConfigChange(config.copy(bands = updatedBands, presetName = "Custom"))
+                    },
+                    eqEnabled = config.eqEnabled,
+                    accentColor = accent,
+                    rmsLevel = rmsLevel,
+                    showSpectrum = !isPerformanceMode
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
 
                 config.bands.forEachIndexed { index, band ->
                     val freqLabel = if (band.centerFreq >= 1000f) "${(band.centerFreq / 1000).toInt()} kHz" else "${band.centerFreq.toInt()} Hz"

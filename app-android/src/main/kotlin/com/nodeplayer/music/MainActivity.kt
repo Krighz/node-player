@@ -107,7 +107,8 @@ class MainActivity : ComponentActivity() {
                         LiquidGlassBackground(
                             accentColor = accentColor,
                             isOled = themeConfig.isOledBlack,
-                            isPlaying = isPlaying
+                            isPlaying = isPlaying,
+                            isPerformanceMode = themeConfig.isPerformanceMode
                         )
 
                         // 2. Foreground Interactive UI (Cards use clean translucent glass; no recursive blur)
@@ -145,6 +146,8 @@ class MainActivity : ComponentActivity() {
                                 onSaveAlbumPreset = { currentTrack?.let { viewModel.saveAsAlbumPreset(it) } },
                                 onClearPreset = { currentTrack?.let { viewModel.clearTrackOrAlbumPreset(it) } },
                                 onLoadConvolverPreset = { viewModel.setConvolverPreset(it) },
+                                rmsLevel = currentRms,
+                                isPerformanceMode = themeConfig.isPerformanceMode,
                                 hazeState = null
                             )
                             "settings" -> SettingsScreen(
@@ -203,7 +206,8 @@ class MainActivity : ComponentActivity() {
                         FrostedBottomBar(
                             selectedRoute = currentRoute,
                             onRouteChange = { currentRoute = it },
-                            hazeState = dockHazeState
+                            hazeState = dockHazeState,
+                            isPerformanceMode = themeConfig.isPerformanceMode || !themeConfig.refractionShaderEnabled
                         )
                     }
 
@@ -228,7 +232,8 @@ class MainActivity : ComponentActivity() {
                                     isNowPlayingExpanded = false
                                     currentRoute = "equalizer"
                                 },
-                                rmsLevel = currentRms
+                                rmsLevel = currentRms,
+                                isPerformanceMode = themeConfig.isPerformanceMode
                             )
                         }
                     }

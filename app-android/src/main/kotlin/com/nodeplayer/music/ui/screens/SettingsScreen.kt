@@ -820,6 +820,51 @@ fun SettingsScreen(
             hazeState = hazeState
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                // Performance Mode
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Performance Mode", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text(
+                            "Disables AGSL refraction, breathing background, and spectrum to minimize GPU load",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    Switch(
+                        checked = themeConfig.isPerformanceMode,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isPerformanceMode = it)) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Real Glass Dock Refraction (AGSL)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Real Glass Dock Refraction", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text(
+                            "Android 13+ AGSL optical lens distortion on floating dock",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    Switch(
+                        checked = themeConfig.refractionShaderEnabled && !themeConfig.isPerformanceMode,
+                        enabled = !themeConfig.isPerformanceMode,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(refractionShaderEnabled = it)) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
                 // OLED Black
                 Row(
                     modifier = Modifier.fillMaxWidth(),
