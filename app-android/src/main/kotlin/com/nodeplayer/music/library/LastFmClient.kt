@@ -22,6 +22,8 @@ object LastFmClient {
     private const val TAG = "LastFmClient"
     private const val API_ROOT = "https://ws.audioscrobbler.com/2.0/"
 
+    private const val FALLBACK_API_SECRET = "0d6137535634972ec6758055afd0959e"
+
     fun getEffectiveApiKey(context: Context? = null): String {
         if (BuildConfig.LASTFM_API_KEY.isNotBlank()) return BuildConfig.LASTFM_API_KEY
         val ctx = context ?: try { NodePlayerApplication.instance } catch (_: Exception) { null }
@@ -33,7 +35,9 @@ object LastFmClient {
         if (BuildConfig.LASTFM_API_SECRET.isNotBlank()) return BuildConfig.LASTFM_API_SECRET
         val ctx = context ?: try { NodePlayerApplication.instance } catch (_: Exception) { null }
         val prefs = ctx?.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
-        return prefs?.getString("custom_lastfm_api_secret", "")?.trim().orEmpty()
+        val custom = prefs?.getString("custom_lastfm_api_secret", "")?.trim().orEmpty()
+        if (custom.isNotBlank()) return custom
+        return FALLBACK_API_SECRET
     }
 
     val isBuiltInKeyPresent: Boolean
