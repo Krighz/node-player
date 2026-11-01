@@ -53,6 +53,18 @@ interface PlayerDao {
     @Query("SELECT * FROM playlists ORDER BY name COLLATE NOCASE ASC")
     fun getAllPlaylists(): Flow<List<PlaylistEntity>>
 
+    @Query("SELECT * FROM playlists ORDER BY name COLLATE NOCASE ASC")
+    suspend fun getAllPlaylistsList(): List<PlaylistEntity>
+
+    @Query("SELECT * FROM playlists WHERE name = :name LIMIT 1")
+    suspend fun getPlaylistByName(name: String): PlaylistEntity?
+
+    @Query("SELECT trackId FROM playlist_tracks WHERE playlistId = :playlistId ORDER BY position ASC")
+    suspend fun getPlaylistTrackIds(playlistId: Long): List<Long>
+
+    @Query("UPDATE tracks SET playCount = :count WHERE id = :id")
+    suspend fun updatePlayCount(id: Long, count: Int)
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlaylist(playlist: PlaylistEntity): Long
 

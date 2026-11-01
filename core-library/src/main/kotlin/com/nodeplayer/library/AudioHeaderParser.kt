@@ -135,11 +135,143 @@ object AudioHeaderParser {
             return parseWav(bytes, 0)
         }
 
-        // 3. Check MP3
+        // 3. Check OGG / Opus ("OggS")
+        if (bytes.size >= 36 &&
+            bytes[0] == 0x4F.toByte() && bytes[1] == 0x67.toByte() &&
+            bytes[2] == 0x67.toByte() && bytes[3] == 0x53.toByte()
+        ) {
+            val oggInfo = parseOggOrOpus(bytes, 0)
+            if (oggInfo != null) return oggInfo
+        }
+
+        // 4. Check MP4 / M4A / ALAC ("....ftyp")
+        if (bytes.size >= 12 &&
+            bytes[4] == 'f'.code.toByte() && bytes[5] == 't'.code.toByte() &&
+            bytes[6] == 'y'.code.toByte() && bytes[7] == 'p'.code.toByte()
+        ) {
+            val m4aInfo = parseM4aOrAlac(bytes)
+            if (m4aInfo != null) return m4aInfo
+        }
+
+        // 5. Check MP3
         val mp3Info = parseMp3(bytes, offset)
         if (mp3Info != null) return mp3Info
 
         return null
+    }
+
+    private fun parseOggOrOpus(bytes: ByteArray, offset: Int = 0): AudioFormatInfo? {
+        if (bytes.size < offset + 36) return null
+        if (bytes[offset] != 0x4F.toByte() || bytes[offset + 1] != 0x67.toByte() ||
+            bytes[offset + 2] != 0x67.toByte() || bytes[offset + 3] != 0x53.toByte()
+        ) return null
+
+        val numPageSegments = bytes[offset + 26].toInt() and 0xFF
+        val payloadOffset = offset + 27 + numPageSegments
+        if (bytes.size < payloadOffset + 16) return null
+
+        // Check Opus ("OpusHead")
+        if (payloadOffset + 16 <= bytes.size &&
+            bytes[payloadOffset] == 'O'.code.toByte() &&
+            bytes[payloadOffset + 1] == 'p'.code.toByte() &&
+            bytes[payloadOffset + 2] == 'u'.code.toByte() &&
+            bytes[payloadOffset + 3] == 's'.code.toByte() &&
+            bytes[payloadOffset + 4] == 'H'.code.toByte() &&
+            bytes[payloadOffset + 5] == 'e'.code.toByte() &&
+            bytes[payloadOffset + 6] == 'a'.code.toByte() &&
+            bytes[payloadOffset + 7] == 'd'.code.toByte()
+        ) {
+            val channels = bytes[payloadOffset + 9].toInt() and 0xFF
+            val rawRate = (bytes[payloadOffset + 12].toInt() and 0xFF) or
+                    ((bytes[payloadOffset + 13].toInt() and 0xFF) shl 8) or
+                    ((bytes[payloadOffset + 14].toInt() and 0xFF) shl 16) or
+                    ((bytes[payloadOffset + 15].toInt() and 0xFF) shl 24)
+            val sampleRate = if (rawRate in 8000..768000) rawRate else 48000
+            return AudioFormatInfo(
+                formatName = "Opus",
+                sampleRate = sampleRate,
+                bitDepth = 0,
+                bitrateKbps = 0,
+                channels = maxOf(1, channels),
+                isLossless = false,
+                formatDescription = "Opus ${formatSampleRate(sampleRate)}"
+            )
+        }
+
+        // Check Ogg Vorbis (\x01vorbis)
+        if (payloadOffset + 16 <= bytes.size &&
+            bytes[payloadOffset] == 1.toByte() &&
+            bytes[payloadOffset + 1] == 'v'.code.toByte() &&
+            bytes[payloadOffset + 2] == 'o'.code.toByte() &&
+            bytes[payloadOffset + 3] == 'r'.code.toByte() &&
+            bytes[payloadOffset + 4] == 'b'.code.toByte() &&
+            bytes[payloadOffset + 5] == 'i'.code.toByte() &&
+            bytes[payloadOffset + 6] == 's'.code.toByte()
+        ) {
+            val channels = bytes[payloadOffset + 11].toInt() and 0xFF
+            val rawRate = (bytes[payloadOffset + 12].toInt() and 0xFF) or
+                    ((bytes[payloadOffset + 13].toInt() and 0xFF) shl 8) or
+                    ((bytes[payloadOffset + 14].toInt() and 0xFF) shl 16) or
+                    ((bytes[payloadOffset + 15].toInt() and 0xFF) shl 24)
+            val sampleRate = if (rawRate in 8000..768000) rawRate else 44100
+            return AudioFormatInfo(
+                formatName = "OGG",
+                sampleRate = sampleRate,
+                bitDepth = 0,
+                bitrateKbps = 0,
+                channels = maxOf(1, channels),
+                isLossless = false,
+                formatDescription = "OGG ${formatSampleRate(sampleRate)}"
+            )
+        }
+
+        return null
+    }
+
+    private fun parseM4aOrAlac(bytes: ByteArray): AudioFormatInfo? {
+        if (bytes.size < 32) return null
+        if (bytes[4] != 'f'.code.toByte() || bytes[5] != 't'.code.toByte() ||
+            bytes[6] != 'y'.code.toByte() || bytes[7] != 'p'.code.toByte()
+        ) return null
+
+        val limit = minOf(bytes.size - 4, 8192)
+        var isAlac = false
+        var isAac = false
+        for (i in 0 until limit) {
+            if (bytes[i] == 'a'.code.toByte() && bytes[i + 1] == 'l'.code.toByte() &&
+                bytes[i + 2] == 'a'.code.toByte() && bytes[i + 3] == 'c'.code.toByte()
+            ) {
+                isAlac = true
+                break
+            }
+            if (bytes[i] == 'm'.code.toByte() && bytes[i + 1] == 'p'.code.toByte() &&
+                bytes[i + 2] == '4'.code.toByte() && bytes[i + 3] == 'a'.code.toByte()
+            ) {
+                isAac = true
+            }
+        }
+
+        return if (isAlac) {
+            AudioFormatInfo(
+                formatName = "ALAC",
+                sampleRate = 44100,
+                bitDepth = 16,
+                bitrateKbps = 0,
+                channels = 2,
+                isLossless = true,
+                formatDescription = "ALAC Lossless"
+            )
+        } else if (isAac) {
+            AudioFormatInfo(
+                formatName = "AAC",
+                sampleRate = 44100,
+                bitDepth = 0,
+                bitrateKbps = 0,
+                channels = 2,
+                isLossless = false,
+                formatDescription = "AAC (M4A)"
+            )
+        } else null
     }
 
     private fun parseFlac(bytes: ByteArray, offset: Int = 0): AudioFormatInfo? {

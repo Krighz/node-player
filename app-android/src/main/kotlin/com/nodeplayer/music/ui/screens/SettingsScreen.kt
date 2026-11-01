@@ -2514,6 +2514,140 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+        // 10. Backup, Restore & M3U Section
+        Text(
+            text = "BACKUP, RESTORE & PLAYLISTS",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        var showImportM3uDialog by remember { mutableStateOf(false) }
+        var m3uPlaylistName by remember { mutableStateOf("Imported Playlist") }
+        var m3uText by remember { mutableStateOf("") }
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Library & Settings Backup",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                )
+                Text(
+                    text = "Export playlists, play counts, favorites, EQ and themes into a single .nodebackup file.",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                )
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                val db = com.nodeplayer.music.NodePlayerApplication.instance.database
+                                val file = com.nodeplayer.music.data.NodeBackupManager.exportNodeBackup(
+                                    context = context,
+                                    database = db,
+                                    effectConfig = com.nodeplayer.model.AudioEffectConfig(),
+                                    themeConfig = themeConfig,
+                                    allTracks = emptyList()
+                                )
+                                if (file != null) {
+                                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        file
+                                    )
+                                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/octet-stream"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(sendIntent, "Export Node Backup"))
+                                } else {
+                                    Toast.makeText(context, "Export failed", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = accent.copy(alpha = 0.25f), contentColor = Color.White)
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Upload, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Export Backup", fontSize = 11.sp)
+                    }
+
+                    FilledTonalButton(
+                        onClick = { showImportM3uDialog = true },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color.White.copy(alpha = 0.10f), contentColor = Color.White)
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Import M3U", fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        if (showImportM3uDialog) {
+            AlertDialog(
+                onDismissRequest = { showImportM3uDialog = false },
+                title = { Text("Import M3U Playlist") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = m3uPlaylistName,
+                            onValueChange = { m3uPlaylistName = it },
+                            label = { Text("Playlist Name") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = m3uText,
+                            onValueChange = { m3uText = it },
+                            label = { Text("M3U Content / Paths") },
+                            placeholder = { Text("#EXTM3U\n/storage/emulated/0/Music/song1.mp3\n...") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(140.dp)
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = {
+                        val db = com.nodeplayer.music.NodePlayerApplication.instance.database
+                        coroutineScope.launch {
+                            val result = com.nodeplayer.music.data.NodeBackupManager.importM3uPlaylist(
+                                m3uContent = m3uText,
+                                playlistName = m3uPlaylistName,
+                                database = db,
+                                allTracks = emptyList()
+                            )
+                            Toast.makeText(context, result.second, Toast.LENGTH_SHORT).show()
+                        }
+                        showImportM3uDialog = false
+                    }) {
+                        Text("Import")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showImportM3uDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
         // 7. About Section
         Text(
             text = "ABOUT",
