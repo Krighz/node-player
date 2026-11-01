@@ -15,6 +15,7 @@ class DspChain {
     val loudness = LoudnessCompensator()
     val harmonicBass = HarmonicBassEnhancer()
     val convolver = PartitionedConvolver()
+    val reverb = ReverbProcessor()
     val stereoWidth = StereoWidthProcessor()
     val crossfeed = CrossfeedFilter()
     val directVolume = DirectVolumeProcessor()
@@ -61,6 +62,12 @@ class DspChain {
         convolver.enabled = config.convolverConfig.enabled
         convolver.blend = config.convolverConfig.blend
 
+        // Reverb & Ambience
+        reverb.enabled = config.reverbConfig.enabled
+        reverb.roomSize = config.reverbConfig.roomSize
+        reverb.damping = config.reverbConfig.damping
+        reverb.wet = config.reverbConfig.wetLevel
+
         // Direct volume
         directVolume.enabled = config.directVolumeConfig.enabled
         directVolume.volume = config.directVolumeConfig.volume
@@ -82,6 +89,7 @@ class DspChain {
         loudness.reset()
         harmonicBass.reset()
         convolver.reset()
+        reverb.reset()
         crossfeed.reset()
     }
 
@@ -127,17 +135,22 @@ class DspChain {
             l = widthOut.first
             r = widthOut.second
 
-            // 7. Crossfeed
+            // 7. Algorithmic Reverb & Ambience
+            val revOut = reverb.processStereo(l, r)
+            l = revOut.first
+            r = revOut.second
+
+            // 8. Crossfeed
             val crossOut = crossfeed.process(l, r)
             l = crossOut.first
             r = crossOut.second
 
-            // 8. Direct Volume Control with TPDF Dither
+            // 9. Direct Volume Control with TPDF Dither
             val volOut = directVolume.processStereo(l, r)
             l = volOut.first
             r = volOut.second
 
-            // 9. Final 32-bit Soft Limiter (guarantees no harsh clipping)
+            // 10. Final 32-bit Soft Limiter (guarantees no harsh clipping)
             l = limiter.process(l)
             r = limiter.process(r)
 
@@ -146,7 +159,7 @@ class DspChain {
             i += 2
         }
 
-        // 10. Convolver block processing (if enabled)
+        // 11. Convolver block processing (if enabled)
         if (convolver.enabled) {
             convolver.processBlock(buffer, offset, count, sampleRate)
         }

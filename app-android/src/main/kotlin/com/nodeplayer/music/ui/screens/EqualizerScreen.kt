@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -22,12 +23,15 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
 import com.nodeplayer.model.*
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.components.ParametricEqCurveGraph
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import dev.chrisbanes.haze.HazeState
+import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EqualizerScreen(
     config: AudioEffectConfig,
@@ -55,7 +59,9 @@ fun EqualizerScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
 
+    var showJumpSheet by remember { mutableStateOf(false) }
     var showAutoEqDialog by remember { mutableStateOf(false) }
     var autoEqText by remember { mutableStateOf("") }
     var autoEqName by remember { mutableStateOf("Sennheiser HD600 AutoEQ") }
@@ -63,13 +69,14 @@ fun EqualizerScreen(
     var showImportJsonDialog by remember { mutableStateOf(false) }
     var importJsonText by remember { mutableStateOf("") }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp)
-            .verticalScroll(scrollState)
-    ) {
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp)
+                .verticalScroll(scrollState)
+        ) {
         // Header
         Row(
             modifier = Modifier
@@ -723,6 +730,145 @@ fun EqualizerScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+        // Reverb & Ambience Card
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Reverb & Ambience",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                        Text(
+                            text = "Algorithmic room & hall acoustic simulation",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+                        )
+                    }
+                    Switch(
+                        checked = config.reverbConfig.enabled,
+                        onCheckedChange = {
+                            onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(enabled = it)))
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                if (config.reverbConfig.enabled) {
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Preset Chips
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            Triple("Studio", 0.3f, 0.5f),
+                            Triple("Live Room", 0.55f, 0.4f),
+                            Triple("Concert Hall", 0.8f, 0.3f),
+                            Triple("Cathedral", 0.95f, 0.2f)
+                        ).forEach { (name, room, damp) ->
+                            val isSel = config.reverbConfig.preset == name
+                            FilterChip(
+                                selected = isSel,
+                                onClick = {
+                                    onConfigChange(
+                                        config.copy(
+                                            reverbConfig = config.reverbConfig.copy(
+                                                preset = name,
+                                                roomSize = room,
+                                                damping = damp,
+                                                wetLevel = if (name == "Cathedral") 0.45f else if (name == "Concert Hall") 0.35f else 0.25f
+                                            )
+                                        )
+                                    )
+                                },
+                                label = { Text(name, fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = accent.copy(alpha = 0.25f),
+                                    selectedLabelColor = accent
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Room Size Slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Room Size", style = MaterialTheme.typography.bodyMedium)
+                        val roomLabel = when {
+                            config.reverbConfig.roomSize < 0.4f -> "Studio (${(config.reverbConfig.roomSize * 100).toInt()}%)"
+                            config.reverbConfig.roomSize < 0.7f -> "Medium Room (${(config.reverbConfig.roomSize * 100).toInt()}%)"
+                            config.reverbConfig.roomSize < 0.9f -> "Large Hall (${(config.reverbConfig.roomSize * 100).toInt()}%)"
+                            else -> "Cathedral (${(config.reverbConfig.roomSize * 100).toInt()}%)"
+                        }
+                        Text(roomLabel, color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = config.reverbConfig.roomSize,
+                        onValueChange = {
+                            onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(roomSize = it, preset = "Custom")))
+                        },
+                        valueRange = 0.0f..1.0f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Damping Slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("HF Damping", style = MaterialTheme.typography.bodyMedium)
+                        val dampLabel = if (config.reverbConfig.damping > 0.6f) "Warm / Dark" else if (config.reverbConfig.damping > 0.3f) "Natural" else "Bright"
+                        Text("$dampLabel (${(config.reverbConfig.damping * 100).toInt()}%)", color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = config.reverbConfig.damping,
+                        onValueChange = {
+                            onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(damping = it, preset = "Custom")))
+                        },
+                        valueRange = 0.0f..1.0f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Wet / Dry Mix Slider
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Wet / Dry Mix", style = MaterialTheme.typography.bodyMedium)
+                        Text("${(config.reverbConfig.wetLevel * 100).toInt()}% Wet", color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = config.reverbConfig.wetLevel,
+                        onValueChange = {
+                            onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(wetLevel = it, preset = "Custom")))
+                        },
+                        valueRange = 0.0f..1.0f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
         // ReplayGain & Spatial Effects Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
@@ -824,6 +970,97 @@ fun EqualizerScreen(
         }
 
         Spacer(modifier = Modifier.height(200.dp))
+    }
+
+        // Floating 3-bar quick-nav jump button
+        FloatingActionButton(
+            onClick = { showJumpSheet = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 20.dp, bottom = 100.dp),
+            containerColor = accent,
+            contentColor = Color.White
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Segment,
+                contentDescription = "Jump to section",
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+
+    // Quick-Nav Jump Bottom Sheet
+    if (showJumpSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showJumpSheet = false },
+            containerColor = Color(0xFF141624),
+            dragHandle = {
+                Box(
+                    modifier = Modifier
+                        .padding(vertical = 10.dp)
+                        .size(width = 40.dp, height = 4.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.25f))
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+            ) {
+                Text(
+                    text = "Jump to Section",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    ),
+                    modifier = Modifier.padding(bottom = 14.dp)
+                )
+
+                listOf(
+                    Triple("Parametric EQ & Preamp", Icons.Rounded.Tune, 0),
+                    Triple("10-Band Sliders", Icons.Rounded.GraphicEq, 450),
+                    Triple("Tone & Harmonic Bass", Icons.Rounded.VolumeUp, 950),
+                    Triple("Reverb & Ambience", Icons.Rounded.SpatialAudio, 1500),
+                    Triple("Convolver Impulse Response", Icons.Rounded.Memory, 1950),
+                    Triple("Spatial Effects & Limiter", Icons.Rounded.SurroundSound, 2400)
+                ).forEach { (title, icon, targetScroll) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                showJumpSheet = false
+                                coroutineScope.launch {
+                                    scrollState.animateScrollTo(targetScroll)
+                                }
+                            }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(accent.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(imageVector = icon, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        }
     }
 
     // Dialog: AutoEQ Import

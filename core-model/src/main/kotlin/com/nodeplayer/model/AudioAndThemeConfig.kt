@@ -56,6 +56,14 @@ data class ConvolverConfig(
     val blend: Float = 1.0f // 0.0 = dry, 1.0 = wet
 )
 
+data class ReverbConfig(
+    val enabled: Boolean = false,
+    val roomSize: Float = 0.5f, // 0.0 to 1.0
+    val damping: Float = 0.5f,  // 0.0 to 1.0
+    val wetLevel: Float = 0.25f, // 0.0 to 1.0
+    val preset: String = "Studio"
+)
+
 data class DirectVolumeConfig(
     val enabled: Boolean = true,
     val volume: Float = 1.0f, // 0.0 to 1.0
@@ -100,6 +108,7 @@ data class AudioEffectConfig(
     val loudnessConfig: LoudnessConfig = LoudnessConfig(),
     val harmonicBassConfig: HarmonicBassConfig = HarmonicBassConfig(),
     val convolverConfig: ConvolverConfig = ConvolverConfig(),
+    val reverbConfig: ReverbConfig = ReverbConfig(),
     val directVolumeConfig: DirectVolumeConfig = DirectVolumeConfig(),
     val isAbComparing: Boolean = false,
     val abLoudnessOffsetDb: Float = 0.0f

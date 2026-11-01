@@ -676,3 +676,107 @@ object AbCompareHelper {
         return -netBoostDb
     }
 }
+
+/**
+ * Algorithmic Stereo Reverb (Freeverb Comb & Allpass Diffusion Model).
+ * Efficient 32-bit float implementation with 4 feedback comb filters and
+ * 2 allpass diffusers per stereo channel.
+ */
+class ReverbProcessor {
+    var enabled: Boolean = false
+    var roomSize: Float = 0.5f
+    var damping: Float = 0.5f
+    var wet: Float = 0.25f
+
+    // Comb filter buffers (Left & Right)
+    private val combLengthsL = intArrayOf(1116, 1188, 1277, 1356)
+    private val combLengthsR = intArrayOf(1139, 1211, 1300, 1379)
+    private val combBuffersL = Array(4) { FloatArray(combLengthsL[it]) }
+    private val combBuffersR = Array(4) { FloatArray(combLengthsR[it]) }
+    private val combIndicesL = IntArray(4)
+    private val combIndicesR = IntArray(4)
+    private val combFiltersL = FloatArray(4)
+    private val combFiltersR = FloatArray(4)
+
+    // Allpass diffusers (Left & Right)
+    private val allpassLengthsL = intArrayOf(225, 341)
+    private val allpassLengthsR = intArrayOf(248, 364)
+    private val allpassBuffersL = Array(2) { FloatArray(allpassLengthsL[it]) }
+    private val allpassBuffersR = Array(2) { FloatArray(allpassLengthsR[it]) }
+    private val allpassIndicesL = IntArray(2)
+    private val allpassIndicesR = IntArray(2)
+
+    fun reset() {
+        for (i in 0 until 4) {
+            combBuffersL[i].fill(0.0f)
+            combBuffersR[i].fill(0.0f)
+            combIndicesL[i] = 0
+            combIndicesR[i] = 0
+            combFiltersL[i] = 0.0f
+            combFiltersR[i] = 0.0f
+        }
+        for (i in 0 until 2) {
+            allpassBuffersL[i].fill(0.0f)
+            allpassBuffersR[i].fill(0.0f)
+            allpassIndicesL[i] = 0
+            allpassIndicesR[i] = 0
+        }
+    }
+
+    fun processStereo(inputL: Float, inputR: Float): Pair<Float, Float> {
+        if (!enabled || wet <= 0.001f) return Pair(inputL, inputR)
+
+        val feedback = (0.7f + roomSize.coerceIn(0.0f, 1.0f) * 0.28f)
+        val damp = damping.coerceIn(0.0f, 1.0f) * 0.4f
+        val damp1 = 1.0f - damp
+
+        var outL = 0.0f
+        var outR = 0.0f
+
+        for (i in 0 until 4) {
+            // Left Comb
+            val bufL = combBuffersL[i]
+            val idxL = combIndicesL[i]
+            val outputCombL = bufL[idxL]
+            combFiltersL[i] = outputCombL * damp1 + combFiltersL[i] * damp
+            bufL[idxL] = inputL + combFiltersL[i] * feedback
+            combIndicesL[i] = if (idxL + 1 >= combLengthsL[i]) 0 else idxL + 1
+            outL += outputCombL
+
+            // Right Comb
+            val bufR = combBuffersR[i]
+            val idxR = combIndicesR[i]
+            val outputCombR = bufR[idxR]
+            combFiltersR[i] = outputCombR * damp1 + combFiltersR[i] * damp
+            bufR[idxR] = inputR + combFiltersR[i] * feedback
+            combIndicesR[i] = if (idxR + 1 >= combLengthsR[i]) 0 else idxR + 1
+            outR += outputCombR
+        }
+
+        // Allpass diffusers
+        for (i in 0 until 2) {
+            // Left Allpass
+            val bufL = allpassBuffersL[i]
+            val idxL = allpassIndicesL[i]
+            val bufOutL = bufL[idxL]
+            outL = -outL + bufOutL
+            bufL[idxL] = outL + bufOutL * 0.5f
+            allpassIndicesL[i] = if (idxL + 1 >= allpassLengthsL[i]) 0 else idxL + 1
+
+            // Right Allpass
+            val bufR = allpassBuffersR[i]
+            val idxR = allpassIndicesR[i]
+            val bufOutR = bufR[idxR]
+            outR = -outR + bufOutR
+            bufR[idxR] = outR + bufOutR * 0.5f
+            allpassIndicesR[i] = if (idxR + 1 >= allpassLengthsR[i]) 0 else idxR + 1
+        }
+
+        val wetGain = wet.coerceIn(0.0f, 1.0f) * 0.35f
+        val dryGain = 1.0f - wetGain
+        val finalL = inputL * dryGain + outL * wetGain
+        val finalR = inputR * dryGain + outR * wetGain
+
+        return Pair(finalL, finalR)
+    }
+}
