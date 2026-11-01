@@ -1,4 +1,3 @@
-import java.util.Base64
 import java.util.Properties
 import java.io.File
 
@@ -8,14 +7,29 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val defaultLastFmProperties = Properties().apply {
+    val propFile = file("lastfm.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
 val localProperties = Properties().apply {
     val localPropFile = rootProject.file("local.properties")
     if (localPropFile.exists()) {
         localPropFile.inputStream().use { load(it) }
     }
 }
-val lastFmApiKey = localProperties.getProperty("LASTFM_API_KEY") ?: System.getenv("LASTFM_API_KEY") ?: ""
-val lastFmApiSecret = localProperties.getProperty("LASTFM_API_SECRET") ?: System.getenv("LASTFM_API_SECRET") ?: ""
+fun getPropValue(props: Properties, key: String): String? {
+    return props.getProperty(key) ?: props.getProperty("\uFEFF$key")
+}
+val lastFmApiKey = getPropValue(localProperties, "LASTFM_API_KEY")
+    ?: getPropValue(defaultLastFmProperties, "LASTFM_API_KEY")
+    ?: System.getenv("LASTFM_API_KEY")
+    ?: ""
+val lastFmApiSecret = getPropValue(localProperties, "LASTFM_API_SECRET")
+    ?: getPropValue(defaultLastFmProperties, "LASTFM_API_SECRET")
+    ?: System.getenv("LASTFM_API_SECRET")
+    ?: ""
 
 android {
     namespace = "com.nodeplayer.music"
@@ -25,8 +39,8 @@ android {
         applicationId = "com.nodeplayer.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "1.0.0"
 
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmApiKey\"")
         buildConfigField("String", "LASTFM_API_SECRET", "\"$lastFmApiSecret\"")
@@ -39,42 +53,55 @@ android {
 
     signingConfigs {
         create("release") {
-            val envKeystoreFile = System.getenv("KEYSTORE_FILE")?.let { file(it) }
-            val envKeystoreBase64 = System.getenv("KEYSTORE_BASE64")
-            val envStorePass = System.getenv("KEYSTORE_PASSWORD")
-            val envKeyAlias = System.getenv("KEY_ALIAS")
-            val envKeyPass = System.getenv("KEY_PASSWORD")
+            val userHome = System.getProperty("user.home") ?: System.getenv("USERPROFILE") ?: ""
+            val defaultSigningPropsFile = File(userHome, "Documents/node-player-signing/signing.properties")
+            val envSigningPropsPath = System.getenv("NODEPLAYER_SIGNING_PROPS")?.let { File(it) }
+            val projectSigningPropsPath = (project.findProperty("signingProps") as? String)?.let { File(it) }
 
-            if (envKeystoreFile != null && envKeystoreFile.exists()) {
-                storeFile = envKeystoreFile
-                storePassword = envStorePass
-                keyAlias = envKeyAlias
-                keyPassword = envKeyPass
-            } else if (!envKeystoreBase64.isNullOrEmpty()) {
-                val decodedKeystore = File(layout.buildDirectory.asFile.get(), "release.keystore")
-                decodedKeystore.parentFile?.mkdirs()
-                decodedKeystore.writeBytes(Base64.getDecoder().decode(envKeystoreBase64))
-                storeFile = decodedKeystore
-                storePassword = envStorePass
-                keyAlias = envKeyAlias
-                keyPassword = envKeyPass
+            val candidates = listOfNotNull(
+                projectSigningPropsPath,
+                envSigningPropsPath,
+                defaultSigningPropsFile,
+                File("C:/Users/satya/Documents/node-player-signing/signing.properties")
+            )
+            val signingPropFile = candidates.firstOrNull { it.exists() }
+
+            val signingProperties = Properties().apply {
+                if (signingPropFile != null && signingPropFile.exists()) {
+                    signingPropFile.inputStream().use { load(it) }
+                }
+            }
+
+            fun getProp(key: String): String? {
+                return signingProperties.getProperty(key)
+                    ?: signingProperties.getProperty("\uFEFF$key")
+            }
+
+            val envKeystoreFile = System.getenv("KEYSTORE_FILE")?.let { file(it) }
+            val propKeystorePath = getProp("storeFile")?.let { File(it) }
+
+            val resolvedKeystore = envKeystoreFile ?: propKeystorePath
+            if (resolvedKeystore != null && resolvedKeystore.exists()) {
+                storeFile = resolvedKeystore
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: getProp("storePassword")
+                keyAlias = System.getenv("KEY_ALIAS") ?: getProp("keyAlias")
+                keyPassword = System.getenv("KEY_PASSWORD") ?: getProp("keyPassword")
+            } else {
+                storeFile = null
             }
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            val releaseSigning = signingConfigs.findByName("release")
-            if (releaseSigning?.storeFile != null && releaseSigning.storeFile!!.exists()) {
-                signingConfig = releaseSigning
-            } else {
-                signingConfig = signingConfigs.getByName("debug")
-            }
+            val releaseSigning = signingConfigs.getByName("release")
+            signingConfig = releaseSigning
         }
     }
     compileOptions {
