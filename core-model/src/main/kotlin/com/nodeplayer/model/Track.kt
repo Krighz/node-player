@@ -36,7 +36,8 @@ data class Track(
     val lastPlayedTimestamp: Long = 0L,
     val playCount: Int = 0,
     val isFavorite: Boolean = false,
-    val isHidden: Boolean = false
+    val isHidden: Boolean = false,
+    val analysisAttempts: Int = 0
 ) {
     val durationFormatted: String
         get() {

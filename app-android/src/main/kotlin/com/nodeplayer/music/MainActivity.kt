@@ -103,6 +103,7 @@ class MainActivity : ComponentActivity() {
                 val activePresetLabel by viewModel.activePresetLabel.collectAsState()
                 val resumeOnHeadsetConnect by viewModel.resumeOnHeadsetConnect.collectAsState()
                 val resamplerRateChoice by viewModel.resamplerRateChoice.collectAsState()
+                val analyzingTrackId by viewModel.analyzingTrackId.collectAsState()
                 val autoDeviceProfilesEnabled by viewModel.autoDeviceProfilesEnabled.collectAsState()
 
                 Box(
@@ -139,7 +140,9 @@ class MainActivity : ComponentActivity() {
                                     viewModel.refreshLibrary()
                                 },
                                 qualityBadgeMode = appSettings.qualityBadgesMode,
-                                hazeState = null
+                                hazeState = null,
+                                onAnalyzeTrack = { viewModel.analyzeTrack(it) },
+                                analyzingTrackId = analyzingTrackId
                             )
                             "equalizer" -> EqualizerScreen(
                                 config = effectConfig,

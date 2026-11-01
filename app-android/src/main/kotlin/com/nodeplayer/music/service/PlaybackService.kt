@@ -67,6 +67,7 @@ class PlaybackService : MediaSessionService() {
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            isCurrentlyPlaying = isPlaying
             statsTracker.onPlayStateChanged(isPlaying)
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
             scheduleNextLyricUpdate()
@@ -92,6 +93,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     companion object {
+        @Volatile var isCurrentlyPlaying: Boolean = false
         const val CHANNEL_ID = "node_player_playback_channel"
         const val ACTION_PLAY_PAUSE = "com.nodeplayer.music.action.PLAY_PAUSE"
         const val ACTION_NEXT = "com.nodeplayer.music.action.NEXT"
@@ -522,6 +524,7 @@ class PlaybackService : MediaSessionService() {
         if (::crossfadeManager.isInitialized) {
             crossfadeManager.release()
         }
+        isCurrentlyPlaying = false
         mediaSession?.release()
         mediaSession = null
         super.onDestroy()

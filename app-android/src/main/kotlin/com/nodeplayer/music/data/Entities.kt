@@ -38,7 +38,8 @@ data class TrackEntity(
     val loudnessLufs: Float? = null,
     val dynamicRangeScore: Int? = null,
     val dynamicRangeLabel: String? = null,
-    val isHidden: Boolean = false
+    val isHidden: Boolean = false,
+    val analysisAttempts: Int = 0
 ) {
     fun toTrack(): Track = Track(
         id = id,
@@ -72,7 +73,8 @@ data class TrackEntity(
         loudnessLufs = loudnessLufs,
         dynamicRangeScore = dynamicRangeScore,
         dynamicRangeLabel = dynamicRangeLabel,
-        isHidden = isHidden
+        isHidden = isHidden,
+        analysisAttempts = analysisAttempts
     )
 
     companion object {
@@ -108,7 +110,8 @@ data class TrackEntity(
             loudnessLufs = track.loudnessLufs,
             dynamicRangeScore = track.dynamicRangeScore,
             dynamicRangeLabel = track.dynamicRangeLabel,
-            isHidden = track.isHidden
+            isHidden = track.isHidden,
+            analysisAttempts = track.analysisAttempts
         )
     }
 }

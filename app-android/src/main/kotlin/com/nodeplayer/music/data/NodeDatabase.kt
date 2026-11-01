@@ -87,7 +87,8 @@ interface PlayerDao {
             hiResCutoffHz = :cutoffHz, 
             loudnessLufs = :lufs, 
             dynamicRangeScore = :drScore, 
-            dynamicRangeLabel = :drLabel 
+            dynamicRangeLabel = :drLabel,
+            analysisAttempts = 0
         WHERE id = :id
     """)
     suspend fun updateTrackAudioAnalysis(
@@ -100,8 +101,14 @@ interface PlayerDao {
         drLabel: String
     )
 
-    @Query("SELECT * FROM tracks WHERE hiResStatus IS NULL OR loudnessLufs IS NULL OR dynamicRangeScore IS NULL")
+    @Query("SELECT * FROM tracks WHERE isHidden = 0 AND (hiResStatus IS NULL OR loudnessLufs IS NULL OR dynamicRangeScore IS NULL) AND analysisAttempts < 3")
     suspend fun getTracksNeedingAnalysis(): List<TrackEntity>
+
+    @Query("UPDATE tracks SET analysisAttempts = analysisAttempts + 1 WHERE id = :id")
+    suspend fun incrementAnalysisAttempts(id: Long)
+
+    @Query("UPDATE tracks SET hiResStatus = 'FAILED', dynamicRangeLabel = 'Failed', loudnessLufs = 0.0, analysisAttempts = 3 WHERE id = :id")
+    suspend fun markTrackAnalysisFailed(id: Long)
 
     // --- Playback & Listening Stats ---
     @Query("UPDATE tracks SET playCount = playCount + 1, lastPlayedTimestamp = :timestamp WHERE id = :id")
@@ -164,7 +171,7 @@ interface PlayerDao {
         ScrobbleQueueEntity::class,
         ScannedFolderEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class NodeDatabase : RoomDatabase() {

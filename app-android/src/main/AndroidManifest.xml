@@ -73,6 +73,16 @@
 
         <!-- BroadcastReceiver for System Audio Sessions -->
         <receiver
+            android:name=".library.AudioAnalysisReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.nodeplayer.music.action.PAUSE_ANALYSIS" />
+                <action android:name="com.nodeplayer.music.action.RESUME_ANALYSIS" />
+                <action android:name="com.nodeplayer.music.action.STOP_ANALYSIS" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".service.AudioSessionReceiver"
             android:exported="true">
             <intent-filter>

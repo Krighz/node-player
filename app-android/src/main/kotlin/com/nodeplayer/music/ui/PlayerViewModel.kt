@@ -927,8 +927,41 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun triggerAudioAnalysis() {
-        com.nodeplayer.music.library.AudioAnalysisWorker.schedule(app, chargingOnly = appSettings.value.analysisChargingOnly)
+    private val _analyzingTrackId = MutableStateFlow<Long?>(null)
+    val analyzingTrackId: StateFlow<Long?> = _analyzingTrackId.asStateFlow()
+
+    val isAnalysisRunning = com.nodeplayer.music.library.AudioAnalysisManager.isRunning
+    val isAnalysisPaused = com.nodeplayer.music.library.AudioAnalysisManager.isPaused
+    val analysisProgress = com.nodeplayer.music.library.AudioAnalysisManager.progress
+    val analysisSongTitle = com.nodeplayer.music.library.AudioAnalysisManager.currentSongTitle
+
+    fun analyzeTrack(track: Track) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _analyzingTrackId.value = track.id
+            try {
+                com.nodeplayer.music.library.AudioAnalysisManager.analyzeSingleTrackDirect(track, dao)
+            } catch (t: Throwable) {
+                Log.e("PlayerViewModel", "Error analyzing track ${track.title}: ${t.message}")
+            } finally {
+                _analyzingTrackId.value = null
+            }
+        }
+    }
+
+    fun triggerAudioAnalysis(chargingOnly: Boolean = false) {
+        com.nodeplayer.music.library.AudioAnalysisWorker.schedule(app, chargingOnly = chargingOnly)
+    }
+
+    fun pauseAudioAnalysis() {
+        com.nodeplayer.music.library.AudioAnalysisManager.pause(app)
+    }
+
+    fun resumeAudioAnalysis() {
+        com.nodeplayer.music.library.AudioAnalysisManager.resume(app)
+    }
+
+    fun cancelAudioAnalysis() {
+        com.nodeplayer.music.library.AudioAnalysisWorker.cancel(app)
     }
 
     fun startSleepTimer(minutes: Int, finishTrack: Boolean = true, fadeSeconds: Int = 10, stopAfterTracks: Int = 0, shakeExtend: Boolean = true) {

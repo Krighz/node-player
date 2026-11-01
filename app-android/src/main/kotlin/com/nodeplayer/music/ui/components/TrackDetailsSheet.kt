@@ -33,7 +33,9 @@ fun TrackDetailsSheet(
     track: Track,
     audioOutputInfo: com.nodeplayer.model.AudioOutputInfo = com.nodeplayer.model.AudioOutputInfo(),
     onDismiss: () -> Unit,
-    hazeState: HazeState? = null
+    hazeState: HazeState? = null,
+    onAnalyzeSong: ((Track) -> Unit)? = null,
+    isAnalyzing: Boolean = false
 ) {
     val accent = LocalAccentColor.current
     val scrollState = rememberScrollState()
@@ -208,6 +210,40 @@ fun TrackDetailsSheet(
                                 color = Color.White
                             )
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = { onAnalyzeSong?.invoke(track) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isAnalyzing,
+                        colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.2f)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        if (isAnalyzing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = accent
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Analyzing Song Quality...", color = accent, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.GraphicEq,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (track.hiResStatus != null && track.hiResStatus != HiResStatus.UNKNOWN) "Re-Analyze This Song" else "Analyze This Song",
+                                color = accent,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                        }
                     }
                 }
             }

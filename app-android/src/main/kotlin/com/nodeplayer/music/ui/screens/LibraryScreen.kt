@@ -48,6 +48,8 @@ fun LibraryScreen(
     onRescanClick: () -> Unit,
     qualityBadgeMode: String = "DETAILED",
     hazeState: HazeState? = null,
+    onAnalyzeTrack: ((Track) -> Unit)? = null,
+    analyzingTrackId: Long? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -171,10 +173,13 @@ fun LibraryScreen(
     }
 
     if (inspectingTrack != null) {
+        val currentTrack = tracks.find { it.id == inspectingTrack!!.id } ?: inspectingTrack!!
         com.nodeplayer.music.ui.components.TrackDetailsSheet(
-            track = inspectingTrack!!,
+            track = currentTrack,
             onDismiss = { inspectingTrack = null },
-            hazeState = hazeState
+            hazeState = hazeState,
+            onAnalyzeSong = onAnalyzeTrack,
+            isAnalyzing = analyzingTrackId == currentTrack.id
         )
     }
 }
@@ -190,8 +195,14 @@ fun SongsList(
     hazeState: HazeState?
 ) {
     val accent = LocalAccentColor.current
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    androidx.compose.runtime.LaunchedEffect(listState.isScrollInProgress) {
+        com.nodeplayer.music.library.AudioAnalysisManager.setUserScrolling(listState.isScrollInProgress)
+    }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 190.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -330,8 +341,14 @@ fun FoldersList(
     hazeState: HazeState?
 ) {
     val accent = LocalAccentColor.current
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    androidx.compose.runtime.LaunchedEffect(listState.isScrollInProgress) {
+        com.nodeplayer.music.library.AudioAnalysisManager.setUserScrolling(listState.isScrollInProgress)
+    }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 190.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)

@@ -113,6 +113,15 @@ fun SettingsScreen(
     var showAdvancedLastFm by remember { mutableStateOf(false) }
     var showSecretText by remember { mutableStateOf(false) }
     var lastFmConfigVersion by remember { mutableIntStateOf(0) }
+
+    var audioAnalysisEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("audio_analysis_enabled", true)) }
+    var analysisSpeed by remember { mutableStateOf(sharedPrefs.getString("analysis_speed", "Slow") ?: "Slow") }
+    var analysisChargingOnly by remember { mutableStateOf(sharedPrefs.getBoolean("analysis_charging_only", false)) }
+
+    val isAnalysisRunning by com.nodeplayer.music.library.AudioAnalysisManager.isRunning.collectAsState()
+    val isAnalysisPaused by com.nodeplayer.music.library.AudioAnalysisManager.isPaused.collectAsState()
+    val analysisProgress by com.nodeplayer.music.library.AudioAnalysisManager.progress.collectAsState()
+    val analysisSongTitle by com.nodeplayer.music.library.AudioAnalysisManager.currentSongTitle.collectAsState()
     var showLastFmConfirmDialog by remember { mutableStateOf(false) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var isFoldersExpanded by remember { mutableStateOf(true) }
@@ -1515,119 +1524,314 @@ fun SettingsScreen(
             hazeState = hazeState
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                // Fake Hi-Res
+                // Master Switch: Audio Quality Analysis
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Fake Hi-Res Detector", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                        Text("FFT background spectrum analysis for cutoffs & upsampling", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                        Text("Audio Quality & Analysis", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White))
+                        Text("Run spectral analysis, DR rating and loudness normalization", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                     }
                     Switch(
-                        checked = fakeHiRes,
+                        checked = audioAnalysisEnabled,
                         onCheckedChange = {
-                            fakeHiRes = it
-                            sharedPrefs.edit().putBoolean("fake_hires_enabled", it).apply()
+                            audioAnalysisEnabled = it
+                            sharedPrefs.edit().putBoolean("audio_analysis_enabled", it).apply()
+                            if (!it) {
+                                com.nodeplayer.music.library.AudioAnalysisWorker.cancel(context)
+                            }
                         },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
                     )
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+                if (audioAnalysisEnabled) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 
-                // Loudness Scan
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("EBU R128 Loudness Scan", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                        Text("Integrated LUFS measurement & automatic gain matching", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    // Fake Hi-Res
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Fake Hi-Res Detector", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                            Text("FFT background spectrum analysis for cutoffs & upsampling", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                        }
+                        Switch(
+                            checked = fakeHiRes,
+                            onCheckedChange = {
+                                fakeHiRes = it
+                                sharedPrefs.edit().putBoolean("fake_hires_enabled", it).apply()
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
                     }
-                    Switch(
-                        checked = loudnessScan,
-                        onCheckedChange = {
-                            loudnessScan = it
-                            sharedPrefs.edit().putBoolean("loudness_scan_enabled", it).apply()
-                        },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
-                    )
-                }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 
-                // Target Level & Clip guard
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Target Loudness", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f)))
-                    Text("%.1f LUFS".format(targetLufs), color = accent, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
-                }
-                Slider(
-                    value = targetLufs,
-                    onValueChange = {
-                        targetLufs = it
-                        sharedPrefs.edit().putFloat("loudness_target_lufs", it).apply()
-                    },
-                    valueRange = -23.0f..-9.0f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Anti-Clipping Guard", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f)))
-                    Switch(
-                        checked = clipGuard,
-                        onCheckedChange = {
-                            clipGuard = it
-                            sharedPrefs.edit().putBoolean("loudness_clip_guard", it).apply()
-                        },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
-
-                // DR Meter
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Dynamic Range (DR) Meter", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                        Text("Standard 3s block dynamic range rating", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    // Loudness Scan
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("EBU R128 Loudness Scan", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                            Text("Integrated LUFS measurement & automatic gain matching", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                        }
+                        Switch(
+                            checked = loudnessScan,
+                            onCheckedChange = {
+                                loudnessScan = it
+                                sharedPrefs.edit().putBoolean("loudness_scan_enabled", it).apply()
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
                     }
-                    Switch(
-                        checked = drMeter,
-                        onCheckedChange = {
-                            drMeter = it
-                            sharedPrefs.edit().putBoolean("dr_meter_enabled", it).apply()
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // Target Level & Clip guard
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Target Loudness", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f)))
+                        Text("%.1f LUFS".format(targetLufs), color = accent, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Slider(
+                        value = targetLufs,
+                        onValueChange = {
+                            targetLufs = it
+                            sharedPrefs.edit().putFloat("loudness_target_lufs", it).apply()
                         },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        valueRange = -23.0f..-9.0f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
                     )
-                }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Anti-Clipping Guard", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f)))
+                        Switch(
+                            checked = clipGuard,
+                            onCheckedChange = {
+                                clipGuard = it
+                                sharedPrefs.edit().putBoolean("loudness_clip_guard", it).apply()
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
+                    }
 
-                Button(
-                    onClick = {
-                        com.nodeplayer.music.library.AudioAnalysisWorker.schedule(context)
-                        android.widget.Toast.makeText(context, "Background quality analysis started", android.widget.Toast.LENGTH_SHORT).show()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.25f))
-                ) {
-                    Icon(imageVector = Icons.Rounded.GraphicEq, contentDescription = null, tint = accent)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Analyze Unscanned Tracks Now", color = accent, fontWeight = FontWeight.Bold)
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // DR Meter
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Dynamic Range (DR) Meter", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                            Text("Standard 3s block dynamic range rating", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                        }
+                        Switch(
+                            checked = drMeter,
+                            onCheckedChange = {
+                                drMeter = it
+                                sharedPrefs.edit().putBoolean("dr_meter_enabled", it).apply()
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // Speed Setting
+                    Column {
+                        Text("Analysis Speed & Throttle", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Controls inter-song delay and background CPU impact", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            listOf("Slow", "Normal", "Fast").forEach { spd ->
+                                val selected = analysisSpeed == spd
+                                OutlinedButton(
+                                    onClick = {
+                                        analysisSpeed = spd
+                                        sharedPrefs.edit().putString("analysis_speed", spd).apply()
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = if (selected) accent.copy(alpha = 0.25f) else Color.Transparent,
+                                        contentColor = if (selected) accent else Color.White.copy(alpha = 0.7f)
+                                    ),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) accent else Color.White.copy(alpha = 0.2f))
+                                ) {
+                                    Text(if (spd == "Slow") "Slow (Def)" else spd, fontSize = 12.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Only While Charging Switch
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Only While Charging", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                            Text("Postpone background scan until device is plugged in", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                        }
+                        Switch(
+                            checked = analysisChargingOnly,
+                            onCheckedChange = {
+                                analysisChargingOnly = it
+                                sharedPrefs.edit().putBoolean("analysis_charging_only", it).apply()
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // Live Status & Progress Notification / Controls
+                    if (isAnalysisRunning) {
+                        val (cur, tot) = analysisProgress ?: (0 to 0)
+                        val frac = if (tot > 0) cur.toFloat() / tot else 0f
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = if (isAnalysisPaused) "Analysis Paused" else "Analyzing Track $cur / $tot",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = if (isAnalysisPaused) Color(0xFFF59E0B) else accent)
+                                )
+                                Text("${(frac * 100).toInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.6f)))
+                            }
+                            if (!analysisSongTitle.isNullOrBlank()) {
+                                Text(
+                                    text = analysisSongTitle!!,
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp, color = Color.White.copy(alpha = 0.7f)),
+                                    maxLines = 1
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { frac },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = if (isAnalysisPaused) Color(0xFFF59E0B) else accent,
+                                trackColor = Color.White.copy(alpha = 0.1f)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = {
+                                        if (isAnalysisPaused) {
+                                            com.nodeplayer.music.library.AudioAnalysisManager.resume(context)
+                                        } else {
+                                            com.nodeplayer.music.library.AudioAnalysisManager.pause(context)
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.25f))
+                                ) {
+                                    Icon(
+                                        imageVector = if (isAnalysisPaused) Icons.Rounded.PlayArrow else Icons.Rounded.Pause,
+                                        contentDescription = null,
+                                        tint = accent,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(if (isAnalysisPaused) "Resume" else "Pause", color = accent, fontWeight = FontWeight.Bold)
+                                }
+                                Button(
+                                    onClick = {
+                                        com.nodeplayer.music.library.AudioAnalysisWorker.cancel(context)
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.2f))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = null,
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Stop", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                com.nodeplayer.music.library.AudioAnalysisWorker.schedule(context, chargingOnly = analysisChargingOnly)
+                                android.widget.Toast.makeText(context, "Background quality analysis started", android.widget.Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.25f))
+                        ) {
+                            Icon(imageVector = Icons.Rounded.GraphicEq, contentDescription = null, tint = accent)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Analyze Unscanned Tracks Now", color = accent, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Reset to default button
+                    OutlinedButton(
+                        onClick = {
+                            fakeHiRes = true
+                            loudnessScan = true
+                            targetLufs = -14.0f
+                            clipGuard = true
+                            drMeter = true
+                            analysisSpeed = "Slow"
+                            analysisChargingOnly = false
+                            sharedPrefs.edit()
+                                .putBoolean("fake_hires_enabled", true)
+                                .putBoolean("loudness_scan_enabled", true)
+                                .putFloat("loudness_target_lufs", -14.0f)
+                                .putBoolean("loudness_clip_guard", true)
+                                .putBoolean("dr_meter_enabled", true)
+                                .putString("analysis_speed", "Slow")
+                                .putBoolean("analysis_charging_only", false)
+                                .apply()
+                            android.widget.Toast.makeText(context, "Audio analysis settings reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+                    ) {
+                        Icon(imageVector = Icons.Rounded.RestartAlt, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Reset Audio Analysis to Defaults", color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
+                    }
                 }
             }
         }

@@ -29,6 +29,8 @@ object AppSettingsRepository {
     // Settings
     val KEY_LOUDNESS_TARGET_LUFS = floatPreferencesKey("loudness_target_lufs")
     val KEY_LOUDNESS_CLIP_GUARD = booleanPreferencesKey("loudness_clip_guard")
+    val KEY_AUDIO_ANALYSIS_ENABLED = booleanPreferencesKey("audio_analysis_enabled")
+    val KEY_ANALYSIS_SPEED = stringPreferencesKey("analysis_speed")
     val KEY_ANALYSIS_CHARGING_ONLY = booleanPreferencesKey("analysis_charging_only")
     val KEY_SLEEP_TIMER_FADE_SECONDS = intPreferencesKey("sleep_timer_fade_seconds")
     val KEY_SLEEP_TIMER_FINISH_TRACK = booleanPreferencesKey("sleep_timer_finish_track")
@@ -52,6 +54,8 @@ object AppSettingsRepository {
         val miniPlayerGesturesEnabled: Boolean = true,
         val loudnessTargetLufs: Float = -14.0f,
         val loudnessClipGuard: Boolean = true,
+        val audioAnalysisEnabled: Boolean = true,
+        val analysisSpeed: String = "Slow",
         val analysisChargingOnly: Boolean = false,
         val sleepTimerFadeSeconds: Int = 10,
         val sleepTimerFinishTrack: Boolean = true,
@@ -78,6 +82,8 @@ object AppSettingsRepository {
                 miniPlayerGesturesEnabled = prefs[KEY_MINI_PLAYER_GESTURES_ENABLED] ?: true,
                 loudnessTargetLufs = prefs[KEY_LOUDNESS_TARGET_LUFS] ?: -14.0f,
                 loudnessClipGuard = prefs[KEY_LOUDNESS_CLIP_GUARD] ?: true,
+                audioAnalysisEnabled = prefs[KEY_AUDIO_ANALYSIS_ENABLED] ?: true,
+                analysisSpeed = prefs[KEY_ANALYSIS_SPEED] ?: "Slow",
                 analysisChargingOnly = prefs[KEY_ANALYSIS_CHARGING_ONLY] ?: false,
                 sleepTimerFadeSeconds = prefs[KEY_SLEEP_TIMER_FADE_SECONDS] ?: 10,
                 sleepTimerFinishTrack = prefs[KEY_SLEEP_TIMER_FINISH_TRACK] ?: true,
