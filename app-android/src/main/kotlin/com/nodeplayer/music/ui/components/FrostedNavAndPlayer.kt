@@ -25,6 +25,11 @@ import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
 import dev.chrisbanes.haze.HazeState
 
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import kotlin.math.abs
+
 @Composable
 fun FrostedMiniPlayer(
     currentTrack: Track?,
@@ -32,7 +37,10 @@ fun FrostedMiniPlayer(
     progressFraction: Float,
     onPlayPauseClick: () -> Unit,
     onSkipNextClick: () -> Unit,
+    onSkipPreviousClick: () -> Unit = {},
     onClick: () -> Unit,
+    onLongPress: () -> Unit = {},
+    gesturesEnabled: Boolean = true,
     hazeState: HazeState? = null,
     rmsLevel: Float = 0.0f,
     modifier: Modifier = Modifier
@@ -42,12 +50,53 @@ fun FrostedMiniPlayer(
     val shape = RoundedCornerShape(GlassTokens.cardCornerRadius)
     val accent = LocalAccentColor.current
 
+    val gestureModifier = if (gesturesEnabled) {
+        Modifier
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onDoubleTap = { onPlayPauseClick() },
+                    onLongPress = { onLongPress() }
+                )
+            }
+            .pointerInput(Unit) {
+                var totalDragX = 0f
+                var totalDragY = 0f
+                detectDragGestures(
+                    onDragStart = {
+                        totalDragX = 0f
+                        totalDragY = 0f
+                    },
+                    onDragEnd = {
+                        if (abs(totalDragX) > abs(totalDragY)) {
+                            if (totalDragX < -40f) {
+                                onSkipNextClick()
+                            } else if (totalDragX > 40f) {
+                                onSkipPreviousClick()
+                            }
+                        } else {
+                            if (totalDragY < -40f) {
+                                onClick() // Swipe up opens Now Playing
+                            }
+                        }
+                    },
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        totalDragX += dragAmount.x
+                        totalDragY += dragAmount.y
+                    }
+                )
+            }
+    } else {
+        Modifier.clickable(onClick = onClick)
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 6.dp)
             .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.65f)
-            .clickable(onClick = onClick)
+            .then(gestureModifier)
     ) {
         // Progress track at bottom
         Box(
@@ -150,7 +199,8 @@ fun FrostedBottomBar(
 ) {
     val items = listOf(
         Triple("library", "Library", Icons.Rounded.LibraryMusic),
-        Triple("equalizer", "Equalizer", Icons.Rounded.Tune),
+        Triple("equalizer", "Sound Lab", Icons.Rounded.GraphicEq),
+        Triple("more", "More", Icons.Rounded.MoreHoriz),
         Triple("settings", "Settings", Icons.Rounded.Settings)
     )
 

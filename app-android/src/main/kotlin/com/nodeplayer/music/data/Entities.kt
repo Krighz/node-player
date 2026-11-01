@@ -2,6 +2,7 @@ package com.nodeplayer.music.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.nodeplayer.model.HiResStatus
 import com.nodeplayer.model.Track
 
 @Entity(tableName = "tracks")
@@ -25,9 +26,16 @@ data class TrackEntity(
     val genre: String?,
     val dateAdded: Long,
     val playCount: Int = 0,
+    val lastPlayedTimestamp: Long = 0L,
     val isFavorite: Boolean = false,
     val isLossless: Boolean = false,
-    val isHiRes: Boolean = false
+    val isHiRes: Boolean = false,
+    val hiResStatus: String? = null,
+    val hiResConfidence: Float? = null,
+    val hiResCutoffHz: Float? = null,
+    val loudnessLufs: Float? = null,
+    val dynamicRangeScore: Int? = null,
+    val dynamicRangeLabel: String? = null
 ) {
     fun toTrack(): Track = Track(
         id = id,
@@ -48,8 +56,17 @@ data class TrackEntity(
         year = year,
         genre = genre,
         dateAdded = dateAdded,
+        playCount = playCount,
+        lastPlayedTimestamp = lastPlayedTimestamp,
+        isFavorite = isFavorite,
         isLossless = isLossless,
-        isHiRes = isHiRes
+        isHiRes = isHiRes,
+        hiResStatus = hiResStatus?.let { runCatching { HiResStatus.valueOf(it) }.getOrDefault(HiResStatus.UNKNOWN) } ?: HiResStatus.UNKNOWN,
+        hiResConfidence = hiResConfidence ?: 0f,
+        hiResCutoffHz = hiResCutoffHz ?: 0f,
+        loudnessLufs = loudnessLufs,
+        dynamicRangeScore = dynamicRangeScore,
+        dynamicRangeLabel = dynamicRangeLabel
     )
 
     companion object {
@@ -72,11 +89,49 @@ data class TrackEntity(
             year = track.year,
             genre = track.genre,
             dateAdded = track.dateAdded,
+            playCount = track.playCount,
+            lastPlayedTimestamp = track.lastPlayedTimestamp,
+            isFavorite = track.isFavorite,
             isLossless = track.isLossless,
-            isHiRes = track.isHiRes
+            isHiRes = track.isHiRes,
+            hiResStatus = track.hiResStatus.name,
+            hiResConfidence = track.hiResConfidence,
+            hiResCutoffHz = track.hiResCutoffHz,
+            loudnessLufs = track.loudnessLufs,
+            dynamicRangeScore = track.dynamicRangeScore,
+            dynamicRangeLabel = track.dynamicRangeLabel
         )
     }
 }
+
+@Entity(tableName = "smart_playlists")
+data class SmartPlaylistEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val rulesJson: String, // JSON serialization of rules
+    val sortField: String = "title",
+    val sortAscending: Boolean = true,
+    val limitCount: Int = 0, // 0 = unlimited
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "daily_listening_stats")
+data class DailyListeningStatEntity(
+    @PrimaryKey val date: String, // "YYYY-MM-DD"
+    val listeningSeconds: Long = 0L,
+    val trackPlayCount: Int = 0
+)
+
+@Entity(tableName = "scrobble_queue")
+data class ScrobbleQueueEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val artist: String,
+    val track: String,
+    val album: String = "",
+    val timestampSeconds: Long = 0L,
+    val retryCount: Int = 0,
+    val createdAt: Long = System.currentTimeMillis()
+)
 
 @Entity(tableName = "playlists")
 data class PlaylistEntity(

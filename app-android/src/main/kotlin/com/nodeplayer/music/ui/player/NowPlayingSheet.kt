@@ -75,6 +75,8 @@ fun NowPlayingSheet(
     var isSeeking by remember { mutableStateOf(false) }
     var sliderPosition by remember { mutableFloatStateOf(0f) }
     var showLyrics by remember { mutableStateOf(false) }
+    var showSpectrogram by remember { mutableStateOf(false) }
+    var showTrackDetailsSheet by remember { mutableStateOf(false) }
     var showQuickActionDialog by remember { mutableStateOf(false) }
 
     val currentMs = if (isSeeking) sliderPosition.toLong() else currentPositionMs
@@ -266,12 +268,27 @@ fun NowPlayingSheet(
                         Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Collapse", tint = Color.White, modifier = Modifier.size(34.dp))
                     }
 
-                    SignalPathBadge(audioOutputInfo = audioOutputInfo, track = track, accent = accent)
+                    Box(modifier = Modifier.clickable { showTrackDetailsSheet = true }) {
+                        SignalPathBadge(audioOutputInfo = audioOutputInfo, track = track, accent = accent)
+                    }
 
                     Row {
                         IconButton(onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            showSpectrogram = !showSpectrogram
+                            if (showSpectrogram) showLyrics = false
+                        }) {
+                            Icon(
+                                Icons.Rounded.GraphicEq,
+                                contentDescription = "Spectrogram",
+                                tint = if (showSpectrogram) accent else Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        IconButton(onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                             showLyrics = !showLyrics
+                            if (showLyrics) showSpectrogram = false
                         }) {
                             Icon(
                                 if (showLyrics) Icons.Rounded.Album else Icons.Rounded.Lyrics,
@@ -291,33 +308,45 @@ fun NowPlayingSheet(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Hero Center Stage (Artwork or Synced Lyrics)
+                // Hero Center Stage (Artwork, Spectrogram or Synced Lyrics)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    Crossfade(targetState = showLyrics, label = "HeroCrossfade") { isLyrics ->
-                        if (isLyrics) {
-                            SyncedLyricsGlassView(
-                                lyrics = lyrics,
-                                currentPositionMs = currentMs,
-                                accentColor = accent,
-                                onSeekTo = onSeekTo
-                            )
-                        } else {
-                            HeroArtwork(
-                                track = track,
-                                accent = accent,
-                                view = view,
-                                onSkipNext = onSkipNextClick,
-                                onSkipPrevious = onSkipPreviousClick,
-                                onLongPress = { showQuickActionDialog = true },
-                                modifier = Modifier
-                                    .fillMaxWidth(0.88f)
-                                    .aspectRatio(1f)
-                            )
+                    if (showSpectrogram) {
+                        com.nodeplayer.music.ui.components.SpectrogramView(
+                            isPlaying = isPlaying,
+                            rmsLevel = rmsLevel,
+                            isPerformanceMode = isPerformanceMode,
+                            modifier = Modifier
+                                .fillMaxWidth(0.88f)
+                                .aspectRatio(1f)
+                                .clickable { showSpectrogram = false }
+                        )
+                    } else {
+                        Crossfade(targetState = showLyrics, label = "HeroCrossfade") { isLyrics ->
+                            if (isLyrics) {
+                                SyncedLyricsGlassView(
+                                    lyrics = lyrics,
+                                    currentPositionMs = currentMs,
+                                    accentColor = accent,
+                                    onSeekTo = onSeekTo
+                                )
+                            } else {
+                                HeroArtwork(
+                                    track = track,
+                                    accent = accent,
+                                    view = view,
+                                    onSkipNext = onSkipNextClick,
+                                    onSkipPrevious = onSkipPreviousClick,
+                                    onLongPress = { showTrackDetailsSheet = true },
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.88f)
+                                        .aspectRatio(1f)
+                                )
+                            }
                         }
                     }
                 }
@@ -412,6 +441,13 @@ fun NowPlayingSheet(
                     Text("Close")
                 }
             }
+        )
+    }
+
+    if (showTrackDetailsSheet) {
+        com.nodeplayer.music.ui.components.TrackDetailsSheet(
+            track = track,
+            onDismiss = { showTrackDetailsSheet = false }
         )
     }
 }

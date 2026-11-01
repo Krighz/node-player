@@ -1,6 +1,8 @@
 package com.nodeplayer.music.ui.screens
 
 import android.net.Uri
+import android.widget.Toast
+import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -82,8 +84,29 @@ fun SettingsScreen(
     var crossfadeSeconds by remember { mutableFloatStateOf(2.0f) }
     var lrclibOptIn by remember { mutableStateOf(false) }
     val sharedPrefs = remember { context.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE) }
-    var lastFmApiKey by remember { mutableStateOf(sharedPrefs.getString("lastfm_api_key", "") ?: "") }
-    var lastFmSecret by remember { mutableStateOf(sharedPrefs.getString("lastfm_secret", "") ?: "") }
+    val coroutineScope = rememberCoroutineScope()
+
+    var fakeHiRes by remember { mutableStateOf(sharedPrefs.getBoolean("fake_hires_enabled", true)) }
+    var loudnessScan by remember { mutableStateOf(sharedPrefs.getBoolean("loudness_scan_enabled", true)) }
+    var targetLufs by remember { mutableFloatStateOf(sharedPrefs.getFloat("loudness_target_lufs", -14.0f)) }
+    var clipGuard by remember { mutableStateOf(sharedPrefs.getBoolean("loudness_clip_guard", true)) }
+    var drMeter by remember { mutableStateOf(sharedPrefs.getBoolean("dr_meter_enabled", true)) }
+    var smartPlaylists by remember { mutableStateOf(sharedPrefs.getBoolean("smart_playlists_enabled", true)) }
+    var duplicateFinder by remember { mutableStateOf(sharedPrefs.getBoolean("duplicate_finder_enabled", true)) }
+    var genreCrossfade by remember { mutableStateOf(sharedPrefs.getBoolean("genre_crossfade_enabled", true)) }
+    var sleepFinishTrack by remember { mutableStateOf(sharedPrefs.getBoolean("sleep_timer_finish_track", true)) }
+    var sleepFadeSec by remember { mutableIntStateOf(sharedPrefs.getInt("sleep_timer_fade_seconds", 10)) }
+    var sleepShake by remember { mutableStateOf(sharedPrefs.getBoolean("sleep_timer_shake_extend", true)) }
+    var badgeMode by remember { mutableStateOf(sharedPrefs.getString("quality_badges_mode", "DETAILED") ?: "DETAILED") }
+    var spectrogramEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("spectrogram_enabled", true)) }
+    var soundLabEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("sound_lab_enabled", true)) }
+    var miniGestures by remember { mutableStateOf(sharedPrefs.getBoolean("mini_player_gestures_enabled", true)) }
+    var lastFmSessionKey by remember { mutableStateOf(sharedPrefs.getString("lastfm_session_key", "") ?: "") }
+    var lastFmUsername by remember { mutableStateOf(sharedPrefs.getString("lastfm_username", "") ?: "") }
+    var lastFmScrobbleEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("lastfm_scrobble_enabled", false)) }
+    var lastFmPendingCount by remember { mutableIntStateOf(0) }
+    var lastFmAuthToken by remember { mutableStateOf<String?>(null) }
+    var showLastFmConfirmDialog by remember { mutableStateOf(false) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var isFoldersExpanded by remember { mutableStateOf(true) }
     var isExcludedTracksExpanded by remember { mutableStateOf(false) }
@@ -1175,57 +1198,423 @@ fun SettingsScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
 
+        // Last.fm Scrobbler Glass Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
             hazeState = hazeState
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "API Credentials",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
-                )
-                Text(
-                    text = "Enter your own Last.fm API credentials to enable scrobbling. Keys are stored locally on your device and are never shared or hardcoded.",
-                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                OutlinedTextField(
-                    value = lastFmApiKey,
-                    onValueChange = {
-                        lastFmApiKey = it
-                        sharedPrefs.edit().putString("lastfm_api_key", it).apply()
-                    },
-                    label = { Text("API Key", color = Color.White.copy(alpha = 0.7f)) },
-                    placeholder = { Text("Enter your Last.fm API key", color = Color.White.copy(alpha = 0.4f)) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = accent,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = lastFmSecret,
-                    onValueChange = {
-                        lastFmSecret = it
-                        sharedPrefs.edit().putString("lastfm_secret", it).apply()
-                    },
-                    label = { Text("Shared Secret", color = Color.White.copy(alpha = 0.7f)) },
-                    placeholder = { Text("Enter your Last.fm shared secret", color = Color.White.copy(alpha = 0.4f)) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = accent,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Enable Last.fm Scrobbling", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Scrobble qualifying tracks (>30s & 50%)", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Switch(
+                        checked = lastFmScrobbleEnabled,
+                        onCheckedChange = {
+                            lastFmScrobbleEnabled = it
+                            sharedPrefs.edit().putBoolean("lastfm_scrobble_enabled", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                if (lastFmSessionKey.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = Color(0xFF10B981), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Connected to Last.fm", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White))
+                            }
+                            Text("User: @$lastFmUsername", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                        }
+                        Button(
+                            onClick = {
+                                lastFmSessionKey = ""
+                                lastFmUsername = ""
+                                sharedPrefs.edit().putString("lastfm_session_key", "").putString("lastfm_username", "").apply()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f))
+                        ) {
+                            Text("Disconnect")
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Account Status", style = MaterialTheme.typography.bodyMedium.copy(color = Color.White))
+                        Button(
+                            onClick = {
+                                coroutineScope.launch {
+                                    val tokenRes = com.nodeplayer.music.library.LastFmClient.getRequestToken()
+                                    tokenRes.onSuccess { token ->
+                                        lastFmAuthToken = token
+                                        val authUrl = com.nodeplayer.music.library.LastFmClient.getAuthUrl(token)
+                                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
+                                        context.startActivity(browserIntent)
+                                        showLastFmConfirmDialog = true
+                                    }.onFailure { err ->
+                                        android.widget.Toast.makeText(context, "Auth Error: ${err.message}", android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = accent)
+                        ) {
+                            Text("Connect Last.fm")
+                        }
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Queue debug info
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Offline Scrobble Queue", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                val flushed = com.nodeplayer.music.library.LastFmClient.flushPendingQueue(lastFmSessionKey)
+                                android.widget.Toast.makeText(context, "Flushed $flushed scrobbles", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.10f)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text("Force Flush", fontSize = 11.sp)
+                    }
+                }
             }
         }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // 7. Audio Quality & Analysis Section
+        Text(
+            text = "AUDIO QUALITY & ANALYSIS",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Fake Hi-Res
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Fake Hi-Res Detector", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("FFT background spectrum analysis for cutoffs & upsampling", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Switch(
+                        checked = fakeHiRes,
+                        onCheckedChange = {
+                            fakeHiRes = it
+                            sharedPrefs.edit().putBoolean("fake_hires_enabled", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Loudness Scan
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("EBU R128 Loudness Scan", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Integrated LUFS measurement & automatic gain matching", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Switch(
+                        checked = loudnessScan,
+                        onCheckedChange = {
+                            loudnessScan = it
+                            sharedPrefs.edit().putBoolean("loudness_scan_enabled", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Target Level & Clip guard
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Target Loudness", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f)))
+                    Text("%.1f LUFS".format(targetLufs), color = accent, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                }
+                Slider(
+                    value = targetLufs,
+                    onValueChange = {
+                        targetLufs = it
+                        sharedPrefs.edit().putFloat("loudness_target_lufs", it).apply()
+                    },
+                    valueRange = -23.0f..-9.0f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Anti-Clipping Guard", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f)))
+                    Switch(
+                        checked = clipGuard,
+                        onCheckedChange = {
+                            clipGuard = it
+                            sharedPrefs.edit().putBoolean("loudness_clip_guard", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // DR Meter
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Dynamic Range (DR) Meter", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Standard 3s block dynamic range rating", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Switch(
+                        checked = drMeter,
+                        onCheckedChange = {
+                            drMeter = it
+                            sharedPrefs.edit().putBoolean("dr_meter_enabled", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        com.nodeplayer.music.library.AudioAnalysisWorker.schedule(context)
+                        android.widget.Toast.makeText(context, "Background quality analysis started", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.25f))
+                ) {
+                    Icon(imageVector = Icons.Rounded.GraphicEq, contentDescription = null, tint = accent)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Analyze Unscanned Tracks Now", color = accent, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // 8. Playback & Sleep Timer Section
+        Text(
+            text = "PLAYBACK & SLEEP TIMER",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Genre-Based Crossfade
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Genre-Adaptive Crossfade", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Contextual curves & lengths (ambient longer, live zero)", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Switch(
+                        checked = genreCrossfade,
+                        onCheckedChange = {
+                            genreCrossfade = it
+                            sharedPrefs.edit().putBoolean("genre_crossfade_enabled", it).apply()
+                            com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.genreCrossfadeEnabled = it
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Sleep finish track
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Sleep Timer: Finish Current Track", style = MaterialTheme.typography.bodyMedium.copy(color = Color.White))
+                    Switch(
+                        checked = sleepFinishTrack,
+                        onCheckedChange = {
+                            sleepFinishTrack = it
+                            sharedPrefs.edit().putBoolean("sleep_timer_finish_track", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                // Sleep fade out
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Fade-Out Length", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f)))
+                    Text("${sleepFadeSec}s", color = accent, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                }
+                Slider(
+                    value = sleepFadeSec.toFloat(),
+                    onValueChange = {
+                        sleepFadeSec = it.toInt()
+                        sharedPrefs.edit().putInt("sleep_timer_fade_seconds", sleepFadeSec).apply()
+                    },
+                    valueRange = 0f..30f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                // Sleep Shake to extend
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Shake Phone to Extend", style = MaterialTheme.typography.bodyMedium.copy(color = Color.White))
+                        Text("Adds +5 minutes when shake is detected", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Switch(
+                        checked = sleepShake,
+                        onCheckedChange = {
+                            sleepShake = it
+                            sharedPrefs.edit().putBoolean("sleep_timer_shake_extend", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // 9. UI & Gestures
+        Text(
+            text = "INTERFACE & GESTURES",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Quality Badges Mode
+                Text("Quality Badges Display", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("OFF", "COMPACT", "DETAILED").forEach { mode ->
+                        FilterChip(
+                            selected = badgeMode == mode,
+                            onClick = {
+                                badgeMode = mode
+                                sharedPrefs.edit().putString("quality_badges_mode", mode).apply()
+                            },
+                            label = { Text(mode) }
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Mini Player Gestures
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Mini Player Gestures", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Swipe left/right next/prev, swipe up open, double-tap play", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Switch(
+                        checked = miniGestures,
+                        onCheckedChange = {
+                            miniGestures = it
+                            sharedPrefs.edit().putBoolean("mini_player_gestures_enabled", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Reset to Defaults Button
+        Button(
+            onClick = {
+                coroutineScope.launch {
+                    com.nodeplayer.music.data.AppSettingsRepository.resetToDefaults(context)
+                    sharedPrefs.edit().clear().apply()
+                    android.widget.Toast.makeText(context, "All settings reset to defaults", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444).copy(alpha = 0.25f))
+        ) {
+            Icon(imageVector = Icons.Rounded.Restore, contentDescription = null, tint = Color(0xFFEF4444))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Reset All Settings to Defaults", color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
 
         Spacer(modifier = Modifier.height(20.dp))
 
@@ -1404,6 +1793,44 @@ fun SettingsScreen(
             },
             containerColor = Color(0xFF16181F),
             shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    if (showLastFmConfirmDialog && lastFmAuthToken != null) {
+        AlertDialog(
+            onDismissRequest = { showLastFmConfirmDialog = false },
+            title = { Text("Complete Last.fm Authorization", color = Color.White) },
+            text = { Text("Have you authorized Node Player in your web browser?", color = Color.White.copy(alpha = 0.8f)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showLastFmConfirmDialog = false
+                        coroutineScope.launch {
+                            val sessionRes = com.nodeplayer.music.library.LastFmClient.getSession(lastFmAuthToken!!)
+                            sessionRes.onSuccess { (key, user) ->
+                                lastFmSessionKey = key
+                                lastFmUsername = user
+                                sharedPrefs.edit()
+                                    .putString("lastfm_session_key", key)
+                                    .putString("lastfm_username", user)
+                                    .putBoolean("lastfm_scrobble_enabled", true)
+                                    .apply()
+                                lastFmScrobbleEnabled = true
+                                android.widget.Toast.makeText(context, "Logged in as @$user", android.widget.Toast.LENGTH_SHORT).show()
+                            }.onFailure { err ->
+                                android.widget.Toast.makeText(context, "Failed to get session: ${err.message}", android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = accent)
+                ) {
+                    Text("Yes, Complete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLastFmConfirmDialog = false }) { Text("Cancel") }
+            },
+            containerColor = Color(0xFF16181F)
         )
     }
 }

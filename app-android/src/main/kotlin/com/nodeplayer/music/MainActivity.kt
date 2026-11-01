@@ -65,8 +65,17 @@ class MainActivity : ComponentActivity() {
                 var currentRoute by remember { mutableStateOf("library") }
                 var isNowPlayingExpanded by remember { mutableStateOf(false) }
 
-                BackHandler(enabled = isNowPlayingExpanded) {
-                    isNowPlayingExpanded = false
+                val appSettings by viewModel.appSettings.collectAsState()
+                val dailyStats by viewModel.dailyListeningStats.collectAsState()
+                val sessionSec by viewModel.sessionListeningSeconds.collectAsState()
+
+                val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder")
+                BackHandler(enabled = isNowPlayingExpanded || isSubRoute) {
+                    if (isNowPlayingExpanded) {
+                        isNowPlayingExpanded = false
+                    } else if (isSubRoute) {
+                        currentRoute = "more"
+                    }
                 }
 
                 val currentTrack by viewModel.currentTrack.collectAsState()
@@ -128,6 +137,7 @@ class MainActivity : ComponentActivity() {
                                     checkAndRequestPermissions()
                                     viewModel.refreshLibrary()
                                 },
+                                qualityBadgeMode = appSettings.qualityBadgesMode,
                                 hazeState = null
                             )
                             "equalizer" -> EqualizerScreen(
@@ -149,6 +159,44 @@ class MainActivity : ComponentActivity() {
                                 onLoadConvolverPreset = { viewModel.setConvolverPreset(it) },
                                 rmsLevel = currentRms,
                                 isPerformanceMode = themeConfig.isPerformanceMode,
+                                hazeState = null
+                            )
+                            "more" -> com.nodeplayer.music.ui.screens.MoreScreen(
+                                dailyStats = dailyStats,
+                                sessionListeningSeconds = sessionSec,
+                                onOpenStats = { currentRoute = "stats" },
+                                onOpenRecap = { currentRoute = "recap" },
+                                onOpenSmartPlaylists = { currentRoute = "smart_playlists" },
+                                onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
+                                hazeState = null
+                            )
+                            "stats" -> com.nodeplayer.music.ui.screens.StatsScreen(
+                                dailyStats = dailyStats,
+                                allTracks = allTracks,
+                                onBack = { currentRoute = "more" },
+                                onOpenRecap = { currentRoute = "recap" },
+                                hazeState = null
+                            )
+                            "recap" -> com.nodeplayer.music.ui.screens.YearlyRecapScreen(
+                                dailyStats = dailyStats,
+                                allTracks = allTracks,
+                                onBack = { currentRoute = "more" },
+                                hazeState = null
+                            )
+                            "smart_playlists" -> com.nodeplayer.music.ui.screens.SmartPlaylistsScreen(
+                                allTracks = allTracks,
+                                onPlayTracks = { queue ->
+                                    if (queue.isNotEmpty()) {
+                                        viewModel.playTrack(queue[0], queue)
+                                    }
+                                },
+                                onBack = { currentRoute = "more" },
+                                hazeState = null
+                            )
+                            "duplicate_finder" -> com.nodeplayer.music.ui.screens.DuplicateFinderScreen(
+                                allTracks = allTracks,
+                                onBack = { currentRoute = "more" },
+                                onTrackDeleted = { viewModel.refreshLibrary() },
                                 hazeState = null
                             )
                             "settings" -> SettingsScreen(
@@ -198,7 +246,10 @@ class MainActivity : ComponentActivity() {
                                 progressFraction = progress,
                                 onPlayPauseClick = { viewModel.togglePlayPause() },
                                 onSkipNextClick = { viewModel.skipNext() },
+                                onSkipPreviousClick = { viewModel.skipPrevious() },
                                 onClick = { isNowPlayingExpanded = true },
+                                onLongPress = { isNowPlayingExpanded = true },
+                                gesturesEnabled = appSettings.miniPlayerGesturesEnabled,
                                 hazeState = dockHazeState,
                                 rmsLevel = currentRms
                             )

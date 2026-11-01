@@ -136,6 +136,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _convolverCpuPercent = MutableStateFlow(0.0f)
     val convolverCpuPercent: StateFlow<Float> = _convolverCpuPercent.asStateFlow()
 
+    // App Settings DataStore Flow
+    val appSettings = com.nodeplayer.music.data.AppSettingsRepository.getSettingsFlow(app)
+        .stateIn(viewModelScope, SharingStarted.Lazily, com.nodeplayer.music.data.AppSettingsRepository.AppSettings())
+
+    // Daily Listening Stats Flow
+    val dailyListeningStats = dao.getAllDailyStats()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val sessionListeningSeconds = MutableStateFlow(0L)
+    private var pauseStartTimestamp = 0L
+    private var lastSessionTickMs = System.currentTimeMillis()
+
     // Resume on Headset Connect
     private val _resumeOnHeadsetConnect = MutableStateFlow(true)
     val resumeOnHeadsetConnect: StateFlow<Boolean> = _resumeOnHeadsetConnect.asStateFlow()
@@ -522,6 +534,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 _currentTrack.value?.let { track ->
                     prefs.edit().putLong("last_pos", pos).putLong("last_track_id", track.id).apply()
                 }
+
+                if (playing) {
+                    if (pauseStartTimestamp > 0L && System.currentTimeMillis() - pauseStartTimestamp > 30 * 60 * 1000L) {
+                        sessionListeningSeconds.value = 0L
+                    }
+                    pauseStartTimestamp = 0L
+                    val now = System.currentTimeMillis()
+                    if (now - lastSessionTickMs >= 1000L) {
+                        val deltaSec = (now - lastSessionTickMs) / 1000L
+                        sessionListeningSeconds.value += deltaSec
+                        lastSessionTickMs = now
+                    }
+                } else {
+                    if (pauseStartTimestamp == 0L) {
+                        pauseStartTimestamp = System.currentTimeMillis()
+                    }
+                    lastSessionTickMs = System.currentTimeMillis()
+                }
+
                 // Read real RMS audio level from DSP engine
                 _currentRms.value = service?.dspAudioProcessor?.currentRms ?: 0.0f
                 _convolverCpuPercent.value = service?.crossfadeManager?.activeDspChain?.convolver?.lastCpuUsagePercent ?: 0.0f
@@ -838,6 +869,46 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateThemeConfig(newConfig: GlassThemeConfig) {
         _themeConfig.value = newConfig
+    }
+
+    fun <T> updateSetting(key: androidx.datastore.preferences.core.Preferences.Key<T>, value: T) {
+        viewModelScope.launch {
+            when (value) {
+                is Boolean -> com.nodeplayer.music.data.AppSettingsRepository.updateSetting(app, key as androidx.datastore.preferences.core.Preferences.Key<Boolean>, value)
+                is String -> com.nodeplayer.music.data.AppSettingsRepository.updateSetting(app, key as androidx.datastore.preferences.core.Preferences.Key<String>, value)
+                is Float -> com.nodeplayer.music.data.AppSettingsRepository.updateSetting(app, key as androidx.datastore.preferences.core.Preferences.Key<Float>, value)
+                is Int -> com.nodeplayer.music.data.AppSettingsRepository.updateSetting(app, key as androidx.datastore.preferences.core.Preferences.Key<Int>, value)
+            }
+        }
+    }
+
+    fun resetAllSettings() {
+        viewModelScope.launch {
+            com.nodeplayer.music.data.AppSettingsRepository.resetToDefaults(app)
+        }
+    }
+
+    fun triggerAudioAnalysis() {
+        com.nodeplayer.music.library.AudioAnalysisWorker.schedule(app, chargingOnly = appSettings.value.analysisChargingOnly)
+    }
+
+    fun startSleepTimer(minutes: Int, finishTrack: Boolean = true, fadeSeconds: Int = 10, stopAfterTracks: Int = 0, shakeExtend: Boolean = true) {
+        val intent = android.content.Intent(app, PlaybackService::class.java).apply {
+            action = PlaybackService.ACTION_SLEEP_START
+            putExtra(PlaybackService.EXTRA_SLEEP_MINUTES, minutes)
+            putExtra(PlaybackService.EXTRA_SLEEP_FINISH_TRACK, finishTrack)
+            putExtra(PlaybackService.EXTRA_SLEEP_FADE_SECONDS, fadeSeconds)
+            putExtra(PlaybackService.EXTRA_SLEEP_STOP_TRACKS, stopAfterTracks)
+            putExtra(PlaybackService.EXTRA_SLEEP_SHAKE_EXTEND, shakeExtend)
+        }
+        app.startService(intent)
+    }
+
+    fun cancelSleepTimer() {
+        val intent = android.content.Intent(app, PlaybackService::class.java).apply {
+            action = PlaybackService.ACTION_SLEEP_CANCEL
+        }
+        app.startService(intent)
     }
 
     override fun onCleared() {

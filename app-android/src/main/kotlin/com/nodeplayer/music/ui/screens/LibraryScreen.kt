@@ -46,6 +46,7 @@ fun LibraryScreen(
     isPlaying: Boolean,
     onTrackClick: (Track, List<Track>) -> Unit,
     onRescanClick: () -> Unit,
+    qualityBadgeMode: String = "DETAILED",
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
@@ -53,6 +54,7 @@ fun LibraryScreen(
     val tabs = listOf("Songs", "Albums", "Artists", "Folders")
     val accent = LocalAccentColor.current
     var viewingFolder by remember { mutableStateOf<MusicFolder?>(null) }
+    var inspectingTrack by remember { mutableStateOf<Track?>(null) }
 
     Column(
         modifier = modifier
@@ -153,6 +155,8 @@ fun LibraryScreen(
                     currentTrack = currentTrack,
                     isPlaying = isPlaying,
                     onTrackClick = onTrackClick,
+                    qualityBadgeMode = qualityBadgeMode,
+                    onInspectTrack = { inspectingTrack = it },
                     hazeState = hazeState
                 )
                 1 -> AlbumsGrid(albums = albums, onAlbumClick = {})
@@ -165,6 +169,14 @@ fun LibraryScreen(
             }
         }
     }
+
+    if (inspectingTrack != null) {
+        com.nodeplayer.music.ui.components.TrackDetailsSheet(
+            track = inspectingTrack!!,
+            onDismiss = { inspectingTrack = null },
+            hazeState = hazeState
+        )
+    }
 }
 
 @Composable
@@ -173,6 +185,8 @@ fun SongsList(
     currentTrack: Track?,
     isPlaying: Boolean,
     onTrackClick: (Track, List<Track>) -> Unit,
+    qualityBadgeMode: String = "DETAILED",
+    onInspectTrack: (Track) -> Unit = {},
     hazeState: HazeState?
 ) {
     val accent = LocalAccentColor.current
@@ -234,12 +248,50 @@ fun SongsList(
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (track.isHiRes) {
-                                FormatBadge("Hi-Res", Color(0xFF10B981))
-                                Spacer(modifier = Modifier.width(6.dp))
-                            } else if (track.isLossless) {
-                                FormatBadge("Lossless", Color(0xFF818CF8))
-                                Spacer(modifier = Modifier.width(6.dp))
+                            if (qualityBadgeMode != "OFF") {
+                                if (qualityBadgeMode == "DETAILED") {
+                                    val formatStr = track.mimeType.substringAfterLast("/").uppercase()
+                                    FormatBadge(formatStr, Color(0xFF94A3B8))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    if (track.sampleRate > 0) {
+                                        val rateStr = "${track.sampleRate / 1000}k"
+                                        val depthStr = if (track.bitDepth > 0) "${track.bitDepth}b " else ""
+                                        FormatBadge("$depthStr$rateStr", Color(0xFF38BDF8))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                    when (track.hiResStatus) {
+                                        com.nodeplayer.model.HiResStatus.GENUINE -> {
+                                            FormatBadge("Genuine", Color(0xFF10B981))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                        }
+                                        com.nodeplayer.model.HiResStatus.LIKELY_LOSSY -> {
+                                            FormatBadge("Lossy", Color(0xFFF59E0B))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                        }
+                                        com.nodeplayer.model.HiResStatus.LIKELY_UPSAMPLED -> {
+                                            FormatBadge("Upsampled", Color(0xFFEF4444))
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                        }
+                                        else -> {}
+                                    }
+                                    if (track.dynamicRangeScore != null) {
+                                        FormatBadge("DR${track.dynamicRangeScore}", Color(0xFF818CF8))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                } else {
+                                    // COMPACT
+                                    if (track.isHiRes) {
+                                        FormatBadge("Hi-Res", Color(0xFF10B981))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    } else if (track.isLossless) {
+                                        FormatBadge("Lossless", Color(0xFF818CF8))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                    if (track.dynamicRangeScore != null) {
+                                        FormatBadge("DR${track.dynamicRangeScore}", Color(0xFF818CF8))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                }
                             }
                             Text(
                                 text = "${track.artist} • ${track.durationFormatted}",
@@ -250,6 +302,19 @@ fun SongsList(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
+                    }
+
+                    // Info button to inspect full audio quality details
+                    IconButton(
+                        onClick = { onInspectTrack(track) },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Info,
+                            contentDescription = "Track Info",
+                            tint = Color.White.copy(alpha = 0.35f),
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
 
                     // Playing indicator soundwave bars

@@ -1,4 +1,5 @@
 import java.util.Base64
+import java.util.Properties
 import java.io.File
 
 plugins {
@@ -6,6 +7,15 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
 }
+
+val localProperties = Properties().apply {
+    val localPropFile = rootProject.file("local.properties")
+    if (localPropFile.exists()) {
+        localPropFile.inputStream().use { load(it) }
+    }
+}
+val lastFmApiKey = localProperties.getProperty("LASTFM_API_KEY") ?: System.getenv("LASTFM_API_KEY") ?: ""
+val lastFmApiSecret = localProperties.getProperty("LASTFM_API_SECRET") ?: System.getenv("LASTFM_API_SECRET") ?: ""
 
 android {
     namespace = "com.nodeplayer.music"
@@ -17,6 +27,9 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+
+        buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmApiKey\"")
+        buildConfigField("String", "LASTFM_API_SECRET", "\"$lastFmApiSecret\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -73,6 +86,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
@@ -124,6 +138,9 @@ dependencies {
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+
+    // WorkManager for background audio analysis
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 
     // Core
     implementation("androidx.core:core-ktx:1.13.1")

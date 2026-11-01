@@ -35,6 +35,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 @UnstableApi
@@ -42,6 +43,10 @@ class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     lateinit var crossfadeManager: com.nodeplayer.music.audio.CrossfadePlayerManager
+    lateinit var sleepTimerManager: SleepTimerManager
+        private set
+    val statsTracker = com.nodeplayer.library.PlaybackStatsTracker()
+    private val scrobbledTrackIds = mutableSetOf<Long>()
 
     val player: ExoPlayer
         get() = crossfadeManager.activePlayer
@@ -62,13 +67,27 @@ class PlaybackService : MediaSessionService() {
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
+            statsTracker.onPlayStateChanged(isPlaying)
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
             scheduleNextLyricUpdate()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED) {
+                statsTracker.onPlayStateChanged(false)
+            }
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
             scheduleNextLyricUpdate()
+        }
+
+        override fun onPositionDiscontinuity(
+            oldPosition: Player.PositionInfo,
+            newPosition: Player.PositionInfo,
+            reason: Int
+        ) {
+            if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                statsTracker.onSeek()
+            }
         }
     }
 
@@ -82,6 +101,15 @@ class PlaybackService : MediaSessionService() {
         const val ACTION_SEEK_FORWARD_30 = "com.nodeplayer.music.action.SEEK_FORWARD_30"
         const val ACTION_START_OVERLAY = "com.nodeplayer.music.action.START_OVERLAY"
         const val ACTION_STOP_OVERLAY = "com.nodeplayer.music.action.STOP_OVERLAY"
+        const val ACTION_SLEEP_START = "com.nodeplayer.music.action.SLEEP_START"
+        const val ACTION_SLEEP_EXTEND_5 = "com.nodeplayer.music.action.SLEEP_EXTEND_5"
+        const val ACTION_SLEEP_EXTEND_15 = "com.nodeplayer.music.action.SLEEP_EXTEND_15"
+        const val ACTION_SLEEP_CANCEL = "com.nodeplayer.music.action.SLEEP_CANCEL"
+        const val EXTRA_SLEEP_MINUTES = "extra_sleep_minutes"
+        const val EXTRA_SLEEP_FINISH_TRACK = "extra_sleep_finish_track"
+        const val EXTRA_SLEEP_FADE_SECONDS = "extra_sleep_fade_seconds"
+        const val EXTRA_SLEEP_STOP_TRACKS = "extra_sleep_stop_tracks"
+        const val EXTRA_SLEEP_SHAKE_EXTEND = "extra_sleep_shake_extend"
         const val EXTRA_SEEK_FRACTION = "extra_seek_fraction"
         const val EXTRA_SEEK_POSITION_MS = "extra_seek_position_ms"
 
@@ -190,6 +218,31 @@ class PlaybackService : MediaSessionService() {
             ACTION_STOP_OVERLAY -> {
                 FloatingOverlayService.stop(this)
             }
+            ACTION_SLEEP_START -> {
+                if (::sleepTimerManager.isInitialized) {
+                    val mins = intent.getIntExtra(EXTRA_SLEEP_MINUTES, 30)
+                    val finish = intent.getBooleanExtra(EXTRA_SLEEP_FINISH_TRACK, true)
+                    val fadeSec = intent.getIntExtra(EXTRA_SLEEP_FADE_SECONDS, 10)
+                    val stopTracks = intent.getIntExtra(EXTRA_SLEEP_STOP_TRACKS, 0)
+                    val shake = intent.getBooleanExtra(EXTRA_SLEEP_SHAKE_EXTEND, true)
+                    sleepTimerManager.startTimer(mins, finish, fadeSec, stopTracks, shake)
+                }
+            }
+            ACTION_SLEEP_EXTEND_5 -> {
+                if (::sleepTimerManager.isInitialized) {
+                    sleepTimerManager.extend(5)
+                }
+            }
+            ACTION_SLEEP_EXTEND_15 -> {
+                if (::sleepTimerManager.isInitialized) {
+                    sleepTimerManager.extend(15)
+                }
+            }
+            ACTION_SLEEP_CANCEL -> {
+                if (::sleepTimerManager.isInitialized) {
+                    sleepTimerManager.cancel()
+                }
+            }
         }
         return super.onStartCommand(intent, flags, startId)
     }
@@ -210,6 +263,17 @@ class PlaybackService : MediaSessionService() {
             context = this,
             onTrackTransition = { track ->
                 onTrackTransitionCallback?.invoke(track)
+                sleepTimerManager.onTrackChanged()
+                scrobbledTrackIds.remove(track.id)
+                statsTracker.onTrackStarted(track.id)
+                serviceScope.launch(Dispatchers.IO) {
+                    val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+                    val sk = prefs.getString("lastfm_session_key", "") ?: ""
+                    val enabled = prefs.getBoolean("lastfm_scrobble_enabled", false)
+                    if (enabled && sk.isNotBlank()) {
+                        com.nodeplayer.music.library.LastFmClient.updateNowPlaying(track, sk)
+                    }
+                }
                 com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this)
                 scheduleNextLyricUpdate()
             },
@@ -219,6 +283,56 @@ class PlaybackService : MediaSessionService() {
             }
         )
         crossfadeManager.activePlayer.addListener(playerListener)
+
+        sleepTimerManager = SleepTimerManager(
+            context = this,
+            playerProvider = { if (::crossfadeManager.isInitialized) crossfadeManager.activePlayer else null },
+            onTimerExpired = {
+                com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
+            }
+        )
+
+        statsTracker.onPlayCountThresholdReached = { trackId ->
+            serviceScope.launch(Dispatchers.IO) {
+                val db = (application as? com.nodeplayer.music.NodePlayerApplication)?.database
+                db?.playerDao()?.recordTrackPlayed(trackId, System.currentTimeMillis())
+            }
+        }
+
+        statsTracker.onListeningTimeAccumulated = { dateStr, seconds ->
+            serviceScope.launch(Dispatchers.IO) {
+                val db = (application as? com.nodeplayer.music.NodePlayerApplication)?.database
+                db?.playerDao()?.addListeningTime(dateStr, seconds, 0)
+            }
+        }
+
+        // Periodic stats ticker & scrobble eligibility checker (every 3s)
+        serviceScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(3000L)
+                if (::crossfadeManager.isInitialized && crossfadeManager.activePlayer.isPlaying) {
+                    statsTracker.tick()
+                    val track = crossfadeManager.currentPlayingTrack
+                    if (track != null && !scrobbledTrackIds.contains(track.id)) {
+                        val listenedMs = statsTracker.currentTrackListenedMsValue
+                        if (com.nodeplayer.library.LastFmSigner.isEligibleForScrobble(track.durationMs / 1000L, listenedMs / 1000L)) {
+                            scrobbledTrackIds.add(track.id)
+                            val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+                            val sk = prefs.getString("lastfm_session_key", "") ?: ""
+                            val enabled = prefs.getBoolean("lastfm_scrobble_enabled", false)
+                            if (enabled && sk.isNotBlank()) {
+                                com.nodeplayer.music.library.LastFmClient.scrobble(
+                                    track = track,
+                                    timestampSec = System.currentTimeMillis() / 1000L,
+                                    sessionKey = sk,
+                                    context = this@PlaybackService
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
@@ -384,6 +498,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        if (::sleepTimerManager.isInitialized) {
+            sleepTimerManager.release()
+        }
         lyricUpdateJob?.cancel()
         serviceScope.cancel()
         try { player.removeListener(playerListener) } catch (_: Exception) {}
