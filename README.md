@@ -76,14 +76,20 @@ Tested on **realme GT 6T (Snapdragon 7+ Gen 3, Android 14 / ColorOS 14)**:
 | <img src="docs/screenshots/screen_widgets.png" width="380" alt="Home Screen Widgets" /> | <img src="docs/screenshots/screen_library.png" width="380" alt="Library Screen" /> |
 | *All 4 responsive widget variants live on home screen with offscreen AGSL glass* | *Frosted floating navigation bar, search, folder scanning, and album cards* |
 
-<div align="center">
+| Signal Path & Bit-Perfect Sink | Sound Lab & Harmonics Engine |
+| :---: | :---: |
+| <img src="docs/screenshots/screen_signal_path.png" width="380" alt="Signal Path Screen" /> | <img src="docs/screenshots/screen_sound_lab.png" width="380" alt="Sound Lab Screen" /> |
+| *Direct bit-perfect chain vs. platform resampler and float sink routing* | *Harmonic bass generator, binaural spatializer, and studio presets* |
 
-| Deep Audio & System-Wide EQ Settings |
-| :---: |
-| <img src="docs/screenshots/screen_settings.png" width="400" alt="Settings Screen" /> |
-| *Crossfade curves, system-wide audio interceptor, Last.fm credentials, and widget tuning* |
+| Translucent Widget Scrub Sheet | Yearly Listening Recap |
+| :---: | :---: |
+| <img src="docs/screenshots/screen_scrub_sheet.png" width="380" alt="Widget Scrub Sheet" /> | <img src="docs/screenshots/screen_yearly_recap.png" width="380" alt="Yearly Recap Screen" /> |
+| *Instant 60fps translucent floating scrub sheet launched directly from widgets* | *Offline analytics: top artists, favorite genres, and total listening time* |
 
-</div>
+| Deep Audio & System-Wide EQ Settings | Last.fm Scrobbler & Offline Queue |
+| :---: | :---: |
+| <img src="docs/screenshots/screen_settings.png" width="380" alt="Settings Screen" /> | <img src="docs/screenshots/screen_lastfm.png" width="380" alt="Last.fm Settings Screen" /> |
+| *Crossfade curves, system-wide audio interceptor, and widget glass tuning* | *Authenticated scrobbling, session manager, and offline queue retry* |
 
 ---
 

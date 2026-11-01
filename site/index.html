@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Node Player — Precision Local Music Player for Android</title>
+  <meta name="description" content="Pure 64-bit float audio pipeline, 10-band biquad EQ, dynamic AGSL liquid glassmorphism, and hardware-verified low latency for Android 14+. Free and open-source.">
+  <meta name="keywords" content="music player, android, audiophile, dsp, biquad eq, agsl, glassmorphism, jetpack compose, 64-bit float, lastfm">
+  <meta name="author" content="Krighz">
+  <meta name="theme-color" content="#07090E">
+  <link rel="canonical" href="https://krighz.github.io/node-player/">
+
+  <!-- OpenGraph Meta Tags -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://krighz.github.io/node-player/">
+  <meta property="og:title" content="Node Player — Precision Local Music Player for Android">
+  <meta property="og:description" content="Pure 64-bit float audio pipeline, 10-band biquad EQ, and dynamic AGSL liquid glassmorphism. Offline-first and GPL-3.0 open source.">
+  <meta property="og:image" content="https://krighz.github.io/node-player/og_image.png">
+
+  <!-- Twitter Meta Tags -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://krighz.github.io/node-player/">
+  <meta name="twitter:title" content="Node Player — Precision Local Music Player for Android">
+  <meta name="twitter:description" content="Pure 64-bit float audio pipeline, 10-band biquad EQ, and dynamic AGSL liquid glassmorphism.">
+  <meta name="twitter:image" content="https://krighz.github.io/node-player/og_image.png">
+
+  <!-- Favicon and Fonts -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Seamless WebGL Liquid-Glass Video Background -->
+  <div class="bg-video-container" aria-hidden="true">
+    <video id="bgVideo" class="bg-video" autoplay loop muted playsinline poster="bg_poster.webp">
+      <source src="bg_desktop.webm" type="video/webm">
+      <source src="bg_desktop.mp4" type="video/mp4">
+    </video>
+    <div class="bg-overlay"></div>
+  </div>
+
+  <!-- Site Navigation -->
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a href="./" class="brand" aria-label="Node Player Home">
+        <img src="favicon.svg" alt="Node Player Logo" class="brand-icon" width="40" height="40">
+        <span class="brand-title">Node Player</span>
+      </a>
+      <nav aria-label="Main Navigation">
+        <ul class="nav-links">
+          <li><a href="#features">Features</a></li>
+          <li><a href="#equalizer">Equalizer</a></li>
+          <li><a href="#dsp">DSP Chain</a></li>
+          <li><a href="#widgets">Widgets</a></li>
+          <li><a href="#privacy">Privacy</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </nav>
+      <div class="nav-cta">
+        <a href="https://github.com/Krighz/node-player" class="btn btn-glass btn-sm" target="_blank" rel="noopener noreferrer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+          GitHub
+        </a>
+        <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk" class="btn btn-primary btn-sm">
+          Download APK
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="container hero-section">
+      <div class="hero-content">
+        <div class="hero-pill">
+          <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          <span>v1.0.0 Production Release</span>
+        </div>
+        <h1 class="hero-title">Liquid Glass.<br>Pure Audio.</h1>
+        <p class="hero-desc">
+          High-fidelity local music player for Android crafted with a pure 64-bit floating point DSP pipeline, 10-band biquad EQ, and dynamic AGSL glassmorphism designed for Android 14+.
+        </p>
+
+        <div class="hero-actions">
+          <div class="hero-btn-group">
+            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk" class="btn btn-primary" id="downloadApkBtn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              Download APK (3.98 MB)
+            </a>
+            <a href="https://github.com/Krighz/node-player/releases" class="btn btn-glass" target="_blank" rel="noopener noreferrer">
+              Releases & Changelog
+            </a>
+          </div>
+
+          <div class="hash-badge">
+            <span>SHA-256:</span>
+            <code>20e397b1b47f458b7884a7bec4b825c7...</code>
+            <button class="copy-btn" id="copyHashBtn" data-hash="20e397b1b47f458b7884a7bec4b825c745fa9d581139c916bb909e106ec326a5" aria-label="Copy full SHA-256 checksum">
+              Copy Full
+            </button>
+          </div>
+        </div>
+
+        <div class="hero-specs">
+          <div class="spec-item">
+            <span class="spec-val">64-bit</span>
+            <span class="spec-lbl">Float Pipeline</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-val">10-Band</span>
+            <span class="spec-lbl">Biquad Filter</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-val">0 Trk</span>
+            <span class="spec-lbl">Zero Trackers</span>
+          </div>
+          <div class="spec-item">
+            <span class="spec-val">GPL-3.0</span>
+            <span class="spec-lbl">Open Source</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sleek Phone Mockup with Native Device Screenshots -->
+      <div class="mockup-wrap">
+        <div class="phone-device">
+          <div class="phone-screen" id="mockupScreen">
+            <img src="screenshots/screen_now_playing.webp" id="screenNowPlaying" class="active" alt="Now Playing screen on realme GT 6T" width="1080" height="2376">
+            <img src="screenshots/screen_equalizer.webp" id="screenEqualizer" alt="10-band equalizer screen with real-time curve" width="1080" height="2376">
+            <img src="screenshots/screen_signal_path.webp" id="screenSignalPath" alt="Audio signal path analysis screen" width="1080" height="2376">
+            <img src="screenshots/screen_library.webp" id="screenLibrary" alt="Music library songs list" width="1080" height="2376">
+            <img src="screenshots/screen_sound_lab.webp" id="screenSoundLab" alt="Sound Lab DSP tuning screen" width="1080" height="2376">
+            <img src="screenshots/screen_widgets_dark.webp" id="screenWidgets" alt="Home screen widgets with liquid glass theme" width="1080" height="2376">
+            <img src="screenshots/screen_yearly_recap.webp" id="screenRecap" alt="Yearly listening stats and recap" width="1080" height="2376">
+          </div>
+        </div>
+
+        <!-- Interactive Screen Switcher Tabs -->
+        <div class="mockup-tabs" role="tablist" aria-label="Screenshot Showcase Tabs">
+          <button class="tab-btn active" data-target="screenNowPlaying" role="tab" aria-selected="true">Now Playing</button>
+          <button class="tab-btn" data-target="screenEqualizer" role="tab" aria-selected="false">Equalizer</button>
+          <button class="tab-btn" data-target="screenSignalPath" role="tab" aria-selected="false">Signal Path</button>
+          <button class="tab-btn" data-target="screenLibrary" role="tab" aria-selected="false">Library</button>
+          <button class="tab-btn" data-target="screenSoundLab" role="tab" aria-selected="false">Sound Lab</button>
+          <button class="tab-btn" data-target="screenWidgets" role="tab" aria-selected="false">Widgets</button>
+          <button class="tab-btn" data-target="screenRecap" role="tab" aria-selected="false">Yearly Recap</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Grid -->
+    <section id="features" class="container">
+      <div class="section-header">
+        <span class="section-pill">Engineering & Design</span>
+        <h2 class="section-title">Built Without Compromise</h2>
+        <p class="section-desc">Every layer of the playback pipeline and user interface was engineered for pristine acoustic accuracy and modern visual depth.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="glass-panel feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+          </div>
+          <h3>64-Bit Float Audio Engine</h3>
+          <p>ExoPlayer decoding feeds double-precision 64-bit floating point biquad IIR filters with automated gain staging to prevent clipping distortion.</p>
+        </div>
+
+        <div class="glass-panel feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+          </div>
+          <h3>AGSL Runtime Shaders</h3>
+          <p>Realtime liquid glassmorphism powered by Android 13+ AGSL shaders featuring specular highlights, caustic light pulses, and chromatic refraction.</p>
+        </div>
+
+        <div class="glass-panel feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
+          </div>
+          <h3>4 Home Screen Widgets</h3>
+          <p>Square, Lyrics (4x3), Card, and Pill widgets with real wallpaper-reactive AGSL liquid glass and an instant draggable scrub sheet.</p>
+        </div>
+
+        <div class="glass-panel feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+          </div>
+          <h3>100% Offline & Private</h3>
+          <p>Zero internet requests made by default. Zero analytics, zero ad SDKs, zero user tracking. Your library and listening habits remain strictly on-device.</p>
+        </div>
+
+        <div class="glass-panel feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+          </div>
+          <h3>Last.fm Offline Scrobbler</h3>
+          <p>Authenticated scrobbler with an automatic offline queue. Scrobbles persist locally during commutes or offline mode and sync on network restore.</p>
+        </div>
+
+        <div class="glass-panel feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+          </div>
+          <h3>Hardware Verified</h3>
+          <p>DSP pipeline tuned, profiled, and verified on Qualcomm Snapdragon 7+ Gen 3 (realme GT 6T / ColorOS 14) for sub-10ms buffer latencies.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Interactive 10-Band Equalizer Playground -->
+    <section id="equalizer" class="container">
+      <div class="section-header">
+        <span class="section-pill">Interactive Playground</span>
+        <h2 class="section-title">10-Band Parametric Equalizer</h2>
+        <p class="section-desc">Experience the exact frequency curve response of Node Player's biquad peaking filters. Adjust the sliders or choose a tuned preset.</p>
+      </div>
+
+      <div class="glass-panel eq-container">
+        <div class="eq-visualizer-wrap">
+          <div class="eq-canvas-card">
+            <canvas id="eqCanvas" width="800" height="320"></canvas>
+          </div>
+
+          <div class="eq-sliders-wrap">
+            <div class="eq-slider-col">
+              <span class="gain-badge">0.0dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" aria-label="32Hz Gain">
+              <span class="freq-label">32Hz</span>
+            </div>
+            <div class="eq-slider-col">
+              <span class="gain-badge">0.0dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" aria-label="64Hz Gain">
+              <span class="freq-label">64Hz</span>
+            </div>
+            <div class="eq-slider-col">
+              <span class="gain-badge">0.0dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" aria-label="125Hz Gain">
+              <span class="freq-label">125Hz</span>
+            </div>
+            <div class="eq-slider-col">
+              <span class="gain-badge">0.0dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" aria-label="250Hz Gain">
+              <span class="freq-label">250Hz</span>
+            </div>
+            <div class="eq-slider-col">
+              <span class="gain-badge">0.0dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" aria-label="500Hz Gain">
+              <span class="freq-label">500Hz</span>
+            </div>
+            <div class="eq-slider-col">
+              <span class="gain-badge">0.0dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" aria-label="1kHz Gain">
+              <span class="freq-label">1kHz</span>
+            </div>
+            <div class="eq-slider-col">
+              <span class="gain-badge">0.0dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" aria-label="2kHz Gain">
+              <span class="freq-label">2kHz</span>
+            </div>
+            <div class="eq-slider-col">
+              <span class="gain-badge">0.0dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" aria-label="4kHz Gain">
+              <span class="freq-label">4kHz</span>
+            </div>
+            <div class="eq-slider-col">
+              <span class="gain-badge">0.0dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" aria-label="8kHz Gain">
+              <span class="freq-label">8kHz</span>
+            </div>
+            <div class="eq-slider-col">
+              <span class="gain-badge">0.0dB</span>
+              <input type="range" min="-12" max="12" step="0.5" value="0" aria-label="16kHz Gain">
+              <span class="freq-label">16kHz</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="eq-controls-card">
+          <h3>Tuned Presets</h3>
+          <p style="font-size: 14px; color: var(--text-muted);">Select pre-calculated acoustic curves or drag the band handles directly on the graph.</p>
+          <div class="preset-list">
+            <button class="preset-btn active" data-preset="flat">Flat</button>
+            <button class="preset-btn" data-preset="bass">Bass Boost</button>
+            <button class="preset-btn" data-preset="vocal">Vocal Enhance</button>
+            <button class="preset-btn" data-preset="electronic">Electronic</button>
+            <button class="preset-btn" data-preset="acoustic">Acoustic</button>
+            <button class="preset-btn" data-preset="rock">Rock</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DSP Architecture Section -->
+    <section id="dsp" class="container">
+      <div class="section-header">
+        <span class="section-pill">Audio Architecture</span>
+        <h2 class="section-title">End-to-End Signal Pipeline</h2>
+        <p class="section-desc">From source audio decoding to hardware AudioTrack output, every step preserves Bit-Perfect clarity with 64-bit headroom.</p>
+      </div>
+
+      <div class="dsp-pipeline">
+        <div class="glass-panel dsp-stage">
+          <div class="stage-num">1</div>
+          <div class="stage-info">
+            <div class="stage-title">ExoPlayer 32-bit Float Audio Sink</div>
+            <div class="stage-desc">Direct PCM extraction supporting high-res FLAC, ALAC, WAV, DSD, AAC, and Opus.</div>
+          </div>
+          <div class="stage-badge">PCM 32-Bit Float</div>
+        </div>
+        <div class="dsp-arrow">↓</div>
+
+        <div class="glass-panel dsp-stage">
+          <div class="stage-num">2</div>
+          <div class="stage-info">
+            <div class="stage-title">High-Precision Resampler</div>
+            <div class="stage-desc">Hardware sink alignment (44.1kHz, 48kHz, 96kHz, 192kHz) with band-limited sinc interpolation.</div>
+          </div>
+          <div class="stage-badge">Polyphase Filter</div>
+        </div>
+        <div class="dsp-arrow">↓</div>
+
+        <div class="glass-panel dsp-stage">
+          <div class="stage-num">3</div>
+          <div class="stage-info">
+            <div class="stage-title">Automatic Gain Staging (-3dB Headroom)</div>
+            <div class="stage-desc">Dynamic pre-attenuation prevents inter-sample peaks from causing hard digital clipping during EQ boosts.</div>
+          </div>
+          <div class="stage-badge">64-Bit Float</div>
+        </div>
+        <div class="dsp-arrow">↓</div>
+
+        <div class="glass-panel dsp-stage">
+          <div class="stage-num">4</div>
+          <div class="stage-info">
+            <div class="stage-title">10-Band Biquad IIR Filter Array</div>
+            <div class="stage-desc">Dual-stage Direct Form II transposed biquads with coefficient smoothing on parameter changes.</div>
+          </div>
+          <div class="stage-badge">±12dB Peaking</div>
+        </div>
+        <div class="dsp-arrow">↓</div>
+
+        <div class="glass-panel dsp-stage">
+          <div class="stage-num">5</div>
+          <div class="stage-info">
+            <div class="stage-title">Spatializer & Reverb Convolver</div>
+            <div class="stage-desc">Ear-canal crossfeed modeling and subtle room acoustic reflections for fatigue-free headphone listening.</div>
+          </div>
+          <div class="stage-badge">Binaural Crossfeed</div>
+        </div>
+        <div class="dsp-arrow">↓</div>
+
+        <div class="glass-panel dsp-stage">
+          <div class="stage-num">6</div>
+          <div class="stage-info">
+            <div class="stage-title">Soft-Knee Lookahead Dynamics Limiter</div>
+            <div class="stage-desc">Transparent 1ms lookahead limiter prevents analog saturation when pushing master output gains.</div>
+          </div>
+          <div class="stage-badge">0dB Ceiling</div>
+        </div>
+      </div>
+
+      <div class="hw-callout">
+        <div class="hw-icon">⚡</div>
+        <div class="hw-text">
+          <h4>Hardware Tuned & Verified</h4>
+          <p>Audio output pipeline, buffer sizes, and low-latency DSP thread priorities were hardware-verified on Qualcomm Snapdragon 7+ Gen 3 (realme GT 6T / ColorOS 14) ensuring 0 dropped frames during 120Hz UI animations.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Home Screen Widgets Showcase -->
+    <section id="widgets" class="container">
+      <div class="section-header">
+        <span class="section-pill">Desktop Experience</span>
+        <h2 class="section-title">Liquid Glass on Your Home Screen</h2>
+        <p class="section-desc">Four distinct glanceable widgets powered by AGSL shaders that adapt organically to your wallpaper colors.</p>
+      </div>
+
+      <div class="widgets-gallery">
+        <div class="glass-panel widget-showcase-card">
+          <img src="screenshots/screen_widgets_dark.webp" class="widget-preview-img" alt="All 4 widgets on dark home screen" width="1080" height="2376">
+          <h3>4 Unique Form Factors</h3>
+          <p>Square, Pill, Card, and Synced Lyrics (4x3). Designed with subtle refraction borders that complement Material You dynamic system colors.</p>
+        </div>
+
+        <div class="glass-panel widget-showcase-card">
+          <img src="screenshots/screen_scrub_sheet.webp" class="widget-preview-img" alt="Translucent scrub sheet opened from widget" width="1080" height="2376">
+          <h3>Translucent Scrub Sheet</h3>
+          <p>Tap the timestamp on any home screen widget to launch the instant floating seek sheet without interrupting your active application context.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy Commitment -->
+    <section id="privacy" class="container">
+      <div class="section-header">
+        <span class="section-pill">Privacy First</span>
+        <h2 class="section-title">Your Music Stays Yours</h2>
+        <p class="section-desc">In an era of invasive trackers and cloud lock-in, Node Player is architected as an offline sanctuary for your local music collection.</p>
+      </div>
+
+      <div class="features-grid">
+        <div class="glass-panel feature-card">
+          <h3>Zero Analytics or Telemetry</h3>
+          <p>No Firebase Analytics, no Google Crashlytics, no telemetry daemons. Node Player communicates with zero reporting servers.</p>
+        </div>
+        <div class="glass-panel feature-card">
+          <h3>Local SQLite Database</h3>
+          <p>Play history, smart playlists, custom EQ presets, and yearly recap statistics are saved locally in private sandbox storage.</p>
+        </div>
+        <div class="glass-panel feature-card">
+          <h3>Opt-In Network Integrations</h3>
+          <p>Online LRCLIB lyrics and Last.fm scrobbling are strictly opt-in. When disabled, zero network sockets are ever opened.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ Accordion -->
+    <section id="faq" class="container">
+      <div class="section-header">
+        <span class="section-pill">Answers</span>
+        <h2 class="section-title">Frequently Asked Questions</h2>
+      </div>
+
+      <div class="faq-grid">
+        <details class="glass-panel faq-item">
+          <summary>What makes Node Player's DSP different from standard Android players?</summary>
+          <p>Standard players rely on Android's default 16-bit integer system AudioEffect chain, which often suffers from low headroom and quantization noise. Node Player intercepts audio at the decoder level and runs double-precision 64-bit floating point biquad IIR filters with automated gain staging and a soft-knee lookahead limiter directly into a 32-bit float hardware AudioTrack sink.</p>
+        </details>
+
+        <details class="glass-panel faq-item">
+          <summary>Does Node Player require root access or special permissions?</summary>
+          <p>No. Node Player requires only standard Android Media Permissions (`READ_MEDIA_AUDIO` on Android 13+) to index your music files. No root, no Shizuku, and no accessibility services are needed.</p>
+        </details>
+
+        <details class="faq-item glass-panel">
+          <summary>How does the Last.fm offline scrobbler work?</summary>
+          <p>Node Player connects securely to Last.fm via official session tokens. If you listen to tracks while offline or in airplane mode, qualifying scrobbles (>30s and 50% played) are stored in an encrypted local SQLite queue. The moment your device reconnects to Wi-Fi or cellular data, the queue flushes automatically.</p>
+        </details>
+
+        <details class="glass-panel faq-item">
+          <summary>What Android versions and hardware are supported?</summary>
+          <p>Node Player is built for Android 9.0+ (API 28+). Full AGSL liquid-glass shaders and RuntimeShader caustics require Android 13+ (API 33+), with graceful fallback to frosted acrylic blur on older releases. Hardware-verified on Qualcomm Snapdragon 7+ Gen 3 (realme GT 6T / ColorOS 14).</p>
+        </details>
+
+        <details class="glass-panel faq-item">
+          <summary>Is Node Player free and open source?</summary>
+          <p>Yes. Node Player is 100% free software licensed under the GNU General Public License v3.0 (GPL-3.0). You can inspect, modify, and build the full Kotlin source code on GitHub.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <a href="./" class="brand" style="margin-bottom: 16px;">
+            <img src="favicon.svg" alt="Node Player Logo" width="36" height="36">
+            <span class="brand-title">Node Player</span>
+          </a>
+          <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6;">
+            Precision local music player for Android with 64-bit float DSP, 10-band biquad EQ, and dynamic AGSL liquid glassmorphism.
+          </p>
+        </div>
+
+        <div class="footer-links-col">
+          <h4>Navigation</h4>
+          <ul>
+            <li><a href="#features">Features</a></li>
+            <li><a href="#equalizer">Equalizer</a></li>
+            <li><a href="#dsp">DSP Signal Path</a></li>
+            <li><a href="#widgets">Widgets</a></li>
+            <li><a href="#privacy">Privacy</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links-col">
+          <h4>Downloads</h4>
+          <ul>
+            <li><a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk">Latest Release (v1.0.0)</a></li>
+            <li><a href="https://github.com/Krighz/node-player/releases">Older Releases</a></li>
+            <li><a href="https://github.com/Krighz/node-player/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">Changelog</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links-col">
+          <h4>Open Source</h4>
+          <ul>
+            <li><a href="https://github.com/Krighz/node-player" target="_blank" rel="noopener noreferrer">GitHub Repository</a></li>
+            <li><a href="https://github.com/Krighz/node-player/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">GPL-3.0 License</a></li>
+            <li><a href="https://github.com/Krighz/node-player/issues" target="_blank" rel="noopener noreferrer">Issue Tracker</a></li>
+            <li><a href="https://github.com/Krighz/node-player/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <p>&copy; 2026 Krighz. Licensed under GPL-3.0. Zero trackers, zero ads.</p>
+        <p>Built with Jetpack Compose & AGSL.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
