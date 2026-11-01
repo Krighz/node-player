@@ -156,14 +156,44 @@ data class CrossfadeConfig(
 )
 
 data class GlassThemeConfig(
-    val blurRadiusDp: Float = 24.0f,
+    val glassStrength: String = "DRAMATIC", // SUBTLE, BALANCED, DRAMATIC, OFF
+    val themeMode: String = "SYSTEM",       // SYSTEM, DARK, LIGHT, OLED
+    val accentSource: String = "ARTWORK",   // ARTWORK, MATERIAL_YOU, PRESET
+    val spacingDensity: String = "COMFORTABLE", // COMPACT, COMFORTABLE, ROOMY
+    val cornerRoundness: String = "ROUNDED",   // SHARP (8dp), ROUNDED (16dp), PILL (24dp)
+    val animatedBackdrop: Boolean = true,
+    val blurRadiusDp: Float = 28.0f,
     val tintAlpha: Float = 0.65f,
-    val borderAlpha: Float = 0.25f,
+    val borderAlpha: Float = 0.30f,
     val noiseGrainAlpha: Float = 0.04f,
     val isOledBlack: Boolean = false,
     val useDynamicAccent: Boolean = true,
     val fixedAccentColorArgb: Long = 0xFF6366F1, // Indigo default
-    val cornerRadiusDp: Float = 20.0f,
+    val cornerRadiusDp: Float = 16.0f,
     val isPerformanceMode: Boolean = false,
-    val refractionShaderEnabled: Boolean = true
-)
+    val refractionShaderEnabled: Boolean = true,
+    val hapticsEnabled: Boolean = true
+) {
+    val effectiveCornerRadiusDp: Float
+        get() = when (cornerRoundness) {
+            "SHARP" -> 8f
+            "PILL" -> 24f
+            else -> 16f
+        }
+
+    val effectiveBlurDp: Float
+        get() = when (glassStrength) {
+            "OFF" -> 0f
+            "SUBTLE" -> 12f
+            "BALANCED" -> 20f
+            else -> 32f // DRAMATIC
+        }
+
+    val effectiveTintAlpha: Float
+        get() = when (glassStrength) {
+            "OFF" -> 1.0f
+            "SUBTLE" -> 0.85f
+            "BALANCED" -> 0.65f
+            else -> 0.45f // DRAMATIC (more translucent liquid refraction)
+        }
+}

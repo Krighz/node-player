@@ -2,7 +2,6 @@ package com.nodeplayer.music.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -14,7 +13,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
@@ -23,18 +21,23 @@ import dev.chrisbanes.haze.haze
 /**
  * High-end Liquid Glass Background inspired by Dribbble "Music Player - Liquid Glass UI".
  * Features fluid organic chrome/obsidian contours with chromatic refraction caustics.
+ * Fully supports Dark, Light, True OLED Black, and Performance/Static modes.
  */
 @Composable
 fun LiquidGlassBackground(
     hazeState: HazeState? = null,
     accentColor: Color = Color(0xFF6366F1),
     isOled: Boolean = false,
+    isLight: Boolean = false,
     isPlaying: Boolean = false,
     isPerformanceMode: Boolean = false,
+    animatedBackdrop: Boolean = true,
+    glassStrength: String = "DRAMATIC",
     modifier: Modifier = Modifier
 ) {
+    val shouldAnimate = animatedBackdrop && !isPerformanceMode && glassStrength != "OFF"
     val infiniteTransition = rememberInfiniteTransition(label = "LiquidAnimation")
-    val pulse by if (isPerformanceMode) {
+    val pulse by if (!shouldAnimate) {
         remember { mutableFloatStateOf(1.0f) }
     } else {
         infiniteTransition.animateFloat(
@@ -61,10 +64,77 @@ fun LiquidGlassBackground(
 
             if (isOled) {
                 drawRect(color = Color.Black)
+                if (isPlaying && glassStrength != "OFF") {
+                    drawCircle(
+                        brush = Brush.radialGradient(
+                            colors = listOf(
+                                accentColor.copy(alpha = 0.08f),
+                                Color.Transparent
+                            ),
+                            center = Offset(width * 0.5f, height * 0.75f),
+                            radius = width * 0.6f * pulse
+                        ),
+                        radius = width * 0.6f,
+                        center = Offset(width * 0.5f, height * 0.75f)
+                    )
+                }
                 return@Canvas
             }
 
-            // 1. Deep Obsidian Base
+            if (glassStrength == "OFF") {
+                val flatColor = if (isLight) Color(0xFFF4F5FB) else Color(0xFF0C0D14)
+                drawRect(color = flatColor)
+                return@Canvas
+            }
+
+            if (isLight) {
+                // Light mode frosted pearl background
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFFFFFFFF),
+                            Color(0xFFF4F5FB),
+                            Color(0xFFE8EAF6)
+                        )
+                    )
+                )
+
+                if (isPerformanceMode) return@Canvas
+
+                val crestPath = Path().apply {
+                    moveTo(-50f, height * 0.20f)
+                    cubicTo(
+                        width * 0.35f, height * 0.08f * pulse,
+                        width * 0.65f, height * 0.35f * pulse,
+                        width + 50f, height * 0.18f
+                    )
+                }
+                drawPath(
+                    path = crestPath,
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(Color.Transparent, Color(0x336366F1), Color(0x666366F1), Color.Transparent)
+                    ),
+                    style = Stroke(width = 2.dp.toPx())
+                )
+
+                // Soft pastel ambient accent glow
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            accentColor.copy(alpha = 0.12f),
+                            accentColor.copy(alpha = 0.03f),
+                            Color.Transparent
+                        ),
+                        center = Offset(width * 0.5f, height * 0.75f),
+                        radius = width * 0.7f
+                    ),
+                    radius = width * 0.7f,
+                    center = Offset(width * 0.5f, height * 0.75f)
+                )
+                return@Canvas
+            }
+
+            // Dark Mode: Deep Obsidian Base
             drawRect(
                 brush = Brush.verticalGradient(
                     colors = listOf(
@@ -75,13 +145,12 @@ fun LiquidGlassBackground(
                 )
             )
 
-            // Performance Mode: Skip heavy liquid contours and chromatic specular highlights to drastically minimize GPU load
+            // Performance Mode: Skip heavy liquid contours and chromatic specular highlights
             if (isPerformanceMode) {
                 return@Canvas
             }
 
-            // 2. Liquid Fluid Contours (inspired by Viktor Sheen / Liquid Glass UI)
-            // Upper fluid curve (velvety charcoal with white specular crest)
+            // Liquid Fluid Contours
             val crestPath = Path().apply {
                 moveTo(-50f, height * 0.18f)
                 cubicTo(
@@ -157,7 +226,6 @@ fun LiquidGlassBackground(
             )
 
             // Chromatic Dispersion Caustic Along the Mid Contour
-            // Fiery amber/orange iridescent edge (left curve)
             drawPath(
                 path = midContourPath,
                 brush = Brush.horizontalGradient(
@@ -207,7 +275,7 @@ fun LiquidGlassBackground(
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        accentColor.copy(alpha = 0.16f),
+                        accentColor.copy(alpha = 0.18f),
                         accentColor.copy(alpha = 0.04f),
                         Color.Transparent
                     ),

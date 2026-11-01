@@ -7,7 +7,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -875,7 +877,206 @@ fun SettingsScreen(
             hazeState = hazeState
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                // Performance Mode
+                // 1. Theme Mode
+                Text("Theme Mode", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                Text("Select application appearance and dark/light switching", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val modes = listOf("SYSTEM" to "System", "DARK" to "Dark", "LIGHT" to "Light", "OLED" to "OLED")
+                    modes.forEach { (mode, label) ->
+                        val selected = themeConfig.themeMode == mode
+                        FilterChip(
+                            selected = selected,
+                            onClick = { onThemeConfigChange(themeConfig.copy(themeMode = mode, isOledBlack = mode == "OLED")) },
+                            label = { Text(label, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = accent.copy(alpha = 0.35f),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White.copy(alpha = 0.06f),
+                                labelColor = Color.White.copy(alpha = 0.75f)
+                            )
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // 2. Glassmorphism Strength
+                Text("Liquid Glassmorphism Strength", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                Text("Control translucency, refraction highlight and blur intensity", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val strengths = listOf("DRAMATIC" to "Dramatic", "BALANCED" to "Balanced", "SUBTLE" to "Subtle", "OFF" to "Solid")
+                    strengths.forEach { (str, label) ->
+                        val selected = themeConfig.glassStrength == str
+                        FilterChip(
+                            selected = selected,
+                            onClick = { onThemeConfigChange(themeConfig.copy(glassStrength = str)) },
+                            label = { Text(label, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = accent.copy(alpha = 0.35f),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White.copy(alpha = 0.06f),
+                                labelColor = Color.White.copy(alpha = 0.75f)
+                            )
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // 3. Accent Color Source
+                Text("Accent Color Source", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                Text("Where UI highlight colors originate from", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val sources = listOf("ARTWORK" to "Album Art", "MATERIAL_YOU" to "Material You", "PRESET" to "Custom Preset")
+                    sources.forEach { (src, label) ->
+                        val selected = themeConfig.accentSource == src
+                        FilterChip(
+                            selected = selected,
+                            onClick = { onThemeConfigChange(themeConfig.copy(accentSource = src, useDynamicAccent = src == "ARTWORK")) },
+                            label = { Text(label, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = accent.copy(alpha = 0.35f),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White.copy(alpha = 0.06f),
+                                labelColor = Color.White.copy(alpha = 0.75f)
+                            )
+                        )
+                    }
+                }
+
+                if (themeConfig.accentSource == "PRESET") {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    val presets = listOf(
+                        0xFF6366F1 to "Indigo",
+                        0xFF06B6D4 to "Cyan",
+                        0xFF10B981 to "Emerald",
+                        0xFFF59E0B to "Amber",
+                        0xFFF43F5E to "Rose",
+                        0xFF8B5CF6 to "Violet"
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        presets.forEach { (argb, _) ->
+                            val isSel = themeConfig.fixedAccentColorArgb == argb
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .background(Color(argb), shape = CircleShape)
+                                    .border(
+                                        width = if (isSel) 3.dp else 1.dp,
+                                        color = if (isSel) Color.White else Color.Transparent,
+                                        shape = CircleShape
+                                    )
+                                    .clickable {
+                                        onThemeConfigChange(themeConfig.copy(fixedAccentColorArgb = argb))
+                                    }
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // 4. Spacing Density & Corner Roundness
+                Text("Spacing Density & Corners", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                Text("Customize layout padding and card rounding", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val densities = listOf("COMPACT" to "Compact", "COMFORTABLE" to "Comfortable", "ROOMY" to "Roomy")
+                    densities.forEach { (d, label) ->
+                        val selected = themeConfig.spacingDensity == d
+                        FilterChip(
+                            selected = selected,
+                            onClick = { onThemeConfigChange(themeConfig.copy(spacingDensity = d)) },
+                            label = { Text(label, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = accent.copy(alpha = 0.35f),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White.copy(alpha = 0.06f),
+                                labelColor = Color.White.copy(alpha = 0.75f)
+                            )
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val roundness = listOf("SHARP" to "Sharp (8dp)", "ROUNDED" to "Rounded (16dp)", "PILL" to "Pill (24dp)")
+                    roundness.forEach { (r, label) ->
+                        val selected = themeConfig.cornerRoundness == r
+                        FilterChip(
+                            selected = selected,
+                            onClick = { onThemeConfigChange(themeConfig.copy(cornerRoundness = r, cornerRadiusDp = when(r) { "SHARP" -> 8f; "PILL" -> 24f; else -> 16f })) },
+                            label = { Text(label, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = accent.copy(alpha = 0.35f),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White.copy(alpha = 0.06f),
+                                labelColor = Color.White.copy(alpha = 0.75f)
+                            )
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // 5. Toggles: Animated Backdrop & Haptics
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Animated Caustic Backdrop", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Continuous fluid refraction light pulses", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Switch(
+                        checked = themeConfig.animatedBackdrop && !themeConfig.isPerformanceMode,
+                        enabled = !themeConfig.isPerformanceMode,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(animatedBackdrop = it)) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Haptic Feedback", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Gentle tactile clicks on transport & buttons", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Switch(
+                        checked = themeConfig.hapticsEnabled,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(hapticsEnabled = it)) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -883,10 +1084,7 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Performance Mode", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                        Text(
-                            "Disables AGSL refraction, breathing background, and spectrum to minimize GPU load",
-                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
-                        )
+                        Text("Disables animations and heavy shaders to maximize GPU battery efficiency", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                     }
                     Switch(
                         checked = themeConfig.isPerformanceMode,
@@ -895,83 +1093,18 @@ fun SettingsScreen(
                     )
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Real Glass Dock Refraction (AGSL)
-                Row(
+                // Reset Button
+                OutlinedButton(
+                    onClick = { onThemeConfigChange(GlassThemeConfig()) },
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White.copy(alpha = 0.85f))
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Real Glass Dock Refraction", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                        Text(
-                            "Android 13+ AGSL optical lens distortion on floating dock",
-                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
-                        )
-                    }
-                    Switch(
-                        checked = themeConfig.refractionShaderEnabled && !themeConfig.isPerformanceMode,
-                        enabled = !themeConfig.isPerformanceMode,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(refractionShaderEnabled = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
-                    )
+                    Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Reset UI & Glass to Defaults")
                 }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
-
-                // OLED Black
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("OLED Pure Black Mode", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                        Text("Turns liquid background to pitch #000000", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
-                    }
-                    Switch(
-                        checked = themeConfig.isOledBlack,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isOledBlack = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
-
-                // Dynamic Artwork Accent
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text("Dynamic Album Accent", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                        Text("Extracts fluid theme colors via Palette API", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
-                    }
-                    Switch(
-                        checked = themeConfig.useDynamicAccent,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(useDynamicAccent = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
-
-                // Blur Strength
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Liquid Glass Blur Radius", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                    Text("${themeConfig.blurRadiusDp.toInt()} dp", color = accent, fontWeight = FontWeight.Bold)
-                }
-                Slider(
-                    value = themeConfig.blurRadiusDp,
-                    onValueChange = { onThemeConfigChange(themeConfig.copy(blurRadiusDp = it)) },
-                    valueRange = 8f..40f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
-                )
             }
         }
 

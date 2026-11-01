@@ -78,9 +78,17 @@ class MainActivity : ComponentActivity() {
             val accentColor by viewModel.accentColor.collectAsState()
             val dockHazeState = remember { HazeState() }
 
+            val systemInDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val isDark = when (themeConfig.themeMode) {
+                "LIGHT" -> false
+                "DARK", "OLED" -> true
+                else -> systemInDark
+            }
+            val isOled = themeConfig.isOledBlack || themeConfig.themeMode == "OLED"
+
             NodePlayerTheme(
-                accentColor = if (themeConfig.useDynamicAccent) accentColor else Color(themeConfig.fixedAccentColorArgb),
-                isOled = themeConfig.isOledBlack
+                themeConfig = themeConfig,
+                artworkAccentColor = accentColor
             ) {
                 var currentRoute by remember { mutableStateOf("library") }
                 var isNowPlayingExpanded by remember { mutableStateOf(false) }
@@ -138,9 +146,12 @@ class MainActivity : ComponentActivity() {
                         // 1. Dribbble-inspired Liquid Glass Organic Chrome & Obsidian Background
                         LiquidGlassBackground(
                             accentColor = accentColor,
-                            isOled = themeConfig.isOledBlack,
+                            isOled = isOled,
+                            isLight = !isDark && !isOled,
                             isPlaying = isPlaying,
-                            isPerformanceMode = themeConfig.isPerformanceMode
+                            isPerformanceMode = themeConfig.isPerformanceMode,
+                            animatedBackdrop = themeConfig.animatedBackdrop,
+                            glassStrength = themeConfig.glassStrength
                         )
 
                         // 2. Foreground Interactive UI (Cards use clean translucent glass; no recursive blur)

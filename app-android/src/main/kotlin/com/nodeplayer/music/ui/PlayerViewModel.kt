@@ -214,6 +214,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _resumeOnHeadsetConnect.value = prefs.getBoolean("resume_on_headset_connect", true)
         _resamplerRateChoice.value = prefs.getInt("resampler_output_rate", 0)
         _autoDeviceProfilesEnabled.value = prefs.getBoolean("auto_device_profiles_enabled", true)
+        _themeConfig.value = loadThemeConfig()
+    }
+
+    private fun loadThemeConfig(): GlassThemeConfig {
+        return GlassThemeConfig(
+            glassStrength = prefs.getString("glass_strength", "DRAMATIC") ?: "DRAMATIC",
+            themeMode = prefs.getString("theme_mode", "SYSTEM") ?: "SYSTEM",
+            accentSource = prefs.getString("accent_source", "ARTWORK") ?: "ARTWORK",
+            spacingDensity = prefs.getString("spacing_density", "COMFORTABLE") ?: "COMFORTABLE",
+            cornerRoundness = prefs.getString("corner_roundness", "ROUNDED") ?: "ROUNDED",
+            animatedBackdrop = prefs.getBoolean("animated_backdrop", true),
+            blurRadiusDp = prefs.getFloat("glass_blur_radius", 28.0f),
+            tintAlpha = prefs.getFloat("glass_tint_alpha", 0.65f),
+            borderAlpha = prefs.getFloat("glass_border_alpha", 0.30f),
+            isOledBlack = prefs.getBoolean("is_oled_black", false),
+            useDynamicAccent = prefs.getBoolean("use_dynamic_accent", true),
+            fixedAccentColorArgb = prefs.getLong("fixed_accent_color", 0xFF6366F1),
+            cornerRadiusDp = prefs.getFloat("corner_radius_dp", 16.0f),
+            isPerformanceMode = prefs.getBoolean("is_performance_mode", false),
+            refractionShaderEnabled = prefs.getBoolean("refraction_shader_enabled", true),
+            hapticsEnabled = prefs.getBoolean("haptics_enabled", true)
+        )
     }
 
     private fun registerAudioDeviceCallback() {
@@ -975,6 +997,28 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateThemeConfig(newConfig: GlassThemeConfig) {
         _themeConfig.value = newConfig
+        prefs.edit()
+            .putString("glass_strength", newConfig.glassStrength)
+            .putString("theme_mode", newConfig.themeMode)
+            .putString("accent_source", newConfig.accentSource)
+            .putString("spacing_density", newConfig.spacingDensity)
+            .putString("corner_roundness", newConfig.cornerRoundness)
+            .putBoolean("animated_backdrop", newConfig.animatedBackdrop)
+            .putFloat("glass_blur_radius", newConfig.blurRadiusDp)
+            .putFloat("glass_tint_alpha", newConfig.tintAlpha)
+            .putFloat("glass_border_alpha", newConfig.borderAlpha)
+            .putBoolean("is_oled_black", newConfig.isOledBlack)
+            .putBoolean("use_dynamic_accent", newConfig.useDynamicAccent)
+            .putLong("fixed_accent_color", newConfig.fixedAccentColorArgb)
+            .putFloat("corner_radius_dp", newConfig.cornerRadiusDp)
+            .putBoolean("is_performance_mode", newConfig.isPerformanceMode)
+            .putBoolean("refraction_shader_enabled", newConfig.refractionShaderEnabled)
+            .putBoolean("haptics_enabled", newConfig.hapticsEnabled)
+            .apply()
+    }
+
+    fun resetThemeConfigToDefault() {
+        updateThemeConfig(GlassThemeConfig())
     }
 
     fun <T> updateSetting(key: androidx.datastore.preferences.core.Preferences.Key<T>, value: T) {
