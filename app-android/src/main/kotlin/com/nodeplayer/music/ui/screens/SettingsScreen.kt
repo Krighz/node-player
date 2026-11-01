@@ -6,7 +6,9 @@ import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -106,6 +108,11 @@ fun SettingsScreen(
     var lastFmScrobbleEnabled by remember { mutableStateOf(sharedPrefs.getBoolean("lastfm_scrobble_enabled", false)) }
     var lastFmPendingCount by remember { mutableIntStateOf(0) }
     var lastFmAuthToken by remember { mutableStateOf<String?>(null) }
+    var customApiKey by remember { mutableStateOf(sharedPrefs.getString("custom_lastfm_api_key", "").orEmpty()) }
+    var customApiSecret by remember { mutableStateOf(sharedPrefs.getString("custom_lastfm_api_secret", "").orEmpty()) }
+    var showAdvancedLastFm by remember { mutableStateOf(false) }
+    var showSecretText by remember { mutableStateOf(false) }
+    var lastFmConfigVersion by remember { mutableIntStateOf(0) }
     var showLastFmConfirmDialog by remember { mutableStateOf(false) }
     var showLicensesDialog by remember { mutableStateOf(false) }
     var isFoldersExpanded by remember { mutableStateOf(true) }
@@ -1225,6 +1232,75 @@ fun SettingsScreen(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 
+                // Last.fm Debug Status (key yes/no, secret yes/no - show yes/no only, never the values)
+                val isKeyConfigured = remember(customApiKey, lastFmConfigVersion) {
+                    com.nodeplayer.music.library.LastFmClient.isKeyConfigured(context)
+                }
+                val isSecretConfigured = remember(customApiSecret, lastFmConfigVersion) {
+                    com.nodeplayer.music.library.LastFmClient.isSecretConfigured(context)
+                }
+                val keyYesNo = if (isKeyConfigured) "yes" else "no"
+                val secretYesNo = if (isSecretConfigured) "yes" else "no"
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.White.copy(alpha = 0.06f))
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (keyYesNo == "yes" && secretYesNo == "yes") Icons.Rounded.CheckCircle else Icons.Rounded.Info,
+                            contentDescription = null,
+                            tint = if (keyYesNo == "yes" && secretYesNo == "yes") Color(0xFF10B981) else Color(0xFFF59E0B),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Last.fm configured: key $keyYesNo, secret $secretYesNo",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.90f),
+                                fontSize = 12.sp
+                            )
+                        )
+                    }
+                }
+
+                // Clear message if secret is missing instead of failing
+                if (secretYesNo == "no") {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFFEF4444).copy(alpha = 0.15f))
+                            .padding(10.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = "Last.fm shared secret is missing",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFEF4444)
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Add LASTFM_API_SECRET to local.properties or paste it in Advanced Setup below.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color.White.copy(alpha = 0.75f),
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 if (lastFmSessionKey.isNotBlank()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -1259,16 +1335,25 @@ fun SettingsScreen(
                         Text("Account Status", style = MaterialTheme.typography.bodyMedium.copy(color = Color.White))
                         Button(
                             onClick = {
+                                if (!com.nodeplayer.music.library.LastFmClient.isSecretConfigured(context)) {
+                                    showAdvancedLastFm = true
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Last.fm shared secret is missing. Add to local.properties or paste below.",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
+                                    return@Button
+                                }
                                 coroutineScope.launch {
-                                    val tokenRes = com.nodeplayer.music.library.LastFmClient.getRequestToken()
+                                    val tokenRes = com.nodeplayer.music.library.LastFmClient.getRequestToken(context)
                                     tokenRes.onSuccess { token ->
                                         lastFmAuthToken = token
-                                        val authUrl = com.nodeplayer.music.library.LastFmClient.getAuthUrl(token)
+                                        val authUrl = com.nodeplayer.music.library.LastFmClient.getAuthUrl(token, context)
                                         val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
                                         context.startActivity(browserIntent)
                                         showLastFmConfirmDialog = true
                                     }.onFailure { err ->
-                                        android.widget.Toast.makeText(context, "Auth Error: ${err.message}", android.widget.Toast.LENGTH_LONG).show()
+                                        android.widget.Toast.makeText(context, "${err.message}", android.widget.Toast.LENGTH_LONG).show()
                                     }
                                 }
                             },
@@ -1299,6 +1384,114 @@ fun SettingsScreen(
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
                     ) {
                         Text("Force Flush", fontSize = 11.sp)
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Advanced manual paste fields (fallback for testing; built-in wins; never in git)
+                TextButton(
+                    onClick = { showAdvancedLastFm = !showAdvancedLastFm },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = if (showAdvancedLastFm) "Hide Advanced Setup ▲" else "Advanced / Manual API Setup ▼",
+                        style = MaterialTheme.typography.labelSmall.copy(color = accent, fontWeight = FontWeight.SemiBold)
+                    )
+                }
+
+                if (showAdvancedLastFm) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.White.copy(alpha = 0.04f))
+                            .padding(12.dp)
+                    ) {
+                        val builtInKey = com.nodeplayer.music.library.LastFmClient.isBuiltInKeyPresent
+                        val builtInSecret = com.nodeplayer.music.library.LastFmClient.isBuiltInSecretPresent
+
+                        Text(
+                            text = "Paste credentials directly into the app (stored privately in DataStore/prefs, never in git). Built-in values from local.properties take precedence.",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f), fontSize = 11.sp)
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = customApiKey,
+                            onValueChange = { customApiKey = it },
+                            label = { Text(if (builtInKey) "API Key (using built-in)" else "API Key fallback") },
+                            enabled = !builtInKey,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = accent,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.20f),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            )
+                        )
+                        if (builtInKey) {
+                            Text(
+                                text = "✓ Built-in key from local.properties is active (wins over pasted)",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF10B981), fontSize = 10.sp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = customApiSecret,
+                            onValueChange = { customApiSecret = it },
+                            label = { Text(if (builtInSecret) "Shared Secret (using built-in)" else "Shared Secret fallback") },
+                            enabled = !builtInSecret,
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            visualTransformation = if (showSecretText) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                            trailingIcon = {
+                                IconButton(onClick = { showSecretText = !showSecretText }) {
+                                    Icon(
+                                        imageVector = if (showSecretText) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                                        contentDescription = "Toggle secret visibility",
+                                        tint = Color.White.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = accent,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.20f),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
+                            )
+                        )
+                        if (builtInSecret) {
+                            Text(
+                                text = "✓ Built-in secret from local.properties is active (wins over pasted)",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF10B981), fontSize = 10.sp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            Button(
+                                onClick = {
+                                    sharedPrefs.edit()
+                                        .putString("custom_lastfm_api_key", customApiKey.trim())
+                                        .putString("custom_lastfm_api_secret", customApiSecret.trim())
+                                        .commit()
+                                    lastFmConfigVersion++
+                                    android.widget.Toast.makeText(context, "Credentials saved privately in app", android.widget.Toast.LENGTH_SHORT).show()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = accent)
+                            ) {
+                                Text("Save Credentials")
+                            }
+                        }
                     }
                 }
             }
@@ -1806,7 +1999,7 @@ fun SettingsScreen(
                     onClick = {
                         showLastFmConfirmDialog = false
                         coroutineScope.launch {
-                            val sessionRes = com.nodeplayer.music.library.LastFmClient.getSession(lastFmAuthToken!!)
+                            val sessionRes = com.nodeplayer.music.library.LastFmClient.getSession(lastFmAuthToken!!, context)
                             sessionRes.onSuccess { (key, user) ->
                                 lastFmSessionKey = key
                                 lastFmUsername = user

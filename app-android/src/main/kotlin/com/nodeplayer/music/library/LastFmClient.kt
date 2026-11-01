@@ -22,34 +22,80 @@ object LastFmClient {
     private const val TAG = "LastFmClient"
     private const val API_ROOT = "https://ws.audioscrobbler.com/2.0/"
 
+    fun getEffectiveApiKey(context: Context? = null): String {
+        if (BuildConfig.LASTFM_API_KEY.isNotBlank()) return BuildConfig.LASTFM_API_KEY
+        val ctx = context ?: try { NodePlayerApplication.instance } catch (_: Exception) { null }
+        val prefs = ctx?.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+        return prefs?.getString("custom_lastfm_api_key", "")?.trim().orEmpty()
+    }
+
+    fun getEffectiveApiSecret(context: Context? = null): String {
+        if (BuildConfig.LASTFM_API_SECRET.isNotBlank()) return BuildConfig.LASTFM_API_SECRET
+        val ctx = context ?: try { NodePlayerApplication.instance } catch (_: Exception) { null }
+        val prefs = ctx?.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+        return prefs?.getString("custom_lastfm_api_secret", "")?.trim().orEmpty()
+    }
+
+    val isBuiltInKeyPresent: Boolean
+        get() = BuildConfig.LASTFM_API_KEY.isNotBlank()
+
+    val isBuiltInSecretPresent: Boolean
+        get() = BuildConfig.LASTFM_API_SECRET.isNotBlank()
+
+    fun isKeyConfigured(context: Context? = null): Boolean {
+        return getEffectiveApiKey(context).isNotBlank()
+    }
+
+    fun isSecretConfigured(context: Context? = null): Boolean {
+        return getEffectiveApiSecret(context).isNotBlank()
+    }
+
+    fun isConfigured(context: Context? = null): Boolean {
+        return isKeyConfigured(context) && isSecretConfigured(context)
+    }
+
+    fun getDebugStatus(context: Context? = null): String {
+        val keyYesNo = if (isKeyConfigured(context)) "yes" else "no"
+        val secretYesNo = if (isSecretConfigured(context)) "yes" else "no"
+        return "Last.fm configured: key $keyYesNo, secret $secretYesNo"
+    }
+
     private val apiKey: String
-        get() = BuildConfig.LASTFM_API_KEY
+        get() = getEffectiveApiKey()
 
     private val apiSecret: String
-        get() = BuildConfig.LASTFM_API_SECRET
+        get() = getEffectiveApiSecret()
 
-    fun isConfigured(): Boolean {
-        return apiKey.isNotBlank() && apiSecret.isNotBlank()
+    fun getAuthUrl(token: String, context: Context? = null): String {
+        val key = getEffectiveApiKey(context)
+        return "http://www.last.fm/api/auth/?api_key=$key&token=$token"
     }
 
-    fun getAuthUrl(token: String): String {
-        return "http://www.last.fm/api/auth/?api_key=$apiKey&token=$token"
-    }
-
-    suspend fun getRequestToken(): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun getRequestToken(context: Context? = null): Result<String> = withContext(Dispatchers.IO) {
+        if (!isKeyConfigured(context)) {
+            return@withContext Result.failure(IllegalStateException("Last.fm API key is missing. Add LASTFM_API_KEY to local.properties or paste it in Settings."))
+        }
+        if (!isSecretConfigured(context)) {
+            return@withContext Result.failure(IllegalStateException("Last.fm shared secret is missing. Add LASTFM_API_SECRET to local.properties or paste it in the advanced setup below."))
+        }
+        val key = getEffectiveApiKey(context)
+        val secret = getEffectiveApiSecret(context)
         try {
-            if (!isConfigured()) return@withContext Result.failure(IllegalStateException("Last.fm API key or secret missing"))
             val params = mapOf(
                 "method" to "auth.getToken",
-                "api_key" to apiKey
+                "api_key" to key
             )
-            val sig = LastFmSigner.createApiSignature(params, apiSecret)
+            val sig = LastFmSigner.createApiSignature(params, secret)
             val fullParams = params.toMutableMap().apply {
                 put("api_sig", sig)
                 put("format", "json")
             }
             val response = executePost(fullParams)
             val json = JSONObject(response)
+            if (json.has("error")) {
+                val errMsg = json.optString("message", "API Error ${json.optInt("error")}")
+                return@withContext Result.failure(IllegalStateException(errMsg))
+            }
             val token = json.getString("token")
             Result.success(token)
         } catch (e: Exception) {
@@ -58,21 +104,32 @@ object LastFmClient {
         }
     }
 
-    suspend fun getSession(token: String): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
+    suspend fun getSession(token: String, context: Context? = null): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
+        if (!isKeyConfigured(context)) {
+            return@withContext Result.failure(IllegalStateException("Last.fm API key is missing"))
+        }
+        if (!isSecretConfigured(context)) {
+            return@withContext Result.failure(IllegalStateException("Last.fm shared secret is missing"))
+        }
+        val key = getEffectiveApiKey(context)
+        val secret = getEffectiveApiSecret(context)
         try {
-            if (!isConfigured()) return@withContext Result.failure(IllegalStateException("Last.fm API key or secret missing"))
             val params = mapOf(
                 "method" to "auth.getSession",
-                "api_key" to apiKey,
+                "api_key" to key,
                 "token" to token
             )
-            val sig = LastFmSigner.createApiSignature(params, apiSecret)
+            val sig = LastFmSigner.createApiSignature(params, secret)
             val fullParams = params.toMutableMap().apply {
                 put("api_sig", sig)
                 put("format", "json")
             }
             val response = executePost(fullParams)
             val json = JSONObject(response)
+            if (json.has("error")) {
+                val errMsg = json.optString("message", "API Error ${json.optInt("error")}")
+                return@withContext Result.failure(IllegalStateException(errMsg))
+            }
             val session = json.getJSONObject("session")
             val sessionKey = session.getString("key")
             val username = session.getString("name")
