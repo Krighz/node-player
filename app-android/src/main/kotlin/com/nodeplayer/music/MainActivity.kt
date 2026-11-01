@@ -125,6 +125,8 @@ class MainActivity : ComponentActivity() {
                 val minDurationSeconds by viewModel.minDurationSeconds.collectAsState()
                 val crossfadeConfig by viewModel.crossfadeConfig.collectAsState()
                 val isShuffleEnabled by viewModel.isShuffleEnabled.collectAsState()
+                val queue by viewModel.queue.collectAsState()
+                val sleepTimerRemainingSec by viewModel.sleepTimerRemainingSeconds.collectAsState()
 
                 val currentDeviceType by viewModel.currentDeviceType.collectAsState()
                 val convolverCpuPercent by viewModel.convolverCpuPercent.collectAsState()
@@ -337,7 +339,16 @@ class MainActivity : ComponentActivity() {
                                 isShuffle = isShuffleEnabled,
                                 onToggleShuffle = { viewModel.toggleShuffle() },
                                 rmsLevel = currentRms,
-                                isPerformanceMode = themeConfig.isPerformanceMode
+                                isPerformanceMode = themeConfig.isPerformanceMode,
+                                queue = queue,
+                                onPlayTrack = { viewModel.playTrack(it, queue) },
+                                onRemoveFromQueue = { viewModel.removeFromQueue(it) },
+                                onMoveQueueItem = { from, to -> viewModel.moveQueueItem(from, to) },
+                                sleepTimerRemainingSec = sleepTimerRemainingSec,
+                                onSetSleepTimer = { viewModel.setSleepTimer(it) },
+                                onOpenSignalPath = {
+                                    // Open signal path dialog / inspector
+                                }
                             )
                         }
                     }

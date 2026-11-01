@@ -696,6 +696,38 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private val _sleepTimerRemainingSeconds = MutableStateFlow<Long?>(null)
+    val sleepTimerRemainingSeconds: StateFlow<Long?> = _sleepTimerRemainingSeconds.asStateFlow()
+    private var sleepTimerJob: kotlinx.coroutines.Job? = null
+
+    fun setSleepTimer(minutes: Int?) {
+        sleepTimerJob?.cancel()
+        if (minutes == null || minutes <= 0) {
+            _sleepTimerRemainingSeconds.value = null
+            return
+        }
+        val totalSec = minutes * 60L
+        _sleepTimerRemainingSeconds.value = totalSec
+        sleepTimerJob = viewModelScope.launch(Dispatchers.Default) {
+            var rem = totalSec
+            while (rem > 0) {
+                kotlinx.coroutines.delay(1000L)
+                rem--
+                _sleepTimerRemainingSeconds.value = rem
+            }
+            withContext(Dispatchers.Main) {
+                val service = PlaybackService.instance
+                if (service != null) {
+                    service.crossfadeManager.pause()
+                } else {
+                    mediaController?.pause()
+                }
+                _isPlaying.value = false
+                _sleepTimerRemainingSeconds.value = null
+            }
+        }
+    }
+
     fun seekTo(positionMs: Long) {
         _currentPositionMs.value = positionMs
         val service = PlaybackService.instance

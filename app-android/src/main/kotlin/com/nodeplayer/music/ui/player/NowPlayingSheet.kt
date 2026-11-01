@@ -48,6 +48,7 @@ import com.nodeplayer.music.ui.theme.glassSurface
 import java.io.File
 import kotlin.math.abs
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NowPlayingSheet(
     track: Track,
@@ -64,6 +65,13 @@ fun NowPlayingSheet(
     onToggleShuffle: () -> Unit = {},
     rmsLevel: Float = 0.0f,
     isPerformanceMode: Boolean = false,
+    queue: List<Track> = emptyList(),
+    onPlayTrack: (Track) -> Unit = {},
+    onRemoveFromQueue: (Int) -> Unit = {},
+    onMoveQueueItem: (Int, Int) -> Unit = { _, _ -> },
+    sleepTimerRemainingSec: Long? = null,
+    onSetSleepTimer: (Int?) -> Unit = {},
+    onOpenSignalPath: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -78,6 +86,9 @@ fun NowPlayingSheet(
     var showSpectrogram by remember { mutableStateOf(false) }
     var showTrackDetailsSheet by remember { mutableStateOf(false) }
     var showQuickActionDialog by remember { mutableStateOf(false) }
+    var showQueueSheet by remember { mutableStateOf(false) }
+    var showSleepTimerDialog by remember { mutableStateOf(false) }
+    var showTopMenu by remember { mutableStateOf(false) }
 
     val currentMs = if (isSeeking) sliderPosition.toLong() else currentPositionMs
     val totalMs = track.durationMs.coerceAtLeast(1L)
@@ -287,19 +298,27 @@ fun NowPlayingSheet(
                         SignalPathBadge(audioOutputInfo = audioOutputInfo, track = track, accent = accent)
                     }
 
-                    Row {
-                        IconButton(onClick = {
-                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                            showSpectrogram = !showSpectrogram
-                            if (showSpectrogram) showLyrics = false
-                        }) {
-                            Icon(
-                                Icons.Rounded.GraphicEq,
-                                contentDescription = "Spectrogram",
-                                tint = if (showSpectrogram) accent else Color.White.copy(alpha = 0.85f),
-                                modifier = Modifier.size(24.dp)
-                            )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (sleepTimerRemainingSec != null) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(accent.copy(alpha = 0.20f))
+                                    .clickable { showSleepTimerDialog = true }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "⏱ ${sleepTimerRemainingSec / 60}m",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = accent,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp
+                                    )
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
                         }
+
                         IconButton(onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                             showLyrics = !showLyrics
@@ -312,11 +331,102 @@ fun NowPlayingSheet(
                                 modifier = Modifier.size(24.dp)
                             )
                         }
-                        IconButton(onClick = {
-                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                            onOpenEq()
-                        }) {
-                            Icon(Icons.Rounded.Tune, contentDescription = "Equalizer", tint = accent, modifier = Modifier.size(24.dp))
+
+                        Box {
+                            IconButton(onClick = {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                showTopMenu = true
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.MoreVert,
+                                    contentDescription = "Options",
+                                    tint = Color.White.copy(alpha = 0.85f),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showTopMenu,
+                                onDismissRequest = { showTopMenu = false },
+                                modifier = Modifier.background(Color(0xFF1E2130))
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Queue (${queue.size})", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Rounded.QueueMusic,
+                                            contentDescription = null,
+                                            tint = accent
+                                        )
+                                    },
+                                    onClick = {
+                                        showTopMenu = false
+                                        showQueueSheet = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            if (sleepTimerRemainingSec != null) "Sleep Timer (${sleepTimerRemainingSec / 60}m)"
+                                            else "Sleep Timer",
+                                            color = Color.White
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Rounded.Timer,
+                                            contentDescription = null,
+                                            tint = if (sleepTimerRemainingSec != null) accent else Color.White.copy(alpha = 0.8f)
+                                        )
+                                    },
+                                    onClick = {
+                                        showTopMenu = false
+                                        showSleepTimerDialog = true
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Spectrogram Visualizer", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Rounded.GraphicEq,
+                                            contentDescription = null,
+                                            tint = if (showSpectrogram) accent else Color.White.copy(alpha = 0.8f)
+                                        )
+                                    },
+                                    onClick = {
+                                        showTopMenu = false
+                                        showSpectrogram = !showSpectrogram
+                                        if (showSpectrogram) showLyrics = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Equalizer & DSP", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Rounded.Tune,
+                                            contentDescription = null,
+                                            tint = accent
+                                        )
+                                    },
+                                    onClick = {
+                                        showTopMenu = false
+                                        onOpenEq()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Audio Signal Path", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Rounded.Info,
+                                            contentDescription = null,
+                                            tint = Color.White.copy(alpha = 0.8f)
+                                        )
+                                    },
+                                    onClick = {
+                                        showTopMenu = false
+                                        showTrackDetailsSheet = true
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -441,9 +551,275 @@ fun NowPlayingSheet(
                     isPerformanceMode = isPerformanceMode
                 )
 
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Up Next Queue Handle
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Color.White.copy(alpha = 0.12f))
+                        .clickable { showQueueSheet = true }
+                        .padding(horizontal = 16.dp, vertical = 7.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.QueueMusic,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (queue.isNotEmpty()) "Up Next • ${queue.size} tracks" else "Up Next • Queue",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White.copy(alpha = 0.90f),
+                                fontSize = 12.sp
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Rounded.KeyboardArrowUp,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.50f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
             }
         }
+    }
+
+    // Queue Modal Bottom Sheet
+    if (showQueueSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showQueueSheet = false },
+            containerColor = Color(0xFF10121C),
+            dragHandle = {
+                Box(
+                    modifier = Modifier
+                        .padding(vertical = 10.dp)
+                        .size(width = 40.dp, height = 4.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.25f))
+                )
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.75f)
+                    .padding(horizontal = 20.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Up Next",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                        )
+                        Text(
+                            text = "${queue.size} songs in queue",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color.White.copy(alpha = 0.60f)
+                            )
+                        )
+                    }
+                    IconButton(onClick = { showQueueSheet = false }) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Close Queue",
+                            tint = Color.White.copy(alpha = 0.70f)
+                        )
+                    }
+                }
+
+                if (queue.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Queue is empty",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.5f))
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(bottom = 24.dp)
+                    ) {
+                        itemsIndexed(queue, key = { index, item -> "${item.id}_$index" }) { index, item ->
+                            val isCurrent = item.id == track.id
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isCurrent) accent.copy(alpha = 0.18f)
+                                        else Color.White.copy(alpha = 0.05f)
+                                    )
+                                    .clickable {
+                                        onPlayTrack(item)
+                                        showQueueSheet = false
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (isCurrent) {
+                                    SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent, maxHeight = 16.dp)
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                } else {
+                                    Text(
+                                        text = "${index + 1}",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = Color.White.copy(alpha = 0.40f),
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        modifier = Modifier.width(22.dp)
+                                    )
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = item.title,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                            color = if (isCurrent) accent else Color.White
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "${item.artist} • ${item.durationFormatted}",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = Color.White.copy(alpha = 0.60f)
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (index > 0) {
+                                        IconButton(
+                                            onClick = { onMoveQueueItem(index, index - 1) },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.KeyboardArrowUp,
+                                                contentDescription = "Move Up",
+                                                tint = Color.White.copy(alpha = 0.60f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                    if (index < queue.size - 1) {
+                                        IconButton(
+                                            onClick = { onMoveQueueItem(index, index + 1) },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.KeyboardArrowDown,
+                                                contentDescription = "Move Down",
+                                                tint = Color.White.copy(alpha = 0.60f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                    IconButton(
+                                        onClick = { onRemoveFromQueue(index) },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.DeleteOutline,
+                                            contentDescription = "Remove from Queue",
+                                            tint = Color.White.copy(alpha = 0.45f),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Sleep Timer Dialog
+    if (showSleepTimerDialog) {
+        AlertDialog(
+            onDismissRequest = { showSleepTimerDialog = false },
+            containerColor = Color(0xFF161825),
+            title = {
+                Text(
+                    text = "Sleep Timer",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (sleepTimerRemainingSec != null) {
+                        Text(
+                            text = "Active: ${sleepTimerRemainingSec / 60}m ${sleepTimerRemainingSec % 60}s remaining",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = accent, fontWeight = FontWeight.SemiBold)
+                        )
+                        Button(
+                            onClick = {
+                                onSetSleepTimer(null)
+                                showSleepTimerDialog = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Turn Off Timer")
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+                    val timerDurations = listOf(15, 30, 45, 60, 90)
+                    timerDurations.forEach { minutes ->
+                        FilledTonalButton(
+                            onClick = {
+                                onSetSleepTimer(minutes)
+                                showSleepTimerDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = Color.White.copy(alpha = 0.08f),
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("$minutes minutes")
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showSleepTimerDialog = false }) {
+                    Text("Close", color = Color.White.copy(alpha = 0.70f))
+                }
+            }
+        )
     }
 
     // Quick Action Dialog (Triggered on Long Press)

@@ -97,7 +97,7 @@ fun LibraryScreen(
                 if (selectedTab == 1 || selectedTab == 2) {
                     IconButton(onClick = { isGridView = !isGridView }) {
                         Icon(
-                            imageVector = if (isGridView) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                            imageVector = if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView,
                             contentDescription = if (isGridView) "Switch to List View" else "Switch to Grid View",
                             tint = accent
                         )
@@ -354,7 +354,7 @@ fun SongsList(
                                 text = { Text("Play Next", color = Color.White) },
                                 leadingIcon = {
                                     Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+                                        imageVector = Icons.Rounded.QueueMusic,
                                         contentDescription = null,
                                         tint = accent
                                     )
@@ -368,7 +368,7 @@ fun SongsList(
                                 text = { Text("Add to Queue", color = Color.White) },
                                 leadingIcon = {
                                     Icon(
-                                        imageVector = Icons.AutoMirrored.Rounded.PlaylistAdd,
+                                        imageVector = Icons.Rounded.PlaylistAdd,
                                         contentDescription = null,
                                         tint = accent
                                     )
@@ -508,7 +508,7 @@ fun FolderDetailView(
         ) {
             IconButton(onClick = onBack) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                    imageVector = Icons.Rounded.ArrowBack,
                     contentDescription = "Back",
                     tint = Color.White
                 )
