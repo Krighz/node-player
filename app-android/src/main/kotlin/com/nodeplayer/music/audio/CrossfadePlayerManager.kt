@@ -194,6 +194,49 @@ class CrossfadePlayerManager(
         }
     }
 
+    fun loadConvolverPreset(presetName: String) {
+        val sampleRate = dspChainA.sampleRate.coerceAtLeast(44100)
+        val numSamples = 512 // 512 taps partitioned block convolution
+        val ir = FloatArray(numSamples)
+        when (presetName) {
+            "Acoustic Room (Subtle Studio)" -> {
+                ir[0] = 1.0f // Direct sound
+                ir[25] = 0.35f // Early reflection 1
+                ir[60] = -0.22f // Early reflection 2
+                ir[110] = 0.15f // Early reflection 3
+                for (i in 1 until numSamples) {
+                    val decay = kotlin.math.exp(-i.toFloat() / 70.0f)
+                    val pseudoNoise = (((i * 1103515245 + 12345) and 0x7FFFFFFF) / 2147483648.0f - 0.5f) * 0.18f
+                    ir[i] += decay * pseudoNoise
+                }
+            }
+            "Diffuse-Field Headphone" -> {
+                ir[0] = 1.0f
+                for (i in 1 until numSamples) {
+                    val decay = kotlin.math.exp(-i.toFloat() / 35.0f)
+                    val highFreqDamp = kotlin.math.cos(i.toFloat() * 0.15f)
+                    ir[i] = decay * highFreqDamp * 0.12f
+                }
+            }
+            "Warm Ambience" -> {
+                ir[0] = 1.0f
+                ir[35] = 0.4f
+                ir[85] = 0.28f
+                ir[160] = 0.18f
+                for (i in 1 until numSamples) {
+                    val decay = kotlin.math.exp(-i.toFloat() / 120.0f)
+                    val pseudoNoise = (((i * 214013 + 2531011) and 0x7FFFFFFF) / 2147483648.0f - 0.5f) * 0.25f
+                    ir[i] += decay * pseudoNoise
+                }
+            }
+            else -> {
+                ir[0] = 1.0f // Identity
+            }
+        }
+        dspChainA.convolver.loadImpulseResponse(ir)
+        dspChainB.convolver.loadImpulseResponse(ir)
+    }
+
     fun onSystemEqStateChanged(running: Boolean) {
         if (running) {
             dspChainA.equalizer.enabled = false

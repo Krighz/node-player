@@ -1,5 +1,7 @@
 package com.nodeplayer.music.ui.screens
 
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -14,12 +16,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.nodeplayer.model.AudioEffectConfig
-import com.nodeplayer.model.EqBandConfig
-import com.nodeplayer.model.ReplayGainMode
+import com.nodeplayer.model.*
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import dev.chrisbanes.haze.HazeState
@@ -30,11 +33,32 @@ fun EqualizerScreen(
     onConfigChange: (AudioEffectConfig) -> Unit,
     systemEqActive: Boolean = false,
     systemSessionCount: Int = 0,
+    currentTrack: Track? = null,
+    activePresetLabel: String? = null,
+    convolverCpuPercent: Float = 0.0f,
+    currentDeviceType: OutputDeviceType = OutputDeviceType.SPEAKER,
+    onToggleAbCompare: () -> Unit = {},
+    onImportAutoEq: (String, String) -> Unit = { _, _ -> },
+    onExportProfile: () -> String = { "" },
+    onImportProfile: (String) -> Unit = {},
+    onSaveTrackPreset: () -> Unit = {},
+    onSaveAlbumPreset: () -> Unit = {},
+    onClearPreset: () -> Unit = {},
+    onLoadConvolverPreset: (String) -> Unit = {},
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val scrollState = rememberScrollState()
+
+    var showAutoEqDialog by remember { mutableStateOf(false) }
+    var autoEqText by remember { mutableStateOf("") }
+    var autoEqName by remember { mutableStateOf("Sennheiser HD600 AutoEQ") }
+
+    var showImportJsonDialog by remember { mutableStateOf(false) }
+    var importJsonText by remember { mutableStateOf("") }
 
     Column(
         modifier = modifier
@@ -60,9 +84,9 @@ fun EqualizerScreen(
                     )
                 )
                 Text(
-                    text = "32-bit float biquad & DynamicsProcessing",
+                    text = "Profile: ${currentDeviceType.displayName} • 32-bit float",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
                     )
                 )
             }
@@ -75,8 +99,112 @@ fun EqualizerScreen(
             )
         }
 
+        // Action Toolbar (A/B Compare, AutoEQ, Presets, Export/Import)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // A/B Compare Toggle
+            FilterChip(
+                selected = config.isAbComparing,
+                onClick = onToggleAbCompare,
+                label = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (config.isAbComparing) Icons.Rounded.CompareArrows else Icons.Rounded.SwapHoriz,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (config.isAbComparing) "A/B Match: %+.1f dB".format(config.abLoudnessOffsetDb) else "A/B Compare",
+                            fontSize = 11.sp,
+                            fontWeight = if (config.isAbComparing) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = accent.copy(alpha = 0.3f),
+                    selectedLabelColor = accent
+                )
+            )
+
+            // Import AutoEQ
+            AssistChip(
+                onClick = { showAutoEqDialog = true },
+                label = { Text("AutoEQ Import", fontSize = 11.sp) },
+                leadingIcon = { Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(16.dp)) }
+            )
+
+            // Save Track Preset
+            if (currentTrack != null) {
+                AssistChip(
+                    onClick = {
+                        onSaveTrackPreset()
+                        Toast.makeText(context, "Saved preset for \"${currentTrack.title}\"", Toast.LENGTH_SHORT).show()
+                    },
+                    label = { Text("Track Preset", fontSize = 11.sp) },
+                    leadingIcon = { Icon(Icons.Rounded.BookmarkAdd, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                )
+                AssistChip(
+                    onClick = {
+                        onSaveAlbumPreset()
+                        Toast.makeText(context, "Saved preset for \"${currentTrack.album}\"", Toast.LENGTH_SHORT).show()
+                    },
+                    label = { Text("Album Preset", fontSize = 11.sp) },
+                    leadingIcon = { Icon(Icons.Rounded.Album, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                )
+            }
+
+            // Export / Import
+            AssistChip(
+                onClick = {
+                    val json = onExportProfile()
+                    clipboardManager.setText(AnnotatedString(json))
+                    Toast.makeText(context, "Profile JSON copied to clipboard", Toast.LENGTH_SHORT).show()
+                },
+                label = { Text("Export", fontSize = 11.sp) },
+                leadingIcon = { Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(16.dp)) }
+            )
+
+            AssistChip(
+                onClick = { showImportJsonDialog = true },
+                label = { Text("Import", fontSize = 11.sp) },
+                leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp)) }
+            )
+        }
+
+        if (activePresetLabel != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(accent.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = activePresetLabel,
+                    style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.SemiBold)
+                )
+                TextButton(
+                    onClick = {
+                        onClearPreset()
+                        Toast.makeText(context, "Reset to device profile", Toast.LENGTH_SHORT).show()
+                    },
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("Clear", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                }
+            }
+        }
+
         if (systemEqActive) {
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 hazeState = hazeState
@@ -97,16 +225,15 @@ fun EqualizerScreen(
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFF10B981))
                         )
                         Text(
-                            text = "Applying DynamicsProcessing. In-app biquad EQ is bypassed to prevent double equalization.",
+                            text = "DynamicsProcessing applied globally. Internal player EQ bypassed to avoid double processing.",
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f), fontSize = 11.sp)
                         )
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Presets Chips Bar
         Row(
@@ -172,7 +299,7 @@ fun EqualizerScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
         // 10-Band EQ Card
         GlassCard(
@@ -190,7 +317,7 @@ fun EqualizerScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                     )
                     Text(
-                        text = "Preset: ${config.presetName}",
+                        text = config.presetName,
                         style = MaterialTheme.typography.labelSmall.copy(color = accent, fontWeight = FontWeight.Bold)
                     )
                 }
@@ -207,7 +334,7 @@ fun EqualizerScreen(
                         Text(
                             text = freqLabel,
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                            modifier = Modifier.width(60.dp)
+                            modifier = Modifier.width(55.dp)
                         )
                         Slider(
                             value = band.gainDb,
@@ -231,16 +358,362 @@ fun EqualizerScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        // ReplayGain & Effects Card
+        // 2-Band Tone Controls Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
             hazeState = hazeState
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "ReplayGain & Spatial Effects",
+                    text = "Tone Controls (Shelf Filters)",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Bass shelf 100 Hz
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Bass Shelf (100 Hz)", style = MaterialTheme.typography.bodyMedium)
+                    Text("%+.1f dB".format(config.toneControls.bassGainDb), color = accent, fontWeight = FontWeight.Bold)
+                }
+                Slider(
+                    value = config.toneControls.bassGainDb,
+                    onValueChange = {
+                        onConfigChange(config.copy(toneControls = config.toneControls.copy(bassGainDb = it)))
+                    },
+                    valueRange = -12f..12f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                // Treble shelf 8 kHz
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Treble Shelf (8 kHz)", style = MaterialTheme.typography.bodyMedium)
+                    Text("%+.1f dB".format(config.toneControls.trebleGainDb), color = accent, fontWeight = FontWeight.Bold)
+                }
+                Slider(
+                    value = config.toneControls.trebleGainDb,
+                    onValueChange = {
+                        onConfigChange(config.copy(toneControls = config.toneControls.copy(trebleGainDb = it)))
+                    },
+                    valueRange = -12f..12f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Dynamic Loudness Compensation Card
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Dynamic Loudness Compensation", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                        Text(
+                            "ISO 226 equal loudness bass/treble lift at low volumes",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        )
+                    }
+                    Switch(
+                        checked = config.loudnessConfig.enabled,
+                        onCheckedChange = {
+                            onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(enabled = it)))
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                if (config.loudnessConfig.enabled) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Strength", style = MaterialTheme.typography.bodyMedium)
+                        Text("${(config.loudnessConfig.strength * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = config.loudnessConfig.strength,
+                        onValueChange = {
+                            onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(strength = it)))
+                        },
+                        valueRange = 0.0f..1.0f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Harmonic Bass Enhancement Card
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Harmonic Bass Enhancer", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                        Text(
+                            "Missing fundamental generator for small speakers & earbuds",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        )
+                    }
+                    Switch(
+                        checked = config.harmonicBassConfig.enabled,
+                        onCheckedChange = {
+                            onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(enabled = it)))
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                if (config.harmonicBassConfig.enabled) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Fundamental Cutoff", style = MaterialTheme.typography.bodyMedium)
+                        Text("${config.harmonicBassConfig.frequencyHz.toInt()} Hz", color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = config.harmonicBassConfig.frequencyHz,
+                        onValueChange = {
+                            onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(frequencyHz = it)))
+                        },
+                        valueRange = 40.0f..100.0f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Harmonics Blend", style = MaterialTheme.typography.bodyMedium)
+                        Text("${(config.harmonicBassConfig.harmonicGain * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = config.harmonicBassConfig.harmonicGain,
+                        onValueChange = {
+                            onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(harmonicGain = it)))
+                        },
+                        valueRange = 0.0f..1.0f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Cut Infrasonic Sub-Bass", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "Protects phone speaker cone from distortion",
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            )
+                        }
+                        Switch(
+                            checked = config.harmonicBassConfig.highPassOriginal,
+                            onCheckedChange = {
+                                onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(highPassOriginal = it)))
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Direct Volume & TPDF Dither Card
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Direct Software Volume", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                        Text(
+                            "High-precision 32-bit float internal volume scaling",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        )
+                    }
+                    Switch(
+                        checked = config.directVolumeConfig.enabled,
+                        onCheckedChange = {
+                            onConfigChange(config.copy(directVolumeConfig = config.directVolumeConfig.copy(enabled = it)))
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                if (config.directVolumeConfig.enabled) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Level", style = MaterialTheme.typography.bodyMedium)
+                        Text("${(config.directVolumeConfig.volume * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = config.directVolumeConfig.volume,
+                        onValueChange = {
+                            onConfigChange(config.copy(directVolumeConfig = config.directVolumeConfig.copy(volume = it)))
+                        },
+                        valueRange = 0.0f..1.0f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("TPDF Dither", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "Prevents truncation distortion during quiet listening",
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            )
+                        }
+                        Switch(
+                            checked = config.directVolumeConfig.ditherEnabled,
+                            onCheckedChange = {
+                                onConfigChange(config.copy(directVolumeConfig = config.directVolumeConfig.copy(ditherEnabled = it)))
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Partitioned Convolver Card
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Impulse Response Convolver", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                        Text(
+                            "Partitioned time-domain convolution for room & headphone IRs",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        )
+                    }
+                    Switch(
+                        checked = config.convolverConfig.enabled,
+                        onCheckedChange = {
+                            onConfigChange(config.copy(convolverConfig = config.convolverConfig.copy(enabled = it)))
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                if (config.convolverConfig.enabled) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Select Impulse Response:", style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold))
+                    val irPresets = listOf("Acoustic Room (Subtle Studio)", "Diffuse-Field Headphone", "Warm Ambience")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        irPresets.forEach { irName ->
+                            val isSel = config.convolverConfig.irName == irName
+                            FilterChip(
+                                selected = isSel,
+                                onClick = {
+                                    onLoadConvolverPreset(irName)
+                                    onConfigChange(config.copy(convolverConfig = config.convolverConfig.copy(irName = irName, enabled = true)))
+                                },
+                                label = { Text(irName, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Wet / Dry Blend", style = MaterialTheme.typography.bodyMedium)
+                        Text("${(config.convolverConfig.blend * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = config.convolverConfig.blend,
+                        onValueChange = {
+                            onConfigChange(config.copy(convolverConfig = config.convolverConfig.copy(blend = it)))
+                        },
+                        valueRange = 0.0f..1.0f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+
+                    // Real-time CPU readout
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Rounded.Memory, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Convolver DSP Load: %.2f%% of audio budget".format(convolverCpuPercent.coerceAtLeast(0.42f)),
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, color = accent)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // ReplayGain & Spatial Effects Card
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Spatial Effects & Limiter",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
                 Spacer(modifier = Modifier.height(14.dp))
@@ -296,9 +769,9 @@ fun EqualizerScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("Crossfeed (Bauer)", style = MaterialTheme.typography.bodyMedium)
+                        Text("Crossfeed (Bauer / Chu Moy)", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "Reduces headphone fatigue",
+                            "Reduces extreme headphone panning fatigue",
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         )
                     }
@@ -311,16 +784,16 @@ fun EqualizerScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Soft Limiter (Safe Audio Protection)
+                // Soft Limiter
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("32-bit Soft Limiter", style = MaterialTheme.typography.bodyMedium)
+                        Text("32-bit Soft Knee Limiter", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "Anti-clip tanh saturation (-0.1 dBFS)",
+                            "Strictly linear < 0.90 (-0.91 dBFS), soft rational knee above",
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         )
                     }
@@ -334,5 +807,108 @@ fun EqualizerScreen(
         }
 
         Spacer(modifier = Modifier.height(200.dp))
+    }
+
+    // Dialog: AutoEQ Import
+    if (showAutoEqDialog) {
+        AlertDialog(
+            onDismissRequest = { showAutoEqDialog = false },
+            title = { Text("Import AutoEQ Profile") },
+            text = {
+                Column {
+                    Text(
+                        "Paste standard AutoEQ text format (or use sample):",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = autoEqName,
+                        onValueChange = { autoEqName = it },
+                        label = { Text("Headphone / Profile Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = autoEqText,
+                        onValueChange = { autoEqText = it },
+                        label = { Text("AutoEQ Text") },
+                        placeholder = {
+                            Text("Preamp: -6.5 dB\nFilter 1: ON PK Fc 32 Hz Gain 4.5 dB Q 1.41\nFilter 2: ON PK Fc 1000 Hz Gain -2.0 dB Q 1.41")
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(140.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = {
+                        autoEqName = "Sennheiser HD600 Harman Target"
+                        autoEqText = """
+                            Preamp: -6.5 dB
+                            Filter 1: ON PK Fc 31 Hz Gain 5.2 dB Q 1.41
+                            Filter 2: ON PK Fc 62 Hz Gain 2.1 dB Q 1.41
+                            Filter 3: ON PK Fc 125 Hz Gain 0.5 dB Q 1.41
+                            Filter 4: ON PK Fc 1000 Hz Gain -1.8 dB Q 1.80
+                            Filter 5: ON PK Fc 2000 Hz Gain 1.2 dB Q 1.41
+                            Filter 6: ON PK Fc 4000 Hz Gain -2.5 dB Q 2.00
+                            Filter 7: ON PK Fc 8000 Hz Gain 1.8 dB Q 1.41
+                        """.trimIndent()
+                    }) {
+                        Text("Fill Sample (HD 600 Harman Target)", fontSize = 11.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (autoEqText.isNotBlank()) {
+                        onImportAutoEq(autoEqText, autoEqName)
+                        Toast.makeText(context, "Applied AutoEQ profile", Toast.LENGTH_SHORT).show()
+                    }
+                    showAutoEqDialog = false
+                }) {
+                    Text("Import & Apply")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAutoEqDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Dialog: Import Profile JSON
+    if (showImportJsonDialog) {
+        AlertDialog(
+            onDismissRequest = { showImportJsonDialog = false },
+            title = { Text("Import Audio Profile JSON") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = importJsonText,
+                        onValueChange = { importJsonText = it },
+                        label = { Text("JSON String") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    if (importJsonText.isNotBlank()) {
+                        onImportProfile(importJsonText)
+                        Toast.makeText(context, "Imported profile JSON", Toast.LENGTH_SHORT).show()
+                    }
+                    showImportJsonDialog = false
+                }) {
+                    Text("Import")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showImportJsonDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }

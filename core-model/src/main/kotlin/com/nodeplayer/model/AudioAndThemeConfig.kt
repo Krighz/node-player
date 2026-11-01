@@ -18,6 +18,58 @@ enum class ReplayGainMode {
     ALBUM
 }
 
+enum class OutputDeviceType(val displayName: String) {
+    SPEAKER("Internal Speaker"),
+    WIRED("Wired Headphones"),
+    BLUETOOTH("Bluetooth A2DP"),
+    USB("USB DAC")
+}
+
+data class ToneControlConfig(
+    val bassGainDb: Float = 0.0f, // -12dB to +12dB (Low-shelf 100Hz)
+    val trebleGainDb: Float = 0.0f // -12dB to +12dB (High-shelf 8kHz)
+)
+
+data class LoudnessConfig(
+    val enabled: Boolean = false,
+    val strength: Float = 0.5f // 0.0f (mild) to 1.0f (full Fletcher-Munson ISO 226)
+)
+
+data class HarmonicBassConfig(
+    val enabled: Boolean = false,
+    val frequencyHz: Float = 60.0f, // Fundamental cutoff frequency (40Hz to 100Hz)
+    val harmonicGain: Float = 0.5f, // Blend 0.0 to 1.0
+    val highPassOriginal: Boolean = false // Cut sub-bass below 80Hz to protect phone speaker
+)
+
+data class ConvolverConfig(
+    val enabled: Boolean = false,
+    val irName: String = "",
+    val irPath: String = "",
+    val blend: Float = 1.0f // 0.0 = dry, 1.0 = wet
+)
+
+data class DirectVolumeConfig(
+    val enabled: Boolean = true,
+    val volume: Float = 1.0f, // 0.0 to 1.0
+    val ditherEnabled: Boolean = true // Triangular Probability Density Function (TPDF)
+)
+
+data class AutoEqFilter(
+    val index: Int,
+    val enabled: Boolean = true,
+    val type: String = "PK", // PK = Peaking, LSC = Low-Shelf, HSC = High-Shelf
+    val frequency: Float = 1000f,
+    val gainDb: Float = 0f,
+    val q: Float = 1.414f
+)
+
+data class AutoEqProfile(
+    val name: String,
+    val preampDb: Float,
+    val filters: List<AutoEqFilter>
+)
+
 data class EqBandConfig(
     val index: Int,
     val centerFreq: Float,
@@ -36,7 +88,14 @@ data class AudioEffectConfig(
     val replayGainPreampDb: Float = 0.0f,
     val crossfeedEnabled: Boolean = false,
     val crossfeedStrength: Float = 0.5f,
-    val stereoWidth: Float = 1.0f // 0.0 = mono, 1.0 = normal, 2.0 = wide
+    val stereoWidth: Float = 1.0f, // 0.0 = mono, 1.0 = normal, 2.0 = wide
+    val toneControls: ToneControlConfig = ToneControlConfig(),
+    val loudnessConfig: LoudnessConfig = LoudnessConfig(),
+    val harmonicBassConfig: HarmonicBassConfig = HarmonicBassConfig(),
+    val convolverConfig: ConvolverConfig = ConvolverConfig(),
+    val directVolumeConfig: DirectVolumeConfig = DirectVolumeConfig(),
+    val isAbComparing: Boolean = false,
+    val abLoudnessOffsetDb: Float = 0.0f
 ) {
     companion object {
         fun default10Bands(): List<EqBandConfig> = listOf(

@@ -87,6 +87,13 @@ class MainActivity : ComponentActivity() {
                 val minDurationSeconds by viewModel.minDurationSeconds.collectAsState()
                 val crossfadeConfig by viewModel.crossfadeConfig.collectAsState()
 
+                val currentDeviceType by viewModel.currentDeviceType.collectAsState()
+                val convolverCpuPercent by viewModel.convolverCpuPercent.collectAsState()
+                val activePresetLabel by viewModel.activePresetLabel.collectAsState()
+                val resumeOnHeadsetConnect by viewModel.resumeOnHeadsetConnect.collectAsState()
+                val resamplerRateChoice by viewModel.resamplerRateChoice.collectAsState()
+                val autoDeviceProfilesEnabled by viewModel.autoDeviceProfilesEnabled.collectAsState()
+
                 Box(
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -126,6 +133,18 @@ class MainActivity : ComponentActivity() {
                                 onConfigChange = { viewModel.updateEffectConfig(it) },
                                 systemEqActive = systemEqEnabled,
                                 systemSessionCount = systemEqSessions.size,
+                                currentTrack = currentTrack,
+                                activePresetLabel = activePresetLabel,
+                                convolverCpuPercent = convolverCpuPercent,
+                                currentDeviceType = currentDeviceType,
+                                onToggleAbCompare = { viewModel.toggleAbCompare() },
+                                onImportAutoEq = { text, name -> viewModel.importAutoEq(text, name) },
+                                onExportProfile = { viewModel.exportCurrentProfile() },
+                                onImportProfile = { viewModel.importProfileJson(it) },
+                                onSaveTrackPreset = { currentTrack?.let { viewModel.saveAsTrackPreset(it) } },
+                                onSaveAlbumPreset = { currentTrack?.let { viewModel.saveAsAlbumPreset(it) } },
+                                onClearPreset = { currentTrack?.let { viewModel.clearTrackOrAlbumPreset(it) } },
+                                onLoadConvolverPreset = { viewModel.setConvolverPreset(it) },
                                 hazeState = null
                             )
                             "settings" -> SettingsScreen(
@@ -136,6 +155,13 @@ class MainActivity : ComponentActivity() {
                                 systemEqEnabled = systemEqEnabled,
                                 systemEqSessions = systemEqSessions,
                                 onToggleSystemEq = { viewModel.setSystemEqEnabled(it) },
+                                currentDeviceType = currentDeviceType,
+                                autoDeviceProfilesEnabled = autoDeviceProfilesEnabled,
+                                onToggleAutoDeviceProfiles = { viewModel.setAutoDeviceProfilesEnabled(it) },
+                                resumeOnHeadsetConnect = resumeOnHeadsetConnect,
+                                onToggleResumeOnHeadsetConnect = { viewModel.setResumeOnHeadsetConnect(it) },
+                                resamplerRateChoice = resamplerRateChoice,
+                                onResamplerRateChange = { viewModel.setResamplerRateChoice(it) },
                                 allFolders = folders,
                                 excludedFolders = excludedFolders,
                                 excludedTracks = excludedTracks,

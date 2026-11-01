@@ -42,6 +42,13 @@ fun SettingsScreen(
     systemEqEnabled: Boolean = false,
     systemEqSessions: List<com.nodeplayer.music.service.SystemWideEqService.SessionInfo> = emptyList(),
     onToggleSystemEq: (Boolean) -> Unit = {},
+    currentDeviceType: com.nodeplayer.model.OutputDeviceType = com.nodeplayer.model.OutputDeviceType.SPEAKER,
+    autoDeviceProfilesEnabled: Boolean = true,
+    onToggleAutoDeviceProfiles: (Boolean) -> Unit = {},
+    resumeOnHeadsetConnect: Boolean = true,
+    onToggleResumeOnHeadsetConnect: (Boolean) -> Unit = {},
+    resamplerRateChoice: Int = 0,
+    onResamplerRateChange: (Int) -> Unit = {},
     allFolders: List<MusicFolder> = emptyList(),
     excludedFolders: Set<String> = emptySet(),
     excludedTracks: List<Track> = emptyList(),
@@ -168,6 +175,78 @@ fun SettingsScreen(
                         Text("Active in ExoPlayer DefaultAudioSink", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                     }
                     Text("ACTIVE", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = Color(0xFF10B981)))
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Per-Device Audio Profiles
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Auto-Switch Device Profiles", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text(
+                            "Currently: ${currentDeviceType.displayName}",
+                            style = MaterialTheme.typography.bodySmall.copy(color = accent)
+                        )
+                    }
+                    Switch(
+                        checked = autoDeviceProfilesEnabled,
+                        onCheckedChange = onToggleAutoDeviceProfiles,
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Resume on Headset Connect
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Resume on Headset Connect", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text(
+                            "Auto-resumes playback when wired or Bluetooth headset reconnects",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    Switch(
+                        checked = resumeOnHeadsetConnect,
+                        onCheckedChange = onToggleResumeOnHeadsetConnect,
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Resampler Output Rate
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Resampler Output Rate", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("Forces platform audio sink target rate (where supported)", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    val rates = listOf(0 to "Auto", 44100 to "44.1k", 48000 to "48k", 96000 to "96k", 192000 to "192k")
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        rates.forEach { (rate, label) ->
+                            val isSel = resamplerRateChoice == rate
+                            Button(
+                                onClick = { onResamplerRateChange(rate) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isSel) accent else MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(label, fontSize = 11.sp)
+                            }
+                        }
+                    }
                 }
             }
         }

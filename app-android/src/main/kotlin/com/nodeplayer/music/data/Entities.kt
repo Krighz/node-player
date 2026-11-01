@@ -91,3 +91,11 @@ data class PlaylistTrackCrossRef(
     val trackId: Long,
     val position: Int
 )
+
+@Entity(tableName = "audio_presets")
+data class AudioPresetEntity(
+    @PrimaryKey val id: String, // e.g. "track_1234" or "album_5678"
+    val isAlbum: Boolean,
+    val presetName: String,
+    val configJson: String
+)

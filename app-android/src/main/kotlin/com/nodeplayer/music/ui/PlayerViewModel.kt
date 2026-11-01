@@ -6,6 +6,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.BitmapFactory
+import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.net.Uri
@@ -23,6 +24,7 @@ import androidx.media3.session.SessionToken
 import androidx.palette.graphics.Palette
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
+import com.nodeplayer.dsp.*
 import com.nodeplayer.model.*
 import com.nodeplayer.music.NodePlayerApplication
 import com.nodeplayer.music.data.TrackEntity
@@ -119,12 +121,38 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val systemEqSessions: StateFlow<List<com.nodeplayer.music.service.SystemWideEqService.SessionInfo>> =
         com.nodeplayer.music.service.SystemWideEqService.activeSessionsState
 
+    // Output Device & Per-Device Profile
+    private val _currentDeviceType = MutableStateFlow(OutputDeviceType.SPEAKER)
+    val currentDeviceType: StateFlow<OutputDeviceType> = _currentDeviceType.asStateFlow()
+
+    private val _autoDeviceProfilesEnabled = MutableStateFlow(true)
+    val autoDeviceProfilesEnabled: StateFlow<Boolean> = _autoDeviceProfilesEnabled.asStateFlow()
+
+    // Convolver CPU Tracking
+    private val _convolverCpuPercent = MutableStateFlow(0.0f)
+    val convolverCpuPercent: StateFlow<Float> = _convolverCpuPercent.asStateFlow()
+
+    // Resume on Headset Connect
+    private val _resumeOnHeadsetConnect = MutableStateFlow(true)
+    val resumeOnHeadsetConnect: StateFlow<Boolean> = _resumeOnHeadsetConnect.asStateFlow()
+
+    // Resampler Output Rate
+    private val _resamplerRateChoice = MutableStateFlow(0) // 0 = Auto
+    val resamplerRateChoice: StateFlow<Int> = _resamplerRateChoice.asStateFlow()
+
+    // Active Preset (Track or Album)
+    private val _activePresetLabel = MutableStateFlow<String?>(null)
+    val activePresetLabel: StateFlow<String?> = _activePresetLabel.asStateFlow()
+
+    private var audioDeviceCallback: AudioDeviceCallback? = null
+
     private var progressJob: Job? = null
 
     init {
         loadFilterPreferences()
         initMediaController()
         refreshLibrary()
+        registerAudioDeviceCallback()
         detectAudioOutput()
         restoreLastPlaybackSession()
     }
@@ -154,6 +182,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _systemEqEnabled.value = sysEq
         if (sysEq) {
             com.nodeplayer.music.service.SystemWideEqService.start(getApplication(), _effectConfig.value)
+        }
+
+        _resumeOnHeadsetConnect.value = prefs.getBoolean("resume_on_headset_connect", true)
+        _resamplerRateChoice.value = prefs.getInt("resampler_output_rate", 0)
+        _autoDeviceProfilesEnabled.value = prefs.getBoolean("auto_device_profiles_enabled", true)
+    }
+
+    private fun registerAudioDeviceCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val audioManager = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audioDeviceCallback = object : AudioDeviceCallback() {
+                override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+                    detectAudioOutput()
+                }
+                override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
+                    detectAudioOutput()
+                }
+            }
+            audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
         }
     }
 
@@ -197,6 +244,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     updatePaletteAccent(track)
                     updateSignalPath(track)
                     dao.incrementPlayCount(track.id)
+                    checkAndApplyTrackOrAlbumPreset(track)
                 }
             }
             service.crossfadeManager.crossfadeConfig = _crossfadeConfig.value
@@ -223,6 +271,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         updatePaletteAccent(it)
                         updateSignalPath(it)
                         dao.incrementPlayCount(it.id)
+                        checkAndApplyTrackOrAlbumPreset(it)
                     }
                 }
             }
@@ -422,6 +471,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 // Read real RMS audio level from DSP engine
                 _currentRms.value = service?.dspAudioProcessor?.currentRms ?: 0.0f
+                _convolverCpuPercent.value = service?.crossfadeManager?.activeDspChain?.convolver?.lastCpuUsagePercent ?: 0.0f
                 delay(120)
             }
         }
@@ -455,6 +505,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun detectAudioOutput() {
         val audioManager = getApplication<Application>().getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
         var deviceName = "Internal Speaker"
+        var deviceType = OutputDeviceType.SPEAKER
         var isBitPerfect = false
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -462,24 +513,207 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             for (dev in devices) {
                 if (dev.type == AudioDeviceInfo.TYPE_USB_DEVICE || dev.type == AudioDeviceInfo.TYPE_USB_HEADSET) {
                     deviceName = "USB DAC (${dev.productName})"
+                    deviceType = OutputDeviceType.USB
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                         isBitPerfect = true
                     }
                     break
                 } else if (dev.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || dev.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES) {
                     deviceName = "Wired Headphones"
+                    deviceType = OutputDeviceType.WIRED
                     break
                 } else if (dev.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP) {
                     deviceName = "Bluetooth A2DP"
+                    deviceType = OutputDeviceType.BLUETOOTH
                     break
                 }
             }
         }
 
+        val previousType = _currentDeviceType.value
+        _currentDeviceType.value = deviceType
         _audioOutputInfo.value = _audioOutputInfo.value.copy(
             outputDeviceName = deviceName,
             isBitPerfect = isBitPerfect
         )
+
+        if (_autoDeviceProfilesEnabled.value && previousType != deviceType) {
+            handleDeviceTypeChanged(previousType, deviceType)
+        }
+    }
+
+    private fun handleDeviceTypeChanged(oldType: OutputDeviceType, newType: OutputDeviceType) {
+        val oldJson = AudioProfileSerializer.toJson(_effectConfig.value)
+        prefs.edit().putString("device_profile_${oldType.name}", oldJson).apply()
+
+        val savedJson = prefs.getString("device_profile_${newType.name}", null)
+        val targetConfig = if (savedJson != null) {
+            try {
+                AudioProfileSerializer.fromJson(savedJson)
+            } catch (_: Exception) {
+                _effectConfig.value
+            }
+        } else {
+            when (newType) {
+                OutputDeviceType.SPEAKER -> _effectConfig.value.copy(
+                    toneControls = ToneControlConfig(bassGainDb = 2.0f, trebleGainDb = 1.0f),
+                    harmonicBassConfig = HarmonicBassConfig(enabled = true, frequencyHz = 75f, harmonicGain = 0.5f, highPassOriginal = true)
+                )
+                OutputDeviceType.WIRED -> _effectConfig.value.copy(
+                    crossfeedEnabled = true,
+                    crossfeedStrength = 0.4f,
+                    harmonicBassConfig = HarmonicBassConfig(enabled = false)
+                )
+                OutputDeviceType.BLUETOOTH -> _effectConfig.value.copy(
+                    crossfeedEnabled = true,
+                    crossfeedStrength = 0.3f
+                )
+                OutputDeviceType.USB -> _effectConfig.value.copy(
+                    preampGainDb = 0.0f,
+                    crossfeedEnabled = false,
+                    harmonicBassConfig = HarmonicBassConfig(enabled = false)
+                )
+            }
+        }
+        updateEffectConfig(targetConfig)
+        Log.i("NodePlayer", "Switched audio profile to: ${newType.displayName}")
+    }
+
+    private suspend fun checkAndApplyTrackOrAlbumPreset(track: Track) {
+        val trackPreset = dao.getAudioPresetById("track_${track.id}")
+        if (trackPreset != null) {
+            try {
+                val cfg = AudioProfileSerializer.fromJson(trackPreset.configJson)
+                _activePresetLabel.value = "Preset: ${trackPreset.presetName} (Track)"
+                updateEffectConfig(cfg)
+                return
+            } catch (_: Exception) {}
+        }
+
+        val albumPreset = dao.getAudioPresetById("album_${track.albumId}")
+        if (albumPreset != null) {
+            try {
+                val cfg = AudioProfileSerializer.fromJson(albumPreset.configJson)
+                _activePresetLabel.value = "Preset: ${albumPreset.presetName} (Album)"
+                updateEffectConfig(cfg)
+                return
+            } catch (_: Exception) {}
+        }
+
+        _activePresetLabel.value = null
+    }
+
+    fun saveAsTrackPreset(track: Track, name: String = "Track Preset") {
+        viewModelScope.launch {
+            val json = AudioProfileSerializer.toJson(_effectConfig.value)
+            dao.insertAudioPreset(
+                com.nodeplayer.music.data.AudioPresetEntity(
+                    id = "track_${track.id}",
+                    isAlbum = false,
+                    presetName = name,
+                    configJson = json
+                )
+            )
+            _activePresetLabel.value = "Preset: $name (Track)"
+        }
+    }
+
+    fun saveAsAlbumPreset(track: Track, name: String = "Album Preset") {
+        viewModelScope.launch {
+            val json = AudioProfileSerializer.toJson(_effectConfig.value)
+            dao.insertAudioPreset(
+                com.nodeplayer.music.data.AudioPresetEntity(
+                    id = "album_${track.albumId}",
+                    isAlbum = true,
+                    presetName = name,
+                    configJson = json
+                )
+            )
+            _activePresetLabel.value = "Preset: $name (Album)"
+        }
+    }
+
+    fun clearTrackOrAlbumPreset(track: Track) {
+        viewModelScope.launch {
+            dao.deleteAudioPresetById("track_${track.id}")
+            dao.deleteAudioPresetById("album_${track.albumId}")
+            _activePresetLabel.value = null
+        }
+    }
+
+    fun importAutoEq(text: String, profileName: String = "Imported AutoEQ") {
+        val profile = AutoEqParser.parse(text, profileName)
+        val eqBands = AutoEqParser.toEqBandConfigs(profile)
+        val updatedConfig = _effectConfig.value.copy(
+            presetName = profile.name,
+            preampGainDb = profile.preampDb,
+            bands = eqBands,
+            eqEnabled = true
+        )
+        updateEffectConfig(updatedConfig)
+    }
+
+    fun toggleAbCompare() {
+        val current = _effectConfig.value
+        val newAb = !current.isAbComparing
+        val offset = if (newAb) {
+            AbCompareHelper.calculateLoudnessOffsetDb(current.bands, current.preampGainDb)
+        } else 0.0f
+        val updated = current.copy(isAbComparing = newAb, abLoudnessOffsetDb = offset)
+        updateEffectConfig(updated)
+    }
+
+    fun setConvolverPreset(presetName: String) {
+        val updated = _effectConfig.value.copy(
+            convolverConfig = _effectConfig.value.convolverConfig.copy(
+                enabled = true,
+                irName = presetName
+            )
+        )
+        updateEffectConfig(updated)
+        PlaybackService.instance?.crossfadeManager?.loadConvolverPreset(presetName)
+    }
+
+    fun setConvolverEnabled(enabled: Boolean) {
+        val updated = _effectConfig.value.copy(
+            convolverConfig = _effectConfig.value.convolverConfig.copy(enabled = enabled)
+        )
+        updateEffectConfig(updated)
+    }
+
+    fun setConvolverBlend(blend: Float) {
+        val updated = _effectConfig.value.copy(
+            convolverConfig = _effectConfig.value.convolverConfig.copy(blend = blend)
+        )
+        updateEffectConfig(updated)
+    }
+
+    fun setResumeOnHeadsetConnect(enabled: Boolean) {
+        _resumeOnHeadsetConnect.value = enabled
+        prefs.edit().putBoolean("resume_on_headset_connect", enabled).apply()
+    }
+
+    fun setAutoDeviceProfilesEnabled(enabled: Boolean) {
+        _autoDeviceProfilesEnabled.value = enabled
+        prefs.edit().putBoolean("auto_device_profiles_enabled", enabled).apply()
+    }
+
+    fun setResamplerRateChoice(rate: Int) {
+        _resamplerRateChoice.value = rate
+        prefs.edit().putInt("resampler_output_rate", rate).apply()
+    }
+
+    fun exportCurrentProfile(): String {
+        return AudioProfileSerializer.toJson(_effectConfig.value)
+    }
+
+    fun importProfileJson(json: String) {
+        try {
+            val parsed = AudioProfileSerializer.fromJson(json)
+            updateEffectConfig(parsed)
+        } catch (e: Exception) {
+            Log.e("NodePlayer", "Failed to import profile JSON", e)
+        }
     }
 
     private fun updateSignalPath(track: Track) {
@@ -558,6 +792,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     override fun onCleared() {
         super.onCleared()
         progressJob?.cancel()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audioDeviceCallback != null) {
+            val audioManager = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
+            audioDeviceCallback = null
+        }
         controllerFuture?.let { MediaController.releaseFuture(it) }
     }
 }

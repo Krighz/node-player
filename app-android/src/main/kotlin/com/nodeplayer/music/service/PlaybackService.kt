@@ -3,8 +3,13 @@ package com.nodeplayer.music.service
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.bluetooth.BluetoothA2dp
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.os.Build
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -37,6 +42,9 @@ class PlaybackService : MediaSessionService() {
         get() = crossfadeManager.activeDspProcessor
 
     var onTrackTransitionCallback: ((com.nodeplayer.model.Track) -> Unit)? = null
+
+    private var wasPlayingBeforeHeadsetUnplug = false
+    private var headsetReceiver: BroadcastReceiver? = null
 
     companion object {
         const val CHANNEL_ID = "node_player_playback_channel"
@@ -84,6 +92,50 @@ class PlaybackService : MediaSessionService() {
         if (SystemWideEqService.isRunning) {
             crossfadeManager.onSystemEqStateChanged(true)
         }
+
+        registerHeadsetReceiver()
+    }
+
+    private fun registerHeadsetReceiver() {
+        headsetReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                val action = intent.action ?: return
+                val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+                val resumeEnabled = prefs.getBoolean("resume_on_headset_connect", true)
+
+                when (action) {
+                    AudioManager.ACTION_AUDIO_BECOMING_NOISY -> {
+                        wasPlayingBeforeHeadsetUnplug = player.isPlaying
+                    }
+                    Intent.ACTION_HEADSET_PLUG -> {
+                        val state = intent.getIntExtra("state", -1)
+                        if (state == 1) { // Plugged in
+                            if (resumeEnabled && wasPlayingBeforeHeadsetUnplug) {
+                                wasPlayingBeforeHeadsetUnplug = false
+                                player.play()
+                            }
+                        } else if (state == 0) { // Unplugged
+                            wasPlayingBeforeHeadsetUnplug = player.isPlaying
+                        }
+                    }
+                    BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
+                    BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                        if (resumeEnabled && wasPlayingBeforeHeadsetUnplug) {
+                            wasPlayingBeforeHeadsetUnplug = false
+                            player.play()
+                        }
+                    }
+                }
+            }
+        }
+
+        val filter = IntentFilter().apply {
+            addAction(AudioManager.ACTION_AUDIO_BECOMING_NOISY)
+            addAction(Intent.ACTION_HEADSET_PLUG)
+            addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+        }
+        registerReceiver(headsetReceiver, filter)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -111,6 +163,10 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        headsetReceiver?.let {
+            try { unregisterReceiver(it) } catch (_: Exception) {}
+            headsetReceiver = null
+        }
         SystemWideEqService.onStateChanged = null
         instance = null
         onTrackTransitionCallback = null

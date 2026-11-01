@@ -60,6 +60,115 @@ class BiquadFilter {
     }
 
     /**
+     * Configure as Low-Shelf EQ filter (RBJ Audio EQ Cookbook).
+     */
+    fun configureLowShelf(sampleRate: Float, cutoffFreq: Float, gainDb: Float, slope: Float = 1.0f) {
+        if (gainDb == 0.0f || !enabled) {
+            b0 = 1.0f; b1 = 0.0f; b2 = 0.0f; a1 = 0.0f; a2 = 0.0f; return
+        }
+        val clampedFreq = cutoffFreq.coerceIn(20f, (sampleRate / 2f) - 100f)
+        val clampedSlope = slope.coerceIn(0.1f, 2.0f)
+        val a = 10.0.pow((gainDb / 40.0).toDouble()).toFloat()
+        val omega = (2.0 * Math.PI * clampedFreq / sampleRate).toFloat()
+        val sn = sin(omega.toDouble()).toFloat()
+        val cs = cos(omega.toDouble()).toFloat()
+        val beta = kotlin.math.sqrt(a.toDouble()).toFloat() * kotlin.math.sqrt(((a + 1.0f / a) * (1.0f / clampedSlope - 1.0f) + 2.0f).toDouble()).toFloat()
+
+        val a0 = (a + 1.0f) + (a - 1.0f) * cs + beta * sn
+        b0 = (a * ((a + 1.0f) - (a - 1.0f) * cs + beta * sn)) / a0
+        b1 = (2.0f * a * ((a - 1.0f) - (a + 1.0f) * cs)) / a0
+        b2 = (a * ((a + 1.0f) - (a - 1.0f) * cs - beta * sn)) / a0
+        a1 = (-2.0f * ((a - 1.0f) + (a + 1.0f) * cs)) / a0
+        a2 = ((a + 1.0f) + (a - 1.0f) * cs - beta * sn) / a0
+    }
+
+    /**
+     * Configure as High-Shelf EQ filter (RBJ Audio EQ Cookbook).
+     */
+    fun configureHighShelf(sampleRate: Float, cutoffFreq: Float, gainDb: Float, slope: Float = 1.0f) {
+        if (gainDb == 0.0f || !enabled) {
+            b0 = 1.0f; b1 = 0.0f; b2 = 0.0f; a1 = 0.0f; a2 = 0.0f; return
+        }
+        val clampedFreq = cutoffFreq.coerceIn(20f, (sampleRate / 2f) - 100f)
+        val clampedSlope = slope.coerceIn(0.1f, 2.0f)
+        val a = 10.0.pow((gainDb / 40.0).toDouble()).toFloat()
+        val omega = (2.0 * Math.PI * clampedFreq / sampleRate).toFloat()
+        val sn = sin(omega.toDouble()).toFloat()
+        val cs = cos(omega.toDouble()).toFloat()
+        val beta = kotlin.math.sqrt(a.toDouble()).toFloat() * kotlin.math.sqrt(((a + 1.0f / a) * (1.0f / clampedSlope - 1.0f) + 2.0f).toDouble()).toFloat()
+
+        val a0 = (a + 1.0f) - (a - 1.0f) * cs + beta * sn
+        b0 = (a * ((a + 1.0f) + (a - 1.0f) * cs + beta * sn)) / a0
+        b1 = (-2.0f * a * ((a - 1.0f) + (a + 1.0f) * cs)) / a0
+        b2 = (a * ((a + 1.0f) + (a - 1.0f) * cs - beta * sn)) / a0
+        a1 = (2.0f * ((a - 1.0f) - (a + 1.0f) * cs)) / a0
+        a2 = ((a + 1.0f) - (a - 1.0f) * cs - beta * sn) / a0
+    }
+
+    /**
+     * Configure as High-Pass filter (RBJ Audio EQ Cookbook).
+     */
+    fun configureHighPass(sampleRate: Float, cutoffFreq: Float, q: Float = 0.707f) {
+        if (!enabled) {
+            b0 = 1.0f; b1 = 0.0f; b2 = 0.0f; a1 = 0.0f; a2 = 0.0f; return
+        }
+        val clampedFreq = cutoffFreq.coerceIn(20f, (sampleRate / 2f) - 100f)
+        val omega = (2.0 * Math.PI * clampedFreq / sampleRate).toFloat()
+        val sn = sin(omega.toDouble()).toFloat()
+        val cs = cos(omega.toDouble()).toFloat()
+        val alpha = sn / (2.0f * q)
+
+        val a0 = 1.0f + alpha
+        b0 = ((1.0f + cs) / 2.0f) / a0
+        b1 = (-(1.0f + cs)) / a0
+        b2 = ((1.0f + cs) / 2.0f) / a0
+        a1 = (-2.0f * cs) / a0
+        a2 = (1.0f - alpha) / a0
+    }
+
+    /**
+     * Configure as Low-Pass filter (RBJ Audio EQ Cookbook).
+     */
+    fun configureLowPass(sampleRate: Float, cutoffFreq: Float, q: Float = 0.707f) {
+        if (!enabled) {
+            b0 = 1.0f; b1 = 0.0f; b2 = 0.0f; a1 = 0.0f; a2 = 0.0f; return
+        }
+        val clampedFreq = cutoffFreq.coerceIn(20f, (sampleRate / 2f) - 100f)
+        val omega = (2.0 * Math.PI * clampedFreq / sampleRate).toFloat()
+        val sn = sin(omega.toDouble()).toFloat()
+        val cs = cos(omega.toDouble()).toFloat()
+        val alpha = sn / (2.0f * q)
+
+        val a0 = 1.0f + alpha
+        b0 = ((1.0f - cs) / 2.0f) / a0
+        b1 = (1.0f - cs) / a0
+        b2 = ((1.0f - cs) / 2.0f) / a0
+        a1 = (-2.0f * cs) / a0
+        a2 = (1.0f - alpha) / a0
+    }
+
+    /**
+     * Configure as Band-Pass filter (RBJ Audio EQ Cookbook, peak gain = Q).
+     */
+    fun configureBandPass(sampleRate: Float, centerFreq: Float, q: Float = 1.0f) {
+        if (!enabled) {
+            b0 = 1.0f; b1 = 0.0f; b2 = 0.0f; a1 = 0.0f; a2 = 0.0f; return
+        }
+        val clampedFreq = centerFreq.coerceIn(20f, (sampleRate / 2f) - 100f)
+        val omega = (2.0 * Math.PI * clampedFreq / sampleRate).toFloat()
+        val sn = sin(omega.toDouble()).toFloat()
+        val cs = cos(omega.toDouble()).toFloat()
+        val alpha = sn / (2.0f * q)
+
+        val a0 = 1.0f + alpha
+        b0 = alpha / a0
+        b1 = 0.0f
+        b2 = -alpha / a0
+        a1 = (-2.0f * cs) / a0
+        a2 = (1.0f - alpha) / a0
+    }
+
+    /**
      * Process a single sample for Left channel.
      */
     fun processLeft(input: Float): Float {

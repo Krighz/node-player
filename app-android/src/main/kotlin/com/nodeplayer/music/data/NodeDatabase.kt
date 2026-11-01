@@ -45,11 +45,20 @@ interface PlayerDao {
         ORDER BY pt.position ASC
     """)
     fun getTracksForPlaylist(playlistId: Long): Flow<List<TrackEntity>>
+
+    @Query("SELECT * FROM audio_presets WHERE id = :id")
+    suspend fun getAudioPresetById(id: String): AudioPresetEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAudioPreset(preset: AudioPresetEntity)
+
+    @Query("DELETE FROM audio_presets WHERE id = :id")
+    suspend fun deleteAudioPresetById(id: String)
 }
 
 @Database(
-    entities = [TrackEntity::class, PlaylistEntity::class, PlaylistTrackCrossRef::class],
-    version = 1,
+    entities = [TrackEntity::class, PlaylistEntity::class, PlaylistTrackCrossRef::class, AudioPresetEntity::class],
+    version = 2,
     exportSchema = false
 )
 abstract class NodeDatabase : RoomDatabase() {
