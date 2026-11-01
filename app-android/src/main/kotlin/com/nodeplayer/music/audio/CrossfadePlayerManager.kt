@@ -378,6 +378,69 @@ class CrossfadePlayerManager(
         playQueue(currentQueue, index, startPositionMs)
     }
 
+    fun playNext(track: Track) {
+        if (currentQueue.isEmpty()) {
+            playQueue(listOf(track), 0)
+            return
+        }
+        val mutable = currentQueue.toMutableList()
+        val insertIndex = (currentQueueIndex + 1).coerceAtMost(mutable.size)
+        mutable.add(insertIndex, track)
+        currentQueue = mutable
+    }
+
+    fun addToQueue(track: Track) {
+        if (currentQueue.isEmpty()) {
+            playQueue(listOf(track), 0)
+            return
+        }
+        val mutable = currentQueue.toMutableList()
+        mutable.add(track)
+        currentQueue = mutable
+    }
+
+    fun removeFromQueue(index: Int) {
+        if (index !in currentQueue.indices) return
+        val mutable = currentQueue.toMutableList()
+        mutable.removeAt(index)
+        if (index < currentQueueIndex) {
+            currentQueueIndex = (currentQueueIndex - 1).coerceAtLeast(0)
+        } else if (index == currentQueueIndex) {
+            if (mutable.isEmpty()) {
+                activePlayer.stop()
+                currentQueue = emptyList()
+                currentQueueIndex = 0
+                return
+            }
+            currentQueueIndex = currentQueueIndex.coerceIn(0, mutable.size - 1)
+            currentQueue = mutable
+            val nextTrack = currentQueue[currentQueueIndex]
+            activePlayer.stop()
+            activePlayer.clearMediaItems()
+            activePlayer.setMediaItem(createMediaItem(nextTrack))
+            activePlayer.prepare()
+            activePlayer.play()
+            onTrackTransition(nextTrack)
+            return
+        }
+        currentQueue = mutable
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        if (fromIndex !in currentQueue.indices || toIndex !in currentQueue.indices || fromIndex == toIndex) return
+        val mutable = currentQueue.toMutableList()
+        val item = mutable.removeAt(fromIndex)
+        mutable.add(toIndex, item)
+        if (currentQueueIndex == fromIndex) {
+            currentQueueIndex = toIndex
+        } else if (fromIndex < currentQueueIndex && toIndex >= currentQueueIndex) {
+            currentQueueIndex--
+        } else if (fromIndex > currentQueueIndex && toIndex <= currentQueueIndex) {
+            currentQueueIndex++
+        }
+        currentQueue = mutable
+    }
+
     fun togglePlayPause() {
         val player = activePlayer
         if (player.isPlaying) {

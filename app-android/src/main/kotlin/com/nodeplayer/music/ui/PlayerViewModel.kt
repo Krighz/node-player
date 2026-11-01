@@ -636,6 +636,66 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun playNext(track: Track) {
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.playNext(track)
+            _queue.value = service.crossfadeManager.currentQueue
+        } else {
+            val q = _queue.value.toMutableList()
+            val cur = _currentTrack.value
+            val idx = if (cur != null) q.indexOfFirst { it.id == cur.id } else -1
+            if (idx >= 0) {
+                q.add(idx + 1, track)
+            } else {
+                q.add(track)
+            }
+            _queue.value = q
+        }
+    }
+
+    fun addToQueue(track: Track) {
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.addToQueue(track)
+            _queue.value = service.crossfadeManager.currentQueue
+        } else {
+            val q = _queue.value.toMutableList()
+            q.add(track)
+            _queue.value = q
+        }
+    }
+
+    fun removeFromQueue(index: Int) {
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.removeFromQueue(index)
+            _queue.value = service.crossfadeManager.currentQueue
+            _currentTrack.value = service.crossfadeManager.currentPlayingTrack
+        } else {
+            val q = _queue.value.toMutableList()
+            if (index in q.indices) {
+                q.removeAt(index)
+                _queue.value = q
+            }
+        }
+    }
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.moveQueueItem(fromIndex, toIndex)
+            _queue.value = service.crossfadeManager.currentQueue
+        } else {
+            val q = _queue.value.toMutableList()
+            if (fromIndex in q.indices && toIndex in q.indices && fromIndex != toIndex) {
+                val item = q.removeAt(fromIndex)
+                q.add(toIndex, item)
+                _queue.value = q
+            }
+        }
+    }
+
     fun seekTo(positionMs: Long) {
         _currentPositionMs.value = positionMs
         val service = PlaybackService.instance

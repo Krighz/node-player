@@ -46,6 +46,8 @@ fun LibraryScreen(
     isPlaying: Boolean,
     onTrackClick: (Track, List<Track>) -> Unit,
     onRescanClick: () -> Unit,
+    onPlayNext: (Track) -> Unit = {},
+    onAddToQueue: (Track) -> Unit = {},
     qualityBadgeMode: String = "DETAILED",
     hazeState: HazeState? = null,
     onAnalyzeTrack: ((Track) -> Unit)? = null,
@@ -53,6 +55,7 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
+    var isGridView by remember { mutableStateOf(true) }
     val tabs = listOf("Songs", "Albums", "Artists", "Folders")
     val accent = LocalAccentColor.current
     var viewingFolder by remember { mutableStateOf<MusicFolder?>(null) }
@@ -90,12 +93,23 @@ fun LibraryScreen(
                 )
             }
 
-            IconButton(onClick = onRescanClick) {
-                Icon(
-                    imageVector = Icons.Rounded.Refresh,
-                    contentDescription = "Rescan",
-                    tint = accent
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (selectedTab == 1 || selectedTab == 2) {
+                    IconButton(onClick = { isGridView = !isGridView }) {
+                        Icon(
+                            imageVector = if (isGridView) Icons.AutoMirrored.Rounded.ViewList else Icons.Rounded.GridView,
+                            contentDescription = if (isGridView) "Switch to List View" else "Switch to Grid View",
+                            tint = accent
+                        )
+                    }
+                }
+                IconButton(onClick = onRescanClick) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = "Rescan",
+                        tint = accent
+                    )
+                }
             }
         }
 
@@ -146,6 +160,8 @@ fun LibraryScreen(
                 isPlaying = isPlaying,
                 onBack = { viewingFolder = null },
                 onTrackClick = onTrackClick,
+                onPlayNext = onPlayNext,
+                onAddToQueue = onAddToQueue,
                 hazeState = hazeState
             )
         } else if (tracks.isEmpty()) {
@@ -157,12 +173,14 @@ fun LibraryScreen(
                     currentTrack = currentTrack,
                     isPlaying = isPlaying,
                     onTrackClick = onTrackClick,
+                    onPlayNext = onPlayNext,
+                    onAddToQueue = onAddToQueue,
                     qualityBadgeMode = qualityBadgeMode,
                     onInspectTrack = { inspectingTrack = it },
                     hazeState = hazeState
                 )
-                1 -> AlbumsGrid(albums = albums, onAlbumClick = {})
-                2 -> ArtistsList(artists = artists, onArtistClick = {})
+                1 -> AlbumsGrid(albums = albums, isGridView = isGridView, onAlbumClick = {}, hazeState = hazeState)
+                2 -> ArtistsList(artists = artists, isGridView = isGridView, onArtistClick = {}, hazeState = hazeState)
                 3 -> FoldersList(
                     folders = folders,
                     onFolderClick = { viewingFolder = it },
@@ -173,13 +191,13 @@ fun LibraryScreen(
     }
 
     if (inspectingTrack != null) {
-        val currentTrack = tracks.find { it.id == inspectingTrack!!.id } ?: inspectingTrack!!
+        val targetTrack = tracks.find { it.id == inspectingTrack!!.id } ?: inspectingTrack!!
         com.nodeplayer.music.ui.components.TrackDetailsSheet(
-            track = currentTrack,
+            track = targetTrack,
             onDismiss = { inspectingTrack = null },
             hazeState = hazeState,
             onAnalyzeSong = onAnalyzeTrack,
-            isAnalyzing = analyzingTrackId == currentTrack.id
+            isAnalyzing = analyzingTrackId == targetTrack.id
         )
     }
 }
@@ -190,6 +208,8 @@ fun SongsList(
     currentTrack: Track?,
     isPlaying: Boolean,
     onTrackClick: (Track, List<Track>) -> Unit,
+    onPlayNext: (Track) -> Unit = {},
+    onAddToQueue: (Track) -> Unit = {},
     qualityBadgeMode: String = "DETAILED",
     onInspectTrack: (Track) -> Unit = {},
     hazeState: HazeState?
@@ -311,17 +331,68 @@ fun SongsList(
                         }
                     }
 
-                    // Info button to inspect full audio quality details
-                    IconButton(
-                        onClick = { onInspectTrack(track) },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Info,
-                            contentDescription = "Track Info",
-                            tint = Color.White.copy(alpha = 0.35f),
-                            modifier = Modifier.size(18.dp)
-                        )
+                    // 3-dot dropdown menu for song actions
+                    var menuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(
+                            onClick = { menuExpanded = true },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreVert,
+                                contentDescription = "Song options",
+                                tint = Color.White.copy(alpha = 0.5f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false },
+                            modifier = Modifier.background(Color(0xFF1E2130))
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Play Next", color = Color.White) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+                                        contentDescription = null,
+                                        tint = accent
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onPlayNext(track)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Add to Queue", color = Color.White) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.PlaylistAdd,
+                                        contentDescription = null,
+                                        tint = accent
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onAddToQueue(track)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Track Details & Analysis", color = Color.White) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Info,
+                                        contentDescription = null,
+                                        tint = Color.White.copy(alpha = 0.8f)
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onInspectTrack(track)
+                                }
+                            )
+                        }
                     }
 
                     // Playing indicator soundwave bars
@@ -422,6 +493,8 @@ fun FolderDetailView(
     isPlaying: Boolean,
     onBack: () -> Unit,
     onTrackClick: (Track, List<Track>) -> Unit,
+    onPlayNext: (Track) -> Unit = {},
+    onAddToQueue: (Track) -> Unit = {},
     hazeState: HazeState?
 ) {
     val accent = LocalAccentColor.current
@@ -435,7 +508,7 @@ fun FolderDetailView(
         ) {
             IconButton(onClick = onBack) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "Back",
                     tint = Color.White
                 )
@@ -478,6 +551,8 @@ fun FolderDetailView(
             currentTrack = currentTrack,
             isPlaying = isPlaying,
             onTrackClick = onTrackClick,
+            onPlayNext = onPlayNext,
+            onAddToQueue = onAddToQueue,
             hazeState = hazeState
         )
     }
@@ -503,52 +578,135 @@ fun FormatBadge(label: String, color: Color) {
 }
 
 @Composable
-fun AlbumsGrid(albums: List<Album>, onAlbumClick: (Album) -> Unit) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 190.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(albums, key = { it.id }) { album ->
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { onAlbumClick(album) }
-            ) {
-                Column(modifier = Modifier.padding(10.dp)) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF222433))
-                    ) {
-                        AsyncImage(
-                            model = album.artworkUri,
-                            contentDescription = album.title,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize()
+fun AlbumsGrid(
+    albums: List<Album>,
+    isGridView: Boolean = true,
+    onAlbumClick: (Album) -> Unit,
+    hazeState: HazeState? = null
+) {
+    if (isGridView) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 190.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(albums, key = { it.id }) { album ->
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    hazeState = hazeState,
+                    onClick = { onAlbumClick(album) }
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Color(0xFF222433)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Album,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.35f),
+                                modifier = Modifier.size(36.dp)
+                            )
+                            AsyncImage(
+                                model = album.artworkUri,
+                                contentDescription = album.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = album.title,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${album.artist} • ${album.trackCount} songs",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color.White.copy(alpha = 0.65f)
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = album.title,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${album.artist} • ${album.trackCount} songs",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = Color.White.copy(alpha = 0.65f)
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                }
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 190.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(albums, key = { it.id }) { album ->
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    hazeState = hazeState,
+                    onClick = { onAlbumClick(album) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(54.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF222433)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Album,
+                                contentDescription = null,
+                                tint = Color.White.copy(alpha = 0.35f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            AsyncImage(
+                                model = album.artworkUri,
+                                contentDescription = album.title,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = album.title,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "${album.artist} • ${album.trackCount} songs",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color.White.copy(alpha = 0.65f)
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.4f)
+                        )
+                    }
                 }
             }
         }
@@ -556,51 +714,117 @@ fun AlbumsGrid(albums: List<Album>, onAlbumClick: (Album) -> Unit) {
 }
 
 @Composable
-fun ArtistsList(artists: List<Artist>, onArtistClick: (Artist) -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = 190.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(artists, key = { it.id }) { artist ->
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = { onArtistClick(artist) }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+fun ArtistsList(
+    artists: List<Artist>,
+    isGridView: Boolean = false,
+    onArtistClick: (Artist) -> Unit,
+    hazeState: HazeState? = null
+) {
+    val accent = LocalAccentColor.current
+    if (isGridView) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 190.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(artists, key = { it.id }) { artist ->
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    hazeState = hazeState,
+                    onClick = { onArtistClick(artist) }
                 ) {
-                    Box(
+                    Column(
                         modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(LocalAccentColor.current.copy(alpha = 0.25f)),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Person,
-                            contentDescription = null,
-                            tint = LocalAccentColor.current
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f)) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(accent.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Person,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
                         Text(
                             text = artist.name,
-                            style = MaterialTheme.typography.bodyLarge.copy(
-                                fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Bold,
                                 color = Color.White
-                            )
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "${artist.trackCount} songs • ${artist.albumCount} albums",
                             style = MaterialTheme.typography.bodySmall.copy(
                                 color = Color.White.copy(alpha = 0.65f)
-                            )
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
+                    }
+                }
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 190.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(artists, key = { it.id }) { artist ->
+                GlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    hazeState = hazeState,
+                    onClick = { onArtistClick(artist) }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(accent.copy(alpha = 0.25f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Person,
+                                contentDescription = null,
+                                tint = accent
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = artist.name,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                            )
+                            Text(
+                                text = "${artist.trackCount} songs • ${artist.albumCount} albums",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color.White.copy(alpha = 0.65f)
+                                )
+                            )
+                        }
                     }
                 }
             }

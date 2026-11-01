@@ -183,6 +183,8 @@ class MainActivity : ComponentActivity() {
                                     checkAndRequestPermissions()
                                     viewModel.refreshLibrary()
                                 },
+                                onPlayNext = { viewModel.playNext(it) },
+                                onAddToQueue = { viewModel.addToQueue(it) },
                                 qualityBadgeMode = appSettings.qualityBadgesMode,
                                 hazeState = null,
                                 onAnalyzeTrack = { viewModel.analyzeTrack(it) },
