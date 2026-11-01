@@ -72,6 +72,9 @@ class CrossfadePlayerManager(
         get() = if (activeIndex == 0) dspChainA else dspChainB
 
     var crossfadeConfig: CrossfadeConfig = CrossfadeConfig()
+    var genreCrossfadeEnabled: Boolean = true
+    var customGenreRules: List<com.nodeplayer.model.GenreCrossfadeRule> = com.nodeplayer.model.GenreCrossfadeRule.defaultRules()
+    private var activeFadeCurve: FadeCurve = FadeCurve.EQUAL_POWER
     var originalQueue: List<Track> = emptyList()
         private set
     var currentQueue: List<Track> = emptyList()
@@ -449,7 +452,7 @@ class CrossfadePlayerManager(
             if (fadePaused) return
             val elapsed = SystemClock.uptimeMillis() - fadeStartTimeMs
             val progress = (elapsed.toFloat() / currentEffectiveFadeMs).coerceIn(0f, 1f)
-            val (outGain, inGain) = CrossfadeCurveMath.calculateGains(progress, crossfadeConfig.curve)
+            val (outGain, inGain) = CrossfadeCurveMath.calculateGains(progress, activeFadeCurve)
 
             primary.volume = outGain
             standbyPlayer.volume = inGain
@@ -486,17 +489,32 @@ class CrossfadePlayerManager(
                 if (duration > 0) {
                     val remaining = duration - position
 
-                    val isGaplessDetected = crossfadeConfig.autoGapless && isGaplessTransition(currentTrack, nextTrack)
-                    if (isGaplessDetected) {
-                        // Suppress crossfade for gapless albums
+                    val (resolvedConfig, _) = if (genreCrossfadeEnabled) {
+                        com.nodeplayer.model.GenreCrossfadeResolver.resolve(
+                            trackA = currentTrack,
+                            trackB = nextTrack,
+                            globalConfig = crossfadeConfig,
+                            rules = customGenreRules
+                        )
+                    } else {
+                        val isGapless = crossfadeConfig.autoGapless && isGaplessTransition(currentTrack, nextTrack)
+                        crossfadeConfig.copy(
+                            durationSeconds = if (isGapless) 0f else crossfadeConfig.durationSeconds,
+                            enabled = !isGapless && crossfadeConfig.enabled
+                        ) to "Global"
+                    }
+
+                    if (!resolvedConfig.enabled || resolvedConfig.durationSeconds <= 0f) {
+                        // Suppress crossfade for gapless / continuous albums
                         return
                     }
 
-                    val requestedFadeMs = (crossfadeConfig.durationSeconds * 1000).toLong()
+                    val requestedFadeMs = (resolvedConfig.durationSeconds * 1000).toLong()
                     // Edge case: if track is shorter than fade length, clamp to at most half track duration
                     val effectiveFadeMs = min(requestedFadeMs, (duration / 2)).coerceAtLeast(500L)
 
                     if (remaining <= effectiveFadeMs && remaining > 0) {
+                        activeFadeCurve = resolvedConfig.curve
                         startCrossfade(nextTrack, effectiveFadeMs)
                     }
                 }
