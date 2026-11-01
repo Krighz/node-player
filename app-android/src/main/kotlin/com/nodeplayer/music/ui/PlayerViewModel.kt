@@ -503,6 +503,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             service.crossfadeManager.playQueue(effectiveQueue, targetIndex, 0L)
             _isPlaying.value = true
             startPositionTracking()
+            _currentTrack.value?.let { com.nodeplayer.music.widget.WidgetUpdateManager.saveLastKnownTrack(getApplication(), it) }
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
             Log.d("PlayerViewModel", "Play dispatched directly to service in ${System.currentTimeMillis() - tapTime}ms")
             return
@@ -567,6 +568,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             service.crossfadeManager.togglePlayPause()
             _isPlaying.value = service.crossfadeManager.activePlayer.isPlaying
             if (_isPlaying.value) startPositionTracking() else stopPositionTracking()
+            _currentTrack.value?.let { com.nodeplayer.music.widget.WidgetUpdateManager.saveLastKnownTrack(getApplication(), it) }
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
             return
         }
@@ -632,6 +634,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (service != null) {
             service.crossfadeManager.setShuffle(newShuffle)
             _queue.value = service.crossfadeManager.currentQueue
+            _currentTrack.value?.let { com.nodeplayer.music.widget.WidgetUpdateManager.saveLastKnownTrack(getApplication(), it) }
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
         }
     }

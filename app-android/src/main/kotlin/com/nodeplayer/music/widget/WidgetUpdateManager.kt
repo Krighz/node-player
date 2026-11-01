@@ -14,9 +14,13 @@ import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.Rect
 import android.graphics.RectF
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
+import android.provider.MediaStore
 import android.util.Log
+import android.util.Size
 import android.view.View
 import android.widget.RemoteViews
 import com.nodeplayer.library.LrcParser
@@ -25,12 +29,14 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.model.WidgetAccentMode
 import com.nodeplayer.model.WidgetSettings
 import com.nodeplayer.music.MainActivity
+import com.nodeplayer.music.NodePlayerApplication
 import com.nodeplayer.music.R
 import com.nodeplayer.music.service.PlaybackService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 val Track.artworkUri: Uri
@@ -43,11 +49,44 @@ object WidgetUpdateManager {
     private const val TAG = "WidgetUpdateManager"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
+    fun saveLastKnownTrack(context: Context, track: Track) {
+        try {
+            val prefs = context.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putLong("last_track_id", track.id)
+                .putString("last_track_title", track.title)
+                .putString("last_track_artist", track.artist)
+                .putString("last_track_album", track.album)
+                .putLong("last_track_album_id", track.albumId)
+                .putString("last_track_path", track.path)
+                .putLong("last_track_duration", track.durationMs)
+                .apply()
+        } catch (_: Exception) {}
+    }
+
+    fun getLastKnownTrack(context: Context): Track? {
+        return try {
+            val prefs = context.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+            val id = prefs.getLong("last_track_id", -1L)
+            if (id != -1L) {
+                Track(
+                    id = id,
+                    title = prefs.getString("last_track_title", "Node Player") ?: "Node Player",
+                    artist = prefs.getString("last_track_artist", "") ?: "",
+                    album = prefs.getString("last_track_album", "") ?: "",
+                    albumId = prefs.getLong("last_track_album_id", 0L),
+                    durationMs = prefs.getLong("last_track_duration", 0L),
+                    path = prefs.getString("last_track_path", "") ?: ""
+                )
+            } else null
+        } catch (_: Exception) { null }
+    }
+
     fun updateAllWidgets(context: Context) {
         scope.launch {
             try {
                 // 1. Read ExoPlayer state on Main Thread
-                val (currentTrack, isPlaying, currentPositionMs, durationMs) = kotlinx.coroutines.withContext(Dispatchers.Main) {
+                val (activeTrack, isPlaying, currentPositionMs, durationMs) = withContext(Dispatchers.Main) {
                     val service = PlaybackService.instance
                     val track = service?.crossfadeManager?.currentPlayingTrack
                     val playing = service?.player?.isPlaying == true
@@ -56,6 +95,17 @@ object WidgetUpdateManager {
                     val trackDur = track?.durationMs ?: 0L
                     val dur = if (playerDur > 0L) playerDur else (if (trackDur > 0L) trackDur else 1L)
                     Tuple4(track, playing, pos, dur)
+                }
+
+                if (activeTrack != null) {
+                    saveLastKnownTrack(context, activeTrack)
+                }
+
+                val currentTrack = activeTrack ?: getLastKnownTrack(context) ?: withContext(Dispatchers.IO) {
+                    try {
+                        val db = (context.applicationContext as? NodePlayerApplication)?.database
+                        db?.playerDao()?.getAllTracksList()?.firstOrNull()?.toTrack()
+                    } catch (_: Exception) { null }
                 }
 
                 val settings = WidgetPreferences.getSettings(context)
@@ -83,7 +133,7 @@ object WidgetUpdateManager {
 
                 // Update live floating overlay if active
                 if (FloatingOverlayService.isRunning) {
-                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    withContext(Dispatchers.Main) {
                         FloatingOverlayService.instance?.updateOverlayContent()
                     }
                 }
@@ -483,16 +533,89 @@ object WidgetUpdateManager {
         }
     }
 
-    private fun loadArtwork(context: Context, track: Track?): Bitmap? {
+    fun loadArtwork(context: Context, track: Track?): Bitmap? {
         if (track == null) return null
-        return try {
-            val uri = track.artworkUri
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                BitmapFactory.decodeStream(stream)
-            }
-        } catch (_: Exception) {
-            null
+
+        // 1. Android 10+ MediaStore thumbnail by track ID
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && track.id > 0) {
+            try {
+                val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, track.id)
+                val thumb = context.contentResolver.loadThumbnail(trackUri, Size(512, 512), null)
+                if (thumb != null) return thumb
+            } catch (_: Exception) {}
         }
+
+        // 2. Embedded picture via MediaMetadataRetriever from file path
+        if (track.path.isNotBlank()) {
+            val file = File(track.path)
+            if (file.exists() && file.canRead()) {
+                val mmr = MediaMetadataRetriever()
+                try {
+                    mmr.setDataSource(file.absolutePath)
+                    val pic = mmr.embeddedPicture
+                    if (pic != null) {
+                        val thumb = BitmapFactory.decodeByteArray(pic, 0, pic.size)
+                        if (thumb != null) return thumb
+                    }
+                } catch (_: Exception) {
+                } finally {
+                    try { mmr.release() } catch (_: Exception) {}
+                }
+            }
+        }
+
+        // 3. MediaStore album art URI
+        if (track.albumId > 0) {
+            try {
+                val uri = Uri.parse("content://media/external/audio/albumart/${track.albumId}")
+                context.contentResolver.openInputStream(uri)?.use { stream ->
+                    val thumb = BitmapFactory.decodeStream(stream)
+                    if (thumb != null) return thumb
+                }
+            } catch (_: Exception) {}
+        }
+
+        // 4. Android 10+ MediaStore thumbnail by album ID
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && track.albumId > 0) {
+            try {
+                val albumUri = ContentUris.withAppendedId(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, track.albumId)
+                val thumb = context.contentResolver.loadThumbnail(albumUri, Size(512, 512), null)
+                if (thumb != null) return thumb
+            } catch (_: Exception) {}
+        }
+
+        // 5. Procedural elegant fallback artwork (so the widget artwork box is never empty)
+        return generateFallbackArtwork(track.title)
+    }
+
+    private fun generateFallbackArtwork(seed: String): Bitmap {
+        val size = 256
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+        val hash = seed.hashCode()
+        val c1 = 0xFF000000.toInt() or (hash and 0x00FFFFFF)
+        val c2 = 0xFF1E293B.toInt()
+
+        val shader = android.graphics.LinearGradient(
+            0f, 0f, size.toFloat(), size.toFloat(),
+            c1, c2, android.graphics.Shader.TileMode.CLAMP
+        )
+        paint.shader = shader
+        canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), paint)
+
+        // Draw clean music symbol / initial
+        paint.shader = null
+        paint.color = android.graphics.Color.WHITE
+        paint.alpha = 180
+        paint.textSize = 96f
+        paint.textAlign = Paint.Align.CENTER
+        val letter = seed.take(1).uppercase()
+        val yPos = (size / 2f) - ((paint.descent() + paint.ascent()) / 2f)
+        canvas.drawText(if (letter.isNotBlank()) letter else "♪", size / 2f, yPos, paint)
+
+        return bitmap
     }
 
     private fun loadLyrics(track: Track?): Lyrics? {

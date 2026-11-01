@@ -16,18 +16,22 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import dev.chrisbanes.haze.HazeState
+import java.io.File
 
 @Composable
 fun HomeScreen(
@@ -51,15 +55,47 @@ fun HomeScreen(
             .take(15)
     }
 
-    // 2. Rediscover: Tracks played in the past but unplayed for 30+ days (or favorite tracks unplayed recently)
+    // 2. Heavy Rotation ("On Repeat" - top tracks by play count)
+    val heavyRotation = remember(allTracks) {
+        allTracks.filter { it.playCount > 0 }
+            .sortedByDescending { it.playCount }
+            .take(15)
+    }
+
+    // 3. Artist Spotlight (Detect most played/prominent artist)
+    val topArtist = remember(allTracks) {
+        allTracks.groupBy { it.artist }
+            .filterKeys { it.isNotBlank() && it != "Unknown Artist" && it != "<unknown>" }
+            .maxByOrNull { entry -> entry.value.sumOf { it.playCount.coerceAtLeast(1) } }?.key
+    }
+    val artistSpotlightTracks = remember(allTracks, topArtist) {
+        if (topArtist != null) allTracks.filter { it.artist == topArtist }.take(15) else emptyList()
+    }
+
+    // 4. Hi-Res Master Studio Vault (Audiophile FLAC / Lossless / 24-bit / Hi-Res)
+    val hiResVault = remember(allTracks) {
+        allTracks.filter { it.isLossless && (it.bitDepth >= 24 || it.sampleRate >= 88200 || it.formatDescription.contains("FLAC", ignoreCase = true)) }
+            .take(15)
+    }
+
+    // 5. Fresh Discoveries (Untapped music in library with 0 play count)
+    val freshDiscoveries = remember(allTracks) {
+        allTracks.filter { it.playCount == 0 }.take(15)
+    }
+
+    // 6. Rediscover: Tracks played in the past but unplayed for 30+ days
     val thirtyDaysAgo = remember { System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000L) }
     val rediscoverTracks = remember(allTracks) {
         allTracks.filter { (it.playCount > 0 && it.lastPlayedTimestamp < thirtyDaysAgo) || (it.isFavorite && it.lastPlayedTimestamp < thirtyDaysAgo) }
             .take(15)
-            .ifEmpty { allTracks.shuffled().take(10) }
     }
 
-    // 3. Quick-launch Smart Playlists
+    // 7. Favorite Anthems
+    val favorites = remember(allTracks) {
+        allTracks.filter { it.isFavorite }.take(15)
+    }
+
+    // 8. Smart Playlist shortcuts
     val recentlyAdded = remember(allTracks) {
         allTracks.sortedByDescending { it.dateAdded }.take(25)
     }
@@ -138,20 +174,12 @@ fun HomeScreen(
                                 .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Hero Artwork
-                            Box(
-                                modifier = Modifier
-                                    .size(72.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(Color.White.copy(alpha = 0.05f))
-                            ) {
-                                AsyncImage(
-                                    model = heroTrack.path,
-                                    contentDescription = heroTrack.title,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            }
+                            // Hero Artwork with fallback
+                            ArtworkThumbnail(
+                                track = heroTrack,
+                                size = 72.dp,
+                                cornerRadius = 16.dp
+                            )
 
                             Spacer(modifier = Modifier.width(16.dp))
 
@@ -210,7 +238,7 @@ fun HomeScreen(
             }
         }
 
-        // Section: Recently Played Carousel
+        // Section 1: Recently Played Carousel
         if (recentlyPlayed.isNotEmpty()) {
             item {
                 SectionHeader(title = "Recently Played", count = recentlyPlayed.size)
@@ -231,7 +259,56 @@ fun HomeScreen(
             }
         }
 
-        // Section: Smart Playlists Shelf
+        // Section 2: Heavy Rotation ("On Repeat")
+        if (heavyRotation.isNotEmpty()) {
+            item {
+                SectionHeader(title = "Heavy Rotation", count = heavyRotation.size, subtitle = "Your most played anthems")
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(heavyRotation, key = { "heavy_${it.id}" }) { track ->
+                        TrackCarouselCard(
+                            track = track,
+                            badgeText = "${track.playCount}x plays",
+                            isPlaying = isPlaying && currentTrack?.id == track.id,
+                            onClick = { onTrackClick(track, heavyRotation) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+
+        // Section 3: Artist Spotlight (if available)
+        if (artistSpotlightTracks.isNotEmpty() && topArtist != null) {
+            item {
+                SectionHeader(
+                    title = "Spotlight: $topArtist",
+                    count = artistSpotlightTracks.size,
+                    actionText = "Play Mix",
+                    onActionClick = { onTrackClick(artistSpotlightTracks[0], artistSpotlightTracks) }
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(artistSpotlightTracks, key = { "artist_${it.id}" }) { track ->
+                        TrackCarouselCard(
+                            track = track,
+                            badgeText = track.formatBadgeText,
+                            isPlaying = isPlaying && currentTrack?.id == track.id,
+                            onClick = { onTrackClick(track, artistSpotlightTracks) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+
+        // Section 4: Quick Mixes Shelf
         item {
             Row(
                 modifier = Modifier
@@ -263,6 +340,26 @@ fun HomeScreen(
             ) {
                 item {
                     SmartPlaylistChip(
+                        title = "Lossless Only",
+                        subtitle = "${losslessTracks.size} tracks",
+                        icon = Icons.Rounded.GraphicEq,
+                        accentColor = Color(0xFF818CF8),
+                        onClick = { if (losslessTracks.isNotEmpty()) onTrackClick(losslessTracks[0], losslessTracks) }
+                    )
+                }
+                if (favorites.isNotEmpty()) {
+                    item {
+                        SmartPlaylistChip(
+                            title = "Loved Tracks",
+                            subtitle = "${favorites.size} tracks",
+                            icon = Icons.Rounded.Favorite,
+                            accentColor = Color(0xFFF43F5E),
+                            onClick = { onTrackClick(favorites[0], favorites) }
+                        )
+                    }
+                }
+                item {
+                    SmartPlaylistChip(
                         title = "Recently Added",
                         subtitle = "${recentlyAdded.size} tracks",
                         icon = Icons.Rounded.Schedule,
@@ -272,16 +369,7 @@ fun HomeScreen(
                 }
                 item {
                     SmartPlaylistChip(
-                        title = "Lossless Only",
-                        subtitle = "${losslessTracks.size} tracks",
-                        icon = Icons.Rounded.GraphicEq,
-                        accentColor = Color(0xFF818CF8),
-                        onClick = { if (losslessTracks.isNotEmpty()) onTrackClick(losslessTracks[0], losslessTracks) }
-                    )
-                }
-                item {
-                    SmartPlaylistChip(
-                        title = "Long Tracks",
+                        title = "Deep Cuts",
                         subtitle = "${longTracks.size} tracks (>5m)",
                         icon = Icons.Rounded.Timer,
                         accentColor = Color(0xFF10B981),
@@ -292,10 +380,62 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(24.dp))
         }
 
-        // Section: Rediscover Shelf
+        // Section 5: Hi-Res Studio Master Vault
+        if (hiResVault.isNotEmpty()) {
+            item {
+                SectionHeader(
+                    title = "Hi-Res Studio Masters",
+                    count = hiResVault.size,
+                    subtitle = "Pure lossless bit-perfect fidelity"
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(hiResVault, key = { "hires_${it.id}" }) { track ->
+                        TrackCarouselCard(
+                            track = track,
+                            badgeText = "${track.bitDepth}-bit / ${(track.sampleRate / 1000.0).toInt()}k",
+                            isPlaying = isPlaying && currentTrack?.id == track.id,
+                            onClick = { onTrackClick(track, hiResVault) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+
+        // Section 6: Fresh Discoveries (Untapped Library)
+        if (freshDiscoveries.isNotEmpty()) {
+            item {
+                SectionHeader(
+                    title = "Fresh Discoveries",
+                    count = freshDiscoveries.size,
+                    subtitle = "Never played in your library"
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(freshDiscoveries, key = { "fresh_${it.id}" }) { track ->
+                        TrackCarouselCard(
+                            track = track,
+                            badgeText = "New",
+                            isPlaying = isPlaying && currentTrack?.id == track.id,
+                            onClick = { onTrackClick(track, freshDiscoveries) }
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+        }
+
+        // Section 7: Rediscover Shelf
         if (rediscoverTracks.isNotEmpty()) {
             item {
-                SectionHeader(title = "Rediscover", count = rediscoverTracks.size)
+                SectionHeader(title = "Rediscover", count = rediscoverTracks.size, subtitle = "Tracks you haven't heard in a while")
                 Spacer(modifier = Modifier.height(10.dp))
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
@@ -315,7 +455,14 @@ fun HomeScreen(
 }
 
 @Composable
-private fun SectionHeader(title: String, count: Int) {
+private fun SectionHeader(
+    title: String,
+    count: Int,
+    subtitle: String? = null,
+    actionText: String? = null,
+    onActionClick: (() -> Unit)? = null
+) {
+    val accent = LocalAccentColor.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -323,18 +470,68 @@ private fun SectionHeader(title: String, count: Int) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium.copy(
-                color = Color.White,
-                fontWeight = FontWeight.Bold
+        Column {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
             )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = Color.White.copy(alpha = 0.50f)
+                    )
+                )
+            }
+        }
+        if (actionText != null && onActionClick != null) {
+            Text(
+                text = actionText,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = accent,
+                    fontWeight = FontWeight.Bold
+                ),
+                modifier = Modifier.clickable { onActionClick() }
+            )
+        } else {
+            Text(
+                text = "$count tracks",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    color = Color.White.copy(alpha = 0.50f)
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun ArtworkThumbnail(
+    track: Track,
+    size: Dp,
+    cornerRadius: Dp,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(cornerRadius))
+            .background(Color.White.copy(alpha = 0.08f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Rounded.MusicNote,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.30f),
+            modifier = Modifier.size(size * 0.45f)
         )
-        Text(
-            text = "$count tracks",
-            style = MaterialTheme.typography.labelSmall.copy(
-                color = Color.White.copy(alpha = 0.5f)
-            )
+        AsyncImage(
+            model = track,
+            contentDescription = track.title,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
         )
     }
 }
@@ -342,6 +539,7 @@ private fun SectionHeader(title: String, count: Int) {
 @Composable
 private fun TrackCarouselCard(
     track: Track,
+    badgeText: String? = null,
     isPlaying: Boolean,
     onClick: () -> Unit
 ) {
@@ -352,21 +550,38 @@ private fun TrackCarouselCard(
             .clickable(onClick = onClick)
     ) {
         Box(
-            modifier = Modifier
-                .size(130.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color.White.copy(alpha = 0.06f))
+            modifier = Modifier.size(130.dp)
         ) {
-            AsyncImage(
-                model = track.path,
-                contentDescription = track.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+            ArtworkThumbnail(
+                track = track,
+                size = 130.dp,
+                cornerRadius = 16.dp
             )
+
+            if (badgeText != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .background(Color.Black.copy(alpha = 0.70f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = badgeText,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = Color.White.copy(alpha = 0.90f),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                }
+            }
+
             if (isPlaying) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .clip(RoundedCornerShape(16.dp))
                         .background(Color.Black.copy(alpha = 0.45f)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -404,7 +619,7 @@ private fun TrackCarouselCard(
 private fun SmartPlaylistChip(
     title: String,
     subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     accentColor: Color,
     onClick: () -> Unit
 ) {

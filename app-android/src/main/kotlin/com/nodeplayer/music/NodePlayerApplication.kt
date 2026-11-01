@@ -3,10 +3,23 @@ package com.nodeplayer.music
 import android.app.Application
 import android.content.Context
 import androidx.room.Room
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import com.nodeplayer.music.data.NodeDatabase
+import com.nodeplayer.music.library.AudioArtworkFetcher
 import com.nodeplayer.music.library.LibraryScanner
 
-class NodePlayerApplication : Application() {
+class NodePlayerApplication : Application(), ImageLoaderFactory {
+
+    override fun newImageLoader(): ImageLoader {
+        return ImageLoader.Builder(this)
+            .components {
+                add(AudioArtworkFetcher.TrackFactory())
+                add(AudioArtworkFetcher.FileFactory())
+            }
+            .crossfade(true)
+            .build()
+    }
 
     lateinit var database: NodeDatabase
         private set

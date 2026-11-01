@@ -42,14 +42,22 @@ class NodePlayerWidget : AppWidgetProvider() {
             track: Track?,
             isPlaying: Boolean
         ) {
+            val effectiveTrack = track ?: WidgetUpdateManager.getLastKnownTrack(context)
             val views = RemoteViews(context.packageName, R.layout.widget_node_player)
 
-            if (track != null) {
-                views.setTextViewText(R.id.widget_title, track.title)
-                views.setTextViewText(R.id.widget_artist, track.artist)
+            if (effectiveTrack != null) {
+                views.setTextViewText(R.id.widget_title, effectiveTrack.title)
+                views.setTextViewText(R.id.widget_artist, effectiveTrack.artist)
             } else {
                 views.setTextViewText(R.id.widget_title, "Node Player")
                 views.setTextViewText(R.id.widget_artist, "Touch to play")
+            }
+
+            val artwork = WidgetUpdateManager.loadArtwork(context, effectiveTrack)
+            if (artwork != null) {
+                views.setImageViewBitmap(R.id.widget_album_art, artwork)
+            } else {
+                views.setImageViewResource(R.id.widget_album_art, R.drawable.ic_music_note)
             }
 
             views.setImageViewResource(

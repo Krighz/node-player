@@ -128,7 +128,7 @@ fun FrostedMiniPlayer(
                     modifier = Modifier.size(24.dp)
                 )
                 AsyncImage(
-                    model = "content://media/external/audio/albumart/${currentTrack.albumId}",
+                    model = currentTrack,
                     contentDescription = "Album Art",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

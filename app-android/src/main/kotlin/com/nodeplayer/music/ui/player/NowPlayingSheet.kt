@@ -909,7 +909,7 @@ private fun HeroArtwork(
         )
         // High-resolution artwork
         AsyncImage(
-            model = "content://media/external/audio/albumart/${track.albumId}",
+            model = track,
             contentDescription = track.album,
             contentScale = ContentScale.Crop,
             modifier = Modifier
