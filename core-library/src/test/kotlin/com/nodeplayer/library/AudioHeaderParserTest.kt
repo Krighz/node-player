@@ -11,27 +11,28 @@ class AudioHeaderParserTest {
     @Test
     fun testFlac24Bit96kHz() {
         val bytes = ByteArray(42)
-        // Magic "fLaC"
+        // Magic "fLaC" (bytes 0..3)
         bytes[0] = 0x66.toByte()
         bytes[1] = 0x4C.toByte()
         bytes[2] = 0x61.toByte()
         bytes[3] = 0x43.toByte()
-        // Block header: type 0 (STREAMINFO), length 34 (0x000022)
+        // Block header: type 0 (STREAMINFO), length 34 (0x000022) (bytes 4..7)
         bytes[4] = 0x00
         bytes[5] = 0x00
         bytes[6] = 0x00
         bytes[7] = 0x22
 
-        // STREAMINFO offset 18 (file byte 26):
-        // sampleRate = 96000 = 0x17700 -> b[26]=0x17, b[27]=0x70, b[28] upper 4 bits=0x0
-        // channels = 2 -> (channels-1)=1 -> b[28] bits 1..3 = 001 -> 0x02
-        // bitDepth = 24 -> (bitDepth-1)=23 = 0x17 -> bit 23 = 1 -> b[28] bit 0 = 1
-        // so b[28] = 0x00 or 0x02 or 0x01 = 0x03
-        // b[29] upper 4 bits = 0x70 (from 0x17)
-        bytes[26] = 0x17.toByte()
-        bytes[27] = 0x70.toByte()
-        bytes[28] = 0x03.toByte()
-        bytes[29] = 0x70.toByte()
+        // STREAMINFO starts at byte 8.
+        // Sample rate, channels, bit depth are at STREAMINFO offsets 10..13 (file bytes 18..21):
+        // sampleRate = 96000 = 0x17700 -> b[18]=0x17, b[19]=0x70, b[20] upper 4 bits=0x0
+        // channels = 2 -> (channels-1)=1 -> b[20] bits 1..3 = 001 -> 0x02
+        // bitDepth = 24 -> (bitDepth-1)=23 = 0x17 -> bit 23 = 1 -> b[20] bit 0 = 1
+        // so b[20] = 0x00 or 0x02 or 0x01 = 0x03
+        // b[21] upper 4 bits = 0x70 (from 0x17)
+        bytes[18] = 0x17.toByte()
+        bytes[19] = 0x70.toByte()
+        bytes[20] = 0x03.toByte()
+        bytes[21] = 0x70.toByte()
 
         val info = AudioHeaderParser.parseBytes(bytes)
         assertNotNull(info)
@@ -57,15 +58,16 @@ class AudioHeaderParserTest {
         bytes[6] = 0x00
         bytes[7] = 0x22
 
-        // sampleRate = 44100 = 0x0AC44 -> b[26]=0x0A, b[27]=0xC4, b[28] upper 4 bits = 0x40
-        // channels = 2 -> b[28] bits 1..3 = 0x02
-        // bitDepth = 16 -> (16-1)=15 = 0x0F -> bit 23 = 0 -> b[28] bit 0 = 0
-        // so b[28] = 0x42
-        // b[29] upper 4 bits = 0xF0
-        bytes[26] = 0x0A.toByte()
-        bytes[27] = 0xC4.toByte()
-        bytes[28] = 0x42.toByte()
-        bytes[29] = 0xF0.toByte()
+        // STREAMINFO offset 10..13 (file bytes 18..21):
+        // sampleRate = 44100 = 0x0AC44 -> b[18]=0x0A, b[19]=0xC4, b[20] upper 4 bits = 0x40
+        // channels = 2 -> b[20] bits 1..3 = 0x02
+        // bitDepth = 16 -> (16-1)=15 = 0x0F -> bit 23 = 0 -> b[20] bit 0 = 0
+        // so b[20] = 0x42
+        // b[21] upper 4 bits = 0xF0
+        bytes[18] = 0x0A.toByte()
+        bytes[19] = 0xC4.toByte()
+        bytes[20] = 0x42.toByte()
+        bytes[21] = 0xF0.toByte()
 
         val info = AudioHeaderParser.parseBytes(bytes)
         assertNotNull(info)
@@ -75,6 +77,76 @@ class AudioHeaderParserTest {
         assertEquals(2, info.channels)
         assertTrue(info.isLossless)
         assertEquals("FLAC 16-bit / 44.1 kHz", info.formatDescription)
+    }
+
+    @Test
+    fun testFlacWithPrependedId3v2Tag() {
+        // ID3 header: 10 bytes + 10 bytes body = 20 bytes ID3 tag
+        val id3Size = 10
+        val totalId3 = 10 + id3Size
+        val bytes = ByteArray(totalId3 + 42)
+
+        // ID3v2.3 tag header
+        bytes[0] = 'I'.code.toByte()
+        bytes[1] = 'D'.code.toByte()
+        bytes[2] = '3'.code.toByte()
+        bytes[3] = 3 // v2.3
+        bytes[4] = 0
+        bytes[5] = 0 // Flags
+        // synchsafe size = 10 (bytes 6..9)
+        bytes[6] = 0
+        bytes[7] = 0
+        bytes[8] = 0
+        bytes[9] = 10
+
+        // At totalId3 (offset 20): "fLaC"
+        bytes[20] = 0x66.toByte()
+        bytes[21] = 0x4C.toByte()
+        bytes[22] = 0x61.toByte()
+        bytes[23] = 0x43.toByte()
+        // STREAMINFO header
+        bytes[24] = 0x00
+        bytes[25] = 0x00
+        bytes[26] = 0x00
+        bytes[27] = 0x22
+
+        // STREAMINFO offset 10..13 (file bytes 20 + 8 + 10 = 38):
+        bytes[38] = 0x0A.toByte()
+        bytes[39] = 0xC4.toByte()
+        bytes[40] = 0x42.toByte()
+        bytes[41] = 0xF0.toByte()
+
+        val info = AudioHeaderParser.parseBytes(bytes)
+        assertNotNull(info)
+        assertEquals("FLAC", info.formatName)
+        assertEquals(44100, info.sampleRate)
+        assertEquals(16, info.bitDepth)
+        assertEquals("FLAC 16-bit / 44.1 kHz", info.formatDescription)
+    }
+
+    @Test
+    fun testFlacPlausibilityInvalidValues() {
+        val bytes = ByteArray(42)
+        bytes[0] = 0x66.toByte()
+        bytes[1] = 0x4C.toByte()
+        bytes[2] = 0x61.toByte()
+        bytes[3] = 0x43.toByte()
+        bytes[4] = 0x00
+        bytes[5] = 0x00
+        bytes[6] = 0x00
+        bytes[7] = 0x22
+
+        // Set sample rate to 0 and bit depth to 1 (which are outside 8..768 kHz and 8..32 bit)
+        bytes[18] = 0
+        bytes[19] = 0
+        bytes[20] = 0
+        bytes[21] = 0 // rawBitDepth = 1, rawSampleRate = 0
+
+        val info = AudioHeaderParser.parseBytes(bytes)
+        assertNotNull(info)
+        assertEquals(0, info.sampleRate)
+        assertEquals(0, info.bitDepth)
+        assertEquals("FLAC — / —", info.formatDescription)
     }
 
     @Test

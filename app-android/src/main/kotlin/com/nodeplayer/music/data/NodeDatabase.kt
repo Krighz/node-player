@@ -171,9 +171,18 @@ interface PlayerDao {
         ScrobbleQueueEntity::class,
         ScannedFolderEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class NodeDatabase : RoomDatabase() {
     abstract fun playerDao(): PlayerDao
+
+    companion object {
+        val MIGRATION_6_7 = object : androidx.room.migration.Migration(6, 7) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                // Clear stale format metadata so the updated parser re-reads accurate headers
+                db.execSQL("UPDATE tracks SET formatDescription = '', sampleRate = 0, bitDepth = 0, bitrateKbps = 0")
+            }
+        }
+    }
 }

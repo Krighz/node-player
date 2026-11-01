@@ -7,7 +7,7 @@ import java.util.Locale
 data class AudioFormatInfo(
     val formatName: String,
     val sampleRate: Int,
-    val bitDepth: Int, // 0 for lossy
+    val bitDepth: Int, // 0 for lossy or unknown
     val bitrateKbps: Int,
     val channels: Int,
     val isLossless: Boolean,
@@ -35,42 +35,59 @@ object AudioHeaderParser {
                 val read = raf.read(magic)
                 if (read < 10) return null
 
-                // 1. FLAC ("fLaC")
-                if (magic[0] == 0x66.toByte() && magic[1] == 0x4C.toByte() &&
-                    magic[2] == 0x61.toByte() && magic[3] == 0x43.toByte()
-                ) {
-                    raf.seek(0L)
-                    val buffer = ByteArray(minOf(raf.length(), 4096L).toInt())
-                    raf.readFully(buffer)
-                    return parseFlac(buffer)
-                }
-
-                // 2. WAV ("RIFF" ... "WAVE")
-                if (magic[0] == 'R'.code.toByte() && magic[1] == 'I'.code.toByte() &&
-                    magic[2] == 'F'.code.toByte() && magic[3] == 'F'.code.toByte()
-                ) {
-                    raf.seek(0L)
-                    val buffer = ByteArray(minOf(raf.length(), 4096L).toInt())
-                    raf.readFully(buffer)
-                    return parseWav(buffer)
-                }
-
-                // 3. MP3: Check for ID3v2 tag and seek directly past it to find frame sync
                 var audioStartOffset = 0L
+                var isId3 = false
                 if (magic[0] == 'I'.code.toByte() && magic[1] == 'D'.code.toByte() && magic[2] == '3'.code.toByte()) {
+                    isId3 = true
+                    val hasFooter = (magic[5].toInt() and 0x10) != 0
                     val s0 = magic[6].toInt() and 0x7F
                     val s1 = magic[7].toInt() and 0x7F
                     val s2 = magic[8].toInt() and 0x7F
                     val s3 = magic[9].toInt() and 0x7F
                     val tagSize = (s0 shl 21) or (s1 shl 14) or (s2 shl 7) or s3
-                    audioStartOffset = 10L + tagSize
+                    audioStartOffset = 10L + tagSize + (if (hasFooter) 10L else 0L)
                 }
 
+                // 1. Check FLAC ("fLaC"): at offset 0, or after ID3 tag
+                if (!isId3) {
+                    if (magic[0] == 0x66.toByte() && magic[1] == 0x4C.toByte() &&
+                        magic[2] == 0x61.toByte() && magic[3] == 0x43.toByte()
+                    ) {
+                        raf.seek(0L)
+                        val buffer = ByteArray(minOf(raf.length(), 4096L).toInt())
+                        raf.readFully(buffer)
+                        return parseFlac(buffer, 0)
+                    }
+                } else if (audioStartOffset > 0L && audioStartOffset + 4 <= raf.length()) {
+                    raf.seek(audioStartOffset)
+                    val flacCheck = ByteArray(4)
+                    raf.readFully(flacCheck)
+                    if (flacCheck[0] == 0x66.toByte() && flacCheck[1] == 0x4C.toByte() &&
+                        flacCheck[2] == 0x61.toByte() && flacCheck[3] == 0x43.toByte()
+                    ) {
+                        raf.seek(audioStartOffset)
+                        val buffer = ByteArray(minOf(raf.length() - audioStartOffset, 4096L).toInt())
+                        raf.readFully(buffer)
+                        return parseFlac(buffer, 0)
+                    }
+                }
+
+                // 2. Check WAV ("RIFF" ... "WAVE")
+                if (!isId3 && magic[0] == 'R'.code.toByte() && magic[1] == 'I'.code.toByte() &&
+                    magic[2] == 'F'.code.toByte() && magic[3] == 'F'.code.toByte()
+                ) {
+                    raf.seek(0L)
+                    val buffer = ByteArray(minOf(raf.length(), 4096L).toInt())
+                    raf.readFully(buffer)
+                    return parseWav(buffer, 0)
+                }
+
+                // 3. MP3: Check after ID3v2 tag (or start)
                 if (audioStartOffset > 0L && audioStartOffset < raf.length()) {
                     raf.seek(audioStartOffset)
                     val buffer = ByteArray(minOf(raf.length() - audioStartOffset, 16384L).toInt())
                     raf.readFully(buffer)
-                    val mp3Info = parseMp3(buffer, file.length(), durationMs)
+                    val mp3Info = parseMp3(buffer, 0)
                     if (mp3Info != null) return mp3Info
                 }
 
@@ -88,51 +105,72 @@ object AudioHeaderParser {
     fun parseBytes(bytes: ByteArray, fileLength: Long = 0, durationMs: Long = 0): AudioFormatInfo? {
         if (bytes.size < 12) return null
 
+        var offset = 0
+        if (bytes.size >= 10 && bytes[0] == 'I'.code.toByte() && bytes[1] == 'D'.code.toByte() && bytes[2] == '3'.code.toByte()) {
+            val hasFooter = (bytes[5].toInt() and 0x10) != 0
+            val s0 = bytes[6].toInt() and 0x7F
+            val s1 = bytes[7].toInt() and 0x7F
+            val s2 = bytes[8].toInt() and 0x7F
+            val s3 = bytes[9].toInt() and 0x7F
+            val tagSize = (s0 shl 21) or (s1 shl 14) or (s2 shl 7) or s3
+            offset = 10 + tagSize + (if (hasFooter) 10 else 0)
+        }
+
         // 1. Check FLAC ("fLaC" = 0x66 0x4C 0x61 0x43)
-        if (bytes[0] == 0x66.toByte() && bytes[1] == 0x4C.toByte() &&
-            bytes[2] == 0x61.toByte() && bytes[3] == 0x43.toByte()
+        if (offset + 4 <= bytes.size &&
+            bytes[offset] == 0x66.toByte() && bytes[offset + 1] == 0x4C.toByte() &&
+            bytes[offset + 2] == 0x61.toByte() && bytes[offset + 3] == 0x43.toByte()
         ) {
-            return parseFlac(bytes)
+            val flac = parseFlac(bytes, offset)
+            if (flac != null) return flac
         }
 
         // 2. Check WAV ("RIFF" ... "WAVE")
-        if (bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() &&
+        if (bytes.size >= 12 &&
+            bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() &&
             bytes[2] == 'F'.code.toByte() && bytes[3] == 'F'.code.toByte() &&
             bytes[8] == 'W'.code.toByte() && bytes[9] == 'A'.code.toByte() &&
             bytes[10] == 'V'.code.toByte() && bytes[11] == 'E'.code.toByte()
         ) {
-            return parseWav(bytes)
+            return parseWav(bytes, 0)
         }
 
-        // 3. Check MP3 (handle optional ID3v2 tag at start)
-        val mp3Info = parseMp3(bytes, fileLength, durationMs)
+        // 3. Check MP3
+        val mp3Info = parseMp3(bytes, offset)
         if (mp3Info != null) return mp3Info
 
         return null
     }
 
-    private fun parseFlac(bytes: ByteArray): AudioFormatInfo? {
-        // STREAMINFO starts at byte 8 (4 bytes magic + 4 bytes block header)
-        // STREAMINFO must be block type 0: (bytes[4] and 0x7F) == 0
-        if (bytes.size < 26) return null
-        val blockType = (bytes[4].toInt() and 0x7F)
+    private fun parseFlac(bytes: ByteArray, offset: Int = 0): AudioFormatInfo? {
+        // "fLaC" starts at offset (4 bytes)
+        // Block header starts at offset + 4 (4 bytes)
+        // STREAMINFO block payload starts at offset + 8 (34 bytes)
+        if (bytes.size < offset + 42) return null
+        val blockHeader = bytes[offset + 4].toInt() and 0xFF
+        val blockType = blockHeader and 0x7F
         if (blockType != 0) return null
 
-        // Bytes 18..25 of STREAMINFO (file bytes 26..33, or if header at offset 8):
-        // File offset: 4 (magic) + 4 (block header) = 8.
-        // STREAMINFO offset 18 = 8 + 18 = 26.
-        if (bytes.size < 34) return null
-        val b18 = bytes[26].toInt() and 0xFF
-        val b19 = bytes[27].toInt() and 0xFF
-        val b20 = bytes[28].toInt() and 0xFF
-        val b21 = bytes[29].toInt() and 0xFF
+        val streamInfoOffset = offset + 8
+        // In STREAMINFO:
+        // Offsets 0..9: min/max block size and frame size (10 bytes)
+        // Offsets 10..13: sample rate (20 bits), channels (3 bits), bits-per-sample (5 bits)
+        // Offsets 18..33: MD5 checksum
+        val b10 = bytes[streamInfoOffset + 10].toInt() and 0xFF
+        val b11 = bytes[streamInfoOffset + 11].toInt() and 0xFF
+        val b12 = bytes[streamInfoOffset + 12].toInt() and 0xFF
+        val b13 = bytes[streamInfoOffset + 13].toInt() and 0xFF
 
-        val sampleRate = (b18 shl 12) or (b19 shl 4) or ((b20 and 0xF0) ushr 4)
-        val channels = ((b20 and 0x0E) ushr 1) + 1
-        val bitDepth = (((b20 and 0x01) shl 4) or ((b21 and 0xF0) ushr 4)) + 1
+        val rawSampleRate = (b10 shl 12) or (b11 shl 4) or ((b12 and 0xF0) ushr 4)
+        val channels = ((b12 and 0x0E) ushr 1) + 1
+        val rawBitDepth = (((b12 and 0x01) shl 4) or ((b13 and 0xF0) ushr 4)) + 1
 
-        val rateFormatted = formatSampleRate(sampleRate)
-        val desc = "FLAC $bitDepth-bit / $rateFormatted"
+        val sampleRate = if (rawSampleRate in 8000..768000) rawSampleRate else 0
+        val bitDepth = if (rawBitDepth in 8..32) rawBitDepth else 0
+
+        val depthPart = if (bitDepth > 0) "$bitDepth-bit" else "—"
+        val ratePart = if (sampleRate > 0) formatSampleRate(sampleRate) else "—"
+        val desc = "FLAC $depthPart / $ratePart"
 
         return AudioFormatInfo(
             formatName = "FLAC",
@@ -145,8 +183,8 @@ object AudioHeaderParser {
         )
     }
 
-    private fun parseWav(bytes: ByteArray): AudioFormatInfo? {
-        var offset = 12
+    private fun parseWav(bytes: ByteArray, wavOffset: Int = 0): AudioFormatInfo? {
+        var offset = wavOffset + 12
         while (offset + 8 <= bytes.size) {
             val chunkId = String(bytes, offset, 4, Charsets.US_ASCII)
             val chunkSize = (bytes[offset + 4].toInt() and 0xFF) or
@@ -158,17 +196,21 @@ object AudioHeaderParser {
                 val fmtOffset = offset + 8
                 val channels = (bytes[fmtOffset + 2].toInt() and 0xFF) or
                         ((bytes[fmtOffset + 3].toInt() and 0xFF) shl 8)
-                val sampleRate = (bytes[fmtOffset + 4].toInt() and 0xFF) or
+                val rawSampleRate = (bytes[fmtOffset + 4].toInt() and 0xFF) or
                         ((bytes[fmtOffset + 5].toInt() and 0xFF) shl 8) or
                         ((bytes[fmtOffset + 6].toInt() and 0xFF) shl 16) or
                         ((bytes[fmtOffset + 7].toInt() and 0xFF) shl 24)
-                val bitsPerSample = if (chunkSize >= 16 && fmtOffset + 16 <= bytes.size) {
+                val rawBitsPerSample = if (chunkSize >= 16 && fmtOffset + 16 <= bytes.size) {
                     (bytes[fmtOffset + 14].toInt() and 0xFF) or
                             ((bytes[fmtOffset + 15].toInt() and 0xFF) shl 8)
                 } else 16
 
-                val rateFormatted = formatSampleRate(sampleRate)
-                val desc = "WAV $bitsPerSample-bit / $rateFormatted"
+                val sampleRate = if (rawSampleRate in 8000..768000) rawSampleRate else 0
+                val bitsPerSample = if (rawBitsPerSample in 8..32) rawBitsPerSample else 0
+
+                val depthPart = if (bitsPerSample > 0) "$bitsPerSample-bit" else "—"
+                val ratePart = if (sampleRate > 0) formatSampleRate(sampleRate) else "—"
+                val desc = "WAV $depthPart / $ratePart"
 
                 return AudioFormatInfo(
                     formatName = "WAV",
@@ -186,20 +228,18 @@ object AudioHeaderParser {
         return null
     }
 
-    private fun parseMp3(bytes: ByteArray, fileLength: Long, durationMs: Long): AudioFormatInfo? {
-        var offset = 0
-
-        // Skip ID3v2 if present
-        if (bytes.size >= 10 && bytes[0] == 'I'.code.toByte() && bytes[1] == 'D'.code.toByte() && bytes[2] == '3'.code.toByte()) {
+    private fun parseMp3(bytes: ByteArray, startOffset: Int = 0): AudioFormatInfo? {
+        var offset = startOffset
+        if (offset == 0 && bytes.size >= 10 && bytes[0] == 'I'.code.toByte() && bytes[1] == 'D'.code.toByte() && bytes[2] == '3'.code.toByte()) {
+            val hasFooter = (bytes[5].toInt() and 0x10) != 0
             val s0 = bytes[6].toInt() and 0x7F
             val s1 = bytes[7].toInt() and 0x7F
             val s2 = bytes[8].toInt() and 0x7F
             val s3 = bytes[9].toInt() and 0x7F
             val tagSize = (s0 shl 21) or (s1 shl 14) or (s2 shl 7) or s3
-            offset = 10 + tagSize
+            offset = 10 + tagSize + (if (hasFooter) 10 else 0)
         }
 
-        // Scan for MP3 frame sync (11 bits of 1s: 0xFF, 0xE0)
         while (offset + 4 <= bytes.size) {
             val b0 = bytes[offset].toInt() and 0xFF
             val b1 = bytes[offset + 1].toInt() and 0xFF
@@ -208,8 +248,6 @@ object AudioHeaderParser {
                 val versionBits = (b1 ushr 3) and 0x03
                 val layerBits = (b1 ushr 1) and 0x03
 
-                // Only valid MPEG versions: 00 = 2.5, 10 = 2, 11 = 1 (01 is reserved)
-                // Layer: 01 = Layer 3 (MP3)
                 if (versionBits != 1 && layerBits == 1) {
                     val b2 = bytes[offset + 2].toInt() and 0xFF
                     val b3 = bytes[offset + 3].toInt() and 0xFF
@@ -219,26 +257,29 @@ object AudioHeaderParser {
                     val channelMode = (b3 ushr 6) and 0x03
                     val channels = if (channelMode == 3) 1 else 2
 
-                    val sampleRate = when (versionBits) {
+                    val rawSampleRate = when (versionBits) {
                         3 -> MP3_V1_SAMPLE_RATES.getOrElse(sampleRateIdx) { 44100 }
                         2 -> MP3_V2_SAMPLE_RATES.getOrElse(sampleRateIdx) { 22050 }
                         0 -> MP3_V25_SAMPLE_RATES.getOrElse(sampleRateIdx) { 11025 }
                         else -> 44100
                     }
 
-                    var bitrateKbps = when (versionBits) {
+                    val rawBitrateKbps = when (versionBits) {
                         3 -> MP3_V1_L3_BITRATES.getOrElse(bitrateIdx) { 0 }
                         else -> MP3_V2_L3_BITRATES.getOrElse(bitrateIdx) { 0 }
                     }
 
-                    // Fallback to average bitrate from duration if header bitrate is 0 (VBR/free)
-                    if (bitrateKbps == 0 && fileLength > 0 && durationMs > 0) {
-                        val durationSec = durationMs / 1000.0
-                        bitrateKbps = ((fileLength * 8) / (durationSec * 1000.0)).toInt()
-                    }
+                    val sampleRate = if (rawSampleRate in 8000..768000) rawSampleRate else 0
+                    val bitrateKbps = if (rawBitrateKbps in 8..1411) rawBitrateKbps else 0
 
-                    if (sampleRate > 0 && bitrateKbps > 0) {
-                        val desc = "MP3 $bitrateKbps kbps"
+                    if (sampleRate > 0 || bitrateKbps > 0) {
+                        val desc = if (bitrateKbps > 0) {
+                            "MP3 $bitrateKbps kbps"
+                        } else if (sampleRate > 0) {
+                            "MP3 ${formatSampleRate(sampleRate)}"
+                        } else {
+                            "MP3"
+                        }
                         return AudioFormatInfo(
                             formatName = "MP3",
                             sampleRate = sampleRate,

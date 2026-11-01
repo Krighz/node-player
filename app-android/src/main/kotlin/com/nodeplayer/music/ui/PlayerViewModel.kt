@@ -171,6 +171,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var progressJob: Job? = null
 
     init {
+        val audioParserVersion = prefs.getInt("audio_parser_version", 0)
+        if (audioParserVersion < 2) {
+            prefs.edit().putInt("audio_parser_version", 2).apply()
+        }
         loadFilterPreferences()
         initMediaController()
         refreshLibrary()
@@ -373,11 +377,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             dao.insertScannedFolders(folderEntities)
 
             // Mark tracks in excluded folders as hidden (do NOT delete them)
+            val existingTracks = dao.getAllRawTracksList().associateBy { it.id }
             val entities = scannedTracks.map { track ->
                 val isHidden = excludedFolders.any { excludedPath ->
                     track.path.startsWith(excludedPath, ignoreCase = true)
                 }
-                TrackEntity.fromTrack(track).copy(isHidden = isHidden)
+                val existing = existingTracks[track.id]
+                TrackEntity.fromTrack(track).copy(
+                    isHidden = isHidden,
+                    isFavorite = existing?.isFavorite ?: track.isFavorite,
+                    playCount = existing?.playCount ?: track.playCount,
+                    lastPlayedTimestamp = existing?.lastPlayedTimestamp ?: track.lastPlayedTimestamp,
+                    hiResStatus = existing?.hiResStatus ?: track.hiResStatus.name,
+                    hiResConfidence = existing?.hiResConfidence ?: track.hiResConfidence,
+                    hiResCutoffHz = existing?.hiResCutoffHz ?: track.hiResCutoffHz,
+                    loudnessLufs = existing?.loudnessLufs ?: track.loudnessLufs,
+                    dynamicRangeScore = existing?.dynamicRangeScore ?: track.dynamicRangeScore,
+                    dynamicRangeLabel = existing?.dynamicRangeLabel ?: track.dynamicRangeLabel,
+                    analysisAttempts = existing?.analysisAttempts ?: track.analysisAttempts
+                )
             }
             dao.insertTracks(entities)
             loadExcludedTracks(scannedTracks.filter { !it.isHidden })

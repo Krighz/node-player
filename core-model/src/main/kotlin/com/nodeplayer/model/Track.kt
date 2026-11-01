@@ -50,12 +50,24 @@ data class Track(
     val formatBadgeText: String
         get() {
             if (formatDescription.isNotBlank()) return formatDescription
-            val rateStr = if (sampleRate % 1000 == 0) "${sampleRate / 1000} kHz" else String.format(java.util.Locale.US, "%.1f kHz", sampleRate / 1000.0)
+            val rateStr = if (sampleRate in 8000..768000) {
+                if (sampleRate % 1000 == 0) "${sampleRate / 1000} kHz" else String.format(java.util.Locale.US, "%.1f kHz", sampleRate / 1000.0)
+            } else "—"
+            val fmt = when {
+                mimeType.contains("flac", ignoreCase = true) || path.endsWith(".flac", ignoreCase = true) -> "FLAC"
+                mimeType.contains("wav", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true) -> "WAV"
+                mimeType.contains("alac", ignoreCase = true) || path.endsWith(".alac", ignoreCase = true) -> "ALAC"
+                mimeType.contains("aac", ignoreCase = true) || path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".aac", ignoreCase = true) -> "AAC"
+                mimeType.contains("mp3", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) -> "MP3"
+                mimeType.contains("ogg", ignoreCase = true) || path.endsWith(".ogg", ignoreCase = true) -> "OGG"
+                mimeType.contains("opus", ignoreCase = true) || path.endsWith(".opus", ignoreCase = true) -> "Opus"
+                else -> mimeType.substringAfterLast("/").uppercase().ifBlank { "Audio" }
+            }
             return if (isLossless) {
-                val depthStr = if (bitDepth > 0) "$bitDepth-bit / " else ""
-                "$depthStr$rateStr"
+                val depthStr = if (bitDepth in 8..32) "$bitDepth-bit" else "—"
+                "$fmt $depthStr / $rateStr"
             } else {
-                if (bitrateKbps > 0) "$bitrateKbps kbps" else rateStr
+                if (bitrateKbps in 8..1411) "$fmt $bitrateKbps kbps" else if (rateStr != "—") "$fmt $rateStr" else fmt
             }
         }
 }

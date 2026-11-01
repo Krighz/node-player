@@ -2,8 +2,12 @@ package com.nodeplayer.music.library
 
 import android.content.ContentUris
 import android.content.Context
+import android.media.AudioFormat
+import android.media.MediaExtractor
+import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import com.nodeplayer.library.AudioFormatInfo
 import com.nodeplayer.library.AudioHeaderParser
@@ -325,61 +329,138 @@ class LibraryScanner(private val context: Context) {
         durationMs: Long,
         isLossless: Boolean
     ): AudioFormatInfo {
-        val file = java.io.File(path)
-        val parsed = AudioHeaderParser.parseFile(file, durationMs)
-        if (parsed != null) return parsed
-
-        var sampleRate = 44100
-        var bitrateKbps = 0
-
-        try {
-            val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(path)
-            val srStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)
-            val brStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)
-            srStr?.toIntOrNull()?.let { if (it > 0) sampleRate = it }
-            brStr?.toIntOrNull()?.let { if (it > 0) bitrateKbps = it / 1000 }
-            retriever.release()
-        } catch (_: Exception) {}
-
         val ext = path.substringAfterLast('.', "").uppercase()
         val formatName = when {
-            mime.contains("aac", ignoreCase = true) || ext == "M4A" || ext == "AAC" -> "AAC"
-            mime.contains("mp3", ignoreCase = true) || ext == "MP3" -> "MP3"
             mime.contains("flac", ignoreCase = true) || ext == "FLAC" -> "FLAC"
             mime.contains("wav", ignoreCase = true) || ext == "WAV" -> "WAV"
+            mime.contains("alac", ignoreCase = true) || ext == "ALAC" -> "ALAC"
+            mime.contains("aac", ignoreCase = true) || ext == "M4A" || ext == "AAC" -> "AAC"
+            mime.contains("mp3", ignoreCase = true) || ext == "MP3" -> "MP3"
             mime.contains("ogg", ignoreCase = true) || ext == "OGG" -> "OGG"
             mime.contains("opus", ignoreCase = true) || ext == "OPUS" -> "Opus"
             else -> ext.ifBlank { mime.substringAfterLast("/").uppercase() }
         }
 
-        return if (isLossless) {
-            val bitDepth = 16
-            val rateFormatted = AudioHeaderParser.formatSampleRate(sampleRate)
-            AudioFormatInfo(
-                formatName = formatName,
-                sampleRate = sampleRate,
-                bitDepth = bitDepth,
-                bitrateKbps = 0,
-                channels = 2,
-                isLossless = true,
-                formatDescription = "$formatName $bitDepth-bit / $rateFormatted"
-            )
-        } else {
-            if (bitrateKbps == 0 && size > 0 && durationMs > 0) {
-                val durSec = durationMs / 1000.0
-                bitrateKbps = ((size * 8) / (durSec * 1000.0)).toInt()
+        val actuallyLossless = isLossless || formatName in listOf("FLAC", "WAV", "ALAC", "AIFF")
+
+        var sampleRate = 0
+        var bitDepth = 0
+        var bitrateKbps = 0
+        var channels = 2
+
+        // 1. Primary: MediaMetadataRetriever (API 31+ METADATA_KEY_SAMPLERATE and METADATA_KEY_BITS_PER_SAMPLE)
+        try {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(path)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)?.toIntOrNull()?.let {
+                    if (it in 8000..768000) sampleRate = it
+                }
+                if (actuallyLossless) {
+                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITS_PER_SAMPLE)?.toIntOrNull()?.let {
+                        if (it in 8..32) bitDepth = it
+                    }
+                }
             }
-            val desc = if (bitrateKbps > 0) "$formatName $bitrateKbps kbps" else formatName
-            AudioFormatInfo(
-                formatName = formatName,
-                sampleRate = sampleRate,
-                bitDepth = 0, // Lossy files have NO bit depth
-                bitrateKbps = bitrateKbps,
-                channels = 2,
-                isLossless = false,
-                formatDescription = desc
-            )
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toIntOrNull()?.let {
+                if (it > 0) bitrateKbps = it / 1000
+            }
+            retriever.release()
+        } catch (_: Exception) {}
+
+        // 2. Secondary: MediaExtractor track format
+        if (sampleRate == 0 || (actuallyLossless && bitDepth == 0) || (!actuallyLossless && bitrateKbps == 0)) {
+            try {
+                val extractor = MediaExtractor()
+                extractor.setDataSource(path)
+                for (i in 0 until extractor.trackCount) {
+                    val format = extractor.getTrackFormat(i)
+                    val trackMime = format.getString(MediaFormat.KEY_MIME) ?: ""
+                    if (trackMime.startsWith("audio/")) {
+                        if (sampleRate == 0 && format.containsKey(MediaFormat.KEY_SAMPLE_RATE)) {
+                            val sr = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                            if (sr in 8000..768000) sampleRate = sr
+                        }
+                        if (format.containsKey(MediaFormat.KEY_CHANNEL_COUNT)) {
+                            channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                        }
+                        if (actuallyLossless && bitDepth == 0) {
+                            if (format.containsKey("bits-per-sample")) {
+                                val bd = format.getInteger("bits-per-sample")
+                                if (bd in 8..32) bitDepth = bd
+                            } else if (format.containsKey(MediaFormat.KEY_PCM_ENCODING)) {
+                                val enc = format.getInteger(MediaFormat.KEY_PCM_ENCODING)
+                                val bd = when (enc) {
+                                    AudioFormat.ENCODING_PCM_8BIT -> 8
+                                    AudioFormat.ENCODING_PCM_16BIT -> 16
+                                    AudioFormat.ENCODING_PCM_24BIT_PACKED -> 24
+                                    AudioFormat.ENCODING_PCM_32BIT, AudioFormat.ENCODING_PCM_FLOAT -> 32
+                                    else -> 0
+                                }
+                                if (bd in 8..32) bitDepth = bd
+                            }
+                        }
+                        if (!actuallyLossless && bitrateKbps == 0 && format.containsKey(MediaFormat.KEY_BIT_RATE)) {
+                            val br = format.getInteger(MediaFormat.KEY_BIT_RATE)
+                            if (br > 0) bitrateKbps = br / 1000
+                        }
+                        break
+                    }
+                }
+                extractor.release()
+            } catch (_: Exception) {}
         }
+
+        // 3. Fallback: Direct header parser (for FLAC STREAMINFO skipping ID3, WAV fmt chunk, MP3 frames)
+        if (sampleRate == 0 || (actuallyLossless && bitDepth == 0) || (!actuallyLossless && bitrateKbps == 0)) {
+            try {
+                val file = File(path)
+                val parsed = AudioHeaderParser.parseFile(file, durationMs)
+                if (parsed != null) {
+                    if (sampleRate == 0 && parsed.sampleRate in 8000..768000) {
+                        sampleRate = parsed.sampleRate
+                    }
+                    if (actuallyLossless && bitDepth == 0 && parsed.bitDepth in 8..32) {
+                        bitDepth = parsed.bitDepth
+                    }
+                    if (!actuallyLossless && bitrateKbps == 0 && parsed.bitrateKbps in 8..1411) {
+                        bitrateKbps = parsed.bitrateKbps
+                    }
+                    if (parsed.channels > 0) {
+                        channels = parsed.channels
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+
+        // 4. Plausibility checks: Never calculate from file size, bitrate, or duration
+        val validSampleRate = if (sampleRate in 8000..768000) sampleRate else 0
+        val validBitDepth = if (actuallyLossless && bitDepth in 8..32) bitDepth else 0
+        val validBitrate = if (!actuallyLossless && bitrateKbps in 8..1411) bitrateKbps else 0
+
+        val desc = if (actuallyLossless) {
+            val depthPart = if (validBitDepth > 0) "$validBitDepth-bit" else "—"
+            val ratePart = if (validSampleRate > 0) AudioHeaderParser.formatSampleRate(validSampleRate) else "—"
+            "$formatName $depthPart / $ratePart"
+        } else {
+            // Lossy files show the bitrate and NO bit depth
+            if (validBitrate > 0) {
+                "$formatName $validBitrate kbps"
+            } else if (validSampleRate > 0) {
+                "$formatName ${AudioHeaderParser.formatSampleRate(validSampleRate)}"
+            } else {
+                formatName
+            }
+        }
+
+        return AudioFormatInfo(
+            formatName = formatName,
+            sampleRate = validSampleRate,
+            bitDepth = validBitDepth,
+            bitrateKbps = validBitrate,
+            channels = channels,
+            isLossless = actuallyLossless,
+            formatDescription = desc
+        )
     }
 }

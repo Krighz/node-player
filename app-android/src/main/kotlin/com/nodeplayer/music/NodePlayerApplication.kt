@@ -45,7 +45,10 @@ class NodePlayerApplication : Application() {
             applicationContext,
             NodeDatabase::class.java,
             "node_player.db"
-        ).fallbackToDestructiveMigration().build()
+        )
+            .addMigrations(NodeDatabase.MIGRATION_6_7)
+            .fallbackToDestructiveMigration()
+            .build()
 
         libraryScanner = LibraryScanner(applicationContext)
     }
