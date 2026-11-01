@@ -24,7 +24,16 @@ data class Track(
     val replayGainTrackPeak: Float? = null,
     val replayGainAlbumPeak: Float? = null,
     val isLossless: Boolean = false,
-    val isHiRes: Boolean = false
+    val isHiRes: Boolean = false,
+    val hiResStatus: HiResStatus = HiResStatus.UNKNOWN,
+    val hiResConfidence: Float = 0f,
+    val hiResCutoffHz: Float = 0f,
+    val loudnessLufs: Float? = null,
+    val dynamicRangeScore: Int? = null,
+    val dynamicRangeLabel: String? = null,
+    val lastPlayedTimestamp: Long = 0L,
+    val playCount: Int = 0,
+    val isFavorite: Boolean = false
 ) {
     val durationFormatted: String
         get() {

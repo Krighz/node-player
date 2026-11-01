@@ -169,6 +169,11 @@ class BiquadFilter {
     }
 
     /**
+     * Process a single sample (mono / Left state).
+     */
+    fun processSample(input: Float): Float = processLeft(input)
+
+    /**
      * Process a single sample for Left channel.
      */
     fun processLeft(input: Float): Float {
