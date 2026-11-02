@@ -45,6 +45,7 @@ import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.components.SoundWaveVisualizer
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
+import com.nodeplayer.music.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.music.ui.theme.glassSurface
 import java.io.File
 import kotlin.math.abs
@@ -536,43 +537,45 @@ fun NowPlayingSheet(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     // 3. One Quality Line (Source format + Bit-perfect / Resampled sink)
-                    val qualitySinkLine = remember(track, audioOutputInfo) {
-                        val srcFormat = if (track.formatBadgeText.isNotBlank()) track.formatBadgeText else "${track.sampleRate} Hz"
-                        val sinkDesc = if (audioOutputInfo.isTrackInitialized) {
-                            val sinkType = if (audioOutputInfo.isBitPerfect) "Bit-perfect" else "Resampled"
-                            val dev = if (audioOutputInfo.outputDeviceName.isNotBlank() && audioOutputInfo.outputDeviceName != "—") " • ${audioOutputInfo.outputDeviceName}" else ""
-                            "$sinkType$dev"
-                        } else "Direct Output"
-                        "$srcFormat  |  $sinkDesc"
-                    }
+                    if (LocalGlassThemeConfig.current.formatBadgeVisible) {
+                        val qualitySinkLine = remember(track, audioOutputInfo) {
+                            val srcFormat = if (track.formatBadgeText.isNotBlank()) track.formatBadgeText else "${track.sampleRate} Hz"
+                            val sinkDesc = if (audioOutputInfo.isTrackInitialized) {
+                                val sinkType = if (audioOutputInfo.isBitPerfect) "Bit-perfect" else "Resampled"
+                                val dev = if (audioOutputInfo.outputDeviceName.isNotBlank() && audioOutputInfo.outputDeviceName != "—") " • ${audioOutputInfo.outputDeviceName}" else ""
+                                "$sinkType$dev"
+                            } else "Direct Output"
+                            "$srcFormat  |  $sinkDesc"
+                        }
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color.White.copy(alpha = 0.10f))
-                            .clickable {
-                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                                showTrackDetailsSheet = true
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.White.copy(alpha = 0.10f))
+                                .clickable {
+                                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                    showTrackDetailsSheet = true
+                                }
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(if (audioOutputInfo.isBitPerfect) Color(0xFF10B981) else accent, CircleShape)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = qualitySinkLine,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        color = if (audioOutputInfo.isBitPerfect) Color(0xFF34D399) else accent,
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
-                            .padding(horizontal = 12.dp, vertical = 4.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(if (audioOutputInfo.isBitPerfect) Color(0xFF10B981) else accent, CircleShape)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = qualitySinkLine,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    color = if (audioOutputInfo.isBitPerfect) Color(0xFF34D399) else accent,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
                         }
                     }
                 }

@@ -285,7 +285,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             frameRateCap = prefs.getString("frame_rate_cap", "AUTO") ?: "AUTO",
             renderQuality = prefs.getString("render_quality", "MAX_NATIVE") ?: "MAX_NATIVE",
             antiBandingDithering = prefs.getBoolean("anti_banding_dithering", true),
-            fontFamily = prefs.getString("font_family", "SYSTEM") ?: "SYSTEM"
+            fontFamily = prefs.getString("font_family", "SYSTEM") ?: "SYSTEM",
+            showDockSearchButton = prefs.getBoolean("show_dock_search_button", true),
+            showMiniPlayerWave = prefs.getBoolean("show_mini_player_wave", true),
+            formatBadgeVisible = prefs.getBoolean("format_badge_visible", true),
+            lensRefractionStrength = prefs.getFloat("lens_refraction_strength", 0.85f),
+            lensRimSpecular = prefs.getFloat("lens_rim_specular", 0.85f)
         )
     }
 
@@ -1176,6 +1181,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .putString("render_quality", newConfig.renderQuality)
             .putBoolean("anti_banding_dithering", newConfig.antiBandingDithering)
             .putString("font_family", newConfig.fontFamily)
+            .putBoolean("show_dock_search_button", newConfig.showDockSearchButton)
+            .putBoolean("show_mini_player_wave", newConfig.showMiniPlayerWave)
+            .putBoolean("format_badge_visible", newConfig.formatBadgeVisible)
+            .putFloat("lens_refraction_strength", newConfig.lensRefractionStrength)
+            .putFloat("lens_rim_specular", newConfig.lensRimSpecular)
             .apply()
 
         // Sync widgets with current glass settings and re-render

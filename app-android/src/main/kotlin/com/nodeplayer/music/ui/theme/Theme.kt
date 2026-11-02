@@ -8,9 +8,47 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nodeplayer.model.GlassThemeConfig
+import com.nodeplayer.music.R
+
+val InterFontFamily = FontFamily(Font(R.font.inter))
+val OutfitFontFamily = FontFamily(Font(R.font.outfit))
+val JetBrainsMonoFontFamily = FontFamily(Font(R.font.jetbrains_mono))
+
+fun resolveAppFontFamily(fontFamilyName: String): FontFamily {
+    return when (fontFamilyName.uppercase()) {
+        "INTER" -> InterFontFamily
+        "OUTFIT" -> OutfitFontFamily
+        "JETBRAINS_MONO" -> JetBrainsMonoFontFamily
+        else -> FontFamily.Default
+    }
+}
+
+fun createThemedTypography(fontFamily: FontFamily): Typography {
+    val default = Typography()
+    return Typography(
+        displayLarge = default.displayLarge.copy(fontFamily = fontFamily),
+        displayMedium = default.displayMedium.copy(fontFamily = fontFamily),
+        displaySmall = default.displaySmall.copy(fontFamily = fontFamily),
+        headlineLarge = default.headlineLarge.copy(fontFamily = fontFamily),
+        headlineMedium = default.headlineMedium.copy(fontFamily = fontFamily),
+        headlineSmall = default.headlineSmall.copy(fontFamily = fontFamily),
+        titleLarge = default.titleLarge.copy(fontFamily = fontFamily),
+        titleMedium = default.titleMedium.copy(fontFamily = fontFamily),
+        titleSmall = default.titleSmall.copy(fontFamily = fontFamily),
+        bodyLarge = default.bodyLarge.copy(fontFamily = fontFamily),
+        bodyMedium = default.bodyMedium.copy(fontFamily = fontFamily),
+        bodySmall = default.bodySmall.copy(fontFamily = fontFamily),
+        labelLarge = default.labelLarge.copy(fontFamily = fontFamily),
+        labelMedium = default.labelMedium.copy(fontFamily = fontFamily),
+        labelSmall = default.labelSmall.copy(fontFamily = fontFamily)
+    )
+}
 
 val DefaultAccent = Color(0xFF6366F1) // Indigo
 
@@ -105,6 +143,11 @@ fun NodePlayerTheme(
         isPerformanceMode = themeConfig.isPerformanceMode
     )
 
+    val currentFontFamily = resolveAppFontFamily(themeConfig.fontFamily)
+    val themedTypography = remember(currentFontFamily) {
+        createThemedTypography(currentFontFamily)
+    }
+
     CompositionLocalProvider(
         LocalAccentColor provides animatedAccent,
         LocalGlassThemeConfig provides themeConfig,
@@ -114,6 +157,7 @@ fun NodePlayerTheme(
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
+            typography = themedTypography,
             content = content
         )
     }

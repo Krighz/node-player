@@ -197,8 +197,110 @@ data class GlassThemeConfig(
     val frameRateCap: String = "AUTO",                     // AUTO, 60, 90, 120
     val renderQuality: String = "MAX_NATIVE",              // MAX_NATIVE, HIGH, BALANCED, LOW, AUTO_ADAPTIVE
     val antiBandingDithering: Boolean = true,
-    val fontFamily: String = "SYSTEM"                      // SYSTEM, INTER, OUTFIT, JETBRAINS_MONO
+    val fontFamily: String = "SYSTEM",                     // SYSTEM, INTER, OUTFIT, JETBRAINS_MONO
+    val showDockSearchButton: Boolean = true,
+    val showMiniPlayerWave: Boolean = true,
+    val formatBadgeVisible: Boolean = true,
+    val lensRefractionStrength: Float = 0.85f,             // 0.50f (Subtle), 0.85f (Balanced), 1.25f (Strong)
+    val lensRimSpecular: Float = 0.85f                     // 0.0f to 1.0f
 ) {
+    companion object {
+        val PRESET_OBSIDIAN_LIQUID = GlassThemeConfig(
+            glassStrength = "BALANCED",
+            themeMode = "DARK",
+            accentSource = "PRESET",
+            fixedAccentColorArgb = 0xFF6366F1,
+            glassOpacity = 0.55f,
+            blurStrength = 0.85f,
+            glassTexture = 0.35f,
+            edgeHighlightStrength = 0.70f,
+            backgroundAnimationStyle = "SLOW_CAUSTICS",
+            cornerRoundness = "ROUNDED",
+            spacingDensity = "COMFORTABLE",
+            fontFamily = "INTER",
+            lensRefractionStrength = 0.85f
+        )
+
+        val PRESET_FROST_PEARL = GlassThemeConfig(
+            glassStrength = "BALANCED",
+            themeMode = "LIGHT",
+            accentSource = "PRESET",
+            fixedAccentColorArgb = 0xFF06B6D4,
+            glassOpacity = 0.75f,
+            blurStrength = 0.90f,
+            glassTexture = 0.45f,
+            edgeHighlightStrength = 0.80f,
+            backgroundAnimationStyle = "AURORA",
+            cornerRoundness = "PILL",
+            spacingDensity = "ROOMY",
+            fontFamily = "OUTFIT",
+            lensRefractionStrength = 1.0f
+        )
+
+        val PRESET_AMBER_FLARE = GlassThemeConfig(
+            glassStrength = "BALANCED",
+            themeMode = "DARK",
+            accentSource = "PRESET",
+            fixedAccentColorArgb = 0xFFF59E0B,
+            glassOpacity = 0.60f,
+            blurStrength = 0.70f,
+            glassTexture = 0.30f,
+            edgeHighlightStrength = 0.85f,
+            backgroundAnimationStyle = "LIQUID_BLOBS",
+            cornerRoundness = "ROUNDED",
+            spacingDensity = "COMFORTABLE",
+            fontFamily = "INTER",
+            lensRefractionStrength = 0.85f
+        )
+
+        val PRESET_NEON_AURORA = GlassThemeConfig(
+            glassStrength = "BALANCED",
+            themeMode = "DARK",
+            accentSource = "PRESET",
+            fixedAccentColorArgb = 0xFF10B981,
+            glassOpacity = 0.50f,
+            blurStrength = 0.80f,
+            glassTexture = 0.40f,
+            edgeHighlightStrength = 0.90f,
+            backgroundAnimationStyle = "AURORA",
+            cornerRoundness = "PILL",
+            spacingDensity = "COMFORTABLE",
+            fontFamily = "OUTFIT",
+            lensRefractionStrength = 1.15f
+        )
+
+        val PRESET_STEALTH_OLED = GlassThemeConfig(
+            glassStrength = "OFF",
+            themeMode = "OLED",
+            isOledBlack = true,
+            accentSource = "PRESET",
+            fixedAccentColorArgb = 0xFFCBD5E1,
+            glassOpacity = 0.20f,
+            blurStrength = 0.0f,
+            glassTexture = 0.0f,
+            edgeHighlightStrength = 0.50f,
+            backgroundAnimationStyle = "STATIC",
+            cornerRoundness = "SHARP",
+            spacingDensity = "COMPACT",
+            fontFamily = "JETBRAINS_MONO",
+            lensRefractionStrength = 0.50f
+        )
+
+        val PRESET_MINIMAL_GLASS = GlassThemeConfig(
+            glassStrength = "SUBTLE",
+            themeMode = "DARK",
+            accentSource = "ARTWORK",
+            glassOpacity = 0.30f,
+            blurStrength = 0.60f,
+            glassTexture = 0.15f,
+            edgeHighlightStrength = 0.40f,
+            backgroundAnimationStyle = "ALBUM_ART_BLUR",
+            cornerRoundness = "ROUNDED",
+            spacingDensity = "COMFORTABLE",
+            fontFamily = "SYSTEM",
+            lensRefractionStrength = 0.70f
+        )
+    }
     fun isShaderActive(selfTestPassed: Boolean): Boolean {
         if (isPerformanceMode) return false
         if (isFullyTransparent || blurStrength <= 0.001f) return false

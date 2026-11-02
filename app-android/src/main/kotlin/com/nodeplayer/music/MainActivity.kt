@@ -417,7 +417,8 @@ class MainActivity : ComponentActivity() {
                                 isPerformanceMode = themeConfig.isPerformanceMode,
                                 shaderEnabled = isShaderActive,
                                 chromaticFringe = themeConfig.chromaticFringeValue(),
-                                grainStrength = themeConfig.grainStrengthValue()
+                                grainStrength = themeConfig.grainStrengthValue(),
+                                showWaveProgress = themeConfig.showMiniPlayerWave
                             )
                         }
 
@@ -431,7 +432,10 @@ class MainActivity : ComponentActivity() {
                             isPerformanceMode = themeConfig.isPerformanceMode,
                             shaderEnabled = isShaderActive,
                             chromaticFringe = themeConfig.chromaticFringeValue(),
-                            grainStrength = themeConfig.grainStrengthValue()
+                            grainStrength = themeConfig.grainStrengthValue(),
+                            searchButtonVisible = themeConfig.showDockSearchButton,
+                            lensStrength = themeConfig.lensRefractionStrength,
+                            rimSpecular = themeConfig.lensRimSpecular
                         )
                     }
 

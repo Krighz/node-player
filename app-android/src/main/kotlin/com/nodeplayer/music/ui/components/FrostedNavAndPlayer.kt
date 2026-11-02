@@ -66,6 +66,7 @@ fun FrostedMiniPlayer(
     shaderEnabled: Boolean = !isPerformanceMode,
     chromaticFringe: Float = 1.0f,
     grainStrength: Float = 0.0f,
+    showWaveProgress: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     if (currentTrack == null) return
@@ -139,13 +140,15 @@ fun FrostedMiniPlayer(
             .then(gestureModifier)
     ) {
         // Progress track at bottom
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
-                .height(2.5.dp)
-                .background(accent)
-        )
+        if (showWaveProgress) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                    .height(2.5.dp)
+                    .background(accent)
+            )
+        }
 
         Row(
             modifier = Modifier
@@ -245,6 +248,8 @@ fun LensDock(
     chromaticFringe: Float = 1.0f,
     lensStrength: Float = 0.85f,
     grainStrength: Float = 0.0f,
+    searchButtonVisible: Boolean = true,
+    rimSpecular: Float = 0.85f,
     modifier: Modifier = Modifier
 ) {
     val items = remember {
@@ -370,7 +375,7 @@ fun LensDock(
                             magnification = 0.22f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
                             refractionIndex = 0.65f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
                             chromaticFringe = chromaticFringe,
-                            rimStrength = 0.85f,
+                            rimStrength = rimSpecular,
                             rimColor = Color(0xFFFDE68A),
                             grainStrength = grainStrength
                         )
@@ -453,36 +458,38 @@ fun LensDock(
         }
 
         // 2. Separate Circular Glass Search Button
-        Box(
-            modifier = Modifier
-                .size(54.dp)
-                .clip(CircleShape)
-                .glassSurface(hazeState = hazeState, shape = CircleShape, tintAlpha = 0.60f)
-                .border(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.35f),
-                            Color.White.copy(alpha = 0.10f)
-                        )
-                    ),
-                    shape = CircleShape
+        if (searchButtonVisible) {
+            Box(
+                modifier = Modifier
+                    .size(54.dp)
+                    .clip(CircleShape)
+                    .glassSurface(hazeState = hazeState, shape = CircleShape, tintAlpha = 0.60f)
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.35f),
+                                Color.White.copy(alpha = 0.10f)
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        onSearchClick()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = "Search",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
                 )
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) {
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    onSearchClick()
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Search,
-                contentDescription = "Search",
-                tint = Color.White,
-                modifier = Modifier.size(24.dp)
-            )
+            }
         }
     }
 }
@@ -500,6 +507,9 @@ fun FrostedBottomBar(
     shaderEnabled: Boolean = !isPerformanceMode,
     chromaticFringe: Float = 1.0f,
     grainStrength: Float = 0.0f,
+    searchButtonVisible: Boolean = true,
+    lensStrength: Float = 0.85f,
+    rimSpecular: Float = 0.85f,
     modifier: Modifier = Modifier
 ) {
     LensDock(
@@ -510,8 +520,10 @@ fun FrostedBottomBar(
         isPerformanceMode = isPerformanceMode,
         shaderEnabled = shaderEnabled,
         chromaticFringe = chromaticFringe,
-        lensStrength = 0.85f,
+        lensStrength = lensStrength,
         grainStrength = grainStrength,
+        searchButtonVisible = searchButtonVisible,
+        rimSpecular = rimSpecular,
         modifier = modifier
     )
 }
