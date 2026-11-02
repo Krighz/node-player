@@ -1,8 +1,8 @@
 # Node Player - Project State
 
-Last Updated: 2026-11-03 05:15:00 +05:30
-Current Version: v1.3.0
-Current Commit: Working Tree (Uncommitted UI Revamp Fixes)
+Last Updated: 2026-11-03 05:25:00 +05:30
+Current Version: v1.3.1
+Current Commit: Working Tree (`0e6d483` + v1.3.1 release bump)
 
 ---
 
@@ -14,7 +14,7 @@ Current Commit: Working Tree (Uncommitted UI Revamp Fixes)
 - **System-Wide EQ**: Background audio effect session interception via `AudioSessionReceiver` and `SystemWideEqService`.
 - **MediaSession & Service**: AndroidX Media3 `MediaSessionService` (`PlaybackService`) with notification channel and lockscreen controls.
 
-### Liquid-Glass UI & Dock Overhaul
+### Liquid-Glass UI & Dock Overhaul (v1.3.1)
 - **Dock Refraction & Styling**:
   - Removed yellow amber rim/border tints (`Color(0xFFFDE68A)`, `0xFFF59E0B`), replacing with pure crystal pearl specular gradients (`Color.White` + `Color(0xFFBAE6FD)`).
   - Passed `hazeState` to `glassSurface` inside the selector bubble, enabling Haze backdrop blur layer to be sampled by the `glassLensBubble` AGSL refraction shader.
@@ -47,6 +47,9 @@ Current Commit: Working Tree (Uncommitted UI Revamp Fixes)
 | Core DSP Unit Tests | `:core-dsp:test` | Done | Gradle output: `BUILD SUCCESSFUL in 1m 4s` |
 | Android Unit Tests | `:app-android:testDebugUnitTest` | Done | Gradle output: `BUILD SUCCESSFUL in 1m 4s`, 38 actionable tasks |
 | Debug APK Build | `:app-android:assembleDebug` | Done | Gradle output: `BUILD SUCCESSFUL in 23s`, 49 actionable tasks |
+| Release APK Build | `:app-android:assembleRelease` | Done | Gradle output: `BUILD SUCCESSFUL in 2m 26s`, 62 actionable tasks |
+| APK Signing Verification | `apksigner.bat verify --verbose` | Done | Output: `Verified using v2 scheme (APK Signature Scheme v2): true` |
+| GitHub Release v1.3.1 | `gh release view v1.3.1` | Done | Release published to GitHub Releases with `NodePlayer.apk` & `NodePlayer.apk.sha256` |
 | Dock Refraction on Device | Physical device test | Not verified | Compiled in debug APK; physical visual validation pending user test |
 | Customize UI Sliders on Device | Physical device test | Not verified | Compiled in debug APK; physical UI interaction pending user test |
 | High-DPI Widgets on Device | Physical device test | Not verified | Compiled in debug APK; home screen launcher placement pending user test |
