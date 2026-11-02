@@ -44,6 +44,9 @@ fun FrostedMiniPlayer(
     hazeState: HazeState? = null,
     rmsLevel: Float = 0.0f,
     isPerformanceMode: Boolean = false,
+    shaderEnabled: Boolean = !isPerformanceMode,
+    chromaticFringe: Float = 1.0f,
+    grainStrength: Float = 0.0f,
     modifier: Modifier = Modifier
 ) {
     if (currentTrack == null) return
@@ -96,7 +99,13 @@ fun FrostedMiniPlayer(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 6.dp)
-            .glassRefraction(shape = shape, enabled = !isPerformanceMode, refractionIndex = 0.65f)
+            .glassRefraction(
+                shape = shape,
+                enabled = shaderEnabled && !isPerformanceMode,
+                refractionIndex = 0.65f,
+                chromaticFringe = chromaticFringe,
+                grainStrength = grainStrength
+            )
             .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.65f)
             .then(gestureModifier)
     ) {
@@ -197,6 +206,9 @@ fun FrostedBottomBar(
     onRouteChange: (String) -> Unit,
     hazeState: HazeState? = null,
     isPerformanceMode: Boolean = false,
+    shaderEnabled: Boolean = !isPerformanceMode,
+    chromaticFringe: Float = 1.0f,
+    grainStrength: Float = 0.0f,
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
@@ -213,7 +225,13 @@ fun FrostedBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 6.dp)
-            .glassRefraction(shape = shape, enabled = !isPerformanceMode, refractionIndex = 0.85f)
+            .glassRefraction(
+                shape = shape,
+                enabled = shaderEnabled && !isPerformanceMode,
+                refractionIndex = 0.85f,
+                chromaticFringe = chromaticFringe,
+                grainStrength = grainStrength
+            )
             .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.70f)
     ) {
         Row(

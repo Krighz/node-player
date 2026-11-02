@@ -165,7 +165,7 @@ data class CrossfadeConfig(
 )
 
 data class GlassThemeConfig(
-    val glassStrength: String = "DRAMATIC", // SUBTLE, BALANCED, DRAMATIC, OFF
+    val glassStrength: String = "BALANCED", // SUBTLE, BALANCED, DRAMATIC, OFF
     val themeMode: String = "SYSTEM",       // SYSTEM, DARK, LIGHT, OLED
     val accentSource: String = "ARTWORK",   // ARTWORK, MATERIAL_YOU, PRESET
     val spacingDensity: String = "COMFORTABLE", // COMPACT, COMFORTABLE, ROOMY
@@ -181,8 +181,36 @@ data class GlassThemeConfig(
     val cornerRadiusDp: Float = 16.0f,
     val isPerformanceMode: Boolean = false,
     val refractionShaderEnabled: Boolean = true,
-    val hapticsEnabled: Boolean = true
+    val hapticsEnabled: Boolean = true,
+    val shaderMode: String = "AUTO", // AUTO, FULL, SIMPLE, BLUR_ONLY, OFF
+    val glassOpacity: Float = 0.65f, // 0.0 to 1.0 (fill opacity)
+    val blurStrength: Float = 0.70f, // 0.0 to 1.0 (blur radius scale)
+    val glassTexture: Float = 0.40f, // 0.0 to 1.0 (grain scale)
+    val edgeHighlightStrength: Float = 0.60f, // 0.0 to 1.0 (rim light & chromatic fringe)
+    val isFullyTransparent: Boolean = false,
+    val keepTextReadable: Boolean = true
 ) {
+    fun isShaderActive(selfTestPassed: Boolean): Boolean {
+        if (isPerformanceMode) return false
+        if (isFullyTransparent || blurStrength <= 0.001f) return false
+        return when (shaderMode) {
+            "AUTO" -> selfTestPassed && refractionShaderEnabled
+            "FULL", "SIMPLE" -> true
+            "BLUR_ONLY", "OFF" -> false
+            else -> selfTestPassed && refractionShaderEnabled
+        }
+    }
+
+    fun chromaticFringeValue(): Float {
+        if (shaderMode == "SIMPLE" || isFullyTransparent) return 0.0f
+        return edgeHighlightStrength
+    }
+
+    fun grainStrengthValue(): Float {
+        if (shaderMode == "SIMPLE" || isFullyTransparent) return 0.0f
+        return glassTexture
+    }
+
     val effectiveCornerRadiusDp: Float
         get() = when (cornerRoundness) {
             "SHARP" -> 8f
@@ -191,18 +219,14 @@ data class GlassThemeConfig(
         }
 
     val effectiveBlurDp: Float
-        get() = when (glassStrength) {
-            "OFF" -> 0f
-            "SUBTLE" -> 12f
-            "BALANCED" -> 20f
-            else -> 32f // DRAMATIC
+        get() {
+            if (isPerformanceMode || shaderMode == "OFF" || isFullyTransparent || blurStrength <= 0.001f) return 0f
+            return 32f * blurStrength.coerceIn(0f, 1f)
         }
 
     val effectiveTintAlpha: Float
-        get() = when (glassStrength) {
-            "OFF" -> 1.0f
-            "SUBTLE" -> 0.85f
-            "BALANCED" -> 0.65f
-            else -> 0.45f // DRAMATIC (more translucent liquid refraction)
+        get() {
+            if (isFullyTransparent) return 0.0f
+            return glassOpacity.coerceIn(0f, 1f)
         }
 }

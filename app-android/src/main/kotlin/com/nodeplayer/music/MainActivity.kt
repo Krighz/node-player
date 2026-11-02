@@ -281,6 +281,7 @@ class MainActivity : ComponentActivity() {
                                 onAddCustomFolder = { viewModel.addCustomFolder(it) },
                                 onRestoreTrack = { viewModel.restoreExcludedTrack(it) },
                                 onThemeConfigChange = { viewModel.updateThemeConfig(it) },
+                                onApplySafeGraphicsMode = { viewModel.applySafeGraphicsMode() },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
                                 hazeState = null
                             )
@@ -298,6 +299,9 @@ class MainActivity : ComponentActivity() {
                             val duration = currentTrack!!.durationMs.coerceAtLeast(1L)
                             val progress = (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
 
+                            val selfTestResult by viewModel.shaderSelfTestResult.collectAsState()
+                            val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
+
                             FrostedMiniPlayer(
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
@@ -310,15 +314,24 @@ class MainActivity : ComponentActivity() {
                                 gesturesEnabled = appSettings.miniPlayerGesturesEnabled,
                                 hazeState = dockHazeState,
                                 rmsLevel = currentRms,
-                                isPerformanceMode = themeConfig.isPerformanceMode || !themeConfig.refractionShaderEnabled
+                                isPerformanceMode = themeConfig.isPerformanceMode,
+                                shaderEnabled = isShaderActive,
+                                chromaticFringe = themeConfig.chromaticFringeValue(),
+                                grainStrength = themeConfig.grainStrengthValue()
                             )
                         }
+
+                        val selfTestResult by viewModel.shaderSelfTestResult.collectAsState()
+                        val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
 
                         FrostedBottomBar(
                             selectedRoute = currentRoute,
                             onRouteChange = { currentRoute = it },
                             hazeState = dockHazeState,
-                            isPerformanceMode = themeConfig.isPerformanceMode || !themeConfig.refractionShaderEnabled
+                            isPerformanceMode = themeConfig.isPerformanceMode,
+                            shaderEnabled = isShaderActive,
+                            chromaticFringe = themeConfig.chromaticFringeValue(),
+                            grainStrength = themeConfig.grainStrengthValue()
                         )
                     }
 

@@ -11,6 +11,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -79,6 +80,7 @@ fun SettingsScreen(
     onAddCustomFolder: (String) -> Unit = {},
     onRestoreTrack: (Long) -> Unit = {},
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
+    onApplySafeGraphicsMode: () -> Unit = {},
     onRescanLibrary: () -> Unit,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
@@ -1190,6 +1192,71 @@ fun SettingsScreen(
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(isPerformanceMode = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
                     )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Glass Shader Mode Selector
+                Text(
+                    text = "GLASS SHADER",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        letterSpacing = 1.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accent
+                    )
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Options: Auto (follows self-test), Full, Simple (no fringe/grain), Blur only, or Off",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val shaderModes = listOf(
+                    "AUTO" to "Auto",
+                    "FULL" to "Full",
+                    "SIMPLE" to "Simple",
+                    "BLUR_ONLY" to "Blur only",
+                    "OFF" to "Off"
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    shaderModes.forEach { (mode, label) ->
+                        val selected = themeConfig.shaderMode == mode
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                onThemeConfigChange(themeConfig.copy(shaderMode = mode))
+                            },
+                            label = { Text(label, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = accent.copy(alpha = 0.35f),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White.copy(alpha = 0.06f),
+                                labelColor = Color.White.copy(alpha = 0.75f)
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                FilledTonalButton(
+                    onClick = onApplySafeGraphicsMode,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = Color(0xFF1E293B),
+                        contentColor = Color(0xFF38BDF8)
+                    )
+                ) {
+                    Icon(Icons.Rounded.Shield, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Safe Graphics Mode")
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))

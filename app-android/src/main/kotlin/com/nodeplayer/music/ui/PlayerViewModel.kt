@@ -254,7 +254,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val selfTestPassed = GlassShaderSelfTest.getLastResult(app).passed
         val refractionEnabled = prefs.getBoolean("refraction_shader_enabled", true) && selfTestPassed
         return GlassThemeConfig(
-            glassStrength = prefs.getString("glass_strength", "DRAMATIC") ?: "DRAMATIC",
+            glassStrength = prefs.getString("glass_strength", "BALANCED") ?: "BALANCED",
             themeMode = prefs.getString("theme_mode", "SYSTEM") ?: "SYSTEM",
             accentSource = prefs.getString("accent_source", "ARTWORK") ?: "ARTWORK",
             spacingDensity = prefs.getString("spacing_density", "COMFORTABLE") ?: "COMFORTABLE",
@@ -269,7 +269,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             cornerRadiusDp = prefs.getFloat("corner_radius_dp", 16.0f),
             isPerformanceMode = prefs.getBoolean("is_performance_mode", false),
             refractionShaderEnabled = refractionEnabled,
-            hapticsEnabled = prefs.getBoolean("haptics_enabled", true)
+            hapticsEnabled = prefs.getBoolean("haptics_enabled", true),
+            shaderMode = prefs.getString("glass_shader_mode", "AUTO") ?: "AUTO",
+            glassOpacity = prefs.getFloat("glass_opacity", 0.65f),
+            blurStrength = prefs.getFloat("glass_blur_strength", 0.70f),
+            glassTexture = prefs.getFloat("glass_texture", 0.40f),
+            edgeHighlightStrength = prefs.getFloat("glass_edge_highlight_strength", 0.60f),
+            isFullyTransparent = prefs.getBoolean("glass_fully_transparent", false),
+            keepTextReadable = prefs.getBoolean("glass_keep_text_readable", true)
         )
     }
 
@@ -1144,7 +1151,29 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .putBoolean("is_performance_mode", newConfig.isPerformanceMode)
             .putBoolean("refraction_shader_enabled", newConfig.refractionShaderEnabled)
             .putBoolean("haptics_enabled", newConfig.hapticsEnabled)
+            .putString("glass_shader_mode", newConfig.shaderMode)
+            .putFloat("glass_opacity", newConfig.glassOpacity)
+            .putFloat("glass_blur_strength", newConfig.blurStrength)
+            .putFloat("glass_texture", newConfig.glassTexture)
+            .putFloat("glass_edge_highlight_strength", newConfig.edgeHighlightStrength)
+            .putBoolean("glass_fully_transparent", newConfig.isFullyTransparent)
+            .putBoolean("glass_keep_text_readable", newConfig.keepTextReadable)
             .apply()
+    }
+
+    fun applySafeGraphicsMode() {
+        updateThemeConfig(
+            _themeConfig.value.copy(
+                shaderMode = "BLUR_ONLY",
+                keepTextReadable = true,
+                isPerformanceMode = false,
+                glassOpacity = 0.65f,
+                blurStrength = 0.60f,
+                glassTexture = 0.0f,
+                edgeHighlightStrength = 0.40f,
+                isFullyTransparent = false
+            )
+        )
     }
 
     fun resetThemeConfigToDefault() {
