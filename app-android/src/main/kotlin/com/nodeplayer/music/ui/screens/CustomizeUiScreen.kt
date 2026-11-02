@@ -50,6 +50,7 @@ fun CustomizeUiScreen(
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
     onApplySafeGraphicsMode: () -> Unit = {},
     onReportProblem: () -> Unit = {},
+    onOpenMotionPlayground: () -> Unit = {},
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
@@ -567,6 +568,18 @@ fun CustomizeUiScreen(
                             )
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                OutlinedButton(
+                    onClick = onOpenMotionPlayground,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                ) {
+                    Icon(Icons.Rounded.Animation, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Interactive Motion & Spring Playground")
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))

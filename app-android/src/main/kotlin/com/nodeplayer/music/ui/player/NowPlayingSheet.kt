@@ -47,6 +47,7 @@ import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.music.ui.theme.glassSurface
+import com.nodeplayer.music.ui.theme.pressScale
 import java.io.File
 import kotlin.math.abs
 
@@ -1176,13 +1177,13 @@ private fun PlayerControlButtons(
         Box(
             modifier = Modifier
                 .size(76.dp)
-                .clip(CircleShape)
-                .background(accent)
-                .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
-                .clickable {
+                .pressScale(targetScale = 0.92f) {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     onPlayPause()
-                },
+                }
+                .clip(CircleShape)
+                .background(accent)
+                .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(

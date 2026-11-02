@@ -551,6 +551,14 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
+        if (activeSection == "motion_playground") {
+            AnimationPlaygroundScreen(
+                onBack = { activeSection = "customize_ui" },
+                hazeState = hazeState
+            )
+            return@Column
+        }
+
         if (shouldShow("sound_eq")) {
         // 1. Audio Output Section
         Text(
@@ -1267,6 +1275,7 @@ fun SettingsScreen(
                 onThemeConfigChange = onThemeConfigChange,
                 onApplySafeGraphicsMode = onApplySafeGraphicsMode,
                 onReportProblem = onReportProblem,
+                onOpenMotionPlayground = { activeSection = "motion_playground" },
                 hazeState = hazeState
             )
             Spacer(modifier = Modifier.height(20.dp))

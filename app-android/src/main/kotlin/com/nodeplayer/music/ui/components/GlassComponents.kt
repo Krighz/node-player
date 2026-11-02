@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.glassSurface
+import com.nodeplayer.music.ui.theme.pressScale
 import dev.chrisbanes.haze.HazeState
 
 @Composable
@@ -31,7 +32,7 @@ fun GlassCard(
     content: @Composable BoxScope.() -> Unit
 ) {
     val clickModifier = if (onClick != null) {
-        Modifier.clickable(onClick = onClick)
+        Modifier.pressScale(targetScale = 0.97f, onClick = onClick)
     } else Modifier
 
     Box(
