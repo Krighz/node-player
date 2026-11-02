@@ -233,7 +233,8 @@ class MainActivity : ComponentActivity() {
                             isPlaying = isPlaying,
                             isPerformanceMode = themeConfig.isPerformanceMode,
                             animatedBackdrop = themeConfig.animatedBackdrop,
-                            glassStrength = themeConfig.glassStrength
+                            glassStrength = themeConfig.glassStrength,
+                            themeConfig = themeConfig
                         )
 
                         // 2. Foreground Interactive UI (Cards use clean translucent glass; no recursive blur)

@@ -188,7 +188,16 @@ data class GlassThemeConfig(
     val glassTexture: Float = 0.40f, // 0.0 to 1.0 (grain scale)
     val edgeHighlightStrength: Float = 0.60f, // 0.0 to 1.0 (rim light & chromatic fringe)
     val isFullyTransparent: Boolean = false,
-    val keepTextReadable: Boolean = true
+    val keepTextReadable: Boolean = true,
+    val backgroundAnimationStyle: String = "LIQUID_BLOBS", // LIQUID_BLOBS, AURORA, MESH_GRADIENT, ALBUM_ART_BLUR, SLOW_CAUSTICS, STATIC
+    val backgroundAnimationSpeed: Float = 1.0f,            // 0.2f to 3.0f
+    val backgroundAnimationIntensity: Float = 0.8f,        // 0.1f to 1.0f
+    val backgroundColorSource: String = "ARTWORK",         // ARTWORK, PALETTE, CUSTOM
+    val animateOnlyWhilePlaying: Boolean = false,
+    val frameRateCap: String = "AUTO",                     // AUTO, 60, 90, 120
+    val renderQuality: String = "MAX_NATIVE",              // MAX_NATIVE, HIGH, BALANCED, LOW, AUTO_ADAPTIVE
+    val antiBandingDithering: Boolean = true,
+    val fontFamily: String = "SYSTEM"                      // SYSTEM, INTER, OUTFIT, JETBRAINS_MONO
 ) {
     fun isShaderActive(selfTestPassed: Boolean): Boolean {
         if (isPerformanceMode) return false

@@ -276,7 +276,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             glassTexture = prefs.getFloat("glass_texture", 0.40f),
             edgeHighlightStrength = prefs.getFloat("glass_edge_highlight_strength", 0.60f),
             isFullyTransparent = prefs.getBoolean("glass_fully_transparent", false),
-            keepTextReadable = prefs.getBoolean("glass_keep_text_readable", true)
+            keepTextReadable = prefs.getBoolean("glass_keep_text_readable", true),
+            backgroundAnimationStyle = prefs.getString("background_animation_style", "LIQUID_BLOBS") ?: "LIQUID_BLOBS",
+            backgroundAnimationSpeed = prefs.getFloat("background_animation_speed", 1.0f),
+            backgroundAnimationIntensity = prefs.getFloat("background_animation_intensity", 0.8f),
+            backgroundColorSource = prefs.getString("background_color_source", "ARTWORK") ?: "ARTWORK",
+            animateOnlyWhilePlaying = prefs.getBoolean("animate_only_while_playing", false),
+            frameRateCap = prefs.getString("frame_rate_cap", "AUTO") ?: "AUTO",
+            renderQuality = prefs.getString("render_quality", "MAX_NATIVE") ?: "MAX_NATIVE",
+            antiBandingDithering = prefs.getBoolean("anti_banding_dithering", true),
+            fontFamily = prefs.getString("font_family", "SYSTEM") ?: "SYSTEM"
         )
     }
 
@@ -1158,6 +1167,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .putFloat("glass_edge_highlight_strength", newConfig.edgeHighlightStrength)
             .putBoolean("glass_fully_transparent", newConfig.isFullyTransparent)
             .putBoolean("glass_keep_text_readable", newConfig.keepTextReadable)
+            .putString("background_animation_style", newConfig.backgroundAnimationStyle)
+            .putFloat("background_animation_speed", newConfig.backgroundAnimationSpeed)
+            .putFloat("background_animation_intensity", newConfig.backgroundAnimationIntensity)
+            .putString("background_color_source", newConfig.backgroundColorSource)
+            .putBoolean("animate_only_while_playing", newConfig.animateOnlyWhilePlaying)
+            .putString("frame_rate_cap", newConfig.frameRateCap)
+            .putString("render_quality", newConfig.renderQuality)
+            .putBoolean("anti_banding_dithering", newConfig.antiBandingDithering)
+            .putString("font_family", newConfig.fontFamily)
             .apply()
 
         // Sync widgets with current glass settings and re-render
