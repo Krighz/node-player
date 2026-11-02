@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.3.0] - 2026-11-03
+
+### Added
+- **Liquid-Glass Lens Dock**: Floating pill dock featuring draggable spring-physics magnifying bubble, amber/cyan specular rim, light haptic feedback on tab boundary crossing, and separate circular glass search button.
+- **In-App Background Animation Engine**: High-resolution procedural background engine with 6 styles (Liquid blobs, Aurora, Mesh gradient, Album-art blur, Slow caustics, Static), dynamic speed (0.2x–3.0x), intensity (0.1–1.0), color source (Artwork, Palette, Custom), animate-only-while-playing gate, frame rate cap (Auto, 60, 90, 120), adaptive quality scaling, and 64x64 blue-noise dithering to eliminate gradient banding.
+- **Static Liquid-Glass Home Widgets**: 4 static launcher widgets (Card 4x2, Lyrics 4x3, Slim 4x1, Square 2x2) with baked-in liquid-glass shimmer look, event-driven RemoteViews re-rendering, live in-app preview configuration screen, and granular element visibility toggles (artwork, waveform, title/artist, seekbar/times, transport, lyrics).
+- **Player UI Restructuring**: Reordered Now Playing hierarchy (Artwork &rarr; Title/Artist &rarr; One clickable quality line [source format + bit-perfect/resampled sink] &rarr; Seekbar with times &rarr; Primary transport controls &rarr; Secondary tools row: shuffle, repeat, queue bottom sheet, lyrics, sleep timer, EQ) with universal 48dp touch targets.
+- **Sectioned Settings Hub**: Redesigned Settings into a 2-column glass card grid with real-time search filtering, quick mode chips (Performance, Shader, Theme), subpage navigation with state memory, and per-section reset to defaults.
+- **Full Customize UI Suite**: Comprehensive personalization hub with interactive live preview cards, 6 theme presets (*Obsidian Liquid*, *Frost Pearl*, *Amber Flare*, *Neon Aurora*, *Stealth OLED*, *Minimal Glass*), bundled fonts (*Inter*, *Outfit*, *JetBrains Mono*, *System Default*), corner roundness (*Sharp 8dp*, *Rounded 16dp*, *Pill 24dp*), spacing density (*Compact 10dp*, *Comfortable 16dp*, *Roomy 22dp*), lens refraction & rim highlight sliders, component toggles, and `.nodetheme` JSON export/import.
+- **iOS-Grade Spring Motion & Animation Playground**: Unified spring physics tokens (*Snappy*, *Smooth*, *Bouncy*, *Gentle*), fluid `.pressScale()` modifier on cards & buttons, interactive draggable spring pucks, and an Animation Playground screen to test motion profiles.
+
+---
+
 ## [1.2.0] - 2026-11-02
 
 ### Added

@@ -3,7 +3,7 @@
 # Node Player 🎵
 ### *The Audiophile Liquid Glass Music Experience for Android*
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0--NodePlayer-00F0FF.svg?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v1.3.0--NodePlayer-00F0FF.svg?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Android%208.0--14%2B-3DDC84.svg?style=for-the-badge&logo=android)](https://developer.android.com)
 [![Audio Engine](https://img.shields.io/badge/Audio%20DSP-32--Bit%20Float-FF5722.svg?style=for-the-badge&logo=soundcharts&logoColor=white)]()
 [![Aesthetics](https://img.shields.io/badge/Aesthetics-Liquid%20Glass%20%7C%20AGSL-2196F3.svg?style=for-the-badge)]()
@@ -30,7 +30,7 @@
 - **🔀 Dual-ExoPlayer Continuous Crossfade**: Dual isolated audio playback engines providing smooth, gapless transitions with configurable mathematical curves (*Equal Power*, *Linear*, *Logarithmic*) and automatic live-album gapless detection.
 - **🔊 System-Wide EQ for Compatible Media Apps**: Dedicated Android foreground service attaching the Android software `DynamicsProcessing` audio effect to apps that broadcast their audio session (`ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION`). Tested and verified with **Spotify** and **YouTube Music** on realme GT 6T, with intelligent anti-double-EQ protection.
 - **💾 Complete Backup & M3U Import**: Unified `.nodebackup` export and import for playlists, play counts, favorites, EQ profiles, and themes, alongside full M3U playlist file compatibility.
-- **📱 Four Liquid Glass Home-Screen Widgets**: Hardware offscreen rendered AGSL glass widgets (`RenderNode` + `HardwareRenderer` + `ImageReader`) in 4 responsive sizes, featuring 20 tap-to-seek slices, synced lyrics, high-res artwork, and an instant 60 fps translucent scrub sheet.
+- **📱 Four Static Liquid Glass Home-Screen Widgets**: Hardware offscreen rendered static glass widgets (`RenderNode` + `HardwareRenderer` + `ImageReader`) in 4 responsive sizes, featuring baked-in liquid-glass shimmer look, event-driven bitmap updates (track change, play/pause, settings change), 20 tap-to-seek slices, synced lyrics, high-res artwork, granular element toggles, and an instant translucent scrub sheet.
 - **🎵 Synchronized Lyrics & Scrobbling**: Real-time synced `.lrc` lyrics with active line prominence and smooth auto-scrolling. Bundled Last.fm scrobbler with browser authorization flow and offline retry queue. Opt-in Last.fm scrobbling and opt-in lyrics also use the network.
 - **🛡️ 100% Private, Local Diagnostics & Open Source**: Local sanitized crash logging with zero network uploads, zero ads, zero telemetry. Licensed under Apache 2.0.
 
