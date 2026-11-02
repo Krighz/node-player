@@ -1,9 +1,11 @@
 package com.nodeplayer.music.diagnostics
 
 import android.content.Context
+import android.hardware.display.DisplayManager
 import android.opengl.GLES20
 import android.os.Build
 import android.util.DisplayMetrics
+import android.view.Display
 import android.view.WindowManager
 import java.util.Locale
 import javax.microedition.khronos.egl.EGL10
@@ -51,19 +53,50 @@ object GpuInspector {
     fun getDeviceInfo(context: Context): DeviceGraphicsInfo {
         cachedInfo?.let { return it }
 
-        val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-        val metrics = DisplayMetrics()
-        val display = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            context.display
-        } else {
-            @Suppress("DEPRECATION")
-            wm?.defaultDisplay
+        val resMetrics = context.resources.displayMetrics
+        var widthPx = resMetrics.widthPixels
+        var heightPx = resMetrics.heightPixels
+        var densityDpi = resMetrics.densityDpi
+        var densityScale = resMetrics.density
+        var refreshRate = 60f
+
+        try {
+            val wm = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            val displayManager = context.getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+
+            val display: Display? = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
+                    try {
+                        context.display
+                    } catch (_: Throwable) {
+                        displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+                    }
+                }
+                else -> {
+                    @Suppress("DEPRECATION")
+                    wm?.defaultDisplay ?: displayManager?.getDisplay(Display.DEFAULT_DISPLAY)
+                }
+            }
+
+            if (display != null) {
+                val realMetrics = DisplayMetrics()
+                @Suppress("DEPRECATION")
+                display.getRealMetrics(realMetrics)
+                widthPx = realMetrics.widthPixels
+                heightPx = realMetrics.heightPixels
+                densityDpi = realMetrics.densityDpi
+                densityScale = realMetrics.density
+                refreshRate = display.refreshRate
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && wm != null) {
+                val bounds = wm.maximumWindowMetrics.bounds
+                if (bounds.width() > 0 && bounds.height() > 0) {
+                    widthPx = bounds.width()
+                    heightPx = bounds.height()
+                }
+            }
+        } catch (_: Throwable) {
+            // Safe fallback already populated from context.resources.displayMetrics
         }
-
-        @Suppress("DEPRECATION")
-        display?.getRealMetrics(metrics)
-
-        val refreshRate = display?.refreshRate ?: 60f
 
         val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             try {
@@ -75,15 +108,19 @@ object GpuInspector {
             Build.HARDWARE
         }
 
-        val gpu = queryGpuFromEgl()
+        val gpu = try {
+            queryGpuFromEgl()
+        } catch (_: Throwable) {
+            "Unknown GPU"
+        }
 
         val info = DeviceGraphicsInfo(
             socModel = soc,
             gpuRenderer = gpu,
-            screenWidthPx = metrics.widthPixels,
-            screenHeightPx = metrics.heightPixels,
-            densityDpi = metrics.densityDpi,
-            densityScale = metrics.density,
+            screenWidthPx = widthPx,
+            screenHeightPx = heightPx,
+            densityDpi = densityDpi,
+            densityScale = densityScale,
             refreshRateHz = refreshRate
         )
         cachedInfo = info
