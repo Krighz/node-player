@@ -163,7 +163,7 @@ object UpdateChecker {
             )
             UpdateCheckResult.UpdateAvailable(info)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed parsing release JSON", e)
+            try { Log.e(TAG, "Failed parsing release JSON", e) } catch (_: Throwable) {}
             UpdateCheckResult.Error("Failed to parse release metadata: ${e.message}")
         }
     }

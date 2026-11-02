@@ -20,6 +20,15 @@ object UpdateManager {
     private val _availableUpdate = MutableStateFlow<AppUpdateInfo?>(null)
     val availableUpdate: StateFlow<AppUpdateInfo?> = _availableUpdate.asStateFlow()
 
+    fun setAvailableUpdate(info: AppUpdateInfo?) {
+        _availableUpdate.value = info
+    }
+
+    fun clearCachedUpdate(context: Context) {
+        UpdatePreferences.setCachedUpdate(context, null)
+        _availableUpdate.value = null
+    }
+
     val downloadStatus: StateFlow<DownloadStatus> = UpdateDownloadManager.downloadStatus
 
     fun setDownloadStatus(status: DownloadStatus) {

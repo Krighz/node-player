@@ -257,6 +257,14 @@ object UpdateDownloadManager {
     }
 
     /**
+     * Extracts and normalizes the hex SHA-256 hash from asset file contents.
+     * Handles typical formats: "<hash>  NodePlayer.apk", "<hash> *NodePlayer.apk", or just "<hash>".
+     */
+    fun parseSha256Text(rawText: String): String? {
+        return rawText.trim().split("\\s+".toRegex()).firstOrNull()?.trim()?.lowercase(Locale.US)?.takeIf { it.isNotBlank() }
+    }
+
+    /**
      * Downloads and parses the expected SHA-256 checksum string from the .sha256 asset.
      */
     fun fetchExpectedSha256(context: Context, sha256Url: String): String? {
@@ -268,9 +276,8 @@ object UpdateDownloadManager {
             conn.readTimeout = 10000
             conn.setRequestProperty("User-Agent", "NodePlayer/${UpdateChecker.getInstalledVersionName(context)}")
             if (conn.responseCode == HttpURLConnection.HTTP_OK) {
-                val text = conn.inputStream.bufferedReader().use { it.readText() }.trim()
-                // Typical format: "<hash>  NodePlayer.apk" or just "<hash>"
-                text.split("\\s+".toRegex()).firstOrNull()?.trim()?.lowercase(Locale.US)
+                val text = conn.inputStream.bufferedReader().use { it.readText() }
+                parseSha256Text(text)
             } else {
                 null
             }

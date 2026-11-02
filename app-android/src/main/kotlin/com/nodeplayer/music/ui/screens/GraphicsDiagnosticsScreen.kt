@@ -191,6 +191,47 @@ fun GraphicsDiagnosticsScreen(
                             colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
                         )
                     }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // Debug Switch: Mock Update Available
+                    var mockUpdateEnabled by remember {
+                        mutableStateOf(com.nodeplayer.music.update.UpdatePreferences.getDebugMockUrl(context) != null)
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Debug Mock Update", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                            Text("Simulates v9.9.0 update banner for UI testing", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
+                        }
+                        Switch(
+                            checked = mockUpdateEnabled,
+                            onCheckedChange = { enabled ->
+                                mockUpdateEnabled = enabled
+                                if (enabled) {
+                                    com.nodeplayer.music.update.UpdatePreferences.setDebugMockUrl(context, "mock://v9.9.0")
+                                    com.nodeplayer.music.update.UpdateManager.setAvailableUpdate(
+                                        com.nodeplayer.music.update.AppUpdateInfo(
+                                            versionName = "9.9.0",
+                                            releaseTag = "v9.9.0",
+                                            downloadUrl = "https://github.com/Krighz/node-player/releases/download/v9.9.0/NodePlayer.apk",
+                                            sha256Url = "https://github.com/Krighz/node-player/releases/download/v9.9.0/NodePlayer.apk.sha256",
+                                            releaseNotes = "• Test release notes\n• Verified banner rendering\n• Safe verification",
+                                            assetSize = 4194304L,
+                                            publishedAt = "2026-11-02T12:00:00Z"
+                                        )
+                                    )
+                                } else {
+                                    com.nodeplayer.music.update.UpdatePreferences.setDebugMockUrl(context, null)
+                                    com.nodeplayer.music.update.UpdateManager.clearCachedUpdate(context)
+                                }
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
+                    }
                 }
             }
 
