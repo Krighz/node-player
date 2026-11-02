@@ -16,7 +16,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,7 +25,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import com.nodeplayer.music.ui.PlayerViewModel
+import com.nodeplayer.music.diagnostics.DiagnosticsDumpManager
+import com.nodeplayer.music.ui.components.DiagnosticsDumpDialog
 import com.nodeplayer.music.ui.components.FrostedBottomBar
+import java.io.File
 import com.nodeplayer.music.ui.components.FrostedMiniPlayer
 import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.player.NowPlayingSheet
@@ -142,6 +145,15 @@ class MainActivity : ComponentActivity() {
                 val autoDeviceProfilesEnabled by viewModel.autoDeviceProfilesEnabled.collectAsState()
                 val selfTestResult by viewModel.shaderSelfTestResult.collectAsState()
 
+                var showDiagnosticsDialog by remember { mutableStateOf(false) }
+                var pendingAutoReportFile by remember { mutableStateOf<File?>(null) }
+
+                LaunchedEffect(Unit) {
+                    if (DiagnosticsDumpManager.hasPendingAutoReport(this@MainActivity)) {
+                        pendingAutoReportFile = DiagnosticsDumpManager.getPendingAutoReportFile(this@MainActivity)
+                    }
+                }
+
                 Box(
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -234,7 +246,7 @@ class MainActivity : ComponentActivity() {
                                 themeConfig = themeConfig,
                                 selfTestResult = selfTestResult,
                                 onToggleForceFail = { viewModel.toggleForceSelfTestFail(it) },
-                                onReportProblemClick = { /* Diagnostics dump modal */ },
+                                onReportProblemClick = { showDiagnosticsDialog = true },
                                 onBack = { currentRoute = "more" },
                                 hazeState = null
                             )
@@ -292,6 +304,7 @@ class MainActivity : ComponentActivity() {
                                 onRestoreTrack = { viewModel.restoreExcludedTrack(it) },
                                 onThemeConfigChange = { viewModel.updateThemeConfig(it) },
                                 onApplySafeGraphicsMode = { viewModel.applySafeGraphicsMode() },
+                                onReportProblem = { showDiagnosticsDialog = true },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
                                 hazeState = null
                             )
@@ -389,6 +402,48 @@ class MainActivity : ComponentActivity() {
                             onDismiss = {
                                 prefs.edit().putBoolean("onboarding_completed", true).apply()
                                 showOnboarding = false
+                            }
+                        )
+                    }
+
+                    if (showDiagnosticsDialog) {
+                        DiagnosticsDumpDialog(
+                            currentShaderMode = themeConfig.shaderMode,
+                            currentScreenProvider = { currentRoute },
+                            onDismiss = { showDiagnosticsDialog = false }
+                        )
+                    }
+
+                    if (pendingAutoReportFile != null) {
+                        AlertDialog(
+                            onDismissRequest = {
+                                DiagnosticsDumpManager.clearAutoReport(this@MainActivity)
+                                pendingAutoReportFile = null
+                            },
+                            title = { Text("Something Looked Wrong") },
+                            text = { Text("Node Player detected a shader or graphics issue earlier. Would you like to share a diagnostic report to help us fix it?") },
+                            confirmButton = {
+                                Button(
+                                    onClick = {
+                                        val file = pendingAutoReportFile!!
+                                        val intent = DiagnosticsDumpManager.createShareIntent(this@MainActivity, file)
+                                        startActivity(Intent.createChooser(intent, "Share Diagnostics Dump"))
+                                        DiagnosticsDumpManager.clearAutoReport(this@MainActivity)
+                                        pendingAutoReportFile = null
+                                    }
+                                ) {
+                                    Text("Send Report")
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(
+                                    onClick = {
+                                        DiagnosticsDumpManager.clearAutoReport(this@MainActivity)
+                                        pendingAutoReportFile = null
+                                    }
+                                ) {
+                                    Text("Dismiss")
+                                }
                             }
                         )
                     }

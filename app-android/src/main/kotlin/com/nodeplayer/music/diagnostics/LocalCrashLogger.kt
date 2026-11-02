@@ -24,6 +24,7 @@ object LocalCrashLogger {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
                 recordCrash(context, thread, throwable)
+                DiagnosticsDumpManager.saveAutoDump(context, "Crash on ${thread.name}: ${throwable.message}")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to record local crash log", e)
             } finally {

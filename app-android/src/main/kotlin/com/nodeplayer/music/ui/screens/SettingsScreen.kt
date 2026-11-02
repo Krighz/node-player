@@ -10,6 +10,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -81,6 +83,7 @@ fun SettingsScreen(
     onRestoreTrack: (Long) -> Unit = {},
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
     onApplySafeGraphicsMode: () -> Unit = {},
+    onReportProblem: () -> Unit = {},
     onRescanLibrary: () -> Unit,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
@@ -1257,6 +1260,18 @@ fun SettingsScreen(
                     Icon(Icons.Rounded.Shield, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Safe Graphics Mode")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = onReportProblem,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFF59E0B))
+                ) {
+                    Icon(Icons.Rounded.BugReport, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Report a Graphics Problem")
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -2747,22 +2762,29 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(
+                        modifier = Modifier.pointerInput(Unit) {
+                            detectTapGestures(onLongPress = { onReportProblem() })
+                        }
+                    ) {
                         Text(
                             text = "Node Player",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
                         )
                         Text(
-                            text = "Version 0.1.0",
+                            text = "Version ${com.nodeplayer.music.BuildConfig.VERSION_NAME} (Hold for diagnostics)",
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                         )
                     }
                     Surface(
                         color = accent.copy(alpha = 0.2f),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.pointerInput(Unit) {
+                            detectTapGestures(onLongPress = { onReportProblem() })
+                        }
                     ) {
                         Text(
-                            text = "v0.1.0",
+                            text = "v${com.nodeplayer.music.BuildConfig.VERSION_NAME}",
                             color = accent,
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)

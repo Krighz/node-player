@@ -78,6 +78,7 @@ object GlassShaderSelfTest {
 
         if (!result.passed) {
             Log.w(TAG, "Shader self-test FAILED: ${result.reason}. Safe fallback (Haze blur + rim) activated.")
+            DiagnosticsDumpManager.saveAutoDump(context, "Shader self-test failed: ${result.reason}")
         } else {
             Log.i(TAG, "Shader self-test PASSED: ${result.reason}")
         }
