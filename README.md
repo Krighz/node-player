@@ -229,6 +229,13 @@ See [docs/RELEASING.md](docs/RELEASING.md) for complete details on keystore setu
 
 ---
 
+## 💬 Community & Feedback
+
+* **Join the Conversation**: Have an idea, question, or want to share your audio setup? Check out [GitHub Discussions](https://github.com/Krighz/node-player/discussions).
+* **Report Issues**: Found a bug or glitch? Open a ticket via the [GitHub Issue Tracker](https://github.com/Krighz/node-player/issues). You can also report directly inside the app with pre-filled device specs or submit a full diagnostics bundle.
+
+---
+
 ## 📜 License & Open-Source Acknowledgments
 
 * **Node Player** is open-source software licensed under the [Apache License 2.0](LICENSE).

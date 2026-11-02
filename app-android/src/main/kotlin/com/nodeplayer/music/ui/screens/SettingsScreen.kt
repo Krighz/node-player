@@ -57,6 +57,7 @@ import com.nodeplayer.music.update.UpdatePreferences
 import com.nodeplayer.music.update.UpdateManager
 import com.nodeplayer.music.update.UpdateWorker
 import com.nodeplayer.music.update.UpdateCheckResult
+import com.nodeplayer.music.feedback.FeedbackHelper
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -3288,6 +3289,82 @@ fun SettingsScreen(
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
                         contentDescription = "Open Link",
+                        tint = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Send Feedback (GitHub Discussions)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { FeedbackHelper.openFeedback(context) }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.Forum,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Send Feedback",
+                                style = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+                            )
+                            Text(
+                                text = "Join conversations on GitHub Discussions",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.6f))
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                        contentDescription = "Open Discussions",
+                        tint = Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Report a Bug (GitHub Issues with device info pre-filled)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { FeedbackHelper.openBugReport(context) }
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.BugReport,
+                            contentDescription = null,
+                            tint = Color(0xFFEF4444),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Report a Bug",
+                                style = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+                            )
+                            Text(
+                                text = "Open issue with pre-filled device & OS details",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.6f))
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.OpenInNew,
+                        contentDescription = "Report Issue",
                         tint = Color.White.copy(alpha = 0.5f),
                         modifier = Modifier.size(18.dp)
                     )

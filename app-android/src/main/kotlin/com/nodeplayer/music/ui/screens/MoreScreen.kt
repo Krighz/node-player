@@ -15,11 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.music.audio.AudioTestTools
 import com.nodeplayer.music.data.DailyListeningStatEntity
+import com.nodeplayer.music.feedback.FeedbackHelper
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import dev.chrisbanes.haze.HazeState
@@ -37,6 +39,7 @@ fun MoreScreen(
     hazeState: HazeState? = null
 ) {
     val accent = LocalAccentColor.current
+    val context = LocalContext.current
     val scrollState = rememberScrollState()
 
     // Listening time calculations
@@ -176,6 +179,62 @@ fun MoreScreen(
             onClick = onOpenDiagnostics,
             hazeState = hazeState
         )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Community & Feedback
+        Text(
+            text = "COMMUNITY & FEEDBACK",
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.2.sp,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            GlassCard(
+                modifier = Modifier.weight(1f),
+                hazeState = hazeState,
+                onClick = { FeedbackHelper.openFeedback(context) },
+                tintAlpha = 0.40f
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.Forum, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text("Send feedback", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Discussions", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp))
+                    }
+                }
+            }
+
+            GlassCard(
+                modifier = Modifier.weight(1f),
+                hazeState = hazeState,
+                onClick = { FeedbackHelper.openBugReport(context) },
+                tintAlpha = 0.40f
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.BugReport, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column {
+                        Text("Report a bug", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Device pre-filled", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp))
+                    }
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 
