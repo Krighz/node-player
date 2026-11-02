@@ -3129,21 +3129,26 @@ fun SettingsScreen(
                         onClick = {
                             UpdateManager.triggerCheck(context, isManual = true) { result ->
                                 updateLastChecked = UpdatePreferences.getLastCheckedTimestamp(context)
+                                val showSafeToast: (String, Int) -> Unit = { msg, len ->
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                                        Toast.makeText(context, msg, len).show()
+                                    }
+                                }
                                 when (result) {
                                     is UpdateCheckResult.UpdateAvailable -> {
-                                        Toast.makeText(context, "Update available: ${result.info.versionName}", Toast.LENGTH_SHORT).show()
+                                        showSafeToast("Update available: ${result.info.versionName}", Toast.LENGTH_SHORT)
                                     }
                                     is UpdateCheckResult.UpToDate -> {
-                                        Toast.makeText(context, "Node Player is up to date (${com.nodeplayer.music.update.UpdateChecker.getInstalledVersionName(context)})", Toast.LENGTH_SHORT).show()
+                                        showSafeToast("Node Player is up to date (${com.nodeplayer.music.update.UpdateChecker.getInstalledVersionName(context)})", Toast.LENGTH_SHORT)
                                     }
                                     is UpdateCheckResult.RateLimited -> {
-                                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                                        showSafeToast(result.message, Toast.LENGTH_LONG)
                                     }
                                     is UpdateCheckResult.NetworkError -> {
-                                        Toast.makeText(context, "Network error: ${result.message}", Toast.LENGTH_SHORT).show()
+                                        showSafeToast("Network error: ${result.message}", Toast.LENGTH_SHORT)
                                     }
                                     is UpdateCheckResult.Error -> {
-                                        Toast.makeText(context, "Check error: ${result.message}", Toast.LENGTH_SHORT).show()
+                                        showSafeToast("Check error: ${result.message}", Toast.LENGTH_SHORT)
                                     }
                                 }
                             }

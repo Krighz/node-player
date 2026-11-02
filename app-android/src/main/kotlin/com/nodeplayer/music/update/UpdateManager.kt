@@ -138,7 +138,9 @@ object UpdateManager {
                         // Keep cached update if offline or rate limited
                     }
                 }
-                onResult?.invoke(result)
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    onResult?.invoke(result)
+                }
             } finally {
                 _isChecking.value = false
             }

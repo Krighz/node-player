@@ -14,11 +14,17 @@ object SupportConfig {
     const val UPI_PAY_URI = "upi://pay?pa=7063061981@fam&pn=Krighz"
     const val SUPPORT_URL = "https://krighz.github.io/node-player/#support"
 
+    private fun showToast(context: Context, text: String, duration: Int = Toast.LENGTH_SHORT) {
+        android.os.Handler(android.os.Looper.getMainLooper()).post {
+            Toast.makeText(context, text, duration).show()
+        }
+    }
+
     fun copyUpiId(context: Context) {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
         val clip = ClipData.newPlainText("Node Player UPI ID", UPI_ID)
         clipboard?.setPrimaryClip(clip)
-        Toast.makeText(context, "Copied UPI ID: $UPI_ID", Toast.LENGTH_SHORT).show()
+        showToast(context, "Copied UPI ID: $UPI_ID", Toast.LENGTH_SHORT)
     }
 
     fun openUpiPayment(context: Context) {
@@ -29,10 +35,10 @@ object SupportConfig {
             context.startActivity(intent)
         } catch (_: ActivityNotFoundException) {
             copyUpiId(context)
-            Toast.makeText(context, "Copied UPI ID ($UPI_ID). Paste it in any UPI app", Toast.LENGTH_LONG).show()
+            showToast(context, "Copied UPI ID ($UPI_ID). Paste it in any UPI app", Toast.LENGTH_LONG)
         } catch (_: Exception) {
             copyUpiId(context)
-            Toast.makeText(context, "Copied UPI ID ($UPI_ID). Paste it in any UPI app", Toast.LENGTH_LONG).show()
+            showToast(context, "Copied UPI ID ($UPI_ID). Paste it in any UPI app", Toast.LENGTH_LONG)
         }
     }
 }

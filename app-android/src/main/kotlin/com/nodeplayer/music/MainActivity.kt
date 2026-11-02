@@ -186,10 +186,14 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                val safeToast: (String, Int) -> Unit = { msg, len ->
+                    runOnUiThread { Toast.makeText(this@MainActivity, msg, len).show() }
+                }
+
                 val performInstall: (File) -> Unit = { apk ->
                     when (val valResult = UpdateInstaller.validateApkSecurity(this@MainActivity, apk)) {
                         is UpdateInstaller.PreInstallValidationResult.Invalid -> {
-                            Toast.makeText(this@MainActivity, valResult.reason, Toast.LENGTH_LONG).show()
+                            safeToast(valResult.reason, Toast.LENGTH_LONG)
                             UpdateManager.setDownloadStatus(DownloadStatus.Error(valResult.reason))
                         }
                         is UpdateInstaller.PreInstallValidationResult.Valid -> {
@@ -202,7 +206,7 @@ class MainActivity : ComponentActivity() {
                             } else {
                                 val installResult = UpdateInstaller.installApk(this@MainActivity, apk)
                                 if (installResult.isFailure) {
-                                    Toast.makeText(this@MainActivity, "Install error: ${installResult.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                    safeToast("Install error: ${installResult.exceptionOrNull()?.message}", Toast.LENGTH_LONG)
                                 }
                             }
                         }
@@ -248,7 +252,7 @@ class MainActivity : ComponentActivity() {
                                     if (readyApk != null) {
                                         performInstall(readyApk)
                                     } else {
-                                        Toast.makeText(this@MainActivity, "Download not ready yet", Toast.LENGTH_SHORT).show()
+                                        safeToast("Download not ready yet", Toast.LENGTH_SHORT)
                                     }
                                 },
                                 hazeState = null
@@ -538,7 +542,7 @@ class MainActivity : ComponentActivity() {
                                 pendingApkToInstall?.let { apk ->
                                     val installResult = UpdateInstaller.installApk(this@MainActivity, apk)
                                     if (installResult.isFailure) {
-                                        Toast.makeText(this@MainActivity, "Install error: ${installResult.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                        safeToast("Install error: ${installResult.exceptionOrNull()?.message}", Toast.LENGTH_LONG)
                                     }
                                 }
                             },
