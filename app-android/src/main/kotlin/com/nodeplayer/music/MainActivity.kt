@@ -140,6 +140,7 @@ class MainActivity : ComponentActivity() {
                 val resamplerRateChoice by viewModel.resamplerRateChoice.collectAsState()
                 val analyzingTrackId by viewModel.analyzingTrackId.collectAsState()
                 val autoDeviceProfilesEnabled by viewModel.autoDeviceProfilesEnabled.collectAsState()
+                val selfTestResult by viewModel.shaderSelfTestResult.collectAsState()
 
                 Box(
                     modifier = Modifier.fillMaxSize()
@@ -226,6 +227,15 @@ class MainActivity : ComponentActivity() {
                                 onOpenRecap = { currentRoute = "recap" },
                                 onOpenSmartPlaylists = { currentRoute = "smart_playlists" },
                                 onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
+                                onOpenDiagnostics = { currentRoute = "graphics_diagnostics" },
+                                hazeState = null
+                            )
+                            "graphics_diagnostics" -> com.nodeplayer.music.ui.screens.GraphicsDiagnosticsScreen(
+                                themeConfig = themeConfig,
+                                selfTestResult = selfTestResult,
+                                onToggleForceFail = { viewModel.toggleForceSelfTestFail(it) },
+                                onReportProblemClick = { /* Diagnostics dump modal */ },
+                                onBack = { currentRoute = "more" },
                                 hazeState = null
                             )
                             "stats" -> com.nodeplayer.music.ui.screens.StatsScreen(
@@ -299,7 +309,6 @@ class MainActivity : ComponentActivity() {
                             val duration = currentTrack!!.durationMs.coerceAtLeast(1L)
                             val progress = (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
 
-                            val selfTestResult by viewModel.shaderSelfTestResult.collectAsState()
                             val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
 
                             FrostedMiniPlayer(
@@ -321,7 +330,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        val selfTestResult by viewModel.shaderSelfTestResult.collectAsState()
                         val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
 
                         FrostedBottomBar(

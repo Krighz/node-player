@@ -33,6 +33,7 @@ fun MoreScreen(
     onOpenRecap: () -> Unit,
     onOpenSmartPlaylists: () -> Unit,
     onOpenDuplicateFinder: () -> Unit,
+    onOpenDiagnostics: () -> Unit = {},
     hazeState: HazeState? = null
 ) {
     val accent = LocalAccentColor.current
@@ -164,6 +165,15 @@ fun MoreScreen(
             title = "Duplicate Finder",
             subtitle = "Exact hash & metadata duplicate detection with keep best",
             onClick = onOpenDuplicateFinder,
+            hazeState = hazeState
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        HubRow(
+            icon = Icons.Rounded.Monitor,
+            title = "Graphics Diagnostics",
+            subtitle = "GPU hardware inspection, shader self-test & previews",
+            onClick = onOpenDiagnostics,
             hazeState = hazeState
         )
 
