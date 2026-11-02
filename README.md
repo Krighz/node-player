@@ -187,10 +187,13 @@ Home screen widgets are RemoteViews and cannot execute continuous 60 fps shaders
 - Intercepts audio session IDs (`ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION`) from third-party players (tested with **Spotify** and **YouTube Music** on realme GT 6T) and attaches the software `DynamicsProcessing` effect.
 - **Anti-Double-EQ Protection**: Node Player automatically disables its internal DSP equalizer while system-wide EQ is active to avoid double filtering.
 
-### 3. Display & Performance Mode
-- **Real Glass Dock Refraction**: AGSL lens distortion and chromatic aberration on the floating navigation dock.
+### 3. Display, Glass Appearance & Graphics Diagnostics
+- **Real Glass Dock Refraction**: AGSL lens distortion and chromatic aberration on the floating navigation dock, mini player, scrub sheet, and widgets.
+- **Glass Appearance Controls**: Unified controls in Settings for all glass surfaces (opacity, blur strength, grain texture, and edge highlight 0–100%), with quick presets (*Clear*, *Light*, *Balanced*, *Frosted*) and *Fully Transparent Glass* mode.
+- **Self-Testing Shader Pipeline**: Automated offscreen render & spill check protects devices (e.g. Mali/Dimensity GPUs) with automatic graceful fallback to Haze blur with rim highlight.
+- **Graphics Diagnostics & Reporting**: Full GPU & EGL inspection in *More &rarr; Graphics Diagnostics*, Safe Graphics Mode button, and 1-tap/60s diagnostics capture (`nodeplayer-diagnostics-<date>.zip`) with zero personal data. Attach reports directly to the [Graphics Glitch issue template](.github/ISSUE_TEMPLATE/graphics_glitch.md).
 - **Performance Mode**: One-tap toggle that turns off the AGSL refraction shader, animated liquid background, and real-time spectrum, lowering GPU memory by 58% and frame times by 31%.
-- **Widget Customization**: Adjust glass opacity (40% to 95%), corner radius (16 dp to 36 dp), and performance fallback mode.
+- **Widget Customization**: Adjust glass opacity (0% to 100%), corner radius (12 dp to 36 dp), and performance fallback mode.
 
 ### 4. Privacy & Last.fm
 - **Strictly Opt-in Lyrics**: Zero internet requests made unless LRCLIB online lyrics is explicitly toggled on.
