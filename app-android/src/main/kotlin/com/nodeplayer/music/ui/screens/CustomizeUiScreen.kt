@@ -635,14 +635,18 @@ fun CustomizeUiScreen(
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     FilledTonalButton(
                         onClick = {
-                            val file = NodeThemeSerializer.exportToFile(context, themeConfig)
-                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "application/json"
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            try {
+                                val file = NodeThemeSerializer.exportToFile(context, themeConfig)
+                                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                                val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/json"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(sendIntent, "Share Node Theme"))
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Failed to share theme: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
-                            context.startActivity(Intent.createChooser(sendIntent, "Share Node Theme"))
                         },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.filledTonalButtonColors(containerColor = accent.copy(alpha = 0.25f), contentColor = Color.White)

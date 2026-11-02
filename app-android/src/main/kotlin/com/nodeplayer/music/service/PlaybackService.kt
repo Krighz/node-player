@@ -2,7 +2,11 @@ package com.nodeplayer.music.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.Notification
 import android.app.PendingIntent
+import android.content.pm.ServiceInfo
+import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
@@ -95,6 +99,7 @@ class PlaybackService : MediaSessionService() {
     companion object {
         @Volatile var isCurrentlyPlaying: Boolean = false
         const val CHANNEL_ID = "node_player_playback_channel"
+        const val NOTIFICATION_ID = 1001
         const val ACTION_PLAY_PAUSE = "com.nodeplayer.music.action.PLAY_PAUSE"
         const val ACTION_NEXT = "com.nodeplayer.music.action.NEXT"
         const val ACTION_PREV = "com.nodeplayer.music.action.PREV"
@@ -123,7 +128,20 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
+        val action = intent?.action
+        if (action in listOf(
+                ACTION_PLAY_PAUSE,
+                ACTION_NEXT,
+                ACTION_PREV,
+                ACTION_SEEK_TO,
+                ACTION_SEEK_BACK_10,
+                ACTION_SEEK_FORWARD_30
+            )
+        ) {
+            startInitialForegroundIfNeeded()
+        }
+
+        when (action) {
             ACTION_PLAY_PAUSE -> {
                 if (::crossfadeManager.isInitialized) {
                     if (crossfadeManager.currentQueue.isEmpty()) {
@@ -139,6 +157,8 @@ class PlaybackService : MediaSessionService() {
                                     crossfadeManager.playQueue(tracks, idx, lastPos)
                                     com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
                                 }
+                            } else {
+                                dismissForegroundAndStopIfNeeded()
                             }
                         }
                     } else {
@@ -158,6 +178,8 @@ class PlaybackService : MediaSessionService() {
                                     crossfadeManager.playQueue(tracks, 0, 0L)
                                     com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
                                 }
+                            } else {
+                                dismissForegroundAndStopIfNeeded()
                             }
                         }
                     } else {
@@ -177,6 +199,8 @@ class PlaybackService : MediaSessionService() {
                                     crossfadeManager.playQueue(tracks, 0, 0L)
                                     com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
                                 }
+                            } else {
+                                dismissForegroundAndStopIfNeeded()
                             }
                         }
                     } else {
@@ -468,6 +492,56 @@ class PlaybackService : MediaSessionService() {
     }
 
 
+
+    private fun startInitialForegroundIfNeeded() {
+        try {
+            createNotificationChannel()
+            val initialNotification = buildInitialNotification()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                ServiceCompat.startForeground(
+                    this,
+                    NOTIFICATION_ID,
+                    initialNotification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                )
+            } else {
+                startForeground(NOTIFICATION_ID, initialNotification)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PlaybackService", "Failed to start initial foreground notification", e)
+        }
+    }
+
+    private fun buildInitialNotification(): Notification {
+        val intent = Intent(this, MainActivity::class.java)
+        val pendingIntent = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText("Playing audio")
+            .setContentIntent(pendingIntent)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .build()
+    }
+
+    private fun dismissForegroundAndStopIfNeeded() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+            } else {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            }
+        } catch (_: Exception) {}
+        stopSelf()
+    }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

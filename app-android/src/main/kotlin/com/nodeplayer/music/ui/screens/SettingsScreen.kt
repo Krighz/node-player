@@ -148,7 +148,9 @@ fun SettingsScreen(
     var isExcludedTracksExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var activeSection by rememberSaveable { mutableStateOf<String?>(null) }
-    BackHandler(enabled = activeSection != null) { activeSection = null }
+    BackHandler(enabled = activeSection != null) {
+        activeSection = if (activeSection == "motion_playground") "customize_ui" else null
+    }
     var showTopMenu by remember { mutableStateOf(false) }
     var showAdvancedSettings by remember { mutableStateOf(sharedPrefs.getBoolean("show_advanced_settings", false)) }
 
@@ -165,6 +167,17 @@ fun SettingsScreen(
             val path = it.path ?: it.toString()
             onAddCustomFolder(path)
         }
+    }
+
+    if (activeSection == "motion_playground") {
+        AnimationPlaygroundScreen(
+            themeConfig = themeConfig,
+            onThemeConfigChange = onThemeConfigChange,
+            onBack = { activeSection = "customize_ui" },
+            hazeState = hazeState,
+            modifier = modifier
+        )
+        return
     }
 
     Column(
@@ -551,15 +564,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(10.dp))
             }
 
-        if (activeSection == "motion_playground") {
-            AnimationPlaygroundScreen(
-                themeConfig = themeConfig,
-                onThemeConfigChange = onThemeConfigChange,
-                onBack = { activeSection = "customize_ui" },
-                hazeState = hazeState
-            )
-            return@Column
-        }
+
 
         if (shouldShow("sound_eq")) {
         // 1. Audio Output Section

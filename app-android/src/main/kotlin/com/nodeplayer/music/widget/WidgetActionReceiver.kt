@@ -27,14 +27,20 @@ class WidgetActionReceiver : BroadcastReceiver() {
             }
             WidgetUpdateManager.updateAllWidgets(context)
         } else {
-            val serviceIntent = Intent(context, PlaybackService::class.java).apply {
-                this.action = action
-                intent.extras?.let { putExtras(it) }
-            }
-            try {
-                ContextCompat.startForegroundService(context, serviceIntent)
-            } catch (e: Exception) {
-                android.util.Log.e("WidgetActionReceiver", "Failed to start service", e)
+            // Only start service for actions that can actually initiate playback
+            if (action == PlaybackService.ACTION_PLAY_PAUSE ||
+                action == PlaybackService.ACTION_NEXT ||
+                action == PlaybackService.ACTION_PREV
+            ) {
+                val serviceIntent = Intent(context, PlaybackService::class.java).apply {
+                    this.action = action
+                    intent.extras?.let { putExtras(it) }
+                }
+                try {
+                    ContextCompat.startForegroundService(context, serviceIntent)
+                } catch (e: Exception) {
+                    android.util.Log.e("WidgetActionReceiver", "Failed to start service", e)
+                }
             }
         }
     }
