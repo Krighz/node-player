@@ -40,6 +40,15 @@ import com.nodeplayer.music.ui.theme.NodePlayerTheme
 import dev.chrisbanes.haze.HazeState
 import com.nodeplayer.music.update.UpdateManager
 import com.nodeplayer.music.update.UpdateOptInDialog
+import com.nodeplayer.music.update.UpdateChecker
+import com.nodeplayer.music.update.UpdatePreferences
+import com.nodeplayer.music.update.UpdateInstaller
+import com.nodeplayer.music.update.UpdateDownloadManager
+import com.nodeplayer.music.update.DownloadStatus
+import com.nodeplayer.music.update.InstallUnknownAppsDialog
+import com.nodeplayer.music.update.PlaybackStopConfirmDialog
+import com.nodeplayer.music.update.WhatsNewSheet
+import android.widget.Toast
 
 class MainActivity : ComponentActivity() {
 
@@ -151,10 +160,52 @@ class MainActivity : ComponentActivity() {
                 var pendingAutoReportFile by remember { mutableStateOf<File?>(null) }
                 val showUpdateOptIn by UpdateManager.showOptInDialog.collectAsState()
 
+                var showWhatsNewSheet by remember { mutableStateOf(false) }
+                var whatsNewVersion by remember { mutableStateOf("") }
+                var whatsNewText by remember { mutableStateOf("") }
+
+                var showUnknownAppsDialog by remember { mutableStateOf(false) }
+                var showPlaybackStopConfirm by remember { mutableStateOf(false) }
+                var pendingApkToInstall by remember { mutableStateOf<File?>(null) }
+                val downloadStatus by UpdateManager.downloadStatus.collectAsState()
+
                 LaunchedEffect(Unit) {
                     UpdateManager.init(this@MainActivity)
                     if (DiagnosticsDumpManager.hasPendingAutoReport(this@MainActivity)) {
                         pendingAutoReportFile = DiagnosticsDumpManager.getPendingAutoReportFile(this@MainActivity)
+                    }
+
+                    val currentVersion = UpdateChecker.getInstalledVersionName(this@MainActivity)
+                    val lastSeen = UpdatePreferences.getLastSeenVersionName(this@MainActivity)
+                    if (lastSeen == null) {
+                        UpdatePreferences.setLastSeenVersionName(this@MainActivity, currentVersion)
+                    } else if (lastSeen != currentVersion) {
+                        whatsNewVersion = currentVersion
+                        whatsNewText = UpdateManager.getReleaseChangelog(this@MainActivity, currentVersion)
+                        showWhatsNewSheet = true
+                    }
+                }
+
+                val performInstall: (File) -> Unit = { apk ->
+                    when (val valResult = UpdateInstaller.validateApkSecurity(this@MainActivity, apk)) {
+                        is UpdateInstaller.PreInstallValidationResult.Invalid -> {
+                            Toast.makeText(this@MainActivity, valResult.reason, Toast.LENGTH_LONG).show()
+                            UpdateManager.setDownloadStatus(DownloadStatus.Error(valResult.reason))
+                        }
+                        is UpdateInstaller.PreInstallValidationResult.Valid -> {
+                            if (!UpdateInstaller.canInstallPackages(this@MainActivity)) {
+                                pendingApkToInstall = apk
+                                showUnknownAppsDialog = true
+                            } else if (isPlaying) {
+                                pendingApkToInstall = apk
+                                showPlaybackStopConfirm = true
+                            } else {
+                                val installResult = UpdateInstaller.installApk(this@MainActivity, apk)
+                                if (installResult.isFailure) {
+                                    Toast.makeText(this@MainActivity, "Install error: ${installResult.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -191,6 +242,15 @@ class MainActivity : ComponentActivity() {
                                 onOpenSmartPlaylists = { currentRoute = "smart_playlists" },
                                 onOpenStats = { currentRoute = "stats" },
                                 onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
+                                onInstallUpdate = {
+                                    val readyApk = (downloadStatus as? DownloadStatus.ReadyToInstall)?.apkFile
+                                        ?: UpdateDownloadManager.getDownloadedApk(this@MainActivity, UpdateManager.availableUpdate.value?.versionName ?: "")
+                                    if (readyApk != null) {
+                                        performInstall(readyApk)
+                                    } else {
+                                        Toast.makeText(this@MainActivity, "Download not ready yet", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
                                 hazeState = null
                             )
                             "library" -> LibraryScreen(
@@ -456,6 +516,45 @@ class MainActivity : ComponentActivity() {
                         UpdateOptInDialog { agreed ->
                             UpdateManager.onOptInChoice(this@MainActivity, agreed)
                         }
+                    }
+
+                    if (showUnknownAppsDialog) {
+                        InstallUnknownAppsDialog(
+                            onOpenSettings = {
+                                showUnknownAppsDialog = false
+                                startActivity(UpdateInstaller.getManageUnknownAppSourcesIntent(this@MainActivity))
+                            },
+                            onDismiss = { showUnknownAppsDialog = false }
+                        )
+                    }
+
+                    if (showPlaybackStopConfirm) {
+                        PlaybackStopConfirmDialog(
+                            onConfirm = {
+                                showPlaybackStopConfirm = false
+                                if (isPlaying) {
+                                    viewModel.togglePlayPause()
+                                }
+                                pendingApkToInstall?.let { apk ->
+                                    val installResult = UpdateInstaller.installApk(this@MainActivity, apk)
+                                    if (installResult.isFailure) {
+                                        Toast.makeText(this@MainActivity, "Install error: ${installResult.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            },
+                            onDismiss = { showPlaybackStopConfirm = false }
+                        )
+                    }
+
+                    if (showWhatsNewSheet) {
+                        WhatsNewSheet(
+                            versionName = whatsNewVersion,
+                            changelogText = whatsNewText,
+                            onDismiss = {
+                                showWhatsNewSheet = false
+                                UpdatePreferences.setLastSeenVersionName(this@MainActivity, whatsNewVersion)
+                            }
+                        )
                     }
                 }
             }

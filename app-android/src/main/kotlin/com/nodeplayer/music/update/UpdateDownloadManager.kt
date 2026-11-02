@@ -41,6 +41,10 @@ object UpdateDownloadManager {
     private val _downloadStatus = MutableStateFlow<DownloadStatus>(DownloadStatus.Idle)
     val downloadStatus: StateFlow<DownloadStatus> = _downloadStatus.asStateFlow()
 
+    fun setDownloadStatus(status: DownloadStatus) {
+        _downloadStatus.value = status
+    }
+
     private var activeApkFile: File? = null
 
     private fun getUpdatesDir(context: Context): File {

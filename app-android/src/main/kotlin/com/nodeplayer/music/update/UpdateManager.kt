@@ -22,6 +22,10 @@ object UpdateManager {
 
     val downloadStatus: StateFlow<DownloadStatus> = UpdateDownloadManager.downloadStatus
 
+    fun setDownloadStatus(status: DownloadStatus) {
+        UpdateDownloadManager.setDownloadStatus(status)
+    }
+
     private val _isChecking = MutableStateFlow(false)
     val isChecking: StateFlow<Boolean> = _isChecking.asStateFlow()
 
@@ -158,5 +162,21 @@ object UpdateManager {
     fun clearAllSkipped(context: Context) {
         UpdatePreferences.clearSkippedVersions(context)
         restoreCachedUpdate(context)
+    }
+
+    fun getReleaseChangelog(context: Context, version: String): String {
+        try {
+            val cached = UpdatePreferences.getCachedUpdate(context)
+            if (cached != null) {
+                val json = JSONObject(cached)
+                val notes = json.optString("releaseNotes", "")
+                if (notes.isNotBlank()) return notes
+            }
+        } catch (_: Exception) {}
+        return "• In-app update system with background checks, verify & install\n" +
+                "• Send feedback via GitHub Discussions and issue bug reporter\n" +
+                "• Support Node Player with direct UPI payments\n" +
+                "• Hardened AGSL shaders, offscreen self-test & glass appearance controls\n" +
+                "• Bug fixes & performance optimizations"
     }
 }

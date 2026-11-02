@@ -13,6 +13,7 @@
     <!-- Opt-in Network for Lyrics only -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".NodePlayerApplication"
@@ -178,6 +179,15 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- In-App PackageInstaller Status Receiver -->
+        <receiver
+            android:name=".update.UpdateInstallReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.nodeplayer.music.ACTION_INSTALL_STATUS" />
+            </intent-filter>
+        </receiver>
 
     </application>
 
