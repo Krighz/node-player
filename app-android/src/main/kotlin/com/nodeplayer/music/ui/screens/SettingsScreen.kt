@@ -3,6 +3,7 @@ package com.nodeplayer.music.ui.screens
 import android.net.Uri
 import android.widget.Toast
 import kotlinx.coroutines.launch
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -19,10 +20,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -144,6 +147,8 @@ fun SettingsScreen(
     var isFoldersExpanded by remember { mutableStateOf(true) }
     var isExcludedTracksExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
+    var activeSection by rememberSaveable { mutableStateOf<String?>(null) }
+    BackHandler(enabled = activeSection != null) { activeSection = null }
     var showTopMenu by remember { mutableStateOf(false) }
     var showAdvancedSettings by remember { mutableStateOf(sharedPrefs.getBoolean("show_advanced_settings", false)) }
 
@@ -287,6 +292,266 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
+                data class SettingsHubItem(
+            val id: String,
+            val title: String,
+            val description: String,
+            val icon: androidx.compose.ui.graphics.vector.ImageVector
+        )
+
+        val hubSections = remember {
+            listOf(
+                SettingsHubItem("sound_eq", "Sound & EQ", "Audio output, 32-bit float, resampler, DSP", Icons.Rounded.Tune),
+                SettingsHubItem("playback", "Playback & Gestures", "Gapless, crossfade, headset, gestures, timer", Icons.Rounded.PlayCircle),
+                SettingsHubItem("library", "Library & Folders", "Storage paths, duration filter, exclusions", Icons.Rounded.Folder),
+                SettingsHubItem("customize_ui", "Customize UI", "Lens dock, themes, bundled fonts, spacing", Icons.Rounded.Palette),
+                SettingsHubItem("widgets", "Widgets & Lock Screen", "4 static styles, shimmer, element toggles", Icons.Rounded.Widgets),
+                SettingsHubItem("lyrics", "Lyrics & Metadata", "Synced LRC, LRCLIB integration, karaoke", Icons.Rounded.Lyrics),
+                SettingsHubItem("lastfm", "Last.fm & Network", "Scrobbling, now playing, custom API keys", Icons.Rounded.CloudQueue),
+                SettingsHubItem("stats", "Stats & Audio Analysis", "Audio quality analysis, genuine Hi-Res, DR", Icons.Rounded.BarChart),
+                SettingsHubItem("updates", "Updates", "GitHub releases, auto-check, download manager", Icons.Rounded.SystemUpdate),
+                SettingsHubItem("backup", "Backup & Data", "Export settings, restore backup, reset data", Icons.Rounded.Save),
+                SettingsHubItem("diagnostics", "Diagnostics & Graphics", "Frame metrics, hardware info, shader logs", Icons.Rounded.BugReport),
+                SettingsHubItem("about", "Support & About", "Node Player v1.3.0, licenses, GitHub", Icons.Rounded.Info)
+            )
+        }
+
+        val isHubMode = activeSection == null && searchQuery.isBlank()
+
+        val shouldShow: (String) -> Boolean = { section ->
+            if (searchQuery.isNotBlank()) {
+                val q = searchQuery.trim().lowercase()
+                val item = hubSections.find { it.id == section }
+                (item != null && (item.title.lowercase().contains(q) || item.description.lowercase().contains(q))) ||
+                    (section == "sound_eq" && (q.contains("sound") || q.contains("audio") || q.contains("eq") || q.contains("dac") || q.contains("usb") || q.contains("resampl") || q.contains("float"))) ||
+                    (section == "playback" && (q.contains("play") || q.contains("crossfade") || q.contains("gapless") || q.contains("headset") || q.contains("gesture") || q.contains("sleep") || q.contains("timer"))) ||
+                    (section == "library" && (q.contains("lib") || q.contains("folder") || q.contains("scan") || q.contains("exclud") || q.contains("durat"))) ||
+                    (section == "customize_ui" && (q.contains("ui") || q.contains("theme") || q.contains("glass") || q.contains("dock") || q.contains("font") || q.contains("color") || q.contains("round"))) ||
+                    (section == "widgets" && (q.contains("widg") || q.contains("lock") || q.contains("overlay"))) ||
+                    (section == "lyrics" && (q.contains("lyric") || q.contains("lrc") || q.contains("lrclib"))) ||
+                    (section == "lastfm" && (q.contains("last") || q.contains("scrobbl") || q.contains("api"))) ||
+                    (section == "stats" && (q.contains("stat") || q.contains("analys") || q.contains("hires") || q.contains("dr") || q.contains("loud"))) ||
+                    (section == "updates" && (q.contains("updat") || q.contains("vers") || q.contains("git") || q.contains("check"))) ||
+                    (section == "backup" && (q.contains("back") || q.contains("restor") || q.contains("export") || q.contains("import"))) ||
+                    (section == "diagnostics" && (q.contains("diag") || q.contains("graph") || q.contains("frame") || q.contains("fps") || q.contains("crash") || q.contains("shader") || q.contains("log"))) ||
+                    (section == "about" && (q.contains("about") || q.contains("licen") || q.contains("node") || q.contains("feedb") || q.contains("bug")))
+            } else {
+                activeSection == section
+            }
+        }
+
+        fun resetCurrentSection(sec: String?) {
+            when (sec) {
+                "sound_eq" -> {
+                    onCrossfadeConfigChange(CrossfadeConfig())
+                    onResamplerRateChange(0)
+                    onToggleSystemEq(false)
+                }
+                "playback" -> {
+                    gaplessEnabled = true
+                    miniGestures = true
+                    onToggleResumeOnHeadsetConnect(true)
+                    sharedPrefs.edit()
+                        .putBoolean("gapless_enabled", true)
+                        .putBoolean("mini_player_gestures_enabled", true)
+                        .apply()
+                }
+                "library" -> {
+                    onMinDurationChange(30)
+                    onRescanLibrary()
+                }
+                "customize_ui" -> {
+                    onThemeConfigChange(GlassThemeConfig())
+                }
+                "widgets" -> {
+                    WidgetPreferences.saveSettings(context, com.nodeplayer.model.WidgetSettings())
+                    WidgetUpdateManager.updateAllWidgets(context)
+                }
+                "lyrics" -> {
+                    lrclibOptIn = false
+                    sharedPrefs.edit().putBoolean("lrclib_opt_in", false).apply()
+                }
+                "lastfm" -> {
+                    lastFmScrobbleEnabled = false
+                    sharedPrefs.edit().putBoolean("lastfm_scrobble_enabled", false).apply()
+                }
+                "stats" -> {
+                    fakeHiRes = true
+                    drMeter = true
+                    loudnessScan = true
+                    sharedPrefs.edit()
+                        .putBoolean("fake_hires_enabled", true)
+                        .putBoolean("dr_meter_enabled", true)
+                        .putBoolean("loudness_scan_enabled", true)
+                        .apply()
+                }
+                "updates" -> {
+                    UpdatePreferences.setCheckAutomatically(context, true)
+                    UpdatePreferences.setWifiOnly(context, true)
+                    updateCheckAuto = true
+                    updateWifiOnly = true
+                }
+            }
+            Toast.makeText(context, "Section reset to defaults", Toast.LENGTH_SHORT).show()
+        }
+
+        if (isHubMode) {
+            // Quick Mode Toggles
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = themeConfig.isPerformanceMode,
+                    onClick = {
+                        onThemeConfigChange(themeConfig.copy(isPerformanceMode = !themeConfig.isPerformanceMode))
+                    },
+                    label = { Text("Performance: ${if (themeConfig.isPerformanceMode) "ON" else "OFF"}") },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                )
+
+                FilterChip(
+                    selected = themeConfig.shaderMode != "OFF",
+                    onClick = {
+                        val nextMode = when (themeConfig.shaderMode) {
+                            "AUTO" -> "FULL"
+                            "FULL" -> "SIMPLE"
+                            "SIMPLE" -> "BLUR_ONLY"
+                            "BLUR_ONLY" -> "OFF"
+                            else -> "AUTO"
+                        }
+                        onThemeConfigChange(themeConfig.copy(shaderMode = nextMode))
+                    },
+                    label = { Text("Shader: ${themeConfig.shaderMode}") },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                )
+
+                FilterChip(
+                    selected = true,
+                    onClick = {
+                        val nextTheme = when (themeConfig.themeMode) {
+                            "SYSTEM" -> "DARK"
+                            "DARK" -> "LIGHT"
+                            "LIGHT" -> "OLED"
+                            else -> "SYSTEM"
+                        }
+                        onThemeConfigChange(themeConfig.copy(themeMode = nextTheme, isOledBlack = nextTheme == "OLED"))
+                    },
+                    label = { Text("Theme: ${themeConfig.themeMode}") },
+                    leadingIcon = {
+                        Icon(Icons.Rounded.DarkMode, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "SETTINGS HUB",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = accent
+                )
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // 2-Column Grid
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SettingsHubCard("Sound & EQ", "Audio output, 32-bit float, resampler, DSP", Icons.Rounded.Tune) { activeSection = "sound_eq" }
+                    SettingsHubCard("Playback & Gestures", "Gapless, crossfade, headset, gestures, timer", Icons.Rounded.PlayCircle) { activeSection = "playback" }
+                    SettingsHubCard("Library & Folders", "Storage paths, duration filter, exclusions", Icons.Rounded.Folder) { activeSection = "library" }
+                    SettingsHubCard("Customize UI", "Lens dock, themes, bundled fonts, spacing", Icons.Rounded.Palette) { activeSection = "customize_ui" }
+                    SettingsHubCard("Widgets & Lock Screen", "4 static styles, shimmer, element toggles", Icons.Rounded.Widgets) { activeSection = "widgets" }
+                    SettingsHubCard("Lyrics & Metadata", "Synced LRC, LRCLIB integration, karaoke", Icons.Rounded.Lyrics) { activeSection = "lyrics" }
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    SettingsHubCard("Last.fm & Network", "Scrobbling, now playing, custom API keys", Icons.Rounded.CloudQueue) { activeSection = "lastfm" }
+                    SettingsHubCard("Stats & Audio Analysis", "Audio quality analysis, genuine Hi-Res, DR", Icons.Rounded.BarChart) { activeSection = "stats" }
+                    SettingsHubCard("Updates", "GitHub releases, auto-check, download manager", Icons.Rounded.SystemUpdate) { activeSection = "updates" }
+                    SettingsHubCard("Backup & Data", "Export settings, restore backup, reset data", Icons.Rounded.Save) { activeSection = "backup" }
+                    SettingsHubCard("Diagnostics & Graphics", "Frame metrics, hardware info, shader logs", Icons.Rounded.BugReport) { activeSection = "diagnostics" }
+                    SettingsHubCard("Support & About", "Node Player v1.3.0, licenses, GitHub", Icons.Rounded.Info) { activeSection = "about" }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        } else {
+            // Subpage Navigation Header
+            if (activeSection != null && searchQuery.isBlank()) {
+                val currentTitle = when (activeSection) {
+                    "sound_eq" -> "Sound & EQ"
+                    "playback" -> "Playback & Gestures"
+                    "library" -> "Library & Folders"
+                    "customize_ui" -> "Customize UI"
+                    "widgets" -> "Widgets & Lock Screen"
+                    "lyrics" -> "Lyrics & Metadata"
+                    "lastfm" -> "Last.fm & Network"
+                    "stats" -> "Stats & Audio Analysis"
+                    "updates" -> "Updates"
+                    "backup" -> "Backup & Data"
+                    "diagnostics" -> "Diagnostics & Graphics"
+                    "about" -> "Support & About"
+                    else -> "Settings"
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.clickable { activeSection = null }
+                    ) {
+                        IconButton(
+                            onClick = { activeSection = null },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "Back",
+                                tint = Color.White
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = currentTitle,
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        )
+                    }
+
+                    TextButton(onClick = { resetCurrentSection(activeSection) }) {
+                        Text("Reset", color = accent, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+
+        if (shouldShow("sound_eq")) {
         // 1. Audio Output Section
         Text(
             text = "AUDIO OUTPUT",
@@ -431,6 +696,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("playback")) {
         // Crossfade & Playback Engine Section
         Text(
             text = "CROSSFADE & PLAYBACK",
@@ -555,6 +823,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("sound_eq")) {
         // System-Wide Equalizer Section
         Text(
             text = "SYSTEM-WIDE AUDIO EFFECTS",
@@ -666,6 +937,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("library")) {
         // 2. Folder Wise Music & Scans Section
         Text(
             text = "LIBRARY & FOLDERS",
@@ -928,6 +1202,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("playback")) {
         // 3. Playback Section
         Text(
             text = "PLAYBACK ENGINE",
@@ -982,6 +1259,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("customize_ui")) {
         // 4. Aesthetics & Glassmorphism Section
         Text(
             text = "APPEARANCE & GLASS",
@@ -1564,6 +1844,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("playback")) {
         // Dedicated ColorOS & realme Battery Guide
         Text(
             text = "COLOROS & REALME BATTERY GUIDE",
@@ -1687,6 +1970,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("widgets")) {
         // Home Screen Widgets & Liquid Glass Section
         Text(
             text = "HOME SCREEN WIDGETS & LIQUID GLASS",
@@ -1874,6 +2160,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("lyrics")) {
         // 5. Lyrics & Privacy Section
         Text(
             text = "LYRICS & PRIVACY",
@@ -1913,6 +2202,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("lastfm")) {
         // 6. Last.fm Scrobbling Section
         Text(
             text = "LAST.FM SCROBBLING",
@@ -2218,6 +2510,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("stats")) {
         // 7. Audio Quality & Analysis Section
         Text(
             text = "AUDIO QUALITY & ANALYSIS",
@@ -2723,6 +3018,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("diagnostics")) {
         // Diagnostics & Local Crash Logger Card
         Text(
             text = "DIAGNOSTICS & LOCAL CRASH LOGS",
@@ -2880,6 +3178,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("backup")) {
         // 10. Backup, Restore & M3U Section
         Text(
             text = "BACKUP, RESTORE & PLAYLISTS",
@@ -3014,6 +3315,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("updates")) {
         // Updates Section
         Text(
             text = "UPDATES",
@@ -3213,6 +3517,9 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
+                }
+
+        if (shouldShow("about")) {
         // 7. About Section
         Text(
             text = "ABOUT",
@@ -3489,6 +3796,9 @@ fun SettingsScreen(
 
         com.nodeplayer.music.ui.components.SupportCard(hazeState = hazeState)
 
+                }
+        }
+
         Spacer(modifier = Modifier.height(200.dp))
     }
 
@@ -3570,5 +3880,61 @@ fun SettingsScreen(
             },
             containerColor = Color(0xFF16181F)
         )
+    }
+}
+
+
+@Composable
+private fun SettingsHubCard(
+    title: String,
+    desc: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF6366F1).copy(alpha = 0.20f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color(0xFF818CF8),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = desc,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = Color.White.copy(alpha = 0.60f),
+                    fontSize = 11.5.sp,
+                    lineHeight = 15.sp
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
