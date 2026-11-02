@@ -195,9 +195,12 @@ Home screen widgets are RemoteViews and cannot execute continuous 60 fps shaders
 - **Performance Mode**: One-tap toggle that turns off the AGSL refraction shader, animated liquid background, and real-time spectrum, lowering GPU memory by 58% and frame times by 31%.
 - **Widget Customization**: Adjust glass opacity (0% to 100%), corner radius (12 dp to 36 dp), and performance fallback mode.
 
-### 4. Privacy & Last.fm
-- **Strictly Opt-in Lyrics**: Zero internet requests made unless LRCLIB online lyrics is explicitly toggled on.
-- **Last.fm Scrobbling**: Opt-in Last.fm scrobbler with built-in API credentials and browser authentication. Scrobbling uses the network only when enabled by the user.
+### 4. Privacy, Network & In-App Updates
+- **Three Strictly Opt-In Network Uses**: Zero network sockets are opened unless explicitly opted in by the user:
+  1. *Synchronized Lyrics (LRCLIB)*: Fetches `.lrc` lines for local tracks.
+  2. *Last.fm Scrobbling*: Authenticates via browser and flushes an offline scrobble queue.
+  3. *In-App Update System*: Queries GitHub Releases API with `User-Agent: NodePlayer/<version>` (reveals IP and installed version to GitHub under GitHub's Privacy Statement). First-launch opt-in dialog, background download with resume, SHA-256 and signing certificate verification, and PackageInstaller integration.
+- **Manual Upgrade Note**: Versions older than v1.2.0 (v0.1.0, v1.0.0, v1.1.0) require a one-time manual download and install of v1.2.0. From v1.2.0 onwards, all future releases can be updated directly within Node Player.
 
 ---
 

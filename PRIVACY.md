@@ -14,7 +14,7 @@
 ---
 
 ## 2. Network Usage & Optional Online Features
-Node Player functions 100% offline as a local audio player. Network access is restricted exclusively to optional, user-initiated features:
+Node Player functions 100% offline as a local audio player. Exactly **three** network uses exist in the application, and all three are strictly **opt-in** and user-controlled:
 
 1. **Synchronized Lyrics (LRCLIB)**:
    - When enabled by the user in Settings, Node Player queries the public [LRCLIB](https://lrclib.net) API using the track's artist, title, and album names to fetch synchronized `.lrc` lyrics.
@@ -25,14 +25,20 @@ Node Player functions 100% offline as a local audio player. Network access is re
    - If offline, scrobbles are queued locally in device storage and synced only when network connectivity resumes.
    - When disabled (the default), zero Last.fm network requests are dispatched.
 
+3. **In-App Update Check (GitHub Releases)**:
+   - When opted into by the user (prompted once after installation with an explicit Yes/No dialog, and togglable in Settings &rarr; Updates), Node Player queries GitHub's official Releases API (`https://api.github.com/repos/Krighz/node-player/releases/latest`) to check for newer versions and download official release APKs.
+   - The check transmits an HTTP `User-Agent: NodePlayer/<version>` header. As with any HTTPS connection, GitHub receives this request and your IP address under [GitHub's Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement).
+   - When disabled (default unless opted in), zero update requests are dispatched.
+
 ---
 
 ## 3. On-Device Permissions
-Node Player requests only the permissions strictly required for local music playback:
+Node Player requests only the permissions strictly required for its local music playback and user-initiated features:
 - **`READ_MEDIA_AUDIO` / `READ_EXTERNAL_STORAGE`**: To scan and decode local music files and embedded album artwork.
-- **`POST_NOTIFICATIONS`**: To present standard Android media playback notifications with transport controls.
+- **`POST_NOTIFICATIONS`**: To present standard Android media playback notifications with transport controls and background download progress.
 - **`FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_MEDIA_PLAYBACK`**: To maintain continuous, uninterrupted audio playback when the app is in the background.
-- **`INTERNET` & `ACCESS_NETWORK_STATE`**: Strictly used for opt-in lyrics retrieval and opt-in Last.fm scrobbling.
+- **`REQUEST_INSTALL_PACKAGES`**: To allow the Android `PackageInstaller` to install validated APK updates when initiated by the user.
+- **`INTERNET` & `ACCESS_NETWORK_STATE`**: Strictly used for the 3 opt-in features described above (lyrics, Last.fm scrobbler, and update checks).
 
 ---
 
