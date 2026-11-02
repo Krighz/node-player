@@ -32,7 +32,18 @@ class CustomizeUiTest {
             showMiniPlayerWave = false,
             formatBadgeVisible = true,
             lensRefractionStrength = 1.25f,
-            lensRimSpecular = 0.95f
+            lensRimSpecular = 0.95f,
+            animationPreset = "CUSTOM",
+            motionSpeed = 1.3f,
+            springBounciness = 0.62f,
+            springStiffness = 450f,
+            switchOvershootEnabled = true,
+            pressScaleEnabled = true,
+            pressScaleStrength = 0.94f,
+            staggeredListAnimation = true,
+            lyricsAnimationEnabled = true,
+            screenTransitionStyle = "SHARED",
+            reduceMotion = false
         )
 
         val json = NodeThemeSerializer.toJson(original)
@@ -40,6 +51,7 @@ class CustomizeUiTest {
         assertTrue(json.contains("NodePlayerTheme"))
         assertTrue(json.contains("AURORA"))
         assertTrue(json.contains("OUTFIT"))
+        assertTrue(json.contains("SHARED"))
 
         val restored = NodeThemeSerializer.fromJson(json)
         assertNotNull(restored)
@@ -59,6 +71,17 @@ class CustomizeUiTest {
         assertEquals(original.formatBadgeVisible, restored.formatBadgeVisible)
         assertEquals(original.lensRefractionStrength, restored.lensRefractionStrength, 0.01f)
         assertEquals(original.lensRimSpecular, restored.lensRimSpecular, 0.01f)
+        assertEquals(original.animationPreset, restored.animationPreset)
+        assertEquals(original.motionSpeed, restored.motionSpeed, 0.01f)
+        assertEquals(original.springBounciness, restored.springBounciness, 0.01f)
+        assertEquals(original.springStiffness, restored.springStiffness, 1.0f)
+        assertEquals(original.switchOvershootEnabled, restored.switchOvershootEnabled)
+        assertEquals(original.pressScaleEnabled, restored.pressScaleEnabled)
+        assertEquals(original.pressScaleStrength, restored.pressScaleStrength, 0.01f)
+        assertEquals(original.staggeredListAnimation, restored.staggeredListAnimation)
+        assertEquals(original.lyricsAnimationEnabled, restored.lyricsAnimationEnabled)
+        assertEquals(original.screenTransitionStyle, restored.screenTransitionStyle)
+        assertEquals(original.reduceMotion, restored.reduceMotion)
     }
 
     @Test

@@ -202,7 +202,18 @@ data class GlassThemeConfig(
     val showMiniPlayerWave: Boolean = true,
     val formatBadgeVisible: Boolean = true,
     val lensRefractionStrength: Float = 0.85f,             // 0.50f (Subtle), 0.85f (Balanced), 1.25f (Strong)
-    val lensRimSpecular: Float = 0.85f                     // 0.0f to 1.0f
+    val lensRimSpecular: Float = 0.85f,                    // 0.0f to 1.0f
+    val animationPreset: String = "SMOOTH",                // OFF, MINIMAL, SMOOTH, BOUNCY, CUSTOM
+    val motionSpeed: Float = 1.0f,                         // 0.5f to 2.0f
+    val springBounciness: Float = 0.82f,                   // 0.5f to 1.0f (damping ratio)
+    val springStiffness: Float = 380f,                     // 150f to 1000f
+    val switchOvershootEnabled: Boolean = true,
+    val pressScaleEnabled: Boolean = true,
+    val pressScaleStrength: Float = 0.96f,                 // 0.90f to 0.98f
+    val staggeredListAnimation: Boolean = true,
+    val lyricsAnimationEnabled: Boolean = true,
+    val screenTransitionStyle: String = "SLIDE",           // SLIDE, FADE, SHARED
+    val reduceMotion: Boolean = false
 ) {
     companion object {
         val PRESET_OBSIDIAN_LIQUID = GlassThemeConfig(

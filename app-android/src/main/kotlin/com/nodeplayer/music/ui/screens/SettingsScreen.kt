@@ -553,6 +553,8 @@ fun SettingsScreen(
 
         if (activeSection == "motion_playground") {
             AnimationPlaygroundScreen(
+                themeConfig = themeConfig,
+                onThemeConfigChange = onThemeConfigChange,
                 onBack = { activeSection = "customize_ui" },
                 hazeState = hazeState
             )

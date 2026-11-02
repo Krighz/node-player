@@ -290,7 +290,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             showMiniPlayerWave = prefs.getBoolean("show_mini_player_wave", true),
             formatBadgeVisible = prefs.getBoolean("format_badge_visible", true),
             lensRefractionStrength = prefs.getFloat("lens_refraction_strength", 0.85f),
-            lensRimSpecular = prefs.getFloat("lens_rim_specular", 0.85f)
+            lensRimSpecular = prefs.getFloat("lens_rim_specular", 0.85f),
+            animationPreset = prefs.getString("animation_preset", "SMOOTH") ?: "SMOOTH",
+            motionSpeed = prefs.getFloat("motion_speed", 1.0f),
+            springBounciness = prefs.getFloat("spring_bounciness", 0.82f),
+            springStiffness = prefs.getFloat("spring_stiffness", 380f),
+            switchOvershootEnabled = prefs.getBoolean("switch_overshoot_enabled", true),
+            pressScaleEnabled = prefs.getBoolean("press_scale_enabled", true),
+            pressScaleStrength = prefs.getFloat("press_scale_strength", 0.96f),
+            staggeredListAnimation = prefs.getBoolean("staggered_list_animation", true),
+            lyricsAnimationEnabled = prefs.getBoolean("lyrics_animation_enabled", true),
+            screenTransitionStyle = prefs.getString("screen_transition_style", "SLIDE") ?: "SLIDE",
+            reduceMotion = prefs.getBoolean("reduce_motion", false)
         )
     }
 
@@ -1186,6 +1197,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .putBoolean("format_badge_visible", newConfig.formatBadgeVisible)
             .putFloat("lens_refraction_strength", newConfig.lensRefractionStrength)
             .putFloat("lens_rim_specular", newConfig.lensRimSpecular)
+            .putString("animation_preset", newConfig.animationPreset)
+            .putFloat("motion_speed", newConfig.motionSpeed)
+            .putFloat("spring_bounciness", newConfig.springBounciness)
+            .putFloat("spring_stiffness", newConfig.springStiffness)
+            .putBoolean("switch_overshoot_enabled", newConfig.switchOvershootEnabled)
+            .putBoolean("press_scale_enabled", newConfig.pressScaleEnabled)
+            .putFloat("press_scale_strength", newConfig.pressScaleStrength)
+            .putBoolean("staggered_list_animation", newConfig.staggeredListAnimation)
+            .putBoolean("lyrics_animation_enabled", newConfig.lyricsAnimationEnabled)
+            .putString("screen_transition_style", newConfig.screenTransitionStyle)
+            .putBoolean("reduce_motion", newConfig.reduceMotion)
             .apply()
 
         // Sync widgets with current glass settings and re-render

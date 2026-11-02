@@ -56,6 +56,17 @@ object NodeThemeSerializer {
         theme.put("formatBadgeVisible", config.formatBadgeVisible)
         theme.put("lensRefractionStrength", config.lensRefractionStrength.toDouble())
         theme.put("lensRimSpecular", config.lensRimSpecular.toDouble())
+        theme.put("animationPreset", config.animationPreset)
+        theme.put("motionSpeed", config.motionSpeed.toDouble())
+        theme.put("springBounciness", config.springBounciness.toDouble())
+        theme.put("springStiffness", config.springStiffness.toDouble())
+        theme.put("switchOvershootEnabled", config.switchOvershootEnabled)
+        theme.put("pressScaleEnabled", config.pressScaleEnabled)
+        theme.put("pressScaleStrength", config.pressScaleStrength.toDouble())
+        theme.put("staggeredListAnimation", config.staggeredListAnimation)
+        theme.put("lyricsAnimationEnabled", config.lyricsAnimationEnabled)
+        theme.put("screenTransitionStyle", config.screenTransitionStyle)
+        theme.put("reduceMotion", config.reduceMotion)
 
         root.put("themeConfig", theme)
         return root.toString(2)
@@ -105,7 +116,18 @@ object NodeThemeSerializer {
                 showMiniPlayerWave = theme.optBoolean("showMiniPlayerWave", def.showMiniPlayerWave),
                 formatBadgeVisible = theme.optBoolean("formatBadgeVisible", def.formatBadgeVisible),
                 lensRefractionStrength = theme.optDouble("lensRefractionStrength", def.lensRefractionStrength.toDouble()).toFloat(),
-                lensRimSpecular = theme.optDouble("lensRimSpecular", def.lensRimSpecular.toDouble()).toFloat()
+                lensRimSpecular = theme.optDouble("lensRimSpecular", def.lensRimSpecular.toDouble()).toFloat(),
+                animationPreset = theme.optString("animationPreset", def.animationPreset),
+                motionSpeed = theme.optDouble("motionSpeed", def.motionSpeed.toDouble()).toFloat(),
+                springBounciness = theme.optDouble("springBounciness", def.springBounciness.toDouble()).toFloat(),
+                springStiffness = theme.optDouble("springStiffness", def.springStiffness.toDouble()).toFloat(),
+                switchOvershootEnabled = theme.optBoolean("switchOvershootEnabled", def.switchOvershootEnabled),
+                pressScaleEnabled = theme.optBoolean("pressScaleEnabled", def.pressScaleEnabled),
+                pressScaleStrength = theme.optDouble("pressScaleStrength", def.pressScaleStrength.toDouble()).toFloat(),
+                staggeredListAnimation = theme.optBoolean("staggeredListAnimation", def.staggeredListAnimation),
+                lyricsAnimationEnabled = theme.optBoolean("lyricsAnimationEnabled", def.lyricsAnimationEnabled),
+                screenTransitionStyle = theme.optString("screenTransitionStyle", def.screenTransitionStyle),
+                reduceMotion = theme.optBoolean("reduceMotion", def.reduceMotion)
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse theme JSON", e)
