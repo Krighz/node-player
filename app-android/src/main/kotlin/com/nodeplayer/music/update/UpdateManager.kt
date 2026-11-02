@@ -20,8 +20,7 @@ object UpdateManager {
     private val _availableUpdate = MutableStateFlow<AppUpdateInfo?>(null)
     val availableUpdate: StateFlow<AppUpdateInfo?> = _availableUpdate.asStateFlow()
 
-    private val _downloadStatus = MutableStateFlow<DownloadStatus>(DownloadStatus.Idle)
-    val downloadStatus: StateFlow<DownloadStatus> = _downloadStatus.asStateFlow()
+    val downloadStatus: StateFlow<DownloadStatus> = UpdateDownloadManager.downloadStatus
 
     private val _isChecking = MutableStateFlow(false)
     val isChecking: StateFlow<Boolean> = _isChecking.asStateFlow()
@@ -146,6 +145,14 @@ object UpdateManager {
     fun unskipVersion(context: Context, version: String) {
         UpdatePreferences.unskipVersion(context, version)
         restoreCachedUpdate(context)
+    }
+
+    fun startDownload(context: Context, info: AppUpdateInfo) {
+        UpdateDownloadManager.startDownload(context, info)
+    }
+
+    fun cancelDownload(context: Context) {
+        UpdateDownloadManager.cancelDownload(context)
     }
 
     fun clearAllSkipped(context: Context) {

@@ -175,12 +175,21 @@ fun HomeScreen(
                     updateInfo = availableUpdate!!,
                     downloadStatus = downloadStatus,
                     hazeState = hazeState,
-                    onUpdateNow = { onStartUpdate(availableUpdate!!) },
+                    onUpdateNow = {
+                        onStartUpdate(availableUpdate!!)
+                        UpdateManager.startDownload(context, availableUpdate!!)
+                    },
                     onLater = { UpdateManager.dismissForSession() },
                     onSkip = { UpdateManager.skipVersion(context, availableUpdate!!.versionName) },
-                    onCancelDownload = onCancelUpdate,
+                    onCancelDownload = {
+                        onCancelUpdate()
+                        UpdateManager.cancelDownload(context)
+                    },
                     onInstall = onInstallUpdate,
-                    onRetry = { onStartUpdate(availableUpdate!!) }
+                    onRetry = {
+                        onStartUpdate(availableUpdate!!)
+                        UpdateManager.startDownload(context, availableUpdate!!)
+                    }
                 )
             }
         }
