@@ -28,6 +28,8 @@ import com.nodeplayer.music.ui.PlayerViewModel
 import com.nodeplayer.music.diagnostics.DiagnosticsDumpManager
 import com.nodeplayer.music.ui.components.DiagnosticsDumpDialog
 import com.nodeplayer.music.ui.components.FrostedBottomBar
+import com.nodeplayer.music.ui.components.GlobalSearchSheet
+import com.nodeplayer.music.diagnostics.FrameMetricsTracker
 import java.io.File
 import com.nodeplayer.music.ui.components.FrostedMiniPlayer
 import com.nodeplayer.music.ui.components.LiquidGlassBackground
@@ -168,6 +170,7 @@ class MainActivity : ComponentActivity() {
                 var showPlaybackStopConfirm by remember { mutableStateOf(false) }
                 var pendingApkToInstall by remember { mutableStateOf<File?>(null) }
                 val downloadStatus by UpdateManager.downloadStatus.collectAsState()
+                var showSearchSheet by remember { mutableStateOf(false) }
 
                 LaunchedEffect(Unit) {
                     UpdateManager.init(this@MainActivity)
@@ -416,6 +419,7 @@ class MainActivity : ComponentActivity() {
                         FrostedBottomBar(
                             selectedRoute = currentRoute,
                             onRouteChange = { currentRoute = it },
+                            onSearchClick = { showSearchSheet = true },
                             hazeState = dockHazeState,
                             isPerformanceMode = themeConfig.isPerformanceMode,
                             shaderEnabled = isShaderActive,
@@ -560,9 +564,30 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
+
+                    if (showSearchSheet) {
+                        GlobalSearchSheet(
+                            tracks = allTracks,
+                            onTrackClick = { track ->
+                                viewModel.playTrack(track, allTracks)
+                                showSearchSheet = false
+                            },
+                            onDismiss = { showSearchSheet = false }
+                        )
+                    }
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        FrameMetricsTracker.start(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        FrameMetricsTracker.stop(this)
     }
 
     private fun checkAndRequestPermissions() {

@@ -1,21 +1,37 @@
 package com.nodeplayer.music.ui.components
 
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -24,11 +40,14 @@ import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
 import dev.chrisbanes.haze.HazeState
-
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
 import kotlin.math.abs
+import kotlin.math.roundToInt
+
+data class NavTabItem(
+    val route: String,
+    val label: String,
+    val icon: ImageVector
+)
 
 @Composable
 fun FrostedMiniPlayer(
@@ -107,6 +126,16 @@ fun FrostedMiniPlayer(
                 grainStrength = grainStrength
             )
             .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.65f)
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.25f),
+                        Color.White.copy(alpha = 0.08f)
+                    )
+                ),
+                shape = shape
+            )
             .then(gestureModifier)
     ) {
         // Progress track at bottom
@@ -200,10 +229,272 @@ fun FrostedMiniPlayer(
     }
 }
 
+/**
+ * Optical Magnifying Lens Dock.
+ * Features a floating glass pill with an AGSL magnifying lens bubble that springs between tabs
+ * and can be dragged across tabs with a light haptic tick, plus an adjacent circular glass search button.
+ */
+@Composable
+fun LensDock(
+    selectedRoute: String,
+    onRouteChange: (String) -> Unit,
+    onSearchClick: () -> Unit = {},
+    hazeState: HazeState? = null,
+    isPerformanceMode: Boolean = false,
+    shaderEnabled: Boolean = !isPerformanceMode,
+    chromaticFringe: Float = 1.0f,
+    lensStrength: Float = 0.85f,
+    grainStrength: Float = 0.0f,
+    modifier: Modifier = Modifier
+) {
+    val items = remember {
+        listOf(
+            NavTabItem("home", "Home", Icons.Rounded.Home),
+            NavTabItem("library", "Library", Icons.Rounded.LibraryMusic),
+            NavTabItem("equalizer", "Equalizer", Icons.Rounded.GraphicEq),
+            NavTabItem("settings", "Settings", Icons.Rounded.Settings)
+        )
+    }
+
+    val view = LocalView.current
+    val accent = LocalAccentColor.current
+    val density = LocalDensity.current
+
+    val selectedIndex = items.indexOfFirst { it.route == selectedRoute }.coerceAtLeast(0)
+
+    var pillWidthPx by remember { mutableIntStateOf(0) }
+    val tabWidthPx = if (pillWidthPx > 0) pillWidthPx / items.size.toFloat() else 0f
+
+    var isDragging by remember { mutableStateOf(false) }
+    var dragTouchXPx by remember { mutableFloatStateOf(0f) }
+    var lastHapticIndex by remember { mutableIntStateOf(selectedIndex) }
+
+    LaunchedEffect(selectedIndex) {
+        if (!isDragging) {
+            lastHapticIndex = selectedIndex
+        }
+    }
+
+    val targetCenterXPx = if (isDragging && tabWidthPx > 0f) {
+        dragTouchXPx.coerceIn(tabWidthPx * 0.5f, pillWidthPx - tabWidthPx * 0.5f)
+    } else if (tabWidthPx > 0f) {
+        (selectedIndex + 0.5f) * tabWidthPx
+    } else 0f
+
+    val springCenterXPx by animateFloatAsState(
+        targetValue = targetCenterXPx,
+        animationSpec = spring(
+            dampingRatio = if (isDragging) 0.95f else 0.72f,
+            stiffness = if (isDragging) 900f else 320f
+        ),
+        label = "LensBubbleSpring"
+    )
+
+    val pillShape = RoundedCornerShape(32.dp)
+    val lensShape = RoundedCornerShape(24.dp)
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 1. Floating Pill Dock with Draggable Magnifying Lens Bubble
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(64.dp)
+                .onSizeChanged { pillWidthPx = it.width }
+                .glassSurface(hazeState = hazeState, shape = pillShape, tintAlpha = 0.55f)
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.22f),
+                            Color.White.copy(alpha = 0.08f)
+                        )
+                    ),
+                    shape = pillShape
+                )
+                .pointerInput(items, tabWidthPx) {
+                    if (tabWidthPx > 0f) {
+                        detectHorizontalDragGestures(
+                            onDragStart = { offset ->
+                                isDragging = true
+                                dragTouchXPx = offset.x
+                                val idx = (offset.x / tabWidthPx).toInt().coerceIn(0, items.lastIndex)
+                                if (idx != lastHapticIndex) {
+                                    lastHapticIndex = idx
+                                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                    onRouteChange(items[idx].route)
+                                }
+                            },
+                            onDragEnd = {
+                                isDragging = false
+                                val finalIdx = (dragTouchXPx / tabWidthPx).toInt().coerceIn(0, items.lastIndex)
+                                onRouteChange(items[finalIdx].route)
+                            },
+                            onDragCancel = {
+                                isDragging = false
+                            },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                dragTouchXPx = (dragTouchXPx + dragAmount).coerceIn(0f, pillWidthPx.toFloat())
+                                val newIdx = (dragTouchXPx / tabWidthPx).toInt().coerceIn(0, items.lastIndex)
+                                if (newIdx != lastHapticIndex) {
+                                    lastHapticIndex = newIdx
+                                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                    onRouteChange(items[newIdx].route)
+                                }
+                            }
+                        )
+                    }
+                }
+        ) {
+            // Lens Bubble Indicator
+            if (pillWidthPx > 0 && tabWidthPx > 0f) {
+                val bubbleWidthDp = with(density) { (tabWidthPx - 10f).toDp().coerceAtLeast(48.dp) }
+                val bubbleWidthPx = with(density) { bubbleWidthDp.toPx() }
+                val bubbleOffsetXPx = springCenterXPx - bubbleWidthPx * 0.5f
+
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(bubbleOffsetXPx.roundToInt(), 0) }
+                        .align(Alignment.CenterStart)
+                        .width(bubbleWidthDp)
+                        .height(50.dp)
+                        .glassLensBubble(
+                            shape = lensShape,
+                            enabled = shaderEnabled && !isPerformanceMode,
+                            magnification = 0.22f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
+                            refractionIndex = 0.65f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
+                            chromaticFringe = chromaticFringe,
+                            rimStrength = 0.85f,
+                            rimColor = Color(0xFFFDE68A),
+                            grainStrength = grainStrength
+                        )
+                        .glassSurface(
+                            hazeState = if (!shaderEnabled) hazeState else null,
+                            shape = lensShape,
+                            tintAlpha = if (!shaderEnabled) 0.65f else 0.15f
+                        )
+                        .border(
+                            width = 1.2.dp,
+                            brush = Brush.verticalGradient(
+                                listOf(
+                                    Color(0xFFFDE68A).copy(alpha = 0.85f),
+                                    Color.White.copy(alpha = 0.25f),
+                                    Color(0xFFF59E0B).copy(alpha = 0.60f)
+                                )
+                            ),
+                            shape = lensShape
+                        )
+                )
+            }
+
+            // Tab Items
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 6.dp),
+                horizontalArrangement = Arrangement.SpaceAround,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                items.forEach { tab ->
+                    val isSelected = selectedRoute == tab.route
+                    val tabColor = if (isSelected) Color.White else Color.White.copy(alpha = 0.55f)
+
+                    val scale by animateFloatAsState(
+                        targetValue = if (isSelected) 1.08f else 1.0f,
+                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                        label = "TabScale"
+                    )
+
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                onRouteChange(tab.route)
+                            },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = tab.icon,
+                            contentDescription = tab.label,
+                            tint = if (isSelected) accent else tabColor,
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    scaleX = scale
+                                    scaleY = scale
+                                }
+                                .size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = tab.label,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = tabColor,
+                                fontSize = 10.5.sp,
+                                letterSpacing = 0.3.sp
+                            ),
+                            maxLines = 1
+                        )
+                    }
+                }
+            }
+        }
+
+        // 2. Separate Circular Glass Search Button
+        Box(
+            modifier = Modifier
+                .size(54.dp)
+                .clip(CircleShape)
+                .glassSurface(hazeState = hazeState, shape = CircleShape, tintAlpha = 0.60f)
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.35f),
+                            Color.White.copy(alpha = 0.10f)
+                        )
+                    ),
+                    shape = CircleShape
+                )
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    onSearchClick()
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.Search,
+                contentDescription = "Search",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Backward compatibility alias for FrostedBottomBar forwarding to LensDock.
+ */
 @Composable
 fun FrostedBottomBar(
     selectedRoute: String,
     onRouteChange: (String) -> Unit,
+    onSearchClick: () -> Unit = {},
     hazeState: HazeState? = null,
     isPerformanceMode: Boolean = false,
     shaderEnabled: Boolean = !isPerformanceMode,
@@ -211,66 +502,16 @@ fun FrostedBottomBar(
     grainStrength: Float = 0.0f,
     modifier: Modifier = Modifier
 ) {
-    val items = listOf(
-        Triple("home", "Home", Icons.Rounded.Home),
-        Triple("library", "Library", Icons.Rounded.LibraryMusic),
-        Triple("equalizer", "Equalizer", Icons.Rounded.GraphicEq),
-        Triple("settings", "Settings", Icons.Rounded.Settings)
-    )
-
-    val shape = RoundedCornerShape(32.dp)
-    val accent = LocalAccentColor.current
-
-    Box(
+    LensDock(
+        selectedRoute = selectedRoute,
+        onRouteChange = onRouteChange,
+        onSearchClick = onSearchClick,
+        hazeState = hazeState,
+        isPerformanceMode = isPerformanceMode,
+        shaderEnabled = shaderEnabled,
+        chromaticFringe = chromaticFringe,
+        lensStrength = 0.85f,
+        grainStrength = grainStrength,
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 6.dp)
-            .glassRefraction(
-                shape = shape,
-                enabled = shaderEnabled && !isPerformanceMode,
-                refractionIndex = 0.85f,
-                chromaticFringe = chromaticFringe,
-                grainStrength = grainStrength
-            )
-            .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.70f)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceAround,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            items.forEach { (route, label, icon) ->
-                val isSelected = selectedRoute == route
-                val itemColor = if (isSelected) accent else Color.White.copy(alpha = 0.55f)
-
-                Column(
-                    modifier = Modifier
-                        .clickable(
-                            indication = null,
-                            interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
-                        ) { onRouteChange(route) }
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = label,
-                        tint = itemColor,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                            color = itemColor,
-                            fontSize = 11.sp
-                        )
-                    )
-                }
-            }
-        }
-    }
+    )
 }
