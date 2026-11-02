@@ -29,6 +29,9 @@ import com.nodeplayer.dsp.*
 import com.nodeplayer.model.*
 import com.nodeplayer.music.NodePlayerApplication
 import com.nodeplayer.music.data.TrackEntity
+import com.nodeplayer.music.diagnostics.GlassShaderSelfTest
+import com.nodeplayer.music.diagnostics.GraphicsEventTracker
+import com.nodeplayer.music.diagnostics.ShaderSelfTestResult
 import com.nodeplayer.music.service.PlaybackService
 import com.nodeplayer.music.ui.theme.DefaultAccent
 import kotlinx.coroutines.Dispatchers
@@ -166,6 +169,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _activePresetLabel = MutableStateFlow<String?>(null)
     val activePresetLabel: StateFlow<String?> = _activePresetLabel.asStateFlow()
 
+    // Graphics Self-Test Result & Fallback State
+    private val _shaderSelfTestResult = MutableStateFlow(GlassShaderSelfTest.getLastResult(app))
+    val shaderSelfTestResult: StateFlow<ShaderSelfTestResult> = _shaderSelfTestResult.asStateFlow()
+
     private var audioDeviceCallback: AudioDeviceCallback? = null
 
     private var progressJob: Job? = null
@@ -175,12 +182,38 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (audioParserVersion < 2) {
             prefs.edit().putInt("audio_parser_version", 2).apply()
         }
+        GraphicsEventTracker.init(app)
+        runGraphicsSelfTest()
         loadFilterPreferences()
         initMediaController()
         refreshLibrary()
         registerAudioDeviceCallback()
         detectAudioOutput()
         restoreLastPlaybackSession()
+    }
+
+    private fun runGraphicsSelfTest() {
+        viewModelScope.launch(Dispatchers.Default) {
+            val result = GlassShaderSelfTest.checkAndRunIfNeeded(app)
+            _shaderSelfTestResult.value = result
+            if (!result.passed) {
+                // Refresh theme config so safe fallback is applied
+                withContext(Dispatchers.Main) {
+                    _themeConfig.value = loadThemeConfig()
+                }
+            }
+        }
+    }
+
+    fun toggleForceSelfTestFail(forceFail: Boolean) {
+        viewModelScope.launch(Dispatchers.Default) {
+            GlassShaderSelfTest.setForceFail(app, forceFail)
+            val updated = GlassShaderSelfTest.getLastResult(app)
+            _shaderSelfTestResult.value = updated
+            withContext(Dispatchers.Main) {
+                _themeConfig.value = loadThemeConfig()
+            }
+        }
     }
 
     private fun loadFilterPreferences() {
@@ -218,6 +251,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun loadThemeConfig(): GlassThemeConfig {
+        val selfTestPassed = GlassShaderSelfTest.getLastResult(app).passed
+        val refractionEnabled = prefs.getBoolean("refraction_shader_enabled", true) && selfTestPassed
         return GlassThemeConfig(
             glassStrength = prefs.getString("glass_strength", "DRAMATIC") ?: "DRAMATIC",
             themeMode = prefs.getString("theme_mode", "SYSTEM") ?: "SYSTEM",
@@ -233,7 +268,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             fixedAccentColorArgb = prefs.getLong("fixed_accent_color", 0xFF6366F1),
             cornerRadiusDp = prefs.getFloat("corner_radius_dp", 16.0f),
             isPerformanceMode = prefs.getBoolean("is_performance_mode", false),
-            refractionShaderEnabled = prefs.getBoolean("refraction_shader_enabled", true),
+            refractionShaderEnabled = refractionEnabled,
             hapticsEnabled = prefs.getBoolean("haptics_enabled", true)
         )
     }

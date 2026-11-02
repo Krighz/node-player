@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.nodeplayer.music.diagnostics.GlassShaderSelfTest
 import com.nodeplayer.music.service.PlaybackService
 import com.nodeplayer.music.ui.components.glassRefraction
 import com.nodeplayer.music.widget.artworkUri
@@ -118,11 +119,12 @@ fun ScrubSheetScreen(onDismiss: () -> Unit) {
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn()
         ) {
             val sheetShape = RoundedCornerShape(28.dp)
+            val selfTestPassed = GlassShaderSelfTest.getLastResult(context).passed
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 24.dp)
-                    .glassRefraction(shape = sheetShape, enabled = true, refractionIndex = 0.70f)
+                    .glassRefraction(shape = sheetShape, enabled = selfTestPassed, refractionIndex = 0.70f)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
