@@ -95,11 +95,22 @@ fun NodePlayerTheme(
 
     val cornerRadius: Dp = themeConfig.effectiveCornerRadiusDp.dp
 
+    val glassTokens = GlassTokensData(
+        opacity = themeConfig.glassOpacity,
+        blurStrength = themeConfig.blurStrength,
+        grainStrength = themeConfig.glassTexture,
+        rimStrength = themeConfig.edgeHighlightStrength,
+        isFullyTransparent = themeConfig.isFullyTransparent,
+        keepTextReadable = themeConfig.keepTextReadable,
+        isPerformanceMode = themeConfig.isPerformanceMode
+    )
+
     CompositionLocalProvider(
         LocalAccentColor provides animatedAccent,
         LocalGlassThemeConfig provides themeConfig,
         LocalDensityPadding provides densityPadding,
-        LocalCornerRadius provides cornerRadius
+        LocalCornerRadius provides cornerRadius,
+        LocalGlassTokens provides glassTokens
     ) {
         MaterialTheme(
             colorScheme = colorScheme,

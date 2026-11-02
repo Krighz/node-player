@@ -21,7 +21,7 @@ object WidgetPreferences {
         } catch (_: Exception) {
             WidgetAccentMode.DYNAMIC_PALETTE
         }
-        val opacity = prefs.getFloat(KEY_GLASS_OPACITY, 0.85f).coerceIn(0.4f, 0.95f)
+        val opacity = prefs.getFloat(KEY_GLASS_OPACITY, 0.85f).coerceIn(0.0f, 1.0f)
         val radius = prefs.getFloat(KEY_CORNER_RADIUS, 24.0f).coerceIn(12f, 36f)
         val perfMode = prefs.getBoolean(KEY_PERF_MODE, false)
         val floatingOverlay = prefs.getBoolean(KEY_FLOATING_OVERLAY, false)

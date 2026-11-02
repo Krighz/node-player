@@ -25,6 +25,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -40,6 +41,8 @@ import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
+import com.nodeplayer.music.ui.components.glassRefraction
+import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.widget.FloatingOverlayService
 import com.nodeplayer.music.widget.WidgetCard4x2Provider
@@ -1008,20 +1011,149 @@ fun SettingsScreen(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 
-                // 2. Glassmorphism Strength
-                Text("Liquid Glassmorphism Strength", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                Text("Control translucency, refraction highlight and blur intensity", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
-                Spacer(modifier = Modifier.height(8.dp))
+                // GLASS SECTION (Controls all surfaces: dock, mini player, cards, sheets, widgets)
+                Text(
+                    text = "GLASS APPEARANCE",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        letterSpacing = 1.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accent
+                    )
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Unified controls applied across all surfaces & home widgets",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // 1. Live Preview Card
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(125.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFE11D48), // Vivid Rose
+                                    Color(0xFF7C3AED), // Vivid Violet
+                                    Color(0xFF2563EB)  // Electric Blue
+                                )
+                            )
+                        )
+                        .padding(8.dp)
+                ) {
+                    val previewShape = RoundedCornerShape(14.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .glassRefraction(
+                                shape = previewShape,
+                                enabled = themeConfig.isShaderActive(true),
+                                refractionIndex = 0.85f,
+                                chromaticFringe = themeConfig.chromaticFringeValue(),
+                                grainStrength = themeConfig.grainStrengthValue()
+                            )
+                            .glassSurface(
+                                hazeState = hazeState,
+                                shape = previewShape,
+                                tintAlpha = themeConfig.effectiveTintAlpha
+                            )
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color.White.copy(alpha = 0.20f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = Color.White)
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "505 - Arctic Monkeys",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                                )
+                                Text(
+                                    text = if (themeConfig.isFullyTransparent) "Fully Transparent (Edge Only)" else "Live Glassmorphism Preview",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.80f), fontSize = 11.sp)
+                                )
+                            }
+                            IconButton(onClick = {}) {
+                                Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.White)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // 2. Presets (Clear, Light, Balanced, Frosted)
+                Text(
+                    text = "Presets",
+                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                )
+                Spacer(modifier = Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    val strengths = listOf("DRAMATIC" to "Dramatic", "BALANCED" to "Balanced", "SUBTLE" to "Subtle", "OFF" to "Solid")
-                    strengths.forEach { (str, label) ->
-                        val selected = themeConfig.glassStrength == str
+                    val presets = listOf(
+                        "CLEAR" to "Clear",
+                        "LIGHT" to "Light",
+                        "BALANCED" to "Balanced",
+                        "FROSTED" to "Frosted"
+                    )
+                    presets.forEach { (pKey, label) ->
+                        val isSel = when (pKey) {
+                            "CLEAR" -> !themeConfig.isFullyTransparent && themeConfig.glassOpacity < 0.25f
+                            "LIGHT" -> !themeConfig.isFullyTransparent && themeConfig.glassOpacity in 0.25f..0.50f
+                            "BALANCED" -> !themeConfig.isFullyTransparent && themeConfig.glassOpacity in 0.51f..0.75f
+                            "FROSTED" -> !themeConfig.isFullyTransparent && themeConfig.glassOpacity > 0.75f
+                            else -> false
+                        }
                         FilterChip(
-                            selected = selected,
-                            onClick = { onThemeConfigChange(themeConfig.copy(glassStrength = str)) },
+                            selected = isSel,
+                            onClick = {
+                                val updated = when (pKey) {
+                                    "CLEAR" -> themeConfig.copy(
+                                        glassOpacity = 0.15f,
+                                        blurStrength = 0.20f,
+                                        glassTexture = 0.10f,
+                                        edgeHighlightStrength = 0.50f,
+                                        isFullyTransparent = false
+                                    )
+                                    "LIGHT" -> themeConfig.copy(
+                                        glassOpacity = 0.40f,
+                                        blurStrength = 0.45f,
+                                        glassTexture = 0.25f,
+                                        edgeHighlightStrength = 0.55f,
+                                        isFullyTransparent = false
+                                    )
+                                    "BALANCED" -> themeConfig.copy(
+                                        glassOpacity = 0.65f,
+                                        blurStrength = 0.70f,
+                                        glassTexture = 0.40f,
+                                        edgeHighlightStrength = 0.60f,
+                                        isFullyTransparent = false
+                                    )
+                                    else -> themeConfig.copy( // FROSTED
+                                        glassOpacity = 0.85f,
+                                        blurStrength = 0.95f,
+                                        glassTexture = 0.60f,
+                                        edgeHighlightStrength = 0.75f,
+                                        isFullyTransparent = false
+                                    )
+                                }
+                                onThemeConfigChange(updated)
+                            },
                             label = { Text(label, fontSize = 12.sp) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = accent.copy(alpha = 0.35f),
@@ -1031,6 +1163,133 @@ fun SettingsScreen(
                             )
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // 3. Glass Opacity Slider (0 to 100%)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Glass Opacity", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("${(themeConfig.glassOpacity * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
+                }
+                Slider(
+                    value = themeConfig.glassOpacity,
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(glassOpacity = it, isFullyTransparent = false)) },
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                // 4. Blur Strength Slider (0 to 100%)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Blur Strength", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("${(themeConfig.blurStrength * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
+                }
+                Slider(
+                    value = themeConfig.blurStrength,
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(blurStrength = it)) },
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                // 5. Glass Texture (Grain) Slider (0 to 100%)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Glass Texture (Grain)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("${(themeConfig.glassTexture * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
+                }
+                Slider(
+                    value = themeConfig.glassTexture,
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(glassTexture = it)) },
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                // 6. Edge Highlight Strength (Rim light & chromatic fringe, 0 to 100%)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Edge Highlight Strength", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("${(themeConfig.edgeHighlightStrength * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
+                }
+                Slider(
+                    value = themeConfig.edgeHighlightStrength,
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(edgeHighlightStrength = it)) },
+                    valueRange = 0f..1f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // 7. Switches: Fully Transparent Glass & Keep Text Readable
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Fully Transparent Glass", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Removes fill, blur and grain; keeps specular rim outline", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
+                    }
+                    Switch(
+                        checked = themeConfig.isFullyTransparent,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isFullyTransparent = it)) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Keep Text Readable", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Adds contrast scrim when glass is high clarity", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
+                    }
+                    Switch(
+                        checked = themeConfig.keepTextReadable,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(keepTextReadable = it)) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Reset Glass to Default
+                OutlinedButton(
+                    onClick = {
+                        onThemeConfigChange(
+                            themeConfig.copy(
+                                glassOpacity = 0.65f,
+                                blurStrength = 0.70f,
+                                glassTexture = 0.40f,
+                                edgeHighlightStrength = 0.60f,
+                                isFullyTransparent = false,
+                                keepTextReadable = true
+                            )
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White.copy(alpha = 0.85f))
+                ) {
+                    Icon(Icons.Rounded.RestartAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Reset Glass to Default (Balanced)")
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))

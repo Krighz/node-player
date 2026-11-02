@@ -1159,6 +1159,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .putBoolean("glass_fully_transparent", newConfig.isFullyTransparent)
             .putBoolean("glass_keep_text_readable", newConfig.keepTextReadable)
             .apply()
+
+        // Sync widgets with current glass settings and re-render
+        val widgetOpacity = if (newConfig.isFullyTransparent) 0.0f else newConfig.glassOpacity
+        prefs.edit().putFloat("widget_glass_opacity", widgetOpacity).apply()
+        try {
+            com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(app)
+        } catch (_: Throwable) {}
     }
 
     fun applySafeGraphicsMode() {
