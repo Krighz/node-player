@@ -309,7 +309,8 @@ class MainActivity : ComponentActivity() {
                                 onLongPress = { isNowPlayingExpanded = true },
                                 gesturesEnabled = appSettings.miniPlayerGesturesEnabled,
                                 hazeState = dockHazeState,
-                                rmsLevel = currentRms
+                                rmsLevel = currentRms,
+                                isPerformanceMode = themeConfig.isPerformanceMode || !themeConfig.refractionShaderEnabled
                             )
                         }
 

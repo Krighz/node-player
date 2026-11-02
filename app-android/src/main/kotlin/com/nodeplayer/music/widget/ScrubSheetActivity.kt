@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nodeplayer.music.service.PlaybackService
+import com.nodeplayer.music.ui.components.glassRefraction
 import com.nodeplayer.music.widget.artworkUri
 import kotlinx.coroutines.delay
 
@@ -116,16 +117,18 @@ fun ScrubSheetScreen(onDismiss: () -> Unit) {
             visible = true,
             enter = slideInVertically(initialOffsetY = { it }) + fadeIn()
         ) {
+            val sheetShape = RoundedCornerShape(28.dp)
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 24.dp)
+                    .glassRefraction(shape = sheetShape, enabled = true, refractionIndex = 0.70f)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {} // Consume click inside sheet
                     ),
-                shape = RoundedCornerShape(28.dp),
+                shape = sheetShape,
                 color = Color(0xEB131722),
                 shadowElevation = 16.dp,
                 tonalElevation = 8.dp

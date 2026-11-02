@@ -43,6 +43,7 @@ fun FrostedMiniPlayer(
     gesturesEnabled: Boolean = true,
     hazeState: HazeState? = null,
     rmsLevel: Float = 0.0f,
+    isPerformanceMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (currentTrack == null) return
@@ -95,6 +96,7 @@ fun FrostedMiniPlayer(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 6.dp)
+            .glassRefraction(shape = shape, enabled = !isPerformanceMode, refractionIndex = 0.65f)
             .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.65f)
             .then(gestureModifier)
     ) {
@@ -211,7 +213,7 @@ fun FrostedBottomBar(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 6.dp)
-            .glassRefractionDock(enabled = !isPerformanceMode, refractionIndex = 0.85f)
+            .glassRefraction(shape = shape, enabled = !isPerformanceMode, refractionIndex = 0.85f)
             .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.70f)
     ) {
         Row(

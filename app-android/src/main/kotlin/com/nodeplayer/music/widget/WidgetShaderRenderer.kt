@@ -76,8 +76,10 @@ object WidgetShaderRenderer {
         uniform float u_corner_radius;
         uniform float u_glass_opacity;
 
+        // Hardened hash: modulo wrapped to eliminate high-coordinate GPU float overflow
         float hash(float2 p) {
-            float3 p3 = fract(float3(p.xyx) * 0.1031);
+            float2 safeP = p - 1024.0 * floor(p / 1024.0);
+            float3 p3 = fract(float3(safeP.xyx) * 0.1031);
             p3 += dot(p3, p3.yzx + 33.33);
             return fract((p3.x + p3.y) * p3.z);
         }
@@ -99,8 +101,13 @@ object WidgetShaderRenderer {
         }
 
         half4 main(float2 fragCoord) {
+            // Strict bounds check: discard if evaluated outside resolution
+            if (fragCoord.x < 0.0 || fragCoord.x > u_resolution.x || fragCoord.y < 0.0 || fragCoord.y > u_resolution.y) {
+                return half4(0.0, 0.0, 0.0, 0.0);
+            }
+
             // 1. Direct pixel-space rounded rectangle SDF for exact edge anti-aliasing
-            float2 halfSize = u_resolution * 0.5;
+            float2 halfSize = max(u_resolution * 0.5, float2(0.5, 0.5));
             float2 pPixel = fragCoord - halfSize;
             float dBox = sdRoundedBox(pPixel, halfSize, u_corner_radius);
             float cardMask = 1.0 - smoothstep(0.0, 1.5, dBox);
@@ -108,12 +115,14 @@ object WidgetShaderRenderer {
                 return half4(0.0, 0.0, 0.0, 0.0);
             }
 
-            float2 uv = fragCoord / u_resolution;
-            float aspect = u_resolution.x / u_resolution.y;
+            // Normalise coordinates to 0..1 guarded by epsilon
+            float2 safeRes = max(u_resolution, float2(1.0, 1.0));
+            float2 uv = clamp(fragCoord / safeRes, 0.0, 1.0);
+            float aspect = safeRes.x / (safeRes.y + 1e-5);
             float2 p = (uv - 0.5) * float2(aspect, 1.0);
 
-            // 2. Fluid Metaball / Domain-Warped Shapes
-            float t = u_phase;
+            // 2. Fluid Metaball / Domain-Warped Shapes with safely wrapped phase
+            float t = u_phase - 3600.0 * floor(u_phase / 3600.0);
             float2 warp = float2(
                 noise(p * 2.2 + float2(t * 0.28, t * 0.18)),
                 noise(p * 2.2 + float2(-t * 0.22, t * 0.32))
@@ -123,21 +132,21 @@ object WidgetShaderRenderer {
             float2 c1 = float2(sin(t * 0.35) * 0.25, cos(t * 0.45) * 0.15);
             float2 c2 = float2(cos(t * -0.30) * 0.30, sin(t * -0.38) * 0.20);
 
-            float d1 = length(fluidP - c1);
-            float d2 = length(fluidP - c2);
+            float d1Sq = dot(fluidP - c1, fluidP - c1) + 0.09;
+            float d2Sq = dot(fluidP - c2, fluidP - c2) + 0.09;
 
-            float fluidField = 0.32 / (d1 * d1 + 0.09) + 0.28 / (d2 * d2 + 0.09);
+            float fluidField = 0.32 / (d1Sq + 1e-5) + 0.28 / (d2Sq + 1e-5);
             float fluidIso = smoothstep(1.5, 3.2, fluidField);
 
-            // Safe normal derivation for specular rim lighting
+            // Safe normal derivation for specular rim lighting (guarded with epsilon)
             float eps = 0.02;
             float2 pR = fluidP + float2(eps, 0.0);
             float2 pU = fluidP + float2(0.0, eps);
-            float fieldR = 0.32 / (dot(pR - c1, pR - c1) + 0.09) + 0.28 / (dot(pR - c2, pR - c2) + 0.09);
-            float fieldU = 0.32 / (dot(pU - c1, pU - c1) + 0.09) + 0.28 / (dot(pU - c2, pU - c2) + 0.09);
+            float fieldR = 0.32 / (dot(pR - c1, pR - c1) + 0.09 + 1e-5) + 0.28 / (dot(pR - c2, pR - c2) + 0.09 + 1e-5);
+            float fieldU = 0.32 / (dot(pU - c1, pU - c1) + 0.09 + 1e-5) + 0.28 / (dot(pU - c2, pU - c2) + 0.09 + 1e-5);
             float2 grad = float2(fieldR - fluidField, fieldU - fluidField);
             float gradLen = length(grad);
-            float2 norm = gradLen > 0.0001 ? grad / gradLen : float2(0.0, 1.0);
+            float2 norm = gradLen > 1e-5 ? grad / (gradLen + 1e-5) : float2(0.0, 1.0);
 
             float fluidEdge = smoothstep(0.18, 0.0, abs(fluidField - 2.2));
 
@@ -157,19 +166,23 @@ object WidgetShaderRenderer {
             col += u_color_warm * (rimWarm * 1.7 + cardWarmFringe * 0.90);
             col += u_color_cool * (rimCool * 1.7 + cardCoolFringe * 0.90);
 
-            float maxRim = max(max(rimWarm, rimCool), 0.0);
-            float specularCore = (maxRim * maxRim * maxRim) * 0.95;
+            float maxRim = clamp(max(rimWarm, rimCool), 0.0, 1.0);
+            // Safe pow: never pow a negative value
+            float specularCore = pow(max(maxRim, 0.0), 3.0) * 0.95;
             col += float3(specularCore, specularCore, specularCore);
 
             float grain = (hash(fragCoord) - 0.5) * 0.032;
             col += float3(grain, grain, grain);
 
-            float alpha = cardMask * clamp(u_glass_opacity, 0.4, 0.95);
             if (u_is_playing < 0.8) {
                 col *= 0.65;
             }
 
-            return half4(clamp(col, 0.0, 1.0) * alpha, alpha);
+            // Output clamped colour and premultiplied alpha
+            col = clamp(col, 0.0, 1.0);
+            float alpha = clamp(cardMask * clamp(u_glass_opacity, 0.0, 1.0), 0.0, 1.0);
+
+            return half4(col * alpha, alpha);
         }
     """
 
@@ -216,6 +229,15 @@ object WidgetShaderRenderer {
      * Uses AGSL + HardwareRenderer on Android 13+ (API 33+), with static frosted fallback on older devices or Performance Mode.
      */
     fun renderGlassBackground(config: WidgetShaderConfig): Bitmap {
+        if (config.widthPx <= 0 || config.heightPx <= 0 ||
+            config.widthPx > 4096 || config.heightPx > 4096 ||
+            config.cornerRadiusPx.isNaN() || config.cornerRadiusPx < 0f ||
+            config.phase.isNaN()
+        ) {
+            Log.w(TAG, "Invalid widget dimensions ${config.widthPx}x${config.heightPx}, using fallback")
+            return renderStaticFallback(config)
+        }
+
         val cacheKey = config.hashCode()
         bitmapCache.get(cacheKey)?.let { cached ->
             if (!cached.isRecycled) return cached
@@ -276,7 +298,8 @@ object WidgetShaderRenderer {
         try {
             val runtimeShader = android.graphics.RuntimeShader(AGSL_LIQUID_GLASS)
             runtimeShader.setFloatUniform("u_resolution", width.toFloat(), height.toFloat())
-            runtimeShader.setFloatUniform("u_phase", config.phase)
+            val safePhase = config.phase % 3600f
+            runtimeShader.setFloatUniform("u_phase", safePhase)
             runtimeShader.setFloatUniform("u_color_warm", config.warmColor[0], config.warmColor[1], config.warmColor[2])
             runtimeShader.setFloatUniform("u_color_cool", config.coolColor[0], config.coolColor[1], config.coolColor[2])
             runtimeShader.setFloatUniform("u_color_base", config.baseColor[0], config.baseColor[1], config.baseColor[2])
@@ -290,7 +313,17 @@ object WidgetShaderRenderer {
             }
 
             val canvas = renderNode.beginRecording(width, height)
+            canvas.save()
+            val clipPath = android.graphics.Path().apply {
+                addRoundRect(
+                    0f, 0f, width.toFloat(), height.toFloat(),
+                    config.cornerRadiusPx, config.cornerRadiusPx,
+                    android.graphics.Path.Direction.CW
+                )
+            }
+            canvas.clipPath(clipPath)
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            canvas.restore()
             renderNode.endRecording()
 
             val syncResult = hardwareRenderer.createRenderRequest().syncAndDraw()
