@@ -39,8 +39,8 @@ android {
         applicationId = "com.nodeplayer.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.1.0"
+        versionCode = 4
+        versionName = "1.2.0"
 
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmApiKey\"")
         buildConfigField("String", "LASTFM_API_SECRET", "\"$lastFmApiSecret\"")

@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2026-11-02
+
+### Added
+- **In-App Update System**: Opt-in GitHub Releases update checker comparing semantic versions (`SemVer`), with background checks via battery-friendly `WorkManager` (daily, unmetered network) and foreground throttling (at most once every 12 hours). Includes first-run opt-in dialog and privacy disclosures.
+- **Glass Update Banner**: Non-blocking liquid glass card on the Home screen featuring release notes, asset size, and actions (*Update now*, *Later*, *Skip this version*).
+- **Background Download Engine**: Resumable HTTPS download directly to private app storage, notification progress, storage space checks, and strict SHA-256 checksum verification against official release assets.
+- **Secure PackageInstaller Integration**: Streams updates directly into Android `PackageInstaller` with `USER_ACTION_NOT_REQUIRED` on Android 12+, unknown app sources guidance (`ACTION_MANAGE_UNKNOWN_APP_SOURCES`), pre-install security validation (verifying package name, strictly newer version, and matching signing certificates), and active playback confirmation.
+- **Post-Update What's New Sheet**: Highlights new features and improvements immediately after an update installs.
+- **Community & Feedback Hub**: Enabled GitHub Discussions on the repository and added *Send feedback* and *Report a bug* (with device and OS details pre-filled) options across *More*, *Settings*, the project README, and website footer.
+- **Voluntary Support Integration**: Added optional voluntary UPI support (`7063061981@fam`, payee `Krighz`) with one-tap payment launching and clipboard copying in *Settings*, *More*, `.github/FUNDING.yml`, and website with a crisp inline SVG QR code.
+- **Debug Mock Updater**: Added debug controls in *Graphics Diagnostics* to test update banner rendering, dismissals, and version unskipping.
+
+### Fixed
+- Fixed `UnsupportedOperationException: Tried to obtain display from a Context not associated with one` on Android 16 (API 36) by querying `DisplayManager` and falling back to display metrics.
+
+---
+
 ## [1.1.0] - 2026-11-02
 
 ### Added
