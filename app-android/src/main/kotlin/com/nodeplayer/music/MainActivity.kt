@@ -118,7 +118,7 @@ class MainActivity : ComponentActivity() {
                 val dailyStats by viewModel.dailyListeningStats.collectAsState()
                 val sessionSec by viewModel.sessionListeningSeconds.collectAsState()
 
-                val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder")
+                val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder", "widgets", "widget_settings")
                 BackHandler(enabled = isNowPlayingExpanded || isSubRoute) {
                     if (isNowPlayingExpanded) {
                         isNowPlayingExpanded = false
@@ -378,6 +378,12 @@ class MainActivity : ComponentActivity() {
                                 onApplySafeGraphicsMode = { viewModel.applySafeGraphicsMode() },
                                 onReportProblem = { showDiagnosticsDialog = true },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
+                                hazeState = null
+                            )
+                            "widgets", "widget_settings" -> com.nodeplayer.music.ui.screens.WidgetSettingsScreen(
+                                currentTrack = currentTrack,
+                                isPlaying = isPlaying,
+                                onBack = { currentRoute = "settings" },
                                 hazeState = null
                             )
                         }

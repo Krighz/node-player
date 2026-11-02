@@ -203,6 +203,7 @@ object WidgetUpdateManager {
             bindControls(context, views, isPlaying)
             bindProgressAndChronometer(views, isPlaying, positionMs, durationMs)
             bindTapToSeekZones(context, views)
+            applyElementVisibilities(views, settings, isCard = true)
 
             // Open Scrub Sheet
             val scrubIntent = Intent(context, ScrubSheetActivity::class.java).apply {
@@ -258,6 +259,7 @@ object WidgetUpdateManager {
 
             bindCommonTrackInfo(context, views, track, artwork)
             bindControls(context, views, isPlaying)
+            applyElementVisibilities(views, settings, isSlim = true)
 
             if (lyrics != null && lyrics.lines.isNotEmpty()) {
                 views.setViewVisibility(R.id.widget_lyrics_empty, View.GONE)
@@ -322,6 +324,7 @@ object WidgetUpdateManager {
 
             bindCommonTrackInfo(context, views, track, artwork)
             bindControls(context, views, isPlaying)
+            applyElementVisibilities(views, settings, isSlim = true)
 
             val progressPercent = ((positionMs.toFloat() / durationMs.toFloat()) * 100).toInt().coerceIn(0, 100)
             views.setProgressBar(R.id.widget_progress, 100, progressPercent, false)
@@ -365,6 +368,7 @@ object WidgetUpdateManager {
             views.setImageViewBitmap(R.id.widget_bg, glassBitmap)
 
             bindCommonTrackInfo(context, views, track, artwork)
+            applyElementVisibilities(views, settings, isSquare = true)
 
             views.setImageViewResource(
                 R.id.widget_btn_play_pause,
@@ -433,6 +437,36 @@ object WidgetUpdateManager {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         views.setOnClickPendingIntent(R.id.widget_root, openAppPendingIntent)
+    }
+
+    private fun applyElementVisibilities(
+        views: RemoteViews,
+        settings: WidgetSettings,
+        isCard: Boolean = false,
+        isLyrics: Boolean = false,
+        isSlim: Boolean = false,
+        isSquare: Boolean = false
+    ) {
+        views.setViewVisibility(R.id.widget_artwork, if (settings.showArt) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.widget_title, if (settings.showTitleArtist) View.VISIBLE else View.GONE)
+        views.setViewVisibility(R.id.widget_artist, if (settings.showTitleArtist) View.VISIBLE else View.GONE)
+
+        if (isCard) {
+            views.setViewVisibility(R.id.widget_glyph, if (settings.showWaveform) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.widget_progress_row, if (settings.showSeekbarTimes) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.widget_controls_row, if (settings.showTransport) View.VISIBLE else View.GONE)
+        }
+        if (isLyrics) {
+            views.setViewVisibility(R.id.widget_lyrics_container, if (settings.showLyrics) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.widget_controls_row, if (settings.showTransport) View.VISIBLE else View.GONE)
+        }
+        if (isSlim) {
+            views.setViewVisibility(R.id.widget_progress, if (settings.showSeekbarTimes) View.VISIBLE else View.GONE)
+            views.setViewVisibility(R.id.widget_controls, if (settings.showTransport) View.VISIBLE else View.GONE)
+        }
+        if (isSquare) {
+            views.setViewVisibility(R.id.widget_btn_play_pause, if (settings.showTransport) View.VISIBLE else View.GONE)
+        }
     }
 
     private fun bindControls(context: Context, views: RemoteViews, isPlaying: Boolean) {

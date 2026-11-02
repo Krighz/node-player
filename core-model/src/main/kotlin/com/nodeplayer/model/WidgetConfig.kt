@@ -12,5 +12,11 @@ data class WidgetSettings(
     val glassOpacity: Float = 0.85f,
     val cornerRadiusDp: Float = 24.0f,
     val isPerformanceMode: Boolean = false,
-    val floatingOverlayEnabled: Boolean = false
+    val floatingOverlayEnabled: Boolean = false,
+    val showArt: Boolean = true,
+    val showWaveform: Boolean = true,
+    val showTitleArtist: Boolean = true,
+    val showSeekbarTimes: Boolean = true,
+    val showTransport: Boolean = true,
+    val showLyrics: Boolean = true
 )
