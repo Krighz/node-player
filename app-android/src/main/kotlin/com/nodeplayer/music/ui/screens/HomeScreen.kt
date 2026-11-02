@@ -23,6 +23,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import com.nodeplayer.music.ui.components.UpdateBanner
+import com.nodeplayer.music.update.UpdateManager
+import com.nodeplayer.music.update.AppUpdateInfo
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -43,10 +46,16 @@ fun HomeScreen(
     onOpenSmartPlaylists: () -> Unit,
     onOpenStats: () -> Unit,
     onOpenDuplicateFinder: () -> Unit,
+    onStartUpdate: (AppUpdateInfo) -> Unit = {},
+    onCancelUpdate: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {},
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val context = LocalContext.current
+    val availableUpdate by UpdateManager.availableUpdate.collectAsState()
+    val downloadStatus by UpdateManager.downloadStatus.collectAsState()
 
     // 1. Recently Played (tracks sorted by lastPlayedTimestamp descending)
     val recentlyPlayed = remember(allTracks) {
@@ -157,6 +166,23 @@ fun HomeScreen(
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // In-App Update Banner (Follows glass appearance settings)
+        if (availableUpdate != null) {
+            item {
+                UpdateBanner(
+                    updateInfo = availableUpdate!!,
+                    downloadStatus = downloadStatus,
+                    hazeState = hazeState,
+                    onUpdateNow = { onStartUpdate(availableUpdate!!) },
+                    onLater = { UpdateManager.dismissForSession() },
+                    onSkip = { UpdateManager.skipVersion(context, availableUpdate!!.versionName) },
+                    onCancelDownload = onCancelUpdate,
+                    onInstall = onInstallUpdate,
+                    onRetry = { onStartUpdate(availableUpdate!!) }
+                )
+            }
         }
 
         // Hero Card: Jump Back In

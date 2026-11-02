@@ -1,5 +1,7 @@
 package com.nodeplayer.music.update
 
+import java.io.File
+
 /**
  * Metadata for an available application update.
  */
@@ -22,4 +24,19 @@ sealed class UpdateCheckResult {
     data class RateLimited(val message: String) : UpdateCheckResult()
     data class NetworkError(val message: String) : UpdateCheckResult()
     data class Error(val message: String) : UpdateCheckResult()
+}
+
+/**
+ * State machine for the download and verification phase.
+ */
+sealed class DownloadStatus {
+    data object Idle : DownloadStatus()
+    data class Downloading(
+        val progress: Float,
+        val downloadedBytes: Long,
+        val totalBytes: Long
+    ) : DownloadStatus()
+    data object Verifying : DownloadStatus()
+    data class ReadyToInstall(val apkFile: File) : DownloadStatus()
+    data class Error(val message: String) : DownloadStatus()
 }
