@@ -6,6 +6,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-11-02
+
+### Added
+- **AGSL Shader Hardening**: Hardened refraction shaders across the dock, mini player, scrub sheet, and home widgets using high-precision `float` coordinates, normalized math (`0..1`), divide/normalize guards with epsilon, time/coordinate modulo wrapping, and strict view boundary clipping to prevent GPU-specific out-of-bounds artifact spills (e.g. Mali-G77 / Dimensity 8020).
+- **Automated Shader Self-Test**: Added an offscreen rendering self-test that verifies bounding transparency, pixel sanity, and plausible luminance on launch. Automatically switches device to safe Haze blur with rim highlight if any anomaly is detected, with a debug switch to force-fail for testing.
+- **Glass Appearance Controls**: Unified glass controls under Settings controlling every surface (dock, mini player, cards, sheets, dialogs, lyrics, home widgets): sliders for Opacity, Blur Strength, Grain Texture, and Edge Highlight (0–100%), presets (*Clear*, *Light*, *Balanced*, *Frosted*), and *Fully Transparent Glass* mode with *Keep Text Readable* scrim.
+- **Graphics Diagnostics Screen**: New screen under *More &rarr; Graphics Diagnostics* displaying device model, Android OS, SoC model, GPU renderer from temporary EGL context, display metrics, self-test status, side-by-side shader previews, and safe graphics mode toggle.
+- **Diagnostics Dump Engine & 60s Record Mode**: One-tap export to `nodeplayer-diagnostics-<date>.zip` containing PixelCopy screenshot, rolling ring buffer of 200 graphics events, process logcat, and hardware info with strictly zero personal data. Includes 60s record mode and system share sheet integration.
+- **Graphics Glitch Issue Template**: Added GitHub issue template and website FAQ entry for visual and shader troubleshooting.
+
+### Changed
+- Extended widget glass opacity range to `0%..100%`, dynamically synced with app glass theme tokens.
+- Optimized rendering pipeline to completely skip blur and shader layers when opacity or blur is zero.
+- Re-architected glass tokens into a single DataStore source of truth in `NodePlayerTheme`.
+
+---
+
 ## [1.0.0] - 2026-11-02
 
 ### Added

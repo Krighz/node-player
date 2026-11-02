@@ -111,7 +111,7 @@ $ghArgs = @(
     "--notes-file", $notesPath
 )
 
-if ($Version -eq "1.0.0") {
+if (-not $PreRelease -and -not $Draft) {
     $ghArgs += "--latest"
 }
 
