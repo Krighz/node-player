@@ -236,6 +236,10 @@ fun MoreScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(10.dp))
+
+        com.nodeplayer.music.ui.components.SupportCard(hazeState = hazeState)
+
         Spacer(modifier = Modifier.height(24.dp))
 
         // 3. Audio Test Tools (Channel check, Polarity, Sweep, Noise, Sine tone)

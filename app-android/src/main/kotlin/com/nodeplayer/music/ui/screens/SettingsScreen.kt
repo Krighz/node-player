@@ -3480,6 +3480,10 @@ fun SettingsScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(14.dp))
+
+        com.nodeplayer.music.ui.components.SupportCard(hazeState = hazeState)
+
         Spacer(modifier = Modifier.height(200.dp))
     }
 

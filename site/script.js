@@ -70,6 +70,26 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // 4b. UPI ID Copy Button
+  const copyUpiBtn = document.getElementById('copyUpiBtn');
+  if (copyUpiBtn) {
+    copyUpiBtn.addEventListener('click', async () => {
+      const upiId = '7063061981@fam';
+      try {
+        await navigator.clipboard.writeText(upiId);
+        const originalText = copyUpiBtn.innerText;
+        copyUpiBtn.innerText = 'Copied!';
+        copyUpiBtn.style.color = '#38BDF8';
+        setTimeout(() => {
+          copyUpiBtn.innerText = originalText;
+          copyUpiBtn.style.color = '';
+        }, 2000);
+      } catch (e) {
+        console.error('UPI copy failed:', e);
+      }
+    });
+  }
+
   // 5. Interactive 10-Band EQ Playground
   const canvas = document.getElementById('eqCanvas');
   if (canvas) {
