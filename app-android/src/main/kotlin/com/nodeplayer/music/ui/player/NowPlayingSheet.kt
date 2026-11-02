@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -89,6 +90,7 @@ fun NowPlayingSheet(
     var showQueueSheet by remember { mutableStateOf(false) }
     var showSleepTimerDialog by remember { mutableStateOf(false) }
     var showTopMenu by remember { mutableStateOf(false) }
+    var isRepeatOne by remember { mutableStateOf(false) }
 
     val currentMs = if (isSeeking) sliderPosition.toLong() else currentPositionMs
     val totalMs = track.durationMs.coerceAtLeast(1L)
@@ -262,11 +264,37 @@ fun NowPlayingSheet(
                         onPlayPause = onPlayPauseClick,
                         onSkipNext = onSkipNextClick,
                         onSkipPrevious = onSkipPreviousClick,
-                        isShuffle = isShuffle,
-                        onToggleShuffle = onToggleShuffle,
                         rmsLevel = rmsLevel,
                         isPerformanceMode = isPerformanceMode
                     )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // Secondary Tools Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { onToggleShuffle() }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Rounded.Shuffle, contentDescription = "Shuffle", tint = if (isShuffle) accent else Color.White.copy(alpha = 0.65f), modifier = Modifier.size(24.dp))
+                        }
+                        IconButton(onClick = { isRepeatOne = !isRepeatOne }, modifier = Modifier.size(48.dp)) {
+                            Icon(if (isRepeatOne) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat, contentDescription = "Repeat", tint = if (isRepeatOne) accent else Color.White.copy(alpha = 0.65f), modifier = Modifier.size(24.dp))
+                        }
+                        IconButton(onClick = { showQueueSheet = true }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.AutoMirrored.Rounded.QueueMusic, contentDescription = "Queue", tint = if (showQueueSheet) accent else Color.White.copy(alpha = 0.85f), modifier = Modifier.size(24.dp))
+                        }
+                        IconButton(onClick = { showLyrics = !showLyrics }, modifier = Modifier.size(48.dp)) {
+                            Icon(if (showLyrics) Icons.Rounded.Album else Icons.Rounded.Lyrics, contentDescription = "Lyrics", tint = if (showLyrics) accent else Color.White.copy(alpha = 0.85f), modifier = Modifier.size(24.dp))
+                        }
+                        IconButton(onClick = { showSleepTimerDialog = true }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Rounded.Timer, contentDescription = "Sleep Timer", tint = if (sleepTimerRemainingSec != null) accent else Color.White.copy(alpha = 0.65f), modifier = Modifier.size(24.dp))
+                        }
+                        IconButton(onClick = { onOpenEq() }, modifier = Modifier.size(48.dp)) {
+                            Icon(Icons.Rounded.Tune, contentDescription = "Equalizer", tint = accent, modifier = Modifier.size(24.dp))
+                        }
+                    }
                 }
             }
         } else {
@@ -476,9 +504,9 @@ fun NowPlayingSheet(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Track Title & Artist (High contrast, single clear hero)
+                // 2. Track Title & Artist (High contrast, clean hierarchy)
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -505,27 +533,53 @@ fun NowPlayingSheet(
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    val portraitOutputDisplay = if (audioOutputInfo.isTrackInitialized) {
-                        val dev = if (audioOutputInfo.outputDeviceName.isNotBlank() && audioOutputInfo.outputDeviceName != "—") " • ${audioOutputInfo.outputDeviceName}" else ""
-                        "${audioOutputInfo.format} • ${audioOutputInfo.sampleRate} Hz$dev"
-                    } else "—"
-                    Text(
-                        text = "${track.formatBadgeText}  |  Output: $portraitOutputDisplay",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            color = accent,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        ),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center
-                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // 3. One Quality Line (Source format + Bit-perfect / Resampled sink)
+                    val qualitySinkLine = remember(track, audioOutputInfo) {
+                        val srcFormat = if (track.formatBadgeText.isNotBlank()) track.formatBadgeText else "${track.sampleRate} Hz"
+                        val sinkDesc = if (audioOutputInfo.isTrackInitialized) {
+                            val sinkType = if (audioOutputInfo.isBitPerfect) "Bit-perfect" else "Resampled"
+                            val dev = if (audioOutputInfo.outputDeviceName.isNotBlank() && audioOutputInfo.outputDeviceName != "—") " • ${audioOutputInfo.outputDeviceName}" else ""
+                            "$sinkType$dev"
+                        } else "Direct Output"
+                        "$srcFormat  |  $sinkDesc"
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.10f))
+                            .clickable {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                showTrackDetailsSheet = true
+                            }
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(if (audioOutputInfo.isBitPerfect) Color(0xFF10B981) else accent, CircleShape)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = qualitySinkLine,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (audioOutputInfo.isBitPerfect) Color(0xFF34D399) else accent,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
 
-                // Seekbar
+                // 4. Seekbar with elapsed & remaining times
                 PlayerSeekBar(
                     currentMs = currentMs,
                     totalMs = totalMs,
@@ -535,9 +589,9 @@ fun NowPlayingSheet(
                     onSeekFinished = { isSeeking = false; onSeekTo(sliderPosition.toLong()) }
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Playback Controls Row
+                // 5. Primary Transport Controls
                 PlayerControlButtons(
                     isPlaying = isPlaying,
                     accent = accent,
@@ -545,49 +599,149 @@ fun NowPlayingSheet(
                     onPlayPause = onPlayPauseClick,
                     onSkipNext = onSkipNextClick,
                     onSkipPrevious = onSkipPreviousClick,
-                    isShuffle = isShuffle,
-                    onToggleShuffle = onToggleShuffle,
                     rmsLevel = rmsLevel,
                     isPerformanceMode = isPerformanceMode
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Up Next Queue Handle
-                Box(
+                // 6. Secondary Tools Row: Shuffle, Repeat, Queue, Lyrics, Sleep Timer, EQ (all >= 48dp)
+                Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.12f))
-                        .clickable { showQueueSheet = true }
-                        .padding(horizontal = 16.dp, vertical = 7.dp)
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Shuffle
+                    IconButton(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            onToggleShuffle()
+                        },
+                        modifier = Modifier.size(48.dp)
+                    ) {
                         Icon(
-                            imageVector = Icons.Rounded.QueueMusic,
-                            contentDescription = null,
-                            tint = accent,
-                            modifier = Modifier.size(16.dp)
+                            imageVector = Icons.Rounded.Shuffle,
+                            contentDescription = "Shuffle",
+                            tint = if (isShuffle) accent else Color.White.copy(alpha = 0.65f),
+                            modifier = Modifier.size(24.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (queue.isNotEmpty()) "Up Next • ${queue.size} tracks" else "Up Next • Queue",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color.White.copy(alpha = 0.90f),
-                                fontSize = 12.sp
+                    }
+
+                    // Repeat
+                    IconButton(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            isRepeatOne = !isRepeatOne
+                        },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isRepeatOne) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                            contentDescription = "Repeat",
+                            tint = if (isRepeatOne) accent else Color.White.copy(alpha = 0.65f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    // Queue Bottom Sheet Trigger
+                    Box(contentAlignment = Alignment.TopEnd) {
+                        IconButton(
+                            onClick = {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                showQueueSheet = true
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+                                contentDescription = "Queue",
+                                tint = if (showQueueSheet) accent else Color.White.copy(alpha = 0.85f),
+                                modifier = Modifier.size(24.dp)
                             )
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        if (queue.isNotEmpty()) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 4.dp, end = 4.dp)
+                                    .size(16.dp)
+                                    .background(accent, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (queue.size > 99) "99+" else "${queue.size}",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 8.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    // Lyrics
+                    IconButton(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            showLyrics = !showLyrics
+                            if (showLyrics) showSpectrogram = false
+                        },
+                        modifier = Modifier.size(48.dp)
+                    ) {
                         Icon(
-                            imageVector = Icons.Rounded.KeyboardArrowUp,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.50f),
-                            modifier = Modifier.size(16.dp)
+                            imageVector = if (showLyrics) Icons.Rounded.Album else Icons.Rounded.Lyrics,
+                            contentDescription = "Lyrics",
+                            tint = if (showLyrics) accent else Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+
+                    // Sleep Timer
+                    Box(contentAlignment = Alignment.TopEnd) {
+                        IconButton(
+                            onClick = {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                showSleepTimerDialog = true
+                            },
+                            modifier = Modifier.size(48.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Timer,
+                                contentDescription = "Sleep Timer",
+                                tint = if (sleepTimerRemainingSec != null) accent else Color.White.copy(alpha = 0.65f),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        if (sleepTimerRemainingSec != null) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 4.dp, end = 4.dp)
+                                    .size(8.dp)
+                                    .background(accent, CircleShape)
+                            )
+                        }
+                    }
+
+                    // EQ
+                    IconButton(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            onOpenEq()
+                        },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Tune,
+                            contentDescription = "Equalizer",
+                            tint = accent,
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(18.dp))
             }
         }
     }
@@ -985,8 +1139,6 @@ private fun PlayerControlButtons(
     onPlayPause: () -> Unit,
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
-    isShuffle: Boolean = false,
-    onToggleShuffle: () -> Unit = {},
     rmsLevel: Float = 0.0f,
     isPerformanceMode: Boolean = false
 ) {
@@ -996,13 +1148,15 @@ private fun PlayerControlButtons(
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Visualizer indicator
-        SoundWaveVisualizer(
-            isPlaying = isPlaying,
-            barColor = accent,
-            maxHeight = 22.dp,
-            rmsLevel = rmsLevel,
-            isPerformanceMode = isPerformanceMode
-        )
+        Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            SoundWaveVisualizer(
+                isPlaying = isPlaying,
+                barColor = accent,
+                maxHeight = 22.dp,
+                rmsLevel = rmsLevel,
+                isPerformanceMode = isPerformanceMode
+            )
+        }
 
         // Previous
         IconButton(
@@ -1010,17 +1164,18 @@ private fun PlayerControlButtons(
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 onSkipPrevious()
             },
-            modifier = Modifier.size(54.dp)
+            modifier = Modifier.size(56.dp)
         ) {
-            Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(36.dp))
+            Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(38.dp))
         }
 
         // Hero Play / Pause Button with tactile glow
         Box(
             modifier = Modifier
-                .size(72.dp)
+                .size(76.dp)
                 .clip(CircleShape)
                 .background(accent)
+                .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape)
                 .clickable {
                     view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                     onPlayPause()
@@ -1031,7 +1186,7 @@ private fun PlayerControlButtons(
                 imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                 contentDescription = if (isPlaying) "Pause" else "Play",
                 tint = Color.White,
-                modifier = Modifier.size(38.dp)
+                modifier = Modifier.size(40.dp)
             )
         }
 
@@ -1041,25 +1196,13 @@ private fun PlayerControlButtons(
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 onSkipNext()
             },
-            modifier = Modifier.size(54.dp)
+            modifier = Modifier.size(56.dp)
         ) {
-            Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(36.dp))
+            Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(38.dp))
         }
 
-        // Shuffle Icon
-        IconButton(
-            onClick = {
-                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                onToggleShuffle()
-            }
-        ) {
-            Icon(
-                Icons.Rounded.Shuffle,
-                contentDescription = "Shuffle",
-                tint = if (isShuffle) accent else Color.White.copy(alpha = 0.40f),
-                modifier = Modifier.size(24.dp)
-            )
-        }
+        // Symmetry spacer
+        Spacer(modifier = Modifier.size(48.dp))
     }
 }
 
