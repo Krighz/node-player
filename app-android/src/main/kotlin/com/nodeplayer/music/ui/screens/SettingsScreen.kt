@@ -53,6 +53,13 @@ import com.nodeplayer.music.widget.WidgetSquare2x2Provider
 import com.nodeplayer.music.widget.WidgetUpdateManager
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import com.nodeplayer.music.update.UpdatePreferences
+import com.nodeplayer.music.update.UpdateManager
+import com.nodeplayer.music.update.UpdateWorker
+import com.nodeplayer.music.update.UpdateCheckResult
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings as AndroidSettings
@@ -138,6 +145,12 @@ fun SettingsScreen(
     var searchQuery by remember { mutableStateOf("") }
     var showTopMenu by remember { mutableStateOf(false) }
     var showAdvancedSettings by remember { mutableStateOf(sharedPrefs.getBoolean("show_advanced_settings", false)) }
+
+    var updateCheckAuto by remember { mutableStateOf(UpdatePreferences.isCheckAutomatically(context)) }
+    var updateWifiOnly by remember { mutableStateOf(UpdatePreferences.isWifiOnly(context)) }
+    var updateLastChecked by remember { mutableLongStateOf(UpdatePreferences.getLastCheckedTimestamp(context)) }
+    var skippedVersions by remember { mutableStateOf(UpdatePreferences.getSkippedVersions(context)) }
+    val isCheckingUpdates by UpdateManager.isChecking.collectAsState()
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -2996,6 +3009,200 @@ fun SettingsScreen(
                     }
                 }
             )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Updates Section
+        Text(
+            text = "UPDATES",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                // Check automatically switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Check for updates automatically",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        )
+                        Text(
+                            text = "Periodically queries GitHub Releases in the background",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    Switch(
+                        checked = updateCheckAuto,
+                        onCheckedChange = { checked ->
+                            updateCheckAuto = checked
+                            UpdatePreferences.setCheckAutomatically(context, checked)
+                            UpdateWorker.scheduleOrCancel(context)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = accent
+                        )
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Wi-Fi only switch
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Wi-Fi only",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        )
+                        Text(
+                            text = "Restricts background checks and downloads to unmetered Wi-Fi",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    Switch(
+                        checked = updateWifiOnly,
+                        onCheckedChange = { checked ->
+                            updateWifiOnly = checked
+                            UpdatePreferences.setWifiOnly(context, checked)
+                            UpdateWorker.scheduleOrCancel(context)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = accent
+                        )
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Last checked and Check Now button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                        Text(
+                            text = "Last checked",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        )
+                        val lastCheckedStr = if (updateLastChecked > 0L) {
+                            SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.getDefault()).format(Date(updateLastChecked))
+                        } else {
+                            "Never"
+                        }
+                        Text(
+                            text = lastCheckedStr,
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            UpdateManager.triggerCheck(context, isManual = true) { result ->
+                                updateLastChecked = UpdatePreferences.getLastCheckedTimestamp(context)
+                                when (result) {
+                                    is UpdateCheckResult.UpdateAvailable -> {
+                                        Toast.makeText(context, "Update available: ${result.info.versionName}", Toast.LENGTH_SHORT).show()
+                                    }
+                                    is UpdateCheckResult.UpToDate -> {
+                                        Toast.makeText(context, "Node Player is up to date (${com.nodeplayer.music.update.UpdateChecker.getInstalledVersionName(context)})", Toast.LENGTH_SHORT).show()
+                                    }
+                                    is UpdateCheckResult.RateLimited -> {
+                                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                                    }
+                                    is UpdateCheckResult.NetworkError -> {
+                                        Toast.makeText(context, "Network error: ${result.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                    is UpdateCheckResult.Error -> {
+                                        Toast.makeText(context, "Check error: ${result.message}", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !isCheckingUpdates,
+                        colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.85f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        if (isCheckingUpdates) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Checking...", color = Color.White, fontSize = 12.sp)
+                        } else {
+                            Text("Check now", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+
+                // Skipped versions
+                if (skippedVersions.isNotEmpty()) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+                    Text(
+                        text = "Skipped Versions",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    skippedVersions.forEach { version ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("v$version", color = Color.White.copy(alpha = 0.75f), style = MaterialTheme.typography.bodySmall)
+                            TextButton(
+                                onClick = {
+                                    UpdateManager.unskipVersion(context, version)
+                                    skippedVersions = UpdatePreferences.getSkippedVersions(context)
+                                }
+                            ) {
+                                Text("Unskip", color = accent, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Privacy Disclosure
+                Text(
+                    text = "Update checks connect directly to GitHub Releases API with User-Agent NodePlayer/<version>. This reveals your IP address and app version to GitHub.",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = Color.White.copy(alpha = 0.45f),
+                        lineHeight = 14.sp
+                    )
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(20.dp))

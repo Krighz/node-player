@@ -38,6 +38,8 @@ import com.nodeplayer.music.ui.screens.LibraryScreen
 import com.nodeplayer.music.ui.screens.SettingsScreen
 import com.nodeplayer.music.ui.theme.NodePlayerTheme
 import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.music.update.UpdateManager
+import com.nodeplayer.music.update.UpdateOptInDialog
 
 class MainActivity : ComponentActivity() {
 
@@ -147,8 +149,10 @@ class MainActivity : ComponentActivity() {
 
                 var showDiagnosticsDialog by remember { mutableStateOf(false) }
                 var pendingAutoReportFile by remember { mutableStateOf<File?>(null) }
+                val showUpdateOptIn by UpdateManager.showOptInDialog.collectAsState()
 
                 LaunchedEffect(Unit) {
+                    UpdateManager.init(this@MainActivity)
                     if (DiagnosticsDumpManager.hasPendingAutoReport(this@MainActivity)) {
                         pendingAutoReportFile = DiagnosticsDumpManager.getPendingAutoReportFile(this@MainActivity)
                     }
@@ -446,6 +450,12 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                         )
+                    }
+
+                    if (showUpdateOptIn) {
+                        UpdateOptInDialog { agreed ->
+                            UpdateManager.onOptInChoice(this@MainActivity, agreed)
+                        }
                     }
                 }
             }
