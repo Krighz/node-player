@@ -241,7 +241,7 @@ fun Modifier.glassLensBubble(
     refractionIndex: Float = 0.70f,
     chromaticFringe: Float = 1.0f,
     rimStrength: Float = 0.85f,
-    rimColor: Color = Color(0xFFFDE68A),
+    rimColor: Color = Color.White,
     grainStrength: Float = 0.0f
 ): Modifier = composed {
     if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {

@@ -38,6 +38,8 @@ import coil.compose.AsyncImage
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
+import com.nodeplayer.music.ui.theme.LocalGlassThemeConfig
+import com.nodeplayer.music.ui.theme.MotionTokens
 import com.nodeplayer.music.ui.theme.glassSurface
 import dev.chrisbanes.haze.HazeState
 import kotlin.math.abs
@@ -286,12 +288,18 @@ fun LensDock(
         (selectedIndex + 0.5f) * tabWidthPx
     } else 0f
 
+    val themeConfig = LocalGlassThemeConfig.current
+    val activeSpringSpec = remember(themeConfig, isDragging) {
+        if (isDragging) {
+            spring(dampingRatio = 0.95f, stiffness = 900f)
+        } else {
+            MotionTokens.resolveSpringSpec(themeConfig, spring(dampingRatio = 0.72f, stiffness = 340f))
+        }
+    }
+
     val springCenterXPx by animateFloatAsState(
         targetValue = targetCenterXPx,
-        animationSpec = spring(
-            dampingRatio = if (isDragging) 0.95f else 0.72f,
-            stiffness = if (isDragging) 900f else 320f
-        ),
+        animationSpec = activeSpringSpec,
         label = "LensBubbleSpring"
     )
 
@@ -311,7 +319,7 @@ fun LensDock(
                 .weight(1f)
                 .height(64.dp)
                 .onSizeChanged { pillWidthPx = it.width }
-                .glassSurface(hazeState = hazeState, shape = pillShape, tintAlpha = 0.55f)
+                .glassSurface(hazeState = hazeState, shape = pillShape, tintAlpha = (themeConfig.effectiveTintAlpha * 0.75f).coerceIn(0.08f, 0.85f))
                 .border(
                     width = 1.dp,
                     brush = Brush.verticalGradient(
@@ -376,21 +384,31 @@ fun LensDock(
                             refractionIndex = 0.65f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
                             chromaticFringe = chromaticFringe,
                             rimStrength = rimSpecular,
-                            rimColor = Color(0xFFFDE68A),
+                            rimColor = Color.White.copy(alpha = 0.90f * rimSpecular),
                             grainStrength = grainStrength
                         )
                         .glassSurface(
-                            hazeState = if (!shaderEnabled) hazeState else null,
+                            hazeState = hazeState,
                             shape = lensShape,
-                            tintAlpha = if (!shaderEnabled) 0.65f else 0.15f
+                            tintAlpha = (themeConfig.effectiveTintAlpha * 0.22f).coerceIn(0.02f, 0.35f)
+                        )
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.15f * rimSpecular),
+                                    Color.White.copy(alpha = 0.02f),
+                                    Color.White.copy(alpha = 0.08f * rimSpecular)
+                                )
+                            ),
+                            shape = lensShape
                         )
                         .border(
                             width = 1.2.dp,
                             brush = Brush.verticalGradient(
                                 listOf(
-                                    Color(0xFFFDE68A).copy(alpha = 0.85f),
-                                    Color.White.copy(alpha = 0.25f),
-                                    Color(0xFFF59E0B).copy(alpha = 0.60f)
+                                    Color.White.copy(alpha = 0.90f * rimSpecular),
+                                    Color(0xFFBAE6FD).copy(alpha = 0.35f * rimSpecular),
+                                    Color.White.copy(alpha = 0.50f * rimSpecular)
                                 )
                             ),
                             shape = lensShape
@@ -410,9 +428,10 @@ fun LensDock(
                     val isSelected = selectedRoute == tab.route
                     val tabColor = if (isSelected) Color.White else Color.White.copy(alpha = 0.55f)
 
+                    val activeMag = 1.0f + 0.22f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f)
                     val scale by animateFloatAsState(
-                        targetValue = if (isSelected) 1.08f else 1.0f,
-                        animationSpec = spring(dampingRatio = 0.7f, stiffness = 400f),
+                        targetValue = if (isSelected) activeMag else 1.0f,
+                        animationSpec = activeSpringSpec,
                         label = "TabScale"
                     )
 
@@ -433,7 +452,7 @@ fun LensDock(
                         Icon(
                             imageVector = tab.icon,
                             contentDescription = tab.label,
-                            tint = if (isSelected) accent else tabColor,
+                            tint = if (isSelected) Color.White else tabColor,
                             modifier = Modifier
                                 .graphicsLayer {
                                     scaleX = scale

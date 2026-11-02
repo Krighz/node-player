@@ -472,7 +472,9 @@ class MainActivity : ComponentActivity() {
                                 onSetSleepTimer = { viewModel.setSleepTimer(it) },
                                 onOpenSignalPath = {
                                     // Open signal path dialog / inspector
-                                }
+                                },
+                                themeConfig = themeConfig,
+                                hazeState = dockHazeState
                             )
                         }
                     }

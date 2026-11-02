@@ -331,6 +331,45 @@ fun WidgetSettingsScreen(
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
+                // Liquid Refraction Style
+                Column {
+                    Text(
+                        text = "Liquid Refraction Style",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        val styles = listOf(
+                            "LIQUID_OBSIDIAN" to "Obsidian Glass",
+                            "FROST_PEARL" to "Frost Pearl",
+                            "DYNAMIC_ART" to "Dynamic Art",
+                            "PRISMATIC_CLEAR" to "Prismatic"
+                        )
+                        styles.forEach { (styleKey, styleLabel) ->
+                            val isSel = settings.refractionStyle == styleKey
+                            FilterChip(
+                                selected = isSel,
+                                onClick = { updateSettings(settings.copy(refractionStyle = styleKey)) },
+                                label = { Text(styleLabel, fontSize = 11.sp) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = Color(0xFF6366F1).copy(alpha = 0.35f),
+                                    selectedLabelColor = Color.White,
+                                    containerColor = Color.White.copy(alpha = 0.06f),
+                                    labelColor = Color.White.copy(alpha = 0.75f)
+                                )
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
                 // Glass Opacity Slider
                 Column {
                     Row(
@@ -353,6 +392,37 @@ fun WidgetSettingsScreen(
                         value = settings.glassOpacity,
                         onValueChange = { updateSettings(settings.copy(glassOpacity = it)) },
                         valueRange = 0.1f..1.0f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = Color(0xFF6366F1),
+                            activeTrackColor = Color(0xFF6366F1)
+                        )
+                    )
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+                // Edge Specular Highlight Slider
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Edge Specular Rim Highlight",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                        )
+                        Text(
+                            text = "${(settings.edgeHighlightStrength * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF6366F1), fontWeight = FontWeight.Bold)
+                        )
+                    }
+                    Slider(
+                        value = settings.edgeHighlightStrength,
+                        onValueChange = { updateSettings(settings.copy(edgeHighlightStrength = it)) },
+                        valueRange = 0.0f..1.0f,
                         colors = SliderDefaults.colors(
                             thumbColor = Color(0xFF6366F1),
                             activeTrackColor = Color(0xFF6366F1)
@@ -390,6 +460,17 @@ fun WidgetSettingsScreen(
                         )
                     )
                 }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+
+                // High-DPI Razor Rendering Toggle
+                WidgetToggleRow(
+                    icon = Icons.Rounded.HighQuality,
+                    label = "High-DPI Razor Rendering",
+                    desc = "Renders widgets at 2x resolution for razor-sharp clarity on 1080p+ displays",
+                    checked = settings.highDpi,
+                    onCheckedChange = { updateSettings(settings.copy(highDpi = it)) }
+                )
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
@@ -439,9 +520,9 @@ private fun WidgetLivePreviewCard(
                 width = 1.2.dp,
                 brush = Brush.verticalGradient(
                     listOf(
-                        Color(0xFFFDE68A).copy(alpha = 0.70f),
-                        Color.White.copy(alpha = 0.25f),
-                        Color(0xFF60A5FA).copy(alpha = 0.40f)
+                        Color.White.copy(alpha = 0.90f * settings.edgeHighlightStrength),
+                        Color(0xFFBAE6FD).copy(alpha = 0.40f * settings.edgeHighlightStrength),
+                        Color.White.copy(alpha = 0.45f * settings.edgeHighlightStrength)
                     )
                 ),
                 shape = cornerShape

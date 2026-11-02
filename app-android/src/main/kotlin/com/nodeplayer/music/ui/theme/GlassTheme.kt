@@ -1,8 +1,14 @@
 package com.nodeplayer.music.ui.theme
 
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.Shader
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -93,6 +99,37 @@ object GlassTokens {
     )
 }
 
+object GlassNoiseCache {
+    private var cachedPaint: android.graphics.Paint? = null
+    private var lastStrength: Float = -1f
+
+    fun getPaint(strength: Float): android.graphics.Paint {
+        val s = (strength * 100).toInt() / 100f
+        if (cachedPaint != null && kotlin.math.abs(lastStrength - s) < 0.05f) {
+            return cachedPaint!!
+        }
+        val size = 64
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val random = kotlin.random.Random(1337)
+        val maxAlpha = (28 * s).toInt().coerceIn(2, 65)
+        for (y in 0 until size) {
+            for (x in 0 until size) {
+                val noise = random.nextInt(maxAlpha.coerceAtLeast(3))
+                bitmap.setPixel(x, y, android.graphics.Color.argb(noise, 255, 255, 255))
+            }
+        }
+        val shader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+        val paint = android.graphics.Paint().apply {
+            isAntiAlias = false
+            isFilterBitmap = false
+            this.shader = shader
+        }
+        cachedPaint = paint
+        lastStrength = s
+        return paint
+    }
+}
+
 @Composable
 fun Modifier.glassSurface(
     hazeState: HazeState? = null,
@@ -103,7 +140,12 @@ fun Modifier.glassSurface(
     customTint: Color? = null
 ): Modifier {
     val tokens = LocalGlassTokens.current
-    val effectiveAlpha = if (tokens.isFullyTransparent) 0.0f else (tintAlpha ?: tokens.effectiveTintAlpha)
+    val masterOpacity = tokens.effectiveTintAlpha
+    val effectiveAlpha = when {
+        tokens.isFullyTransparent -> 0.0f
+        tintAlpha != null -> (tintAlpha * (masterOpacity / 0.65f).coerceIn(0.15f, 2.0f)).coerceIn(0.0f, 1.0f)
+        else -> masterOpacity
+    }
 
     val baseTint = when {
         tokens.isFullyTransparent -> Color.Transparent
@@ -119,6 +161,18 @@ fun Modifier.glassSurface(
 
     val scrimModifier = if (tokens.keepTextReadable && effectiveAlpha < 0.25f && !tokens.isFullyTransparent) {
         Modifier.background(Color.Black.copy(alpha = 0.12f), shape)
+    } else {
+        Modifier
+    }
+
+    val grainModifier = if (tokens.grainStrength > 0.01f && !tokens.isFullyTransparent && !tokens.isPerformanceMode) {
+        Modifier.drawWithContent {
+            drawContent()
+            val paint = GlassNoiseCache.getPaint(tokens.grainStrength)
+            drawIntoCanvas { canvas ->
+                canvas.nativeCanvas.drawRect(0f, 0f, size.width, size.height, paint)
+            }
+        }
     } else {
         Modifier
     }
@@ -148,6 +202,7 @@ fun Modifier.glassSurface(
                 Modifier
             }
         )
+        .then(grainModifier)
         .border(
             width = tokens.borderWidth,
             brush = borderBrush,

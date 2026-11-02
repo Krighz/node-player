@@ -1627,15 +1627,16 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Online Lyrics (LRCLIB)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Online Sync & Lyrics (Deferred)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text(
-                            "Strictly opt-in. When off, zero internet requests are made.",
+                            "Online sync is deferred. Node Player makes 0 internet requests and operates in 100% offline local mode.",
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                         )
                     }
                     Switch(
-                        checked = lrclibOptIn,
-                        onCheckedChange = { lrclibOptIn = it },
+                        checked = false,
+                        enabled = false,
+                        onCheckedChange = {},
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
                     )
                 }

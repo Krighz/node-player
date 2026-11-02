@@ -25,11 +25,13 @@ data class WidgetShaderConfig(
     val cornerRadiusPx: Float,
     val isPlaying: Boolean = true,
     val phase: Float = 0.0f,
-    val glassOpacity: Float = 0.85f,
-    val warmColor: FloatArray = floatArrayOf(1.0f, 0.65f, 0.12f),
-    val coolColor: FloatArray = floatArrayOf(0.12f, 0.78f, 0.98f),
-    val baseColor: FloatArray = floatArrayOf(0.06f, 0.07f, 0.09f),
-    val isPerformanceMode: Boolean = false
+    val glassOpacity: Float = 0.52f,
+    val warmColor: FloatArray = floatArrayOf(0.95f, 0.98f, 1.0f),
+    val coolColor: FloatArray = floatArrayOf(0.20f, 0.85f, 1.0f),
+    val baseColor: FloatArray = floatArrayOf(0.04f, 0.05f, 0.07f),
+    val isPerformanceMode: Boolean = false,
+    val edgeHighlightStrength: Float = 0.85f,
+    val refractionStyle: String = "LIQUID_OBSIDIAN"
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -41,6 +43,8 @@ data class WidgetShaderConfig(
                 phase == other.phase &&
                 glassOpacity == other.glassOpacity &&
                 isPerformanceMode == other.isPerformanceMode &&
+                edgeHighlightStrength == other.edgeHighlightStrength &&
+                refractionStyle == other.refractionStyle &&
                 warmColor.contentEquals(other.warmColor) &&
                 coolColor.contentEquals(other.coolColor) &&
                 baseColor.contentEquals(other.baseColor)
@@ -54,6 +58,8 @@ data class WidgetShaderConfig(
         result = 31 * result + phase.hashCode()
         result = 31 * result + glassOpacity.hashCode()
         result = 31 * result + isPerformanceMode.hashCode()
+        result = 31 * result + edgeHighlightStrength.hashCode()
+        result = 31 * result + refractionStyle.hashCode()
         result = 31 * result + warmColor.contentHashCode()
         result = 31 * result + coolColor.contentHashCode()
         result = 31 * result + baseColor.contentHashCode()
@@ -75,6 +81,7 @@ object WidgetShaderRenderer {
         uniform float u_is_playing;
         uniform float u_corner_radius;
         uniform float u_glass_opacity;
+        uniform float u_edge_highlight;
 
         // Hardened hash: modulo wrapped to eliminate high-coordinate GPU float overflow
         float hash(float2 p) {
@@ -159,26 +166,37 @@ object WidgetShaderRenderer {
             float cardWarmFringe = clamp(p.x * -1.5, 0.0, 1.0) * cardInnerRim;
             float cardCoolFringe = clamp(p.x * 1.5, 0.0, 1.0) * cardInnerRim;
 
-            // 4. Color Compositing
-            float3 col = u_color_base * 0.35;
-            col = mix(col, u_color_base * 0.90 + float3(0.02, 0.02, 0.03), fluidIso * 0.85);
+            // 4. Liquid Glass Compositing (Obsidian Depth + Pearl Caustics + Crystal Specular Rim)
+            float3 col = u_color_base * 0.45;
+            col = mix(col, u_color_base * 0.92 + float3(0.025, 0.035, 0.045), fluidIso * 0.85);
 
-            col += u_color_warm * (rimWarm * 1.7 + cardWarmFringe * 0.90);
-            col += u_color_cool * (rimCool * 1.7 + cardCoolFringe * 0.90);
+            // Pearl caustics inside fluid field
+            float pearlCaustics = smoothstep(1.9, 3.6, fluidField) * 0.35;
+            col += float3(pearlCaustics, pearlCaustics, pearlCaustics);
+
+            // Chromatic dispersion prism fringe along perimeter
+            col += u_color_warm * (rimWarm * 0.80 + cardWarmFringe * 0.55) * u_edge_highlight;
+            col += u_color_cool * (rimCool * 0.95 + cardCoolFringe * 0.70) * u_edge_highlight;
+
+            // Razor-sharp anti-aliased outer crystal rim (1.5px boundary)
+            float outerRim = smoothstep(1.5, 0.0, abs(dBox)) * u_edge_highlight;
+            float angleLight = clamp(dot(norm, float2(-0.707, -0.707)), 0.0, 1.0);
+            float rimLight = outerRim * (0.75 + 0.25 * angleLight);
+            float3 rimColor = mix(float3(1.0, 1.0, 1.0), u_color_cool, 0.22) * rimLight * 1.5;
+            col += rimColor;
 
             float maxRim = clamp(max(rimWarm, rimCool), 0.0, 1.0);
-            // Safe pow: never pow a negative value
-            float specularCore = pow(max(maxRim, 0.0), 3.0) * 0.95;
+            float specularCore = pow(max(maxRim, 0.0), 3.0) * 0.90 * u_edge_highlight;
             col += float3(specularCore, specularCore, specularCore);
 
-            float grain = (hash(fragCoord) - 0.5) * 0.032;
+            float grain = (hash(fragCoord) - 0.5) * 0.025;
             col += float3(grain, grain, grain);
 
             if (u_is_playing < 0.8) {
-                col *= 0.65;
+                col *= 0.70;
             }
 
-            // Output clamped colour and premultiplied alpha
+            // Output clamped colour and premultiplied alpha for translucent glass
             col = clamp(col, 0.0, 1.0);
             float alpha = clamp(cardMask * clamp(u_glass_opacity, 0.0, 1.0), 0.0, 1.0);
 
@@ -195,9 +213,9 @@ object WidgetShaderRenderer {
     fun extractColors(artwork: Bitmap?): Triple<FloatArray, FloatArray, FloatArray> {
         if (artwork == null) {
             return Triple(
-                floatArrayOf(1.0f, 0.65f, 0.12f),  // Warm amber
-                floatArrayOf(0.12f, 0.78f, 0.98f),  // Cool cyan
-                floatArrayOf(0.06f, 0.07f, 0.09f)   // Deep charcoal
+                floatArrayOf(0.95f, 0.98f, 1.0f),  // Crystal pearl
+                floatArrayOf(0.20f, 0.85f, 1.0f),  // Cyan specular
+                floatArrayOf(0.04f, 0.05f, 0.07f)   // Deep obsidian
             )
         }
 
@@ -306,6 +324,7 @@ object WidgetShaderRenderer {
             runtimeShader.setFloatUniform("u_is_playing", if (config.isPlaying) 1.0f else 0.4f)
             runtimeShader.setFloatUniform("u_corner_radius", config.cornerRadiusPx)
             runtimeShader.setFloatUniform("u_glass_opacity", config.glassOpacity)
+            runtimeShader.setFloatUniform("u_edge_highlight", config.edgeHighlightStrength)
 
             val paint = Paint().apply {
                 shader = runtimeShader

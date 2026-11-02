@@ -41,7 +41,11 @@ import com.nodeplayer.library.LrcParser
 import com.nodeplayer.model.AudioOutputInfo
 import com.nodeplayer.model.Lyrics
 import com.nodeplayer.model.Track
+import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.music.ui.components.LiquidGlassBackground
+import com.nodeplayer.music.ui.components.glassLensBubble
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.haze
 import com.nodeplayer.music.ui.components.SoundWaveVisualizer
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
@@ -75,6 +79,8 @@ fun NowPlayingSheet(
     sleepTimerRemainingSec: Long? = null,
     onSetSleepTimer: (Int?) -> Unit = {},
     onOpenSignalPath: () -> Unit = {},
+    themeConfig: GlassThemeConfig? = null,
+    hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -112,10 +118,12 @@ fun NowPlayingSheet(
         }
     }
 
+    val activeThemeConfig = themeConfig ?: LocalGlassThemeConfig.current
+    val sheetHazeState = hazeState ?: remember { HazeState() }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF07080E))
             .pointerInput(Unit) {
                 // Vertical drag down to close gesture
                 detectDragGestures { change, dragAmount ->
@@ -127,23 +135,32 @@ fun NowPlayingSheet(
                 }
             }
     ) {
-        // 1. Fluid Background
-        LiquidGlassBackground(
-            accentColor = accent,
-            isPlaying = isPlaying,
-            isPerformanceMode = isPerformanceMode
-        )
+        // 1. Fluid Background (samples into sheetHazeState for crystal lens glass refraction)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .haze(sheetHazeState)
+        ) {
+            LiquidGlassBackground(
+                accentColor = accent,
+                isPlaying = isPlaying,
+                isPerformanceMode = isPerformanceMode,
+                glassStrength = activeThemeConfig.glassStrength,
+                animatedBackdrop = activeThemeConfig.animatedBackdrop,
+                themeConfig = activeThemeConfig
+            )
+        }
 
-        // 2. High-Contrast Darkening Scrim (guarantees text contrast even for pure white album art)
+        // 2. Translucent Ambient Scrim (lets fluid caustics breathe through)
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.55f),
-                            Color(0xFF07080E).copy(alpha = 0.70f),
-                            Color(0xFF030407).copy(alpha = 0.90f)
+                            Color.Black.copy(alpha = 0.20f),
+                            Color.Black.copy(alpha = 0.35f),
+                            Color.Black.copy(alpha = 0.65f)
                         )
                     )
                 )
@@ -267,7 +284,9 @@ fun NowPlayingSheet(
                         onSkipNext = onSkipNextClick,
                         onSkipPrevious = onSkipPreviousClick,
                         rmsLevel = rmsLevel,
-                        isPerformanceMode = isPerformanceMode
+                        isPerformanceMode = isPerformanceMode,
+                        hazeState = sheetHazeState,
+                        themeConfig = activeThemeConfig
                     )
 
                     Spacer(modifier = Modifier.height(14.dp))
@@ -604,7 +623,9 @@ fun NowPlayingSheet(
                     onSkipNext = onSkipNextClick,
                     onSkipPrevious = onSkipPreviousClick,
                     rmsLevel = rmsLevel,
-                    isPerformanceMode = isPerformanceMode
+                    isPerformanceMode = isPerformanceMode,
+                    hazeState = sheetHazeState,
+                    themeConfig = activeThemeConfig
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
@@ -1114,8 +1135,8 @@ private fun PlayerSeekBar(
             onValueChangeFinished = onSeekFinished,
             colors = SliderDefaults.colors(
                 thumbColor = Color.White,
-                activeTrackColor = accent,
-                inactiveTrackColor = Color.White.copy(alpha = 0.20f)
+                activeTrackColor = Color.White.copy(alpha = 0.92f),
+                inactiveTrackColor = Color.White.copy(alpha = 0.18f)
             ),
             modifier = Modifier.fillMaxWidth()
         )
@@ -1144,8 +1165,16 @@ private fun PlayerControlButtons(
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit,
     rmsLevel: Float = 0.0f,
-    isPerformanceMode: Boolean = false
+    isPerformanceMode: Boolean = false,
+    hazeState: HazeState? = null,
+    themeConfig: GlassThemeConfig? = null
 ) {
+    val cfg = themeConfig ?: LocalGlassThemeConfig.current
+    val lensStrength = cfg.lensRefractionStrength
+    val rimSpecular = cfg.lensRimSpecular
+    val grainStrength = cfg.grainStrengthValue()
+    val chromaticFringe = cfg.chromaticFringeValue()
+
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -1173,25 +1202,70 @@ private fun PlayerControlButtons(
             Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(38.dp))
         }
 
-        // Hero Play / Pause Button with tactile glow
+        // Hero Play / Pause Liquid-Glass Lens Bubble
         Box(
             modifier = Modifier
-                .size(76.dp)
-                .pressScale(targetScale = 0.92f) {
-                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                    onPlayPause()
-                }
-                .clip(CircleShape)
-                .background(accent)
-                .border(1.5.dp, Color.White.copy(alpha = 0.35f), CircleShape),
+                .size(80.dp)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.16f * rimSpecular),
+                    shape = CircleShape
+                )
+                .padding(4.dp),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                contentDescription = if (isPlaying) "Pause" else "Play",
-                tint = Color.White,
-                modifier = Modifier.size(40.dp)
-            )
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .pressScale(targetScale = 0.92f) {
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        onPlayPause()
+                    }
+                    .glassLensBubble(
+                        shape = CircleShape,
+                        enabled = !isPerformanceMode && cfg.isShaderActive(true),
+                        magnification = 0.25f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
+                        refractionIndex = 0.70f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
+                        chromaticFringe = chromaticFringe,
+                        rimStrength = rimSpecular,
+                        rimColor = Color.White.copy(alpha = 0.90f * rimSpecular),
+                        grainStrength = grainStrength
+                    )
+                    .glassSurface(
+                        hazeState = hazeState,
+                        shape = CircleShape,
+                        tintAlpha = (cfg.effectiveTintAlpha * 0.35f).coerceIn(0.08f, 0.50f)
+                    )
+                    .background(
+                        Brush.radialGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.12f * rimSpecular),
+                                Color.White.copy(alpha = 0.02f),
+                                Color.Black.copy(alpha = 0.25f)
+                            )
+                        ),
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = 1.2.dp,
+                        brush = Brush.verticalGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.90f * rimSpecular),
+                                Color(0xFFBAE6FD).copy(alpha = 0.35f * rimSpecular),
+                                Color.White.copy(alpha = 0.40f * rimSpecular)
+                            )
+                        ),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    tint = Color.White,
+                    modifier = Modifier.size(38.dp)
+                )
+            }
         }
 
         // Next

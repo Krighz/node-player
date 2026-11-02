@@ -145,23 +145,41 @@ object WidgetUpdateManager {
     }
 
     private fun resolveColors(settings: WidgetSettings, artwork: Bitmap?): Triple<FloatArray, FloatArray, FloatArray> {
-        return when (settings.accentMode) {
-            WidgetAccentMode.DYNAMIC_PALETTE -> WidgetShaderRenderer.extractColors(artwork)
-            WidgetAccentMode.WARM_AMBER_COOL_CYAN -> Triple(
-                floatArrayOf(1.0f, 0.65f, 0.12f),
-                floatArrayOf(0.12f, 0.78f, 0.98f),
-                floatArrayOf(0.06f, 0.07f, 0.09f)
+        return when (settings.refractionStyle) {
+            "LIQUID_OBSIDIAN" -> Triple(
+                floatArrayOf(0.95f, 0.98f, 1.0f),  // Crystal pearl highlight
+                floatArrayOf(0.20f, 0.85f, 1.0f),  // Cyan specular rim
+                floatArrayOf(0.04f, 0.05f, 0.07f)   // Deep liquid obsidian
             )
-            WidgetAccentMode.ELECTRIC_VIOLET -> Triple(
-                floatArrayOf(0.80f, 0.15f, 1.0f),
-                floatArrayOf(0.0f, 0.90f, 1.0f),
-                floatArrayOf(0.05f, 0.05f, 0.08f)
+            "FROST_PEARL" -> Triple(
+                floatArrayOf(1.0f, 1.0f, 1.0f),
+                floatArrayOf(0.85f, 0.92f, 1.0f),
+                floatArrayOf(0.12f, 0.14f, 0.18f)
             )
-            WidgetAccentMode.MONOCHROME_GLASS -> Triple(
-                floatArrayOf(0.50f, 0.55f, 0.60f),
-                floatArrayOf(0.35f, 0.40f, 0.45f),
-                floatArrayOf(0.03f, 0.03f, 0.04f)
+            "PRISMATIC_CLEAR" -> Triple(
+                floatArrayOf(1.0f, 0.60f, 0.20f),
+                floatArrayOf(0.10f, 0.90f, 1.0f),
+                floatArrayOf(0.03f, 0.03f, 0.05f)
             )
+            "DYNAMIC_ART" -> WidgetShaderRenderer.extractColors(artwork)
+            else -> when (settings.accentMode) {
+                WidgetAccentMode.DYNAMIC_PALETTE -> WidgetShaderRenderer.extractColors(artwork)
+                WidgetAccentMode.WARM_AMBER_COOL_CYAN -> Triple(
+                    floatArrayOf(1.0f, 0.65f, 0.12f),
+                    floatArrayOf(0.12f, 0.78f, 0.98f),
+                    floatArrayOf(0.06f, 0.07f, 0.09f)
+                )
+                WidgetAccentMode.ELECTRIC_VIOLET -> Triple(
+                    floatArrayOf(0.80f, 0.15f, 1.0f),
+                    floatArrayOf(0.0f, 0.90f, 1.0f),
+                    floatArrayOf(0.05f, 0.05f, 0.08f)
+                )
+                WidgetAccentMode.MONOCHROME_GLASS -> Triple(
+                    floatArrayOf(0.95f, 0.98f, 1.0f),
+                    floatArrayOf(0.45f, 0.50f, 0.55f),
+                    floatArrayOf(0.03f, 0.03f, 0.04f)
+                )
+            }
         }
     }
 
@@ -179,19 +197,22 @@ object WidgetUpdateManager {
         val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, WidgetCard4x2Provider::class.java))
         if (ids.isEmpty()) return
 
-        val widthPx = 540
-        val heightPx = 280
+        val scale = if (settings.highDpi) 2 else 1
+        val widthPx = 540 * scale
+        val heightPx = 280 * scale
         val config = WidgetShaderConfig(
             widthPx = widthPx,
             heightPx = heightPx,
-            cornerRadiusPx = settings.cornerRadiusDp * 2.5f,
+            cornerRadiusPx = settings.cornerRadiusDp * 2.5f * scale,
             isPlaying = isPlaying,
             phase = if (isPlaying) (SystemClock.elapsedRealtime() % 10000) / 1000f else 0f,
             glassOpacity = settings.glassOpacity,
             warmColor = colors.first,
             coolColor = colors.second,
             baseColor = colors.third,
-            isPerformanceMode = settings.isPerformanceMode
+            isPerformanceMode = settings.isPerformanceMode,
+            edgeHighlightStrength = settings.edgeHighlightStrength,
+            refractionStyle = settings.refractionStyle
         )
         val glassBitmap = WidgetShaderRenderer.renderGlassBackground(config)
 
@@ -235,19 +256,22 @@ object WidgetUpdateManager {
         val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, WidgetLyrics4x3Provider::class.java))
         if (ids.isEmpty()) return
 
-        val widthPx = 540
-        val heightPx = 380
+        val scale = if (settings.highDpi) 2 else 1
+        val widthPx = 540 * scale
+        val heightPx = 380 * scale
         val config = WidgetShaderConfig(
             widthPx = widthPx,
             heightPx = heightPx,
-            cornerRadiusPx = settings.cornerRadiusDp * 2.5f,
+            cornerRadiusPx = settings.cornerRadiusDp * 2.5f * scale,
             isPlaying = isPlaying,
             phase = if (isPlaying) (SystemClock.elapsedRealtime() % 10000) / 1000f else 0f,
             glassOpacity = settings.glassOpacity,
             warmColor = colors.first,
             coolColor = colors.second,
             baseColor = colors.third,
-            isPerformanceMode = settings.isPerformanceMode
+            isPerformanceMode = settings.isPerformanceMode,
+            edgeHighlightStrength = settings.edgeHighlightStrength,
+            refractionStyle = settings.refractionStyle
         )
         val glassBitmap = WidgetShaderRenderer.renderGlassBackground(config)
 
@@ -302,19 +326,22 @@ object WidgetUpdateManager {
         val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, WidgetSlim4x1Provider::class.java))
         if (ids.isEmpty()) return
 
-        val widthPx = 540
-        val heightPx = 140
+        val scale = if (settings.highDpi) 2 else 1
+        val widthPx = 540 * scale
+        val heightPx = 140 * scale
         val config = WidgetShaderConfig(
             widthPx = widthPx,
             heightPx = heightPx,
-            cornerRadiusPx = settings.cornerRadiusDp * 2.0f,
+            cornerRadiusPx = settings.cornerRadiusDp * 2.0f * scale,
             isPlaying = isPlaying,
             phase = if (isPlaying) (SystemClock.elapsedRealtime() % 10000) / 1000f else 0f,
             glassOpacity = settings.glassOpacity,
             warmColor = colors.first,
             coolColor = colors.second,
             baseColor = colors.third,
-            isPerformanceMode = settings.isPerformanceMode
+            isPerformanceMode = settings.isPerformanceMode,
+            edgeHighlightStrength = settings.edgeHighlightStrength,
+            refractionStyle = settings.refractionStyle
         )
         val glassBitmap = WidgetShaderRenderer.renderGlassBackground(config)
 
@@ -347,19 +374,22 @@ object WidgetUpdateManager {
         val ids = appWidgetManager.getAppWidgetIds(ComponentName(context, WidgetSquare2x2Provider::class.java))
         if (ids.isEmpty()) return
 
-        val widthPx = 280
-        val heightPx = 280
+        val scale = if (settings.highDpi) 2 else 1
+        val widthPx = 280 * scale
+        val heightPx = 280 * scale
         val config = WidgetShaderConfig(
             widthPx = widthPx,
             heightPx = heightPx,
-            cornerRadiusPx = settings.cornerRadiusDp * 2.5f,
+            cornerRadiusPx = settings.cornerRadiusDp * 2.5f * scale,
             isPlaying = isPlaying,
             phase = if (isPlaying) (SystemClock.elapsedRealtime() % 10000) / 1000f else 0f,
             glassOpacity = settings.glassOpacity,
             warmColor = colors.first,
             coolColor = colors.second,
             baseColor = colors.third,
-            isPerformanceMode = settings.isPerformanceMode
+            isPerformanceMode = settings.isPerformanceMode,
+            edgeHighlightStrength = settings.edgeHighlightStrength,
+            refractionStyle = settings.refractionStyle
         )
         val glassBitmap = WidgetShaderRenderer.renderGlassBackground(config)
 

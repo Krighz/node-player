@@ -1,8 +1,8 @@
 # Node Player - Project State
 
-Last Updated: 2026-11-03 04:45:00 +05:30
+Last Updated: 2026-11-03 05:15:00 +05:30
 Current Version: v1.3.0
-Current Commit: `6f79e17`
+Current Commit: Working Tree (Uncommitted UI Revamp Fixes)
 
 ---
 
@@ -14,19 +14,29 @@ Current Commit: `6f79e17`
 - **System-Wide EQ**: Background audio effect session interception via `AudioSessionReceiver` and `SystemWideEqService`.
 - **MediaSession & Service**: AndroidX Media3 `MediaSessionService` (`PlaybackService`) with notification channel and lockscreen controls.
 
-### UI & Styling (v1.3.0 Revamp)
-- **Liquid-Glass Lens Dock**: Floating pill dock with magnifying bubble, specular rim, search action, and haptic feedback.
-- **Background Shader Engine**: AGSL procedural backgrounds with 6 modes (Liquid blobs, Aurora, Mesh gradient, Album-art blur, Slow caustics, Static), speed 0.2x–3.0x, blue-noise dithering.
-- **Static RemoteViews Widgets**: 4 launcher widgets (Card 4x2, Lyrics 4x3, Slim 4x1, Square 2x2) with baked shimmer bitmaps, live in-app preview (`WidgetSettingsScreen`), element visibility toggles.
-- **Now Playing Sheet**: Reordered hierarchy (Artwork -> Title/Artist -> Clickable audio quality line -> Seekbar with times -> Transport row -> Secondary tools row) with 48dp touch targets.
-- **Sectioned Settings Hub**: 2-column glass card grid for 12 sections with live search query filtering, subpages, and per-section reset.
-- **Customize UI Area**: Theme presets, bundled fonts (Inter, Outfit, JetBrains Mono, System), density, corner radius, glass sliders, and `.nodetheme` JSON export/import.
-- **Spring Motion Tokens**: Centralized spring token resolution (`MotionTokens.kt`), `.pressScale()`, `AnimationPlaygroundScreen`.
-
-### Recent Crash Fixes (Commit `6f79e17`)
-- **Fix 1 (Foreground Service Start Timeout)**: In `PlaybackService.kt`, `startInitialForegroundIfNeeded()` is called immediately on widget playback intents; `WidgetActionReceiver.kt` avoids starting service for seek actions when stopped.
-- **Fix 2 (Nested Scroll Infinite Height Crash)**: In `SettingsScreen.kt`, `AnimationPlaygroundScreen` is rendered as a standalone root screen rather than nested inside the scrollable `Column`.
-- **Fix 3 (FileProvider Root Missing Crash)**: In `file_paths.xml`, added `<cache-path name="cache" path="." />` and `<files-path name="files" path="." />` to permit sharing exported `.nodetheme` files from cache.
+### Liquid-Glass UI & Dock Overhaul
+- **Dock Refraction & Styling**:
+  - Removed yellow amber rim/border tints (`Color(0xFFFDE68A)`, `0xFFF59E0B`), replacing with pure crystal pearl specular gradients (`Color.White` + `Color(0xFFBAE6FD)`).
+  - Passed `hazeState` to `glassSurface` inside the selector bubble, enabling Haze backdrop blur layer to be sampled by the `glassLensBubble` AGSL refraction shader.
+  - Active tab icon set to pure `Color.White` with dynamic optical magnification (`1.22x`).
+  - Bubble motion dynamic spring physics wired to `MotionTokens.resolveSpringSpec(themeConfig)`.
+  - Dock pill opacity dynamically scales with `(themeConfig.effectiveTintAlpha * 0.75f)`.
+- **Now Playing Liquid-Glass Screen**:
+  - Removed opaque `Color(0xFF07080E)` root background and high-contrast dark scrims, restoring fluid background bleeding.
+  - Passed `themeConfig` and `sheetHazeState` to `LiquidGlassBackground`.
+  - Replaced flat play/pause button with a circular liquid-glass lens bubble (`glassLensBubble` + `glassSurface` + concentric glass ring) matching reference design.
+  - Seekbar restyled with crystal translucent track and pure white active track.
+- **Customize UI Controls**:
+  - Fixed glass opacity slider affecting all `GlassCard` and dock components (`tintAlpha` null default).
+  - Fixed glass grain slider via cached 64x64 blue noise bitmap shader (`GlassNoiseCache`).
+  - Added continuous Lens Refraction Strength slider (`0.20f..1.50f`).
+  - Added "BACKGROUND AMBIENCE & STYLES" section: 6 style chips (`LIQUID_BLOBS`, `AURORA`, `MESH_GRADIENT`, `ALBUM_ART_BLUR`, `SLOW_CAUSTICS`, `STATIC`), animation speed dial (`0.2x..3.0x`), intensity slider (`0.1..1.0`), color source chips, and animate-only-while-playing switch.
+- **Widgets Overhaul**:
+  - Replaced hardcoded amber shader colors with liquid obsidian depth, pearl caustics, and anti-aliased crystal specular rim.
+  - Added High-DPI 2x resolution rendering for 1080p+ screens (`1080x560` for 4x2, `1080x760` for 4x3, `1080x280` for 4x1, `560x560` for 2x2).
+  - Added widget settings: `refractionStyle` preset, `edgeHighlightStrength` slider, `highDpi` toggle, and reduced default glass opacity to 0.52f.
+- **Online Sync / LRCLIB Dropped**:
+  - Online sync deferred; LRCLIB disabled and labeled deferred; 0 network requests executed; pure local offline operation.
 
 ---
 
@@ -34,27 +44,22 @@ Current Commit: `6f79e17`
 
 | Component / Task | Verification Method | Status | Evidence |
 | :--- | :--- | :--- | :--- |
-| Unit Test Suite | `:app-android:testDebugUnitTest` | Done | Gradle output: `BUILD SUCCESSFUL in 39s`, 36 actionable tasks |
-| Core DSP Unit Tests | `:core-dsp:test` | Done | Gradle output: `BUILD SUCCESSFUL` |
-| Debug APK Build | `:app-android:assembleDebug` | Done | Gradle output: `BUILD SUCCESSFUL in 24s`, APK generated at `app-android/build/outputs/apk/debug/app-android-debug.apk` |
-| Release APK Build | `:app-android:assembleRelease` | Done | Gradle output: `BUILD SUCCESSFUL in 1m 48s`, APK generated at `app-android/build/outputs/apk/release/app-android-release.apk` |
-| APK Signing Verification | `apksigner verify --verbose` | Done | Output: `Verified using v2 scheme (APK Signature Scheme v2): true` |
-| GitHub Release v1.3.0 | `gh release view v1.3.0` | Done | Release live at `https://github.com/Krighz/node-player/releases/tag/v1.3.0` with assets `NodePlayer.apk` & `NodePlayer.apk.sha256` |
-| Crash Fix 1 on Device | Physical device test | Not verified | Device not connected via adb (`adb devices` output: empty) |
-| Crash Fix 2 on Device | Physical device test | Not verified | Device not connected via adb (`adb devices` output: empty) |
-| Crash Fix 3 on Device | Physical device test | Not verified | Device not connected via adb (`adb devices` output: empty) |
-| Live Display Frame Times | `dumpsys gfxinfo` / Systrace | Not verified | No adb device connected; live frame profiling not run |
+| Core DSP Unit Tests | `:core-dsp:test` | Done | Gradle output: `BUILD SUCCESSFUL in 1m 4s` |
+| Android Unit Tests | `:app-android:testDebugUnitTest` | Done | Gradle output: `BUILD SUCCESSFUL in 1m 4s`, 38 actionable tasks |
+| Debug APK Build | `:app-android:assembleDebug` | Done | Gradle output: `BUILD SUCCESSFUL in 23s`, 49 actionable tasks |
+| Dock Refraction on Device | Physical device test | Not verified | Compiled in debug APK; physical visual validation pending user test |
+| Customize UI Sliders on Device | Physical device test | Not verified | Compiled in debug APK; physical UI interaction pending user test |
+| High-DPI Widgets on Device | Physical device test | Not verified | Compiled in debug APK; home screen launcher placement pending user test |
+| Real-time Display FPS | `dumpsys gfxinfo` / Systrace | Not verified | Live frame profiling not run during build turn |
 
 ---
 
 ## 3. Known Issues & Unverified Items
-- **On-device validation of crash fixes**: The three fixes (`ForegroundServiceDidNotStartInTimeException`, `IllegalStateException` nested vertical scroll, `IllegalArgumentException` FileProvider) compiled and passed unit tests, but have not been exercised on physical device hardware.
-- **Realme GT 6T / ColorOS 14 frame rates**: Exact live refresh and 99th-percentile frame durations require physical device adb profiling with `dumpsys gfxinfo com.nodeplayer.music framestats`.
+- **On-device visual verification**: Changes compiled into debug APK, but live rendering on the Realme GT 6T screen has not yet been exercised via physical user touch.
+- **Online Sync**: Dropped and deferred as requested. Local `.lrc` file parsing remains fully functional.
 
 ---
 
 ## 4. Key Architectural Decisions
-- **Static RemoteViews for Widgets**: Launcher widgets use static bitmaps re-rendered only on track/playback changes to prevent battery drain; shaders are not run live in RemoteViews.
-- **FileProvider Scope**: Exposes the root application cache and files directories to support sharing `.nodetheme` and diagnostic dump files securely.
-- **Subpage Navigation in Settings**: Full sub-screens that contain their own scrolling containers must be hoisted outside the parent `Modifier.verticalScroll()` layout to prevent Compose infinite height constraint violations.
-- **Service Foreground Promotion**: Any intent received by `PlaybackService` that could be initiated by `startForegroundService()` immediately invokes `ServiceCompat.startForeground()` with `FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK` to satisfy the OS deadline.
+- **Haze Input for AGSL Refraction**: Android `RenderEffect.createRuntimeShaderEffect` modifies the current layer's drawn buffer (`"contents"`). By chaining `glassSurface(hazeState)` inside the bubble Box, the blurred screen buffer is drawn and becomes the input to AGSL, enabling true optical magnification and dispersion of the underlying UI.
+- **Static High-DPI RemoteViews**: To preserve battery while achieving crisp liquid-glass visuals on 1080p+ OLED screens, launcher widget bitmaps are rendered at 2x native resolution via `HardwareRenderer` on track change events only.

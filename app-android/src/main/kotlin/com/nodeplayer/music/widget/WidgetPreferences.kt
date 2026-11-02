@@ -17,6 +17,9 @@ object WidgetPreferences {
     private const val KEY_SHOW_SEEKBAR_TIMES = "widget_show_seekbar_times"
     private const val KEY_SHOW_TRANSPORT = "widget_show_transport"
     private const val KEY_SHOW_LYRICS = "widget_show_lyrics"
+    private const val KEY_EDGE_HIGHLIGHT = "widget_edge_highlight"
+    private const val KEY_REFRACTION_STYLE = "widget_refraction_style"
+    private const val KEY_HIGH_DPI = "widget_high_dpi"
 
     fun getSettings(context: Context): WidgetSettings {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -27,7 +30,7 @@ object WidgetPreferences {
         } catch (_: Exception) {
             WidgetAccentMode.DYNAMIC_PALETTE
         }
-        val opacity = prefs.getFloat(KEY_GLASS_OPACITY, 0.85f).coerceIn(0.0f, 1.0f)
+        val opacity = prefs.getFloat(KEY_GLASS_OPACITY, 0.52f).coerceIn(0.0f, 1.0f)
         val radius = prefs.getFloat(KEY_CORNER_RADIUS, 24.0f).coerceIn(12f, 36f)
         val perfMode = prefs.getBoolean(KEY_PERF_MODE, false)
         val floatingOverlay = prefs.getBoolean(KEY_FLOATING_OVERLAY, false)
@@ -37,6 +40,9 @@ object WidgetPreferences {
         val showSeekbarTimes = prefs.getBoolean(KEY_SHOW_SEEKBAR_TIMES, true)
         val showTransport = prefs.getBoolean(KEY_SHOW_TRANSPORT, true)
         val showLyrics = prefs.getBoolean(KEY_SHOW_LYRICS, true)
+        val edgeHighlight = prefs.getFloat(KEY_EDGE_HIGHLIGHT, 0.85f).coerceIn(0.0f, 1.0f)
+        val refractionStyle = prefs.getString(KEY_REFRACTION_STYLE, "LIQUID_OBSIDIAN") ?: "LIQUID_OBSIDIAN"
+        val highDpi = prefs.getBoolean(KEY_HIGH_DPI, true)
 
         return WidgetSettings(
             accentMode = accentMode,
@@ -49,7 +55,10 @@ object WidgetPreferences {
             showTitleArtist = showTitleArtist,
             showSeekbarTimes = showSeekbarTimes,
             showTransport = showTransport,
-            showLyrics = showLyrics
+            showLyrics = showLyrics,
+            edgeHighlightStrength = edgeHighlight,
+            refractionStyle = refractionStyle,
+            highDpi = highDpi
         )
     }
 
@@ -67,6 +76,9 @@ object WidgetPreferences {
             .putBoolean(KEY_SHOW_SEEKBAR_TIMES, settings.showSeekbarTimes)
             .putBoolean(KEY_SHOW_TRANSPORT, settings.showTransport)
             .putBoolean(KEY_SHOW_LYRICS, settings.showLyrics)
+            .putFloat(KEY_EDGE_HIGHLIGHT, settings.edgeHighlightStrength)
+            .putString(KEY_REFRACTION_STYLE, settings.refractionStyle)
+            .putBoolean(KEY_HIGH_DPI, settings.highDpi)
             .apply()
     }
 }

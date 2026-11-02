@@ -203,15 +203,26 @@ fun CustomizeUiScreen(
                                             refractionIndex = 0.65f * (themeConfig.lensRefractionStrength / 0.85f),
                                             chromaticFringe = themeConfig.chromaticFringeValue(),
                                             rimStrength = themeConfig.lensRimSpecular,
-                                            rimColor = Color(0xFFFDE68A),
+                                            rimColor = Color.White.copy(alpha = 0.90f * themeConfig.lensRimSpecular),
                                             grainStrength = themeConfig.grainStrengthValue()
+                                        )
+                                        .background(
+                                            Brush.verticalGradient(
+                                                listOf(
+                                                    Color.White.copy(alpha = 0.15f * themeConfig.lensRimSpecular),
+                                                    Color.White.copy(alpha = 0.02f),
+                                                    Color.White.copy(alpha = 0.08f * themeConfig.lensRimSpecular)
+                                                )
+                                            ),
+                                            shape = RoundedCornerShape(14.dp)
                                         )
                                         .border(
                                             width = 1.dp,
                                             brush = Brush.verticalGradient(
                                                 listOf(
-                                                    Color(0xFFFDE68A).copy(alpha = 0.85f * themeConfig.lensRimSpecular),
-                                                    Color(0xFFF59E0B).copy(alpha = 0.50f * themeConfig.lensRimSpecular)
+                                                    Color.White.copy(alpha = 0.85f * themeConfig.lensRimSpecular),
+                                                    Color(0xFFBAE6FD).copy(alpha = 0.35f * themeConfig.lensRimSpecular),
+                                                    Color.White.copy(alpha = 0.40f * themeConfig.lensRimSpecular)
                                                 )
                                             ),
                                             shape = RoundedCornerShape(14.dp)
@@ -456,26 +467,16 @@ fun CustomizeUiScreen(
                 Text("LENS DOCK & REFRACTION", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = accent, letterSpacing = 1.sp))
                 Spacer(modifier = Modifier.height(6.dp))
 
-                Text("Lens Refraction Strength", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    listOf("Subtle" to 0.50f, "Balanced" to 0.85f, "Strong" to 1.25f).forEach { (label, value) ->
-                        FilterChip(
-                            selected = kotlin.math.abs(themeConfig.lensRefractionStrength - value) < 0.1f,
-                            onClick = { onThemeConfigChange(themeConfig.copy(lensRefractionStrength = value)) },
-                            label = { Text(label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accent.copy(alpha = 0.35f),
-                                selectedLabelColor = Color.White,
-                                containerColor = Color.White.copy(alpha = 0.06f),
-                                labelColor = Color.White.copy(alpha = 0.75f)
-                            )
-                        )
-                    }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Lens Refraction Strength", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("%.2fx".format(themeConfig.lensRefractionStrength), style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                 }
+                Slider(
+                    value = themeConfig.lensRefractionStrength,
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(lensRefractionStrength = it)) },
+                    valueRange = 0.20f..1.50f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
 
                 Spacer(modifier = Modifier.height(8.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -488,6 +489,102 @@ fun CustomizeUiScreen(
                     valueRange = 0f..1f,
                     colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
                 )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // 5b. Background Ambience & Shader Styles
+                Text("BACKGROUND AMBIENCE & STYLES", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = accent, letterSpacing = 1.sp))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text("Shader Background Style", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val styles = listOf(
+                        "LIQUID_BLOBS" to "Liquid Blobs",
+                        "AURORA" to "Aurora Waves",
+                        "MESH_GRADIENT" to "Mesh Gradient",
+                        "ALBUM_ART_BLUR" to "Album Art Blur",
+                        "SLOW_CAUSTICS" to "Slow Caustics",
+                        "STATIC" to "Static Minimal"
+                    )
+                    styles.forEach { (styleKey, styleName) ->
+                        FilterChip(
+                            selected = themeConfig.backgroundAnimationStyle == styleKey,
+                            onClick = { onThemeConfigChange(themeConfig.copy(backgroundAnimationStyle = styleKey)) },
+                            label = { Text(styleName, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = accent.copy(alpha = 0.35f),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White.copy(alpha = 0.06f),
+                                labelColor = Color.White.copy(alpha = 0.75f)
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Animation Speed", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("%.1fx".format(themeConfig.backgroundAnimationSpeed), style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
+                }
+                Slider(
+                    value = themeConfig.backgroundAnimationSpeed,
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(backgroundAnimationSpeed = it)) },
+                    valueRange = 0.2f..3.0f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Animation Intensity", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("${(themeConfig.backgroundAnimationIntensity * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
+                }
+                Slider(
+                    value = themeConfig.backgroundAnimationIntensity,
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(backgroundAnimationIntensity = it)) },
+                    valueRange = 0.1f..1.0f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Background Color Source", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf("ARTWORK" to "Artwork", "PALETTE" to "Theme Palette", "CUSTOM" to "Custom Swatch").forEach { (src, label) ->
+                        FilterChip(
+                            selected = themeConfig.backgroundColorSource == src,
+                            onClick = { onThemeConfigChange(themeConfig.copy(backgroundColorSource = src)) },
+                            label = { Text(label, fontSize = 12.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = accent.copy(alpha = 0.35f),
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White.copy(alpha = 0.06f),
+                                labelColor = Color.White.copy(alpha = 0.75f)
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Animate Only While Playing", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Pauses fluid background shader when music is paused to save battery", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
+                    }
+                    Switch(
+                        checked = themeConfig.animateOnlyWhilePlaying,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(animateOnlyWhilePlaying = it)) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 

@@ -27,7 +27,7 @@ fun GlassCard(
     shape: Shape = RoundedCornerShape(GlassTokens.cardCornerRadius),
     isOled: Boolean = false,
     isDark: Boolean = true,
-    tintAlpha: Float = 0.60f,
+    tintAlpha: Float? = null,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {

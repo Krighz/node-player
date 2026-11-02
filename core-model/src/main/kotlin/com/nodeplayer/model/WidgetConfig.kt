@@ -9,7 +9,7 @@ enum class WidgetAccentMode(val title: String) {
 
 data class WidgetSettings(
     val accentMode: WidgetAccentMode = WidgetAccentMode.DYNAMIC_PALETTE,
-    val glassOpacity: Float = 0.85f,
+    val glassOpacity: Float = 0.52f,
     val cornerRadiusDp: Float = 24.0f,
     val isPerformanceMode: Boolean = false,
     val floatingOverlayEnabled: Boolean = false,
@@ -18,5 +18,8 @@ data class WidgetSettings(
     val showTitleArtist: Boolean = true,
     val showSeekbarTimes: Boolean = true,
     val showTransport: Boolean = true,
-    val showLyrics: Boolean = true
+    val showLyrics: Boolean = true,
+    val edgeHighlightStrength: Float = 0.85f,
+    val refractionStyle: String = "LIQUID_OBSIDIAN",
+    val highDpi: Boolean = true
 )
