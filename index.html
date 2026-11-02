@@ -107,6 +107,9 @@
               Copy Full
             </button>
           </div>
+          <p style="font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.4;">
+            ✨ <strong>In-app updates</strong>: v1.2.0+ self-updates automatically. Earlier versions (v0.1.0 – v1.1.0) require a one-time manual install.
+          </p>
         </div>
 
         <div class="hero-specs">
@@ -417,8 +420,8 @@
           <p>Play history, smart playlists, custom EQ presets, and yearly recap statistics are saved locally in private sandbox storage.</p>
         </div>
         <div class="glass-panel feature-card">
-          <h3>Opt-In Network Integrations</h3>
-          <p>Online LRCLIB lyrics and Last.fm scrobbling are strictly opt-in. When disabled, zero network sockets are ever opened.</p>
+          <h3>Strictly 3 Opt-In Network Features</h3>
+          <p>Online LRCLIB lyrics, Last.fm scrobbling, and in-app update checks (GitHub Releases) are strictly opt-in. When disabled, zero network sockets are ever opened.</p>
         </div>
       </div>
     </section>
@@ -431,6 +434,10 @@
       </div>
 
       <div class="faq-grid">
+        <details class="glass-panel faq-item">
+          <summary>How does the in-app update system work and what data is sent?</summary>
+          <p>Starting with v1.2.0, Node Player can check for updates directly from GitHub Releases. It is strictly opt-in: on first run, the app explicitly asks "Check for updates automatically?" with Yes and No options, and you can change this anytime in Settings &rarr; Updates. When checking, it sends a standard HTTPS request with <code>User-Agent: NodePlayer/&lt;version&gt;</code> to GitHub Releases, which reveals your IP address and installed version to GitHub under GitHub's Privacy Statement. Downloaded APKs are verified against official SHA-256 hashes and matched against the app's cryptographic signing certificate before installation.</p>
+        </details>
         <details class="glass-panel faq-item">
           <summary>What makes Node Player's DSP different from standard Android players?</summary>
           <p>Standard players rely on Android's default 16-bit integer system AudioEffect chain, which often suffers from low headroom and quantization noise. Node Player intercepts audio at the decoder level and runs double-precision 64-bit floating point biquad IIR filters with automated gain staging and a soft-knee lookahead limiter directly into a 32-bit float hardware AudioTrack sink.</p>
