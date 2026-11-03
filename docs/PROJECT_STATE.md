@@ -1,14 +1,21 @@
 # Node Player - Project State
 
-Last Updated: 2026-11-03 08:11:00 +05:30
-Current Version: v1.4.0 (refactor in progress)
-Current Commit: `c0e4f80` on branch `refactor/v1.4.0`
+Last Updated: 2026-11-03 13:06:00 +05:30
+Current Version: v1.4.0 (Windows Desktop & Android)
+Current Commit: `fad3000` on branch `feature/windows`
 
 ---
 
 ## 1. What Is Built
 
-### Core Architecture & Audio
+### Windows Desktop App (v1.4.0)
+- **Engine & Output**: Dual WASAPI output (`WasapiAudioOutput`) supporting WASAPI Shared and WASAPI Exclusive (Bit-Perfect) modes with 32-bit float internal routing.
+- **Decoding**: Hybrid `CompositeAudioDecoder` utilizing pure JVM decoding for WAV/AIFF and FFmpeg pipe for AAC, ALAC, Opus, OGG, and MP3.
+- **Shared Code Reuse**: 100% reuse of `:core-dsp` (`DspChain`, parametric EQ, preamp, limiter), `:core-model` (`Track`, `AudioEffectConfig`), `:core-library` (`AudioHeaderParser`), and `:core-common` platform contracts.
+- **Storage**: SQLite database at `%APPDATA%\NodePlayer\library.db` and settings at `%APPDATA%\NodePlayer\settings.properties`.
+- **UI & Experience**: Compose Desktop liquid-glass interface with Skia runtime refraction shaders, collapsible navigation sidebar, 10-band equalizer, search, and persistent Now Playing glass dock.
+
+### Android Core Architecture & Audio
 - **Audio Engine**: 32-bit float audio pipeline, resampler options (Auto, 44.1k, 48k, 96k, 192k), gapless playback, crossfade manager.
 - **DSP Chain**: 10-band equalizer, bass boost, virtualizer, reverb, loudness enhancer.
 - **System-Wide EQ**: Background audio effect session interception via `AudioSessionReceiver` and `SystemWideEqService`.
