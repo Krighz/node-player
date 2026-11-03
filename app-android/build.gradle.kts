@@ -39,8 +39,10 @@ android {
         applicationId = "com.nodeplayer.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.3.1"
+        versionCode = 7
+        versionName = "1.4.0"
+
+        manifestPlaceholders["appName"] = "Node Player"
 
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmApiKey\"")
         buildConfigField("String", "LASTFM_API_SECRET", "\"$lastFmApiSecret\"")
@@ -106,6 +108,12 @@ android {
             )
             val releaseSigning = signingConfigs.getByName("release")
             signingConfig = releaseSigning
+        }
+        create("staging") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".staging"
+            manifestPlaceholders["appName"] = "Node Player (Test)"
+            matchingFallbacks += listOf("release")
         }
     }
     compileOptions {
