@@ -1,8 +1,12 @@
 # Node Player - Project State
 
-Last Updated: 2026-11-03 08:11:00 +05:30
-Current Version: v1.4.0 (refactor in progress)
-Current Commit: `c0e4f80` on branch `refactor/v1.4.0`
+Last Updated: 2026-11-03 13:30:00 +05:30
+Current Version: v1.4.0
+Current Branch: `feature/shared-ui`
+
+> [!NOTE]
+> Standalone Windows prototype work has been preserved on branch `wip/windows-standalone` (commit `3b4470f`) and `feature/windows`.
+> Active development is now focused on `feature/shared-ui`: single shared Compose Multiplatform UI across Android Phone (portrait), Android Landscape (16:9), and Windows Desktop.
 
 ---
 
