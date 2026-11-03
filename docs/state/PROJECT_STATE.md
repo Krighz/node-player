@@ -1,11 +1,11 @@
 # Node Player - Project State
 
-Last Updated: 2026-11-03 14:55:00 +05:30
-Current Version: v1.4.0
+Last Updated: 2026-11-03 16:25:00 +05:30
+Current Version: v1.5.0
 Current Branch: `feature/shared-ui`
 
 > [!NOTE]
-> Active development on `feature/shared-ui` has fixed lossless FLAC decoding, wired 10-band Equalizer and DSP settings persistence, moved music folder management inside Settings, and revamped the liquid-glass optical shaders with live user tokens (commit `b752e8a`).
+> Unified Universal Release v1.5.0: Compose Multiplatform UI across Android and Windows Desktop, bit-perfect WASAPI audio output, exact zero-estimation header metadata extraction, and decoupled artwork loading restoring 120fps fluid performance on Android.
 
 ---
 

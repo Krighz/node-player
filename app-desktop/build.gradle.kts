@@ -47,7 +47,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "NodePlayer"
-            packageVersion = "1.4.0"
+            packageVersion = "1.5.0"
             description = "Node Player for Windows - Shared Liquid Glass Pure Audio"
             vendor = "Krighz"
             copyright = "© 2026 Krighz. Licensed under GPLv3."

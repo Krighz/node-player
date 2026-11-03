@@ -1,22 +1,32 @@
 <div align="center">
 
 # Node Player 🎵
-### *The Audiophile Liquid Glass Music Experience for Android*
+### *The Audiophile Liquid Glass Music Experience for Windows & Android*
 
-[![Release](https://img.shields.io/badge/Release-v1.4.0--NodePlayer-00F0FF.svg?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
-[![Platform](https://img.shields.io/badge/Platform-Android%208.0--14%2B-3DDC84.svg?style=for-the-badge&logo=android)](https://developer.android.com)
-[![Audio Engine](https://img.shields.io/badge/Audio%20DSP-32--Bit%20Float-FF5722.svg?style=for-the-badge&logo=soundcharts&logoColor=white)]()
-[![Aesthetics](https://img.shields.io/badge/Aesthetics-Liquid%20Glass%20%7C%20AGSL-2196F3.svg?style=for-the-badge)]()
+[![Release](https://img.shields.io/badge/Release-v1.5.0-00F0FF.svg?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
+[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20x64-0078D6.svg?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
+[![Android](https://img.shields.io/badge/Android-8.0--15%2B-3DDC84.svg?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
+[![Audio Engine](https://img.shields.io/badge/Audio%20DSP-32--Bit%20Float%20%7C%20WASAPI-FF5722.svg?style=for-the-badge&logo=soundcharts&logoColor=white)]()
+[![Aesthetics](https://img.shields.io/badge/Aesthetics-Liquid%20Glass%20%7C%20Compose%20MP-2196F3.svg?style=for-the-badge)]()
 [![Privacy](https://img.shields.io/badge/Privacy-Zero%20Telemetry%20%7C%20No%20Ads-success.svg?style=for-the-badge)]()
 [![License](https://img.shields.io/badge/License-Apache%202.0-lightgrey.svg?style=for-the-badge)](LICENSE)
 
 <br/>
 
 <p align="center">
-  <strong>Node Player</strong> is a high-fidelity local Android music player engineered for pure acoustic transparency, fluid liquid glass aesthetics, and studio-grade signal processing. Powered by a custom <strong>32-bit floating-point DSP pipeline</strong>, dual-player crossfade engine, <strong>System-Wide software equalizer effect</strong>, and offscreen <strong>AGSL runtime shader home-screen widgets</strong> with real-time synchronized lyrics.
+  <strong>Node Player</strong> is a high-fidelity local music player engineered for pure acoustic transparency, fluid liquid glass aesthetics, and studio-grade signal processing across <strong>Windows 10/11</strong> and <strong>Android</strong>. Powered by a custom <strong>32-bit floating-point DSP pipeline</strong>, bit-perfect WASAPI / AudioTrack playback, exact zero-estimation metadata parsing, expanding translucent glass sidebar, and offscreen <strong>AGSL runtime shaders</strong> with real-time synchronized lyrics.
 </p>
 
-[Download APK](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk) • [Screenshots](#-photo-gallery--screenshots) • [Architecture](#-modular-architecture) • [DSP Suite](#-high-precision-32-bit-float-dsp-suite) • [Widgets](#-liquid-glass-home-screen-widgets) • [Settings Reference](#-comprehensive-settings-reference) • [Building](#-building-and-installing)
+### 📥 Instant Downloads (v1.5.0)
+
+| Platform | Package | Format | Architecture | Direct Download |
+| :--- | :--- | :---: | :---: | :---: |
+| 🪟 **Windows** | Official Installer | `.msi` | x64 | [Download NodePlayer-1.5.0.msi](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0.msi) |
+| 🪟 **Windows** | Standalone Portable | `.zip` | x64 | [Download NodePlayer-1.5.0-windows-x64.zip](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0-windows-x64.zip) |
+| 🪟 **Windows** | Portable Executable | `.exe` | x64 | [Download NodePlayer.exe](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.exe) |
+| 🤖 **Android** | Signed Release APK | `.apk` | Universal | [Download NodePlayer.apk](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk) |
+
+[Screenshots](#-photo-gallery--screenshots) • [Architecture](#-modular-architecture) • [DSP Suite](#-high-precision-32-bit-float-dsp-suite) • [Desktop Features](#-desktop-experience-windows-1011) • [Settings Reference](#-comprehensive-settings-reference) • [Building](#-building-and-releasing)
 
 </div>
 
@@ -24,30 +34,57 @@
 
 ## 🌟 What Makes Node Player Special?
 
-- **🌊 Real AGSL Liquid Glass UI & Optical Refraction**: Immersive glassmorphic design language built with Jetpack Compose, dynamic Haze backdrop blur, and Android 13+ AGSL runtime shaders featuring domain-warped fluid metaballs, chromatic fringe, and live optical refraction.
+- **🖥️ Dual-Platform Liquid Glass (Windows & Android)**: Powered by Compose Multiplatform. Features an expansive 16:9 desktop UI with an animated expanding sidebar, floating glass playback bar, smooth mouse-wheel track scrub, and full keyboard hotkey control (Space, Arrows, Ctrl+F, Ctrl+O, Esc).
+- **🌊 Real AGSL & Skia Liquid Glass UI**: Immersive glassmorphic design language built with Jetpack Compose & Skia graphics, dynamic Haze backdrop blur, and Android 13+ AGSL runtime shaders featuring domain-warped fluid metaballs, chromatic fringe, and live optical refraction.
+- **⏱️ Exact Zero-Estimation Audio Parsing**: Ground-truth binary header parsing for MP3 (Xing/Info, VBRI, exact CBR frame walk), FLAC (`STREAMINFO`), M4A/AAC (`stts`/`mdhd` atoms), and OGG Vorbis (`granule_position`). Eliminates incorrect file estimations, missing lossless durations, and the 3-minute duration ceiling.
 - **🎛️ Studio-Grade 32-Bit Float DSP Chain**: 10-band biquad parametric equalizer with tight $\pm0.1\text{ dB}$ precision at band centres, linear pass-through soft-knee limiter, zero-allocation XorShift TPDF dither, ISO 226 loudness contour, psychoacoustic harmonic bass generator, algorithmic Freeverb 4-comb diffusion reverb, and partitioned impulse response convolution reverb.
-- **🔍 Truthful Signal Path Inspection**: Real-time inspection modal revealing true source file encoding, 32-bit float DSP transformation, AudioTrack output sink, and hardware routing device with bit-perfect vs. resampled indicators.
-- **🔀 Dual-ExoPlayer Continuous Crossfade**: Dual isolated audio playback engines providing smooth, gapless transitions with configurable mathematical curves (*Equal Power*, *Linear*, *Logarithmic*) and automatic live-album gapless detection.
-- **🔊 System-Wide EQ for Compatible Media Apps**: Dedicated Android foreground service attaching the Android software `DynamicsProcessing` audio effect to apps that broadcast their audio session (`ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION`). Tested and verified with **Spotify** and **YouTube Music** on realme GT 6T, with intelligent anti-double-EQ protection.
+- **⚡ Native Windows Audio (WASAPI & DirectSound)**: Dedicated low-latency audio output sink on Windows using 32-bit float internal mixing and non-blocking streaming.
+- **🚀 120 FPS Android Performance Decoupling**: Completely decoupled desktop and mobile artwork loaders. Android uses native C++ `MediaMetadataRetriever` with downsampled `RGB_565` memory buffers, eliminating disk scanning stalls and keeping scroll rates pinned at 120 fps.
+- **🔍 Truthful Signal Path Inspection**: Real-time inspection modal revealing true source file encoding, 32-bit float DSP transformation, AudioTrack/WASAPI output sink, and hardware routing device with bit-perfect vs. resampled indicators.
+- **🔀 Dual-Player Continuous Crossfade**: Dual isolated audio playback engines providing smooth, gapless transitions with configurable mathematical curves (*Equal Power*, *Linear*, *Logarithmic*) and automatic live-album gapless detection.
+- **🔊 System-Wide EQ for Compatible Android Media Apps**: Dedicated Android foreground service attaching the Android software `DynamicsProcessing` audio effect to apps that broadcast their audio session (`ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION`). Tested and verified with **Spotify** and **YouTube Music**.
 - **💾 Complete Backup & M3U Import**: Unified `.nodebackup` export and import for playlists, play counts, favorites, EQ profiles, and themes, alongside full M3U playlist file compatibility.
-- **📱 Four Static Liquid Glass Home-Screen Widgets**: Hardware offscreen rendered static glass widgets (`RenderNode` + `HardwareRenderer` + `ImageReader`) in 4 responsive sizes, featuring baked-in liquid-glass shimmer look, event-driven bitmap updates (track change, play/pause, settings change), 20 tap-to-seek slices, synced lyrics, high-res artwork, granular element toggles, and an instant translucent scrub sheet.
-- **🎵 Synchronized Lyrics & Scrobbling**: Real-time synced `.lrc` lyrics with active line prominence and smooth auto-scrolling. Bundled Last.fm scrobbler with browser authorization flow and offline retry queue. Opt-in Last.fm scrobbling and opt-in lyrics also use the network.
-- **🛡️ 100% Private, Local Diagnostics & Open Source**: Local sanitized crash logging with zero network uploads, zero ads, zero telemetry. Licensed under Apache 2.0.
+- **📱 Four Static Liquid Glass Home-Screen Widgets**: Hardware offscreen rendered static glass widgets (`RenderNode` + `HardwareRenderer` + `ImageReader`) in 4 responsive sizes on Android.
+- **🎵 Synchronized Lyrics & Scrobbling**: Real-time synced `.lrc` lyrics with active line prominence and smooth auto-scrolling. Bundled Last.fm scrobbler with browser authorization flow and offline retry queue.
+- **🛡️ 100% Private, Local Diagnostics & Open Source**: Zero network uploads, zero telemetry, zero ads, zero tracking. Licensed under Apache 2.0.
 
 ---
 
-## 📊 Feature Comparison: Node Player vs. Typical Android Players
+## 🖥️ Desktop Experience (Windows 10/11)
 
-| Feature | Node Player | Generic Players | System Players |
+Node Player Desktop brings studio-grade audio playback directly to your desktop workspace:
+
+* **Expanding Liquid Glass Dock**: Left sidebar collapses into clean, minimal glyphs when idle and smoothly expands with fluid glass reflections on hover to reveal Home, Library, Playlists, Equalizer, and Settings.
+* **Continuous Scrubbing & Mouse Wheel Seek**: Precision scrubber with live thumb tracking and mouse wheel seek (wheel up to seek forward $+5\text{s}$, wheel down $-5\text{s}$).
+* **Seamless Local Library Scanner**: Select any folder, drive, or network share from *Settings &rarr; Music Directory* or with `Ctrl+O`. Recursively catalogs lossless FLAC, ALAC, WAV, and high-bitrate MP3/AAC/OGG with zero file skips.
+* **Desktop Hotkey Matrix**:
+  | Shortcut | Action |
+  | :--- | :--- |
+  | <kbd>Space</kbd> | Toggle Play / Pause |
+  | <kbd>→</kbd> / <kbd>←</kbd> | Seek $+5\text{s}$ / $-5\text{s}$ |
+  | <kbd>Ctrl</kbd> + <kbd>→</kbd> / <kbd>←</kbd> | Next Track / Previous Track |
+  | <kbd>↑</kbd> / <kbd>↓</kbd> | Volume Up / Volume Down ($+5\%$ / $-5\%$) |
+  | <kbd>M</kbd> | Mute / Unmute Audio |
+  | <kbd>Ctrl</kbd> + <kbd>F</kbd> | Focus Library Search |
+  | <kbd>Ctrl</kbd> + <kbd>O</kbd> | Select Music Directory |
+  | <kbd>Esc</kbd> | Clear Search / Close Modals |
+
+---
+
+## 📊 Feature Comparison: Node Player vs. Typical Players
+
+| Feature | Node Player (v1.5.0) | Generic Players | System Players |
 | :--- | :---: | :---: | :---: |
+| **Cross-Platform** | **Windows 10/11 & Android 8+** | Single OS | Single OS |
 | **Audio Processing Engine** | **32-Bit Float Low-Latency Pipeline** | 16-bit integer fixed | 16-bit fixed |
+| **Desktop Audio Output** | **WASAPI / DirectSound 32-bit Float** | Generic JavaSound | OS DirectSound |
+| **Audio Header Scanner** | **Binary Xing/VBRI/FLAC (Zero Estimation)** | Header-size division guesses | MediaStore metadata |
 | **Aesthetic Design** | **Liquid Glassmorphism + True OLED** | Flat Material 2/3 | Basic system theme |
 | **Algorithmic Reverb** | **32-bit Freeverb 4-Comb Diffusion** | None / basic Android FX | None |
 | **Signal Path Inspector** | **Truthful Bit-Perfect Sink Inspector** | ❌ (Guesses or hardcoded) | ❌ |
-| **System-Wide EQ** | **✔️ Intercepts Spotify & YouTube Music** | ❌ | ❌ |
+| **System-Wide EQ (Android)** | **✔️ Intercepts Spotify & YouTube Music** | ❌ | ❌ |
 | **Home Screen Widgets** | **4 Offscreen AGSL Glass + 20-Zone Seek** | Static flat bitmap | Simple media controls |
 | **Crash & Diagnostics** | **100% On-Device Local Log Viewer** | Cloud trackers / telemetry | System dump only |
-| **Data Portability** | **Unified `.nodebackup` + M3U Import** | Locked to app database | None |
 | **Telemetry & Privacy** | **Zero Telemetry / Fully Private** | Often ad/tracker-backed | OEM analytics |
 
 ---
@@ -102,6 +139,8 @@ node-player/
 ├── :core-model       # 100% Pure Kotlin data structures (Track, Album, Lyrics, AudioConfig, WidgetConfig)
 ├── :core-dsp         # 100% Pure Kotlin 32-bit float audio DSP engine (Biquad EQ, Limiter, Dither, Reverb)
 ├── :core-library     # Parsers for .lrc lyrics, .cue sheets, .m3u playlists, and AutoEQ profiles
+├── :core-ui          # Shared Compose Multiplatform components (liquid glass, dock, colors, themes)
+├── :app-desktop      # Compose Multiplatform Desktop: Skia UI, WASAPI/DirectSound engine, JLayer/Vorbis/Flac4J
 └── :app-android      # Android 14 App: Compose UI, Media3 Session, Room, AGSL shaders, AppWidgets
 ```
 
@@ -109,8 +148,10 @@ node-player/
 | :--- | :--- | :--- | :--- |
 | **`:core-model`** | JVM / Pure Kotlin | Universal entity contracts and state representations. Zero Android dependencies for maximum portability. | Pure Kotlin |
 | **`:core-dsp`** | JVM / Pure Kotlin | High-precision 32-bit floating point audio filters, biquad equations, dither algorithms, and unit tests. | Pure Kotlin, JUnit 4 |
-| **`:core-library`** | JVM / Pure Kotlin | File parsers for synchronized lyrics (`.lrc`), playlist formats, and AutoEQ parametric curve text files. | Pure Kotlin |
-| **`:app-android`** | Android 14 (API 26–34) | UI, MediaSessionService, Room database, offscreen AGSL shader pipeline, and broadcast widget actions. | Jetpack Compose, Media3, Haze, Coil, Room, Palette |
+| **`:core-library`** | JVM / Pure Kotlin | Exact binary header parsers (MP3, FLAC, M4A, OGG), synchronized lyrics (`.lrc`), and playlist formats. | Pure Kotlin |
+| **`:core-ui`** | Compose Multiplatform | Shared liquid glass surfaces, floating navigation dock, theme tokens, and typography. | Compose Multiplatform |
+| **`:app-desktop`** | Windows 10/11 x64 | Desktop UI, low-latency WASAPI output sink, recursive directory scanner, and hotkey coordinator. | Compose Multiplatform, Skia, JLayer, VorbisSPI, Flac4J |
+| **`:app-android`** | Android 14 (API 26–35) | UI, MediaSessionService, Room database, offscreen AGSL shader pipeline, and broadcast widget actions. | Jetpack Compose, Media3, Haze, Coil, Room, Palette |
 
 ---
 
@@ -218,7 +259,19 @@ Releases are built, signed, and published locally using [`scripts/release.ps1`](
 ```
 See [docs/RELEASING.md](docs/RELEASING.md) for complete details on keystore setup and release verification.
 
-### Manual Gradle Commands
+### Windows Desktop Commands
+```powershell
+# Run Desktop Application locally
+.\gradlew.bat :app-desktop:run
+
+# Build Standalone Windows MSI Installer
+.\gradlew.bat :app-desktop:packageMsi
+
+# Build Portable Windows ZIP Distribution
+.\gradlew.bat :app-desktop:packageDistributionForCurrentOS
+```
+
+### Android Gradle Commands
 ```powershell
 # Run DSP Unit Tests
 .\gradlew.bat :core-dsp:test

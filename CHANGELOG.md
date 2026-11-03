@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.5.0] - 2026-11-03
+
+### Added
+- **Universal Compose Multiplatform Architecture**: One unified UI codebase shared across Android phone (portrait), Android landscape (16:9), and Windows Desktop (16:9).
+- **Windows Desktop Shell (`:app-desktop`)**: Native Windows desktop player with 16:9 layout, hover-expanding sidebar navigation, responsive Now Playing centerpiece, and mobile disc logo.
+- **Bit-Perfect WASAPI Audio Output**: Low-latency Windows Audio Session API integration supporting both Shared mode and Exclusive mode with zero resampling.
+- **Pure 64-Bit Float Desktop DSP**: Cross-platform 10-band biquad equalizer, Freeverb reverb, loudness contour, psychoacoustic bass, and TPDF dither shared between Windows and Android.
+- **Strict Zero-Estimation Metadata Extraction**: Pure header parsing for FLAC (STREAMINFO total samples, Vorbis comments), WAV (fmt and data chunks), MP3 (ID3v2 tags, TLEN, Xing/VBRI frame counts), M4A/ALAC (mvhd timescale/duration, ilst tags), and OGG/Opus without arbitrary guesses or 3-minute clamps.
+- **Desktop Navigation & Controls**: Mouse wheel seeking on scrubbers (±5s seek), spacebar play/pause, arrow seeking & volume, Ctrl+F search, and hardware media keys.
+- **Windows MSI Installer & Standalone Bundle**: Official WiX-packaged MSI installer (`NodePlayer-1.5.0.msi`) and portable zero-dependency executable distribution.
+
+### Fixed
+- **Android 120fps Fluid Performance**: Decoupled heavy desktop disk-byte artwork extraction from shared UI. Android now uses hardware-accelerated, zero-lag `RGB_565` bitmap memory management.
+- **Lossless FLAC & MP3 Playback**: Fixed JLayer MPEG sync word frame alignment past ID3v2 tags/padding and eliminated stream positioning stalls.
+- **Scrubber Seek Synchronization**: Synchronized playback position atomically to eliminate scrubber jumps during seeking.
+- **Audio Cleanliness**: Disabled TPDF dither by default on desktop to eliminate white noise hiss. Cashmere Beige default accent and OLED black off by default on initial launch.
+
+---
+
 ## [1.4.0] - 2026-11-03
 
 ### Changed
