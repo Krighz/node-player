@@ -1,8 +1,8 @@
 # Node Player - Project State
 
-Last Updated: 2026-11-03 05:25:00 +05:30
-Current Version: v1.3.1
-Current Commit: Working Tree (`0e6d483` + v1.3.1 release bump)
+Last Updated: 2026-11-03 07:49:00 +05:30
+Current Version: v1.4.0 (refactor in progress)
+Current Commit: `cd33f48` on branch `refactor/v1.4.0`
 
 ---
 
@@ -44,8 +44,10 @@ Current Commit: Working Tree (`0e6d483` + v1.3.1 release bump)
 
 | Component / Task | Verification Method | Status | Evidence |
 | :--- | :--- | :--- | :--- |
-| Core DSP Unit Tests | `:core-dsp:test` | Done | Gradle output: `BUILD SUCCESSFUL in 1m 4s` |
-| Android Unit Tests | `:app-android:testDebugUnitTest` | Done | Gradle output: `BUILD SUCCESSFUL in 1m 4s`, 38 actionable tasks |
+| Core Common Module | `:core-common:test` | Done | Gradle output: `BUILD SUCCESSFUL in 14s` |
+| Core DSP Unit Tests | `:core-dsp:test` | Done | Gradle output: `BUILD SUCCESSFUL in 14s` |
+| Android Unit Tests | `:app-android:testDebugUnitTest` | Done | Gradle output: `BUILD SUCCESSFUL in 14s`, 43 actionable tasks |
+| Widget Split & API | Compile & unit tests | Done | Commit `cd33f48` (`WidgetArtworkLoader`, `WidgetRemoteViewsHelper`, `WidgetFeatureApi`) |
 | Debug APK Build | `:app-android:assembleDebug` | Done | Gradle output: `BUILD SUCCESSFUL in 23s`, 49 actionable tasks |
 | Release APK Build | `:app-android:assembleRelease` | Done | Gradle output: `BUILD SUCCESSFUL in 2m 26s`, 62 actionable tasks |
 | APK Signing Verification | `apksigner.bat verify --verbose` | Done | Output: `Verified using v2 scheme (APK Signature Scheme v2): true` |
