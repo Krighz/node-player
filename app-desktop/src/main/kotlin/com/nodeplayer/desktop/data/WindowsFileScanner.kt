@@ -9,7 +9,8 @@ import java.io.File
 
 /**
  * Windows Music Folder Scanner.
- * Recursively scans directories, using AudioHeaderParser from core-library to inspect lossless/lossy stream headers.
+ * Recursively scans directories, extracting real audio metadata and stream specs from headers.
+ * Never estimates or guesses duration or format attributes.
  */
 class WindowsFileScanner : MediaLibraryScanner {
 
@@ -47,17 +48,19 @@ class WindowsFileScanner : MediaLibraryScanner {
             val formatInfo = AudioHeaderParser.parseFile(file)
             val nameWithoutExt = file.nameWithoutExtension
 
-            val (artist, title) = if (nameWithoutExt.contains(" - ")) {
+            val (fallbackArtist, fallbackTitle) = if (nameWithoutExt.contains(" - ")) {
                 val parts = nameWithoutExt.split(" - ", limit = 2)
                 parts[0].trim() to parts[1].trim()
             } else {
                 "Unknown Artist" to nameWithoutExt.trim()
             }
 
-            val album = file.parentFile?.name ?: "Unknown Album"
+            val title = formatInfo?.title?.ifBlank { null } ?: fallbackTitle
+            val artist = formatInfo?.artist?.ifBlank { null } ?: fallbackArtist
+            val album = formatInfo?.album?.ifBlank { null } ?: (file.parentFile?.name ?: "Unknown Album")
             val sampleRate = formatInfo?.sampleRate ?: 44100
             val bitDepth = formatInfo?.bitDepth ?: 16
-            val durationMs = estimateDuration(file, formatInfo?.bitrateKbps ?: 320)
+            val durationMs = formatInfo?.durationMs ?: 0L
 
             ScannedAudioMetadata(
                 filePath = file.absolutePath,
@@ -102,16 +105,10 @@ class WindowsFileScanner : MediaLibraryScanner {
             bitDepth = meta.bitDepth,
             channels = 2,
             bitrateKbps = 0,
-            formatDescription = "${meta.format} ${if (isLossless) "${meta.bitDepth}-bit" else ""} ${meta.sampleRate / 1000}kHz".trim(),
+            formatDescription = "${meta.format} ${if (isLossless && meta.bitDepth > 0) "${meta.bitDepth}-bit" else ""} ${meta.sampleRate / 1000}kHz".trim(),
             isLossless = isLossless,
             isHiRes = isHiRes,
             hiResStatus = if (isHiRes) HiResStatus.GENUINE else HiResStatus.UNKNOWN
         )
-    }
-
-    private fun estimateDuration(file: File, bitrateKbps: Int): Long {
-        if (bitrateKbps <= 0) return 180000L
-        val bytes = file.length()
-        return (bytes * 8L * 1000L) / (bitrateKbps * 1000L)
     }
 }

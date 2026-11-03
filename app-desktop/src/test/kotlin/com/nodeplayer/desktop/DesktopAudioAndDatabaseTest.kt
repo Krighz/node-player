@@ -197,8 +197,54 @@ class DesktopAudioAndDatabaseTest {
             val track = scanner.toTrack(meta!!, id = 1L)
             assertEquals(1L, track.id)
             assertEquals("audio/mpeg", track.mimeType)
+            assertEquals(0L, track.durationMs) // Strict 0L when metadata is absent (no estimation!)
         } finally {
             tempFile.delete()
+        }
+    }
+
+    @Test
+    fun testAudioHeaderParserExactFlacMetadata() {
+        val tempFlac = File.createTempFile("test_stream", ".flac")
+        try {
+            val baos = ByteArrayOutputStream()
+            // 1. "fLaC" magic
+            baos.write("fLaC".toByteArray(Charsets.US_ASCII))
+            // 2. STREAMINFO block header: isLast = 1, type = 0, length = 34
+            baos.write(byteArrayOf(0x80.toByte(), 0x00, 0x00, 34))
+            // 3. STREAMINFO payload (34 bytes):
+            // minBlockSize (2), maxBlockSize (2), minFrameSize (3), maxFrameSize (3) -> 10 bytes
+            baos.write(ByteArray(10))
+            // Sample rate 96000 (0x017700 = 20 bits), 2 channels (3 bits: 001 = 2 channels), 24 bits (5 bits: 10111 = 24 bits)
+            // byte 10: (96000 ushr 12) = 0x17
+            // byte 11: ((96000 ushr 4) and 0xFF) = 0x70
+            // byte 12: ((96000 and 0x0F) shl 4) or ((channels - 1) shl 1) or ((24 - 1) ushr 4)
+            //          = (0x00) or (1 shl 1) or (1) = 0x03
+            // byte 13: ((24 - 1) and 0x0F) shl 4 or (totalSamples ushr 32)
+            // Let totalSamples = 96000 * 5 = 480000 (5 seconds) = 0x00075300
+            val b10 = (96000 ushr 12).toByte()
+            val b11 = ((96000 ushr 4) and 0xFF).toByte()
+            val b12 = (((96000 and 0x0F) shl 4) or (1 shl 1) or (23 ushr 4)).toByte()
+            val b13 = (((23 and 0x0F) shl 4) or (0 and 0x0F)).toByte() // bits per sample + upper 4 bits of totalSamples
+            val b14 = ((480000L ushr 24) and 0xFF).toByte()
+            val b15 = ((480000L ushr 16) and 0xFF).toByte()
+            val b16 = ((480000L ushr 8) and 0xFF).toByte()
+            val b17 = (480000L and 0xFF).toByte()
+            baos.write(byteArrayOf(b10, b11, b12, b13, b14, b15, b16, b17))
+            // MD5 checksum (16 bytes)
+            baos.write(ByteArray(16))
+
+            tempFlac.writeBytes(baos.toByteArray())
+
+            val info = com.nodeplayer.library.AudioHeaderParser.parseFile(tempFlac)
+            assertNotNull(info)
+            assertEquals("FLAC", info?.formatName)
+            assertEquals(96000, info?.sampleRate)
+            assertEquals(24, info?.bitDepth)
+            assertEquals(2, info?.channels)
+            assertEquals(5000L, info?.durationMs) // EXACT 5000ms from STREAMINFO, not estimated!
+        } finally {
+            tempFlac.delete()
         }
     }
 }

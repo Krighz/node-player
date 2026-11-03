@@ -87,6 +87,7 @@ class WindowsPlaybackEngine(
 
     fun playTrack(track: Track) {
         playbackJob?.cancel()
+        pendingSeekMs.set(-1L)
         _currentTrack.value = track
         _durationMs.value = track.durationMs
         _currentPositionMs.value = 0L
@@ -100,6 +101,10 @@ class WindowsPlaybackEngine(
             if (!opened || meta == null) {
                 _isPlaying.value = false
                 return@launch
+            }
+
+            if (meta.durationMs > 0L) {
+                _durationMs.value = meta.durationMs
             }
 
             dspChain.sampleRate = meta.sampleRate

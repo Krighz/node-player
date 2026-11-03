@@ -74,28 +74,28 @@ fun HomeView(
     // Curated Carousels dynamically renewed on each opening and seed refresh
     val recentlyPlayed = remember(tracks, sessionSeed) {
         val filtered = tracks.filter { it.lastPlayedTimestamp > 0L }.sortedByDescending { it.lastPlayedTimestamp }
-        if (filtered.isNotEmpty()) filtered.take(16) else tracks.shuffled().take(16)
+        if (filtered.isNotEmpty()) filtered else tracks.shuffled()
     }
 
     val heavyRotation = remember(tracks, sessionSeed) {
         val filtered = tracks.filter { it.playCount > 0 }.sortedByDescending { it.playCount }
-        if (filtered.isNotEmpty()) filtered.take(30).shuffled().take(16) else tracks.shuffled().take(16)
+        if (filtered.isNotEmpty()) filtered else tracks.shuffled()
     }
 
     val audiophileVault = remember(tracks, sessionSeed) {
         val pool = tracks.filter {
             it.isLossless || it.bitDepth >= 24 || it.sampleRate >= 88200 || it.formatDescription.contains("FLAC", ignoreCase = true)
         }
-        pool.shuffled().take(16)
+        if (pool.isNotEmpty()) pool else tracks.filter { it.isLossless }
     }
 
     val freshDiscoveries = remember(tracks, sessionSeed) {
         val unplayed = tracks.filter { it.playCount <= 1 }
-        if (unplayed.isNotEmpty()) unplayed.shuffled().take(16) else tracks.shuffled().take(16)
+        if (unplayed.isNotEmpty()) unplayed else tracks.shuffled()
     }
 
     val favorites = remember(tracks, sessionSeed) {
-        tracks.filter { it.isFavorite }.shuffled().take(16)
+        tracks.filter { it.isFavorite }
     }
 
     val heroTrack = currentTrack ?: recentlyPlayed.firstOrNull() ?: tracks.shuffled().firstOrNull()
