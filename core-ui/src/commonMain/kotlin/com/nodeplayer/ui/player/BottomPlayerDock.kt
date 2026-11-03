@@ -31,11 +31,11 @@ fun BottomPlayerDock(
     durationMs: Long,
     volume: Float = 1.0f,
     isShuffle: Boolean = false,
-    repeatMode: Int = 0, // 0 = Off, 1 = All, 2 = One
-    onPlayPause: () -> Unit,
-    onNext: () -> Unit,
-    onPrevious: () -> Unit,
-    onSeek: (Long) -> Unit,
+    repeatMode: Int = 0,
+    onPlayPause: () -> Unit = {},
+    onNext: () -> Unit = {},
+    onPrevious: () -> Unit = {},
+    onSeek: (Long) -> Unit = {},
     onVolumeChange: (Float) -> Unit = {},
     onToggleShuffle: () -> Unit = {},
     onCycleRepeat: () -> Unit = {},
@@ -47,6 +47,12 @@ fun BottomPlayerDock(
     if (currentTrack == null) return
 
     val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+
+    var isDragging by remember { mutableStateOf(false) }
+    var dragFraction by remember { mutableFloatStateOf(0f) }
+
+    val displayFraction = if (isDragging) dragFraction else progress
+    val displayPositionMs = if (isDragging && durationMs > 0) (dragFraction * durationMs).toLong() else positionMs
 
     fun formatTime(ms: Long): String {
         val totalSec = ms / 1000
@@ -60,25 +66,32 @@ fun BottomPlayerDock(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         isDark = true,
-        onClick = onExpandNowPlaying
+        onClick = null // Don't steal clicks for the whole card
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Top Scrubber Progress Slider
+            // Top Scrubber Progress Slider with smooth drag tracking
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = formatTime(positionMs),
+                    text = formatTime(displayPositionMs),
                     fontSize = 10.sp,
                     color = Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.width(36.dp)
+                    modifier = Modifier.width(38.dp)
                 )
 
                 Slider(
-                    value = progress,
+                    value = displayFraction,
                     onValueChange = { frac ->
-                        onSeek((frac * durationMs).toLong())
+                        isDragging = true
+                        dragFraction = frac
+                    },
+                    onValueChangeFinished = {
+                        isDragging = false
+                        if (durationMs > 0) {
+                            onSeek((dragFraction * durationMs).toLong())
+                        }
                     },
                     modifier = Modifier.weight(1f).height(16.dp),
                     colors = SliderDefaults.colors(
@@ -92,21 +105,25 @@ fun BottomPlayerDock(
                     text = formatTime(durationMs),
                     fontSize = 10.sp,
                     color = Color.White.copy(alpha = 0.6f),
-                    modifier = Modifier.width(36.dp)
+                    modifier = Modifier.width(38.dp)
                 )
             }
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Main Bar: Track Info (Left) + Center Playback Controls + Right Tools
+            // Main Bar: Track Info (Clickable for full screen) + Center Playback Controls + Right Tools
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 1. Left Track Metadata
+                // 1. Left Track Metadata (Click to expand Now Playing)
                 Row(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { onExpandNowPlaying() }
+                        .padding(vertical = 4.dp, horizontal = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -160,8 +177,8 @@ fun BottomPlayerDock(
                         Icon(
                             Icons.Rounded.Shuffle,
                             contentDescription = "Shuffle",
-                            tint = if (isShuffle) accent else Color.White.copy(alpha = 0.4f),
-                            modifier = Modifier.size(20.dp)
+                            tint = if (isShuffle) accent else Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
 
@@ -169,18 +186,20 @@ fun BottomPlayerDock(
                         Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(26.dp))
                     }
 
-                    IconButton(
-                        onClick = onPlayPause,
+                    // Play/Pause Bubble
+                    Box(
                         modifier = Modifier
-                            .size(42.dp)
+                            .size(46.dp)
                             .clip(CircleShape)
                             .background(accent)
+                            .clickable { onPlayPause() },
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = Color.White,
-                            modifier = Modifier.size(26.dp)
+                            tint = Color(0xFF131728),
+                            modifier = Modifier.size(28.dp)
                         )
                     }
 
@@ -189,34 +208,47 @@ fun BottomPlayerDock(
                     }
 
                     IconButton(onClick = onCycleRepeat) {
-                        val icon = if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat
                         Icon(
-                            icon,
+                            imageVector = if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                             contentDescription = "Repeat",
-                            tint = if (repeatMode > 0) accent else Color.White.copy(alpha = 0.4f),
-                            modifier = Modifier.size(20.dp)
+                            tint = if (repeatMode > 0) accent else Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
 
-                // 3. Right Volume Control
+                // 3. Right Volume Control & Expand Fullscreen Button
                 Row(
-                    modifier = Modifier.width(130.dp).padding(start = 12.dp),
+                    modifier = Modifier.weight(0.7f),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = if (volume > 0.01f) Icons.Rounded.VolumeUp else Icons.Rounded.VolumeOff,
+                        imageVector = if (volume <= 0.01f) Icons.Rounded.VolumeMute else if (volume < 0.5f) Icons.Rounded.VolumeDown else Icons.Rounded.VolumeUp,
                         contentDescription = "Volume",
-                        tint = Color.White.copy(alpha = 0.6f),
-                        modifier = Modifier.size(18.dp)
+                        tint = Color.White.copy(alpha = 0.65f),
+                        modifier = Modifier.size(20.dp)
                     )
+                    Spacer(modifier = Modifier.width(6.dp))
                     Slider(
                         value = volume,
                         onValueChange = onVolumeChange,
-                        valueRange = 0f..1f,
-                        modifier = Modifier.weight(1f).height(14.dp),
-                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                        modifier = Modifier.width(90.dp).height(16.dp),
+                        colors = SliderDefaults.colors(
+                            thumbColor = accent,
+                            activeTrackColor = accent,
+                            inactiveTrackColor = Color.White.copy(alpha = 0.15f)
+                        )
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(onClick = onExpandNowPlaying) {
+                        Icon(
+                            Icons.Rounded.OpenInFull,
+                            contentDescription = "Expand Fullscreen",
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }

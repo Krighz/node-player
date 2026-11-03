@@ -115,7 +115,7 @@ class WindowsPlaybackEngine(
             _isPlaying.value = true
             isPaused.set(false)
 
-            val bufferSize = 4096
+            val bufferSize = 8192
             val buffer = FloatArray(bufferSize)
             var framesPlayed = 0L
 

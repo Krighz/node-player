@@ -67,7 +67,7 @@ data class ReverbConfig(
 data class DirectVolumeConfig(
     val enabled: Boolean = true,
     val volume: Float = 1.0f, // 0.0 to 1.0
-    val ditherEnabled: Boolean = true // Triangular Probability Density Function (TPDF)
+    val ditherEnabled: Boolean = false // Off by default to guarantee zero-noise floor / zero hiss
 )
 
 data class AutoEqFilter(
@@ -177,7 +177,7 @@ data class GlassThemeConfig(
     val noiseGrainAlpha: Float = 0.04f,
     val isOledBlack: Boolean = false,
     val useDynamicAccent: Boolean = true,
-    val fixedAccentColorArgb: Long = 0xFF6366F1, // Indigo default
+    val fixedAccentColorArgb: Long = 0xFFE8D5B7L, // Cashmere Cream / Warm Beige default
     val cornerRadiusDp: Float = 16.0f,
     val isPerformanceMode: Boolean = false,
     val refractionShaderEnabled: Boolean = true,

@@ -58,6 +58,7 @@ compose.desktop {
                 menu = true
                 shortcut = true
                 upgradeUuid = "63d1bc8e-1f8d-4f05-89f3-8b7bf48291f0"
+                iconFile.set(project.file("src/main/resources/icon.ico"))
             }
         }
     }

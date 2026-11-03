@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -137,7 +138,8 @@ fun main() = application {
             exitApplication()
         },
         state = windowState,
-        title = "Node Player"
+        title = "Node Player",
+        icon = painterResource("icon.png")
     ) {
         window.minimumSize = Dimension(960, 600)
 

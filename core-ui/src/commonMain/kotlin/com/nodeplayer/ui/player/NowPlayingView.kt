@@ -55,10 +55,13 @@ fun NowPlayingView(
 
     if (currentTrack == null) return
 
+    var isDragging by remember { mutableStateOf(false) }
+    var dragFraction by remember { mutableStateOf(0f) }
     val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+    val displayFraction = if (isDragging) dragFraction else progress
 
     fun formatTime(ms: Long): String {
-        val totalSec = ms / 1000
+        val totalSec = (ms / 1000).coerceAtLeast(0L)
         val m = totalSec / 60
         val s = totalSec % 60
         return "%d:%02d".format(m, s)
@@ -255,18 +258,28 @@ fun NowPlayingView(
         // Scrubber Slider
         Column {
             Slider(
-                value = progress,
+                value = displayFraction.coerceIn(0f, 1f),
                 onValueChange = { frac ->
-                    onSeek((frac * durationMs).toLong())
+                    isDragging = true
+                    dragFraction = frac
+                },
+                onValueChangeFinished = {
+                    onSeek((dragFraction * durationMs).toLong())
+                    isDragging = false
                 },
                 modifier = Modifier.fillMaxWidth(),
-                colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                colors = SliderDefaults.colors(
+                    thumbColor = accent,
+                    activeTrackColor = accent,
+                    inactiveTrackColor = Color.White.copy(alpha = 0.2f)
+                )
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(formatTime(positionMs), fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                val currentDisplayMs = if (isDragging) (dragFraction * durationMs).toLong() else positionMs
+                Text(formatTime(currentDisplayMs), fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                 Text(formatTime(durationMs), fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
             }
         }
@@ -293,7 +306,7 @@ fun NowPlayingView(
                 Icon(
                     imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                     contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = Color.White,
+                    tint = Color(0xFF131728),
                     modifier = Modifier.size(36.dp)
                 )
             }

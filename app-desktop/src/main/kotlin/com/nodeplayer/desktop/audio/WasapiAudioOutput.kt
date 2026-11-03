@@ -14,6 +14,7 @@ import javax.sound.sampled.SourceDataLine
  * Windows Audio Output Engine.
  * Supports WASAPI Shared mode and WASAPI Exclusive (Bit-Perfect) mode.
  * Automatically adapts to hardware sample rates (44.1k, 48k, 96k, 192k) with seamless fallback.
+ * Uses a jitter-resilient 65KB buffer and continuous boundary interpolation to prevent clicks and pops.
  */
 class WasapiAudioOutput : AudioOutput {
 
@@ -48,6 +49,10 @@ class WasapiAudioOutput : AudioOutput {
     @Volatile
     private var framesWritten = 0L
 
+    // Boundary continuity states to eliminate resampling clicks
+    private var prevLastSampleL = 0.0f
+    private var prevLastSampleR = 0.0f
+
     override fun open(config: AudioFormatConfig): Boolean {
         close()
         currentSampleRate = config.sampleRate
@@ -70,7 +75,8 @@ class WasapiAudioOutput : AudioOutput {
                 val info = DataLine.Info(SourceDataLine::class.java, audioFormat)
                 if (AudioSystem.isLineSupported(info)) {
                     val line = AudioSystem.getLine(info) as SourceDataLine
-                    val bufferSize = if (config.isExclusiveMode) 4096 else 16384
+                    // 65536 bytes (~370ms buffer at 44.1k/48k 16-bit stereo) prevents audio thread underflow
+                    val bufferSize = if (config.isExclusiveMode) 16384 else 65536
                     line.open(audioFormat, bufferSize)
                     line.start()
 
@@ -79,6 +85,8 @@ class WasapiAudioOutput : AudioOutput {
                     isOpened = true
                     isPaused = false
                     framesWritten = 0L
+                    prevLastSampleL = 0.0f
+                    prevLastSampleR = 0.0f
 
                     currentDeviceSpec = AudioDeviceSpec(
                         id = "default",
@@ -138,18 +146,38 @@ class WasapiAudioOutput : AudioOutput {
             val frac = (srcIndex - baseIdx).toFloat()
 
             for (ch in 0 until currentChannels) {
-                val s0 = if (baseIdx < inFrames) input[offset + baseIdx * currentChannels + ch] else 0f
-                val s1 = if (baseIdx + 1 < inFrames) input[offset + (baseIdx + 1) * currentChannels + ch] else s0
+                val s0 = if (baseIdx < inFrames) {
+                    input[offset + baseIdx * currentChannels + ch]
+                } else {
+                    if (ch == 0) prevLastSampleL else prevLastSampleR
+                }
+
+                val s1 = if (baseIdx + 1 < inFrames) {
+                    input[offset + (baseIdx + 1) * currentChannels + ch]
+                } else {
+                    s0
+                }
+
                 output[f * currentChannels + ch] = s0 + frac * (s1 - s0)
             }
         }
+
+        // Store last frames for boundary continuity
+        if (inFrames > 0) {
+            prevLastSampleL = input[offset + (inFrames - 1) * currentChannels]
+            if (currentChannels > 1) {
+                prevLastSampleR = input[offset + (inFrames - 1) * currentChannels + 1]
+            }
+        }
+
         return output
     }
 
     private fun convertFloatToBytes16(pcm: FloatArray, offset: Int, length: Int): ByteArray {
         val bb = ByteBuffer.allocate(length * 2).order(ByteOrder.LITTLE_ENDIAN)
+        val vol = volume
         for (i in offset until (offset + length)) {
-            val sample = (pcm[i] * volume).coerceIn(-1.0f, 1.0f)
+            val sample = (pcm[i] * vol).coerceIn(-1.0f, 1.0f)
             val shortVal = (sample * 32767.0f).toInt().coerceIn(-32768, 32767).toShort()
             bb.putShort(shortVal)
         }
@@ -168,12 +196,16 @@ class WasapiAudioOutput : AudioOutput {
 
     override fun flush() {
         sourceLine?.flush()
+        prevLastSampleL = 0.0f
+        prevLastSampleR = 0.0f
     }
 
     override fun close() {
         val line = sourceLine
         sourceLine = null
         isOpened = false
+        prevLastSampleL = 0.0f
+        prevLastSampleR = 0.0f
         try {
             line?.stop()
             line?.flush()

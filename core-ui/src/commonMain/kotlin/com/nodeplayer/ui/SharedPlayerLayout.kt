@@ -1,10 +1,16 @@
 package com.nodeplayer.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,10 +29,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.*
 import com.nodeplayer.ui.components.LiquidGlassBackground
+import com.nodeplayer.ui.components.NodePlayerLogo
 import com.nodeplayer.ui.player.BottomPlayerDock
 import com.nodeplayer.ui.player.NowPlayingView
 import com.nodeplayer.ui.screens.CustomizeUiView
 import com.nodeplayer.ui.screens.EqualizerView
+import com.nodeplayer.ui.screens.HomeView
 import com.nodeplayer.ui.screens.LibraryView
 import com.nodeplayer.ui.screens.SettingsView
 import com.nodeplayer.ui.theme.GlassTokens
@@ -37,6 +45,7 @@ import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.liquidGlass
 
 enum class PlayerNavDestination(val title: String, val icon: ImageVector) {
+    HOME("For You", Icons.Rounded.Home),
     LIBRARY("Library", Icons.Rounded.LibraryMusic),
     EQUALIZER("Equalizer", Icons.Rounded.GraphicEq),
     CUSTOMIZE("Customize UI", Icons.Rounded.Palette),
@@ -89,9 +98,16 @@ fun SharedPlayerLayout(
     onSelectMusicFolder: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var currentNav by remember { mutableStateOf(PlayerNavDestination.LIBRARY) }
+    var currentNav by remember { mutableStateOf(PlayerNavDestination.HOME) }
     var searchQuery by remember { mutableStateOf("") }
     var showNowPlayingOverlay by remember { mutableStateOf(false) }
+
+    val sidebarInteractionSource = remember { MutableInteractionSource() }
+    val isSidebarHovered by sidebarInteractionSource.collectIsHoveredAsState()
+    val sidebarWidth by animateDpAsState(
+        targetValue = if (isSidebarHovered) 230.dp else 78.dp,
+        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+    )
 
     val accent = Color(themeConfig.fixedAccentColorArgb)
     val glassTokens = remember(themeConfig) {
@@ -127,41 +143,49 @@ fun SharedPlayerLayout(
             if (isExpanded) {
                 // 16:9 Expanded Layout: Left Sidebar + Center Screen + Bottom Dock
                 Row(modifier = Modifier.fillMaxSize()) {
-                    // Left Navigation Glass Sidebar
+                    // Left Navigation Glass Sidebar (Hover-animated: icon-only collapsed, full-width expanded)
                     Column(
                         modifier = Modifier
-                            .width(230.dp)
+                            .width(sidebarWidth)
                             .fillMaxHeight()
-                            .padding(16.dp)
+                            .padding(14.dp)
                             .liquidGlass(cornerRadius = 20.dp)
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.SpaceBetween
+                            .hoverable(sidebarInteractionSource)
+                            .padding(
+                                start = if (isSidebarHovered) 16.dp else 8.dp,
+                                end = if (isSidebarHovered) 16.dp else 8.dp,
+                                top = 16.dp,
+                                bottom = 16.dp
+                            ),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                        horizontalAlignment = if (isSidebarHovered) Alignment.Start else Alignment.CenterHorizontally
                     ) {
-                        Column {
+                        Column(
+                            horizontalAlignment = if (isSidebarHovered) Alignment.Start else Alignment.CenterHorizontally
+                        ) {
                             // Logo / Title
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(bottom = 24.dp, top = 8.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 24.dp, top = 4.dp),
+                                horizontalArrangement = if (isSidebarHovered) Arrangement.Start else Arrangement.Center
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(38.dp)
-                                        .clip(CircleShape)
-                                        .background(Brush.linearGradient(listOf(accent, Color(0xFF06B6D4)))),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        text = "Node Player",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold)
-                                    )
-                                    Text(
-                                        text = "v1.4.0 • Hi-Fi Pure",
-                                        style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.5f))
-                                    )
+                                NodePlayerLogo(size = 38.dp, accentColor = accent)
+                                if (isSidebarHovered) {
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column {
+                                        Text(
+                                            text = "Node Player",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = "v1.4.0 • Hi-Fi Pure",
+                                            style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.5f)),
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
 
@@ -171,28 +195,55 @@ fun SharedPlayerLayout(
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .height(46.dp)
                                         .clip(RoundedCornerShape(12.dp))
                                         .background(if (isSelected) accent.copy(alpha = 0.22f) else Color.Transparent)
                                         .clickable { currentNav = destination }
-                                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .padding(horizontal = if (isSidebarHovered) 14.dp else 0.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = if (isSidebarHovered) Arrangement.Start else Arrangement.Center
                                 ) {
                                     Icon(
                                         imageVector = destination.icon,
                                         contentDescription = destination.title,
                                         tint = if (isSelected) accent else Color.White.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(22.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Text(
-                                        text = destination.title,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f)
+                                    if (isSidebarHovered) {
+                                        Spacer(modifier = Modifier.width(12.dp))
+                                        Text(
+                                            text = destination.title,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f)
+                                            ),
+                                            maxLines = 1
                                         )
-                                    )
+                                    }
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
+                            }
+                        }
+
+                        // Bottom status in sidebar
+                        if (isSidebarHovered) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isPlaying) accent else Color.Gray)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (isPlaying) "Bit-Perfect Output" else "Ready",
+                                    fontSize = 11.sp,
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    maxLines = 1
+                                )
                             }
                         }
                     }
@@ -205,6 +256,23 @@ fun SharedPlayerLayout(
                             .padding(bottom = if (currentTrack != null) 90.dp else 0.dp)
                     ) {
                         when (currentNav) {
+                            PlayerNavDestination.HOME -> HomeView(
+                                tracks = tracks,
+                                currentTrack = currentTrack,
+                                isPlaying = isPlaying,
+                                onPlayTrack = onPlayTrack,
+                                onPlayPause = onPlayPause,
+                                onQuickShuffle = {
+                                    if (tracks.isNotEmpty()) {
+                                        val shuffled = tracks.shuffled()
+                                        onPlayTrack(shuffled.first(), shuffled)
+                                    }
+                                },
+                                onRescanClick = onRescanLibrary,
+                                onSelectMusicFolder = onSelectMusicFolder,
+                                onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
+                                onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER }
+                            )
                             PlayerNavDestination.LIBRARY -> LibraryView(
                                 tracks = tracks,
                                 albums = albums,
@@ -254,6 +322,23 @@ fun SharedPlayerLayout(
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         when (currentNav) {
+                            PlayerNavDestination.HOME -> HomeView(
+                                tracks = tracks,
+                                currentTrack = currentTrack,
+                                isPlaying = isPlaying,
+                                onPlayTrack = onPlayTrack,
+                                onPlayPause = onPlayPause,
+                                onQuickShuffle = {
+                                    if (tracks.isNotEmpty()) {
+                                        val shuffled = tracks.shuffled()
+                                        onPlayTrack(shuffled.first(), shuffled)
+                                    }
+                                },
+                                onRescanClick = onRescanLibrary,
+                                onSelectMusicFolder = onSelectMusicFolder,
+                                onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
+                                onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER }
+                            )
                             PlayerNavDestination.LIBRARY -> LibraryView(
                                 tracks = tracks,
                                 albums = albums,
