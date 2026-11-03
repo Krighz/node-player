@@ -44,12 +44,12 @@ val Track.artworkUri: Uri
 
 private data class Tuple4<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
-object WidgetUpdateManager {
+object WidgetUpdateManager : WidgetFeatureApi {
 
     private const val TAG = "WidgetUpdateManager"
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
-    fun saveLastKnownTrack(context: Context, track: Track) {
+    override fun saveLastKnownTrack(context: Context, track: Track) {
         try {
             val prefs = context.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
             prefs.edit()
@@ -64,7 +64,7 @@ object WidgetUpdateManager {
         } catch (_: Exception) {}
     }
 
-    fun getLastKnownTrack(context: Context): Track? {
+    override fun getLastKnownTrack(context: Context): Track? {
         return try {
             val prefs = context.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
             val id = prefs.getLong("last_track_id", -1L)
@@ -82,7 +82,7 @@ object WidgetUpdateManager {
         } catch (_: Exception) { null }
     }
 
-    fun updateAllWidgets(context: Context) {
+    override fun updateAllWidgets(context: Context) {
         scope.launch {
             try {
                 // 1. Read ExoPlayer state on Main Thread
@@ -221,10 +221,10 @@ object WidgetUpdateManager {
             views.setImageViewBitmap(R.id.widget_bg, glassBitmap)
 
             bindCommonTrackInfo(context, views, track, artwork)
-            bindControls(context, views, isPlaying)
-            bindProgressAndChronometer(views, isPlaying, positionMs, durationMs)
-            bindTapToSeekZones(context, views)
-            applyElementVisibilities(views, settings, isCard = true)
+            WidgetRemoteViewsHelper.bindControls(context, views, isPlaying)
+            WidgetRemoteViewsHelper.bindProgressAndChronometer(views, isPlaying, positionMs, durationMs)
+            WidgetRemoteViewsHelper.bindTapToSeekZones(context, views)
+            WidgetRemoteViewsHelper.applyElementVisibilities(views, settings, isCard = true)
 
             // Open Scrub Sheet
             val scrubIntent = Intent(context, ScrubSheetActivity::class.java).apply {
@@ -282,8 +282,8 @@ object WidgetUpdateManager {
             views.setImageViewBitmap(R.id.widget_bg, glassBitmap)
 
             bindCommonTrackInfo(context, views, track, artwork)
-            bindControls(context, views, isPlaying)
-            applyElementVisibilities(views, settings, isSlim = true)
+            WidgetRemoteViewsHelper.bindControls(context, views, isPlaying)
+            WidgetRemoteViewsHelper.applyElementVisibilities(views, settings, isLyrics = true)
 
             if (lyrics != null && lyrics.lines.isNotEmpty()) {
                 views.setViewVisibility(R.id.widget_lyrics_empty, View.GONE)
@@ -350,8 +350,8 @@ object WidgetUpdateManager {
             views.setImageViewBitmap(R.id.widget_bg, glassBitmap)
 
             bindCommonTrackInfo(context, views, track, artwork)
-            bindControls(context, views, isPlaying)
-            applyElementVisibilities(views, settings, isSlim = true)
+            WidgetRemoteViewsHelper.bindControls(context, views, isPlaying)
+            WidgetRemoteViewsHelper.applyElementVisibilities(views, settings, isSlim = true)
 
             val progressPercent = ((positionMs.toFloat() / durationMs.toFloat()) * 100).toInt().coerceIn(0, 100)
             views.setProgressBar(R.id.widget_progress, 100, progressPercent, false)
@@ -398,7 +398,7 @@ object WidgetUpdateManager {
             views.setImageViewBitmap(R.id.widget_bg, glassBitmap)
 
             bindCommonTrackInfo(context, views, track, artwork)
-            applyElementVisibilities(views, settings, isSquare = true)
+            WidgetRemoteViewsHelper.applyElementVisibilities(views, settings, isSquare = true)
 
             views.setImageViewResource(
                 R.id.widget_btn_play_pause,
@@ -451,7 +451,7 @@ object WidgetUpdateManager {
         }
 
         if (artwork != null) {
-            views.setImageViewBitmap(R.id.widget_artwork, getRoundedCornerBitmap(artwork, 24f))
+            views.setImageViewBitmap(R.id.widget_artwork, WidgetArtworkLoader.getRoundedCornerBitmap(artwork, 24f))
         } else {
             views.setImageViewResource(R.id.widget_artwork, R.drawable.ic_music_note)
         }
@@ -469,218 +469,7 @@ object WidgetUpdateManager {
         views.setOnClickPendingIntent(R.id.widget_root, openAppPendingIntent)
     }
 
-    private fun applyElementVisibilities(
-        views: RemoteViews,
-        settings: WidgetSettings,
-        isCard: Boolean = false,
-        isLyrics: Boolean = false,
-        isSlim: Boolean = false,
-        isSquare: Boolean = false
-    ) {
-        views.setViewVisibility(R.id.widget_artwork, if (settings.showArt) View.VISIBLE else View.GONE)
-        views.setViewVisibility(R.id.widget_title, if (settings.showTitleArtist) View.VISIBLE else View.GONE)
-        views.setViewVisibility(R.id.widget_artist, if (settings.showTitleArtist) View.VISIBLE else View.GONE)
-
-        if (isCard) {
-            views.setViewVisibility(R.id.widget_glyph, if (settings.showWaveform) View.VISIBLE else View.GONE)
-            views.setViewVisibility(R.id.widget_progress_row, if (settings.showSeekbarTimes) View.VISIBLE else View.GONE)
-            views.setViewVisibility(R.id.widget_controls_row, if (settings.showTransport) View.VISIBLE else View.GONE)
-        }
-        if (isLyrics) {
-            views.setViewVisibility(R.id.widget_lyrics_container, if (settings.showLyrics) View.VISIBLE else View.GONE)
-            views.setViewVisibility(R.id.widget_controls_row, if (settings.showTransport) View.VISIBLE else View.GONE)
-        }
-        if (isSlim) {
-            views.setViewVisibility(R.id.widget_progress, if (settings.showSeekbarTimes) View.VISIBLE else View.GONE)
-            views.setViewVisibility(R.id.widget_controls, if (settings.showTransport) View.VISIBLE else View.GONE)
-        }
-        if (isSquare) {
-            views.setViewVisibility(R.id.widget_btn_play_pause, if (settings.showTransport) View.VISIBLE else View.GONE)
-        }
-    }
-
-    private fun bindControls(context: Context, views: RemoteViews, isPlaying: Boolean) {
-        // Play/Pause
-        views.setImageViewResource(
-            R.id.widget_btn_play_pause,
-            if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-        )
-        val playPauseIntent = Intent(context, WidgetActionReceiver::class.java).apply {
-            action = PlaybackService.ACTION_PLAY_PAUSE
-        }
-        val playPausePendingIntent = PendingIntent.getBroadcast(
-            context, 1, playPauseIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        views.setOnClickPendingIntent(R.id.widget_btn_play_pause, playPausePendingIntent)
-
-        // Previous
-        val prevIntent = Intent(context, WidgetActionReceiver::class.java).apply {
-            action = PlaybackService.ACTION_PREV
-        }
-        val prevPendingIntent = PendingIntent.getBroadcast(
-            context, 2, prevIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        views.setOnClickPendingIntent(R.id.widget_btn_prev, prevPendingIntent)
-
-        // Next
-        val nextIntent = Intent(context, WidgetActionReceiver::class.java).apply {
-            action = PlaybackService.ACTION_NEXT
-        }
-        val nextPendingIntent = PendingIntent.getBroadcast(
-            context, 3, nextIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        views.setOnClickPendingIntent(R.id.widget_btn_next, nextPendingIntent)
-
-        // Rewind -10s
-        val rewindIntent = Intent(context, WidgetActionReceiver::class.java).apply {
-            action = PlaybackService.ACTION_SEEK_BACK_10
-        }
-        val rewindPendingIntent = PendingIntent.getBroadcast(
-            context, 4, rewindIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        views.setOnClickPendingIntent(R.id.widget_btn_rewind, rewindPendingIntent)
-
-        // Forward +30s
-        val forwardIntent = Intent(context, WidgetActionReceiver::class.java).apply {
-            action = PlaybackService.ACTION_SEEK_FORWARD_30
-        }
-        val forwardPendingIntent = PendingIntent.getBroadcast(
-            context, 5, forwardIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        views.setOnClickPendingIntent(R.id.widget_btn_forward, forwardPendingIntent)
-    }
-
-    private fun bindProgressAndChronometer(
-        views: RemoteViews,
-        isPlaying: Boolean,
-        positionMs: Long,
-        durationMs: Long
-    ) {
-        // Chronometer counts elapsed time automatically without wake locks or polling!
-        val baseTime = SystemClock.elapsedRealtime() - positionMs
-        views.setChronometer(R.id.widget_elapsed_time, baseTime, null, isPlaying)
-
-        // Total time
-        views.setTextViewText(R.id.widget_total_time, formatTime(durationMs))
-
-        // Progress Bar
-        val progressPercent = ((positionMs.toFloat() / durationMs.toFloat()) * 100).toInt().coerceIn(0, 100)
-        views.setProgressBar(R.id.widget_progress, 100, progressPercent, false)
-    }
-
-    private fun bindTapToSeekZones(context: Context, views: RemoteViews) {
-        val zoneIds = intArrayOf(
-            R.id.zone_0, R.id.zone_1, R.id.zone_2, R.id.zone_3, R.id.zone_4,
-            R.id.zone_5, R.id.zone_6, R.id.zone_7, R.id.zone_8, R.id.zone_9,
-            R.id.zone_10, R.id.zone_11, R.id.zone_12, R.id.zone_13, R.id.zone_14,
-            R.id.zone_15, R.id.zone_16, R.id.zone_17, R.id.zone_18, R.id.zone_19
-        )
-
-        for (i in zoneIds.indices) {
-            val fraction = (i + 0.5f) / 20.0f
-            val seekIntent = Intent(context, PlaybackService::class.java).apply {
-                action = PlaybackService.ACTION_SEEK_TO
-                putExtra(PlaybackService.EXTRA_SEEK_FRACTION, fraction)
-            }
-            val seekPendingIntent = PendingIntent.getService(
-                context,
-                200 + i,
-                seekIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(zoneIds[i], seekPendingIntent)
-        }
-    }
-
-    fun loadArtwork(context: Context, track: Track?): Bitmap? {
-        if (track == null) return null
-
-        // 1. Android 10+ MediaStore thumbnail by track ID
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && track.id > 0) {
-            try {
-                val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, track.id)
-                val thumb = context.contentResolver.loadThumbnail(trackUri, Size(512, 512), null)
-                if (thumb != null) return thumb
-            } catch (_: Exception) {}
-        }
-
-        // 2. Embedded picture via MediaMetadataRetriever from file path
-        if (track.path.isNotBlank()) {
-            val file = File(track.path)
-            if (file.exists() && file.canRead()) {
-                val mmr = MediaMetadataRetriever()
-                try {
-                    mmr.setDataSource(file.absolutePath)
-                    val pic = mmr.embeddedPicture
-                    if (pic != null) {
-                        val thumb = BitmapFactory.decodeByteArray(pic, 0, pic.size)
-                        if (thumb != null) return thumb
-                    }
-                } catch (_: Exception) {
-                } finally {
-                    try { mmr.release() } catch (_: Exception) {}
-                }
-            }
-        }
-
-        // 3. MediaStore album art URI
-        if (track.albumId > 0) {
-            try {
-                val uri = Uri.parse("content://media/external/audio/albumart/${track.albumId}")
-                context.contentResolver.openInputStream(uri)?.use { stream ->
-                    val thumb = BitmapFactory.decodeStream(stream)
-                    if (thumb != null) return thumb
-                }
-            } catch (_: Exception) {}
-        }
-
-        // 4. Android 10+ MediaStore thumbnail by album ID
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && track.albumId > 0) {
-            try {
-                val albumUri = ContentUris.withAppendedId(MediaStore.Audio.Albums.EXTERNAL_CONTENT_URI, track.albumId)
-                val thumb = context.contentResolver.loadThumbnail(albumUri, Size(512, 512), null)
-                if (thumb != null) return thumb
-            } catch (_: Exception) {}
-        }
-
-        // 5. Procedural elegant fallback artwork (so the widget artwork box is never empty)
-        return generateFallbackArtwork(track.title)
-    }
-
-    private fun generateFallbackArtwork(seed: String): Bitmap {
-        val size = 256
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-
-        val hash = seed.hashCode()
-        val c1 = 0xFF000000.toInt() or (hash and 0x00FFFFFF)
-        val c2 = 0xFF1E293B.toInt()
-
-        val shader = android.graphics.LinearGradient(
-            0f, 0f, size.toFloat(), size.toFloat(),
-            c1, c2, android.graphics.Shader.TileMode.CLAMP
-        )
-        paint.shader = shader
-        canvas.drawRect(0f, 0f, size.toFloat(), size.toFloat(), paint)
-
-        // Draw clean music symbol / initial
-        paint.shader = null
-        paint.color = android.graphics.Color.WHITE
-        paint.alpha = 180
-        paint.textSize = 96f
-        paint.textAlign = Paint.Align.CENTER
-        val letter = seed.take(1).uppercase()
-        val yPos = (size / 2f) - ((paint.descent() + paint.ascent()) / 2f)
-        canvas.drawText(if (letter.isNotBlank()) letter else "♪", size / 2f, yPos, paint)
-
-        return bitmap
-    }
+    fun loadArtwork(context: Context, track: Track?): Bitmap? = WidgetArtworkLoader.loadArtwork(context, track)
 
     private fun loadLyrics(track: Track?): Lyrics? {
         if (track == null) return null
@@ -694,25 +483,5 @@ object WidgetUpdateManager {
         } catch (_: Exception) {
             null
         }
-    }
-
-    private fun getRoundedCornerBitmap(bitmap: Bitmap, cornerRadiusPx: Float): Bitmap {
-        val output = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(output)
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-        val rect = Rect(0, 0, bitmap.width, bitmap.height)
-        val rectF = RectF(rect)
-
-        canvas.drawRoundRect(rectF, cornerRadiusPx, cornerRadiusPx, paint)
-        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
-        canvas.drawBitmap(bitmap, rect, rect, paint)
-        return output
-    }
-
-    private fun formatTime(millis: Long): String {
-        val totalSeconds = (millis / 1000).coerceAtLeast(0)
-        val minutes = totalSeconds / 60
-        val seconds = totalSeconds % 60
-        return String.format("%d:%02d", minutes, seconds)
     }
 }
