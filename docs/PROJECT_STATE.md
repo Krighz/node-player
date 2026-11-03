@@ -1,8 +1,8 @@
 # Node Player - Project State
 
-Last Updated: 2026-11-03 07:49:00 +05:30
+Last Updated: 2026-11-03 08:11:00 +05:30
 Current Version: v1.4.0 (refactor in progress)
-Current Commit: `cd33f48` on branch `refactor/v1.4.0`
+Current Commit: `c0e4f80` on branch `refactor/v1.4.0`
 
 ---
 
@@ -48,6 +48,15 @@ Current Commit: `cd33f48` on branch `refactor/v1.4.0`
 | Core DSP Unit Tests | `:core-dsp:test` | Done | Gradle output: `BUILD SUCCESSFUL in 14s` |
 | Android Unit Tests | `:app-android:testDebugUnitTest` | Done | Gradle output: `BUILD SUCCESSFUL in 14s`, 43 actionable tasks |
 | Widget Split & API | Compile & unit tests | Done | Commit `cd33f48` (`WidgetArtworkLoader`, `WidgetRemoteViewsHelper`, `WidgetFeatureApi`) |
+| Scrobble Feature API | Compile verification | Done | Commit `5dc2888` (`ScrobbleFeatureApi` on `LastFmClient`) |
+| Updater Feature API | Compile verification | Done | Commit `8e0fdad` (`UpdaterFeatureApi` on `UpdateManager`) |
+| Diagnostics Feature API | Compile verification | Done | Commit `cea3a5b` (`DiagnosticsFeatureApi` on `DiagnosticsDumpManager`) |
+| Lyrics Feature API | Compile verification | Done | Commit `9f2c37a` (`LyricsFeatureApi` on `LyricsManager`) |
+| Architecture Boundary Test | `:core-common:test` | Done | Commit `4199131` (`ArchitectureBoundaryTest` passing) |
+| Integration API Module | `:integration-api:test` | Done | Commit `df20102` (`ProtocolVersionTest` passing) |
+| Staging Build (`.staging`) | `:app-android:assembleStaging` | Done | R8 minified, verified v2 signing, SHA-256 `1b6d42e0...` |
+| Release Build (v1.4.0) | `:app-android:assembleRelease` | Done | R8 minified, verified v2 signing, SHA-256 `5278a574...` |
+| GitHub Draft Release | `gh release list` | Done | Published strictly as Draft `v1.4.0` with release + staging APKs |
 | Debug APK Build | `:app-android:assembleDebug` | Done | Gradle output: `BUILD SUCCESSFUL in 23s`, 49 actionable tasks |
 | Release APK Build | `:app-android:assembleRelease` | Done | Gradle output: `BUILD SUCCESSFUL in 2m 26s`, 62 actionable tasks |
 | APK Signing Verification | `apksigner.bat verify --verbose` | Done | Output: `Verified using v2 scheme (APK Signature Scheme v2): true` |
