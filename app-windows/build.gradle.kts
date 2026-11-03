@@ -47,6 +47,8 @@ compose.desktop {
             vendor = "Krighz"
             copyright = "© 2026 Krighz. Licensed under GPLv3."
 
+            modules("java.instrument", "java.sql", "jdk.unsupported", "java.naming")
+
             windows {
                 menu = true
                 shortcut = true
