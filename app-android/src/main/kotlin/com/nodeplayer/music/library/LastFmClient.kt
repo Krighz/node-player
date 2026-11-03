@@ -17,7 +17,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-object LastFmClient {
+object LastFmClient : com.nodeplayer.music.scrobble.ScrobbleFeatureApi {
 
     private const val TAG = "LastFmClient"
     private const val API_ROOT = "https://ws.audioscrobbler.com/2.0/"
@@ -46,15 +46,15 @@ object LastFmClient {
     val isBuiltInSecretPresent: Boolean
         get() = BuildConfig.LASTFM_API_SECRET.isNotBlank()
 
-    fun isKeyConfigured(context: Context? = null): Boolean {
+    override fun isKeyConfigured(context: Context?): Boolean {
         return getEffectiveApiKey(context).isNotBlank()
     }
 
-    fun isSecretConfigured(context: Context? = null): Boolean {
+    override fun isSecretConfigured(context: Context?): Boolean {
         return getEffectiveApiSecret(context).isNotBlank()
     }
 
-    fun isConfigured(context: Context? = null): Boolean {
+    override fun isConfigured(context: Context?): Boolean {
         return isKeyConfigured(context) && isSecretConfigured(context)
     }
 
@@ -144,7 +144,7 @@ object LastFmClient {
         }
     }
 
-    suspend fun updateNowPlaying(track: Track, sessionKey: String): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun updateNowPlaying(track: Track, sessionKey: String): Boolean = withContext(Dispatchers.IO) {
         if (!isConfigured() || sessionKey.isBlank()) return@withContext false
         try {
             val params = mutableMapOf(
@@ -167,7 +167,7 @@ object LastFmClient {
         }
     }
 
-    suspend fun scrobble(track: Track, timestampSec: Long, sessionKey: String, context: Context): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun scrobble(track: Track, timestampSec: Long, sessionKey: String, context: Context): Boolean = withContext(Dispatchers.IO) {
         if (!isConfigured() || sessionKey.isBlank()) return@withContext false
         val dao = NodePlayerApplication.instance.database.playerDao()
         try {
@@ -205,7 +205,7 @@ object LastFmClient {
         }
     }
 
-    suspend fun flushPendingQueue(sessionKey: String): Int = withContext(Dispatchers.IO) {
+    override suspend fun flushPendingQueue(sessionKey: String): Int = withContext(Dispatchers.IO) {
         if (!isConfigured() || sessionKey.isBlank()) return@withContext 0
         val dao = NodePlayerApplication.instance.database.playerDao()
         val pending = dao.getPendingScrobbles()
