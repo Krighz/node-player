@@ -3,7 +3,7 @@
 # Node Player 🎵
 ### *The Audiophile Liquid Glass Music Experience for Android*
 
-[![Release](https://img.shields.io/badge/Release-v1.3.1--NodePlayer-00F0FF.svg?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v1.4.0--NodePlayer-00F0FF.svg?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Android%208.0--14%2B-3DDC84.svg?style=for-the-badge&logo=android)](https://developer.android.com)
 [![Audio Engine](https://img.shields.io/badge/Audio%20DSP-32--Bit%20Float-FF5722.svg?style=for-the-badge&logo=soundcharts&logoColor=white)]()
 [![Aesthetics](https://img.shields.io/badge/Aesthetics-Liquid%20Glass%20%7C%20AGSL-2196F3.svg?style=for-the-badge)]()

@@ -6,6 +6,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.0] - 2026-11-03
+
+### Changed
+- **Internal Modular Restructure**: Clean architectural boundary separation with explicit public feature contracts (`WidgetFeatureApi`, `ScrobbleFeatureApi`, `UpdaterFeatureApi`, `DiagnosticsFeatureApi`, `LyricsFeatureApi`).
+- **Pure Kotlin Common Module (`:core-common`)**: Central `NodeLog` with feature tags and 500-entry ring-buffer, `DispatcherProvider`, and sealed `NodeResult`.
+- **Ecosystem Integration Surface (`:integration-api`)**: Pure Kotlin IPC contract with protocol versioning and immutable state snapshots (`NowPlayingState`, `PlaybackCommand`, `ExternalTrackItem`) for upcoming Android TV companion apps and external controllers.
+- **Architectural Boundary Enforcement**: Added automated test `ArchitectureBoundaryTest` ensuring core modules remain pure Kotlin without Android framework dependencies and enforcing strict encapsulation across feature internals.
+- **Side-by-Side Staging Build (`.staging`)**: Added `staging` build type with `.staging` application ID suffix, allowing parallel side-by-side test installations on device without touching production data.
+
+---
+
+## [1.3.1] - 2026-11-03
+
+### Fixed
+- Revamped liquid glass dock refraction with pure crystal pearl specular rim and dynamic optical magnification.
+- Restored Now Playing fluid glass background bleeding and liquid play/pause lens bubble.
+- Fixed Customize UI continuous glass opacity, grain texture, and lens refraction strength controls.
+- Added high-DPI 2x static widget rendering for 1080p+ displays and widget customization options.
+
+---
+
 ## [1.3.0] - 2026-11-03
 
 ### Added
