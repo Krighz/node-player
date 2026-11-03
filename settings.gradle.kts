@@ -20,6 +20,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "NodePlayer"
+include(":core-common")
 include(":core-model")
 include(":core-dsp")
 include(":core-library")

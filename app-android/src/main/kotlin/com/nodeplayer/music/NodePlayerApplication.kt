@@ -5,6 +5,8 @@ import android.content.Context
 import androidx.room.Room
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import com.nodeplayer.common.logging.LogLevel
+import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.music.data.NodeDatabase
 import com.nodeplayer.music.library.AudioArtworkFetcher
 import com.nodeplayer.music.library.LibraryScanner
@@ -30,6 +32,22 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
+        NodeLog.addSink { level, tag, message, throwable ->
+            val androidPriority = when (level) {
+                LogLevel.VERBOSE -> android.util.Log.VERBOSE
+                LogLevel.DEBUG -> android.util.Log.DEBUG
+                LogLevel.INFO -> android.util.Log.INFO
+                LogLevel.WARN -> android.util.Log.WARN
+                LogLevel.ERROR -> android.util.Log.ERROR
+            }
+            if (throwable != null) {
+                android.util.Log.println(androidPriority, tag, "$message\n${android.util.Log.getStackTraceString(throwable)}")
+            } else {
+                android.util.Log.println(androidPriority, tag, message)
+            }
+        }
+        NodeLog.i("app/lifecycle", "NodePlayerApplication initialized")
 
         com.nodeplayer.music.diagnostics.LocalCrashLogger.init(this)
 
