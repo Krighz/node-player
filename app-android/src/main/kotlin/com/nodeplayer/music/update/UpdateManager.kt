@@ -10,33 +10,34 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.File
 import java.util.concurrent.TimeUnit
 
-object UpdateManager {
+object UpdateManager : UpdaterFeatureApi {
 
     private const val TAG = "UpdateManager"
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val _availableUpdate = MutableStateFlow<AppUpdateInfo?>(null)
-    val availableUpdate: StateFlow<AppUpdateInfo?> = _availableUpdate.asStateFlow()
+    override val availableUpdate: StateFlow<AppUpdateInfo?> = _availableUpdate.asStateFlow()
 
-    fun setAvailableUpdate(info: AppUpdateInfo?) {
+    override fun setAvailableUpdate(info: AppUpdateInfo?) {
         _availableUpdate.value = info
     }
 
-    fun clearCachedUpdate(context: Context) {
+    override fun clearCachedUpdate(context: Context) {
         UpdatePreferences.setCachedUpdate(context, null)
         _availableUpdate.value = null
     }
 
-    val downloadStatus: StateFlow<DownloadStatus> = UpdateDownloadManager.downloadStatus
+    override val downloadStatus: StateFlow<DownloadStatus> = UpdateDownloadManager.downloadStatus
 
-    fun setDownloadStatus(status: DownloadStatus) {
+    override fun setDownloadStatus(status: DownloadStatus) {
         UpdateDownloadManager.setDownloadStatus(status)
     }
 
     private val _isChecking = MutableStateFlow(false)
-    val isChecking: StateFlow<Boolean> = _isChecking.asStateFlow()
+    override val isChecking: StateFlow<Boolean> = _isChecking.asStateFlow()
 
     private val _showOptInDialog = MutableStateFlow(false)
     val showOptInDialog: StateFlow<Boolean> = _showOptInDialog.asStateFlow()
@@ -162,8 +163,16 @@ object UpdateManager {
         restoreCachedUpdate(context)
     }
 
-    fun startDownload(context: Context, info: AppUpdateInfo) {
-        UpdateDownloadManager.startDownload(context, info)
+    override fun checkForUpdates(context: Context, isManual: Boolean) {
+        triggerCheck(context, isManual)
+    }
+
+    override fun startDownload(context: Context, updateInfo: AppUpdateInfo) {
+        UpdateDownloadManager.startDownload(context, updateInfo)
+    }
+
+    override fun installUpdate(context: Context, apkFile: File) {
+        UpdateInstaller.installApk(context, apkFile)
     }
 
     fun cancelDownload(context: Context) {
