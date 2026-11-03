@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Node Player — Precision Local Music Player for Android</title>
-  <meta name="description" content="Pure 64-bit float audio pipeline, 10-band biquad EQ, dynamic AGSL liquid glassmorphism, and hardware-verified low latency for Android 14+. Free and open-source.">
-  <meta name="keywords" content="music player, android, audiophile, dsp, biquad eq, agsl, glassmorphism, jetpack compose, 64-bit float, lastfm">
+  <title>Node Player — Liquid Glass Hi-Fi Music for Windows & Android</title>
+  <meta name="description" content="Unified Compose Multiplatform local music player for Windows 10/11 and Android. Pure 64-bit float DSP, 10-band biquad EQ, bit-perfect WASAPI audio, and dynamic liquid glassmorphism. Free and open-source.">
+  <meta name="keywords" content="music player, windows music player, android music player, audiophile, wasapi, dsp, biquad eq, agsl, liquid glass, compose multiplatform, 64-bit float, lastfm">
   <meta name="author" content="Krighz">
   <meta name="theme-color" content="#07090E">
   <link rel="canonical" href="https://krighz.github.io/node-player/">
@@ -13,15 +13,15 @@
   <!-- OpenGraph Meta Tags -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://krighz.github.io/node-player/">
-  <meta property="og:title" content="Node Player — Precision Local Music Player for Android">
-  <meta property="og:description" content="Pure 64-bit float audio pipeline, 10-band biquad EQ, and dynamic AGSL liquid glassmorphism. Offline-first and GPL-3.0 open source.">
+  <meta property="og:title" content="Node Player — Liquid Glass Hi-Fi Music for Windows & Android">
+  <meta property="og:description" content="Unified Compose Multiplatform local music player. Pure 64-bit float DSP, 10-band biquad EQ, bit-perfect WASAPI, and liquid glassmorphism. Free and open-source.">
   <meta property="og:image" content="https://krighz.github.io/node-player/og_image.png">
 
   <!-- Twitter Meta Tags -->
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:url" content="https://krighz.github.io/node-player/">
-  <meta name="twitter:title" content="Node Player — Precision Local Music Player for Android">
-  <meta name="twitter:description" content="Pure 64-bit float audio pipeline, 10-band biquad EQ, and dynamic AGSL liquid glassmorphism.">
+  <meta name="twitter:title" content="Node Player — Liquid Glass Hi-Fi Music for Windows & Android">
+  <meta name="twitter:description" content="Unified Compose Multiplatform local music player for Windows & Android. 64-bit float DSP, 10-band EQ, bit-perfect WASAPI, and liquid glass.">
   <meta name="twitter:image" content="https://krighz.github.io/node-player/og_image.png">
 
   <!-- Favicon and Fonts -->
@@ -31,7 +31,7 @@
 </head>
 <body>
 
-  <!-- Seamless WebGL Liquid-Glass Video Background -->
+  <!-- Seamless Liquid-Glass Video Background -->
   <div class="bg-video-container" aria-hidden="true">
     <video id="bgVideo" class="bg-video" autoplay loop muted playsinline poster="bg_poster.webp">
       <source src="bg_desktop.webm" type="video/webm">
@@ -49,10 +49,11 @@
       </a>
       <nav aria-label="Main Navigation">
         <ul class="nav-links">
+          <li><a href="#desktop">Desktop 16:9</a></li>
           <li><a href="#features">Features</a></li>
           <li><a href="#equalizer">Equalizer</a></li>
           <li><a href="#dsp">DSP Chain</a></li>
-          <li><a href="#widgets">Widgets</a></li>
+          <li><a href="#downloads">Downloads</a></li>
           <li><a href="#privacy">Privacy</a></li>
           <li><a href="#faq">FAQ</a></li>
           <li><a href="#support">Support</a></li>
@@ -65,8 +66,8 @@
           </svg>
           GitHub
         </a>
-        <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk" class="btn btn-primary btn-sm">
-          Download APK
+        <a href="#downloads" class="btn btn-primary btn-sm">
+          Get v1.5.0
         </a>
       </div>
     </div>
@@ -78,65 +79,70 @@
       <div class="hero-content">
         <div class="hero-pill">
           <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-          <span>v1.4.0 Modular Architecture Release</span>
+          <span>v1.5.0 Universal Release: Windows Desktop & Android</span>
         </div>
-        <h1 class="hero-title">Liquid Glass.<br>Pure Audio.</h1>
+        <h1 class="hero-title">Liquid Glass.<br>Pure Audio. Everywhere.</h1>
         <p class="hero-desc">
-          High-fidelity local music player for Android crafted with a pure 64-bit floating point DSP pipeline, 10-band biquad EQ, and dynamic AGSL glassmorphism designed for Android 14+.
+          Precision local music player engineered with Compose Multiplatform. One unified liquid glass aesthetic across Windows 10/11 and Android, powered by a 64-bit float DSP pipeline, 10-band biquad EQ, bit-perfect WASAPI output, and zero estimation metadata scanning.
         </p>
 
+        <!-- Dual Platform Download Actions -->
         <div class="hero-actions">
-          <div class="hero-btn-group">
-            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk" class="btn btn-primary" id="downloadApkBtn">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
+          <div class="hero-btn-group" style="display: flex; flex-wrap: wrap; gap: 14px;">
+            <!-- Windows Button -->
+            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0.msi" class="btn btn-primary" id="downloadWindowsBtn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.749-1.5L24 0v11.551H10.749V1.949zM0 12.549h9.75v9.451L0 20.651v-8.102zm10.749 0H24V24l-13.251-1.95v-9.501z"/>
               </svg>
-              Download APK (3.98 MB)
+              Download for Windows (.msi)
             </a>
-            <a href="https://github.com/Krighz/node-player/releases" class="btn btn-glass" target="_blank" rel="noopener noreferrer">
-              Releases & Changelog
+            <!-- Android Button -->
+            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk" class="btn btn-glass" id="downloadApkBtn">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.411 13.8533 8.084 12 8.084s-3.5902.327-5.1368.8657L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/>
+              </svg>
+              Download Android APK
             </a>
           </div>
 
-          <div class="hash-badge">
-            <span>SHA-256:</span>
-            <code>6fbe3d383654374aa552e85e5177d021...</code>
-            <button class="copy-btn" id="copyHashBtn" data-hash="6fbe3d383654374aa552e85e5177d021f5f4425bf82dbeb4fa8ca0714fd1eed7" aria-label="Copy full SHA-256 checksum">
+          <!-- Quick Checksum Details -->
+          <div class="hash-badge" style="margin-top: 14px;">
+            <span>SHA-256 (MSI):</span>
+            <code>c2b528988eac69ebe2bb6d00059d74e0...</code>
+            <button class="copy-btn" id="copyHashBtn" data-hash="c2b528988eac69ebe2bb6d00059d74e0e97c42d1c6b93e390bc92bc6c2f4d452" aria-label="Copy full SHA-256 checksum">
               Copy Full
             </button>
           </div>
           <p style="font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.4;">
-            ✨ <strong>In-app updates</strong>: v1.2.0+ self-updates automatically. Earlier versions (v0.1.0 – v1.1.0) require a one-time manual install.
+            📦 Available as <strong>Windows Installer (.msi)</strong>, <strong>Portable Zip (.zip)</strong>, <strong>Standalone EXE</strong>, and <strong>Signed Android APK</strong>.
           </p>
         </div>
 
         <div class="hero-specs">
           <div class="spec-item">
+            <span class="spec-val">WASAPI</span>
+            <span class="spec-lbl">Bit-Perfect Output</span>
+          </div>
+          <div class="spec-item">
             <span class="spec-val">64-bit</span>
-            <span class="spec-lbl">Float Pipeline</span>
+            <span class="spec-lbl">Float DSP Engine</span>
           </div>
           <div class="spec-item">
             <span class="spec-val">10-Band</span>
-            <span class="spec-lbl">Biquad Filter</span>
+            <span class="spec-lbl">Parametric EQ</span>
           </div>
           <div class="spec-item">
-            <span class="spec-val">0 Trk</span>
-            <span class="spec-lbl">Zero Trackers</span>
-          </div>
-          <div class="spec-item">
-            <span class="spec-val">GPL-3.0</span>
-            <span class="spec-lbl">Open Source</span>
+            <span class="spec-val">0 Telemetry</span>
+            <span class="spec-lbl">100% Private</span>
           </div>
         </div>
       </div>
 
-      <!-- Sleek Phone Mockup with Native Device Screenshots -->
+      <!-- Phone Mockup with Native Device Screenshots -->
       <div class="mockup-wrap">
         <div class="phone-device">
           <div class="phone-screen" id="mockupScreen">
-            <img src="screenshots/screen_now_playing.webp" id="screenNowPlaying" class="active" alt="Now Playing screen on realme GT 6T" width="1080" height="2376">
+            <img src="screenshots/screen_now_playing.webp" id="screenNowPlaying" class="active" alt="Now Playing screen" width="1080" height="2376">
             <img src="screenshots/screen_equalizer.webp" id="screenEqualizer" alt="10-band equalizer screen with real-time curve" width="1080" height="2376">
             <img src="screenshots/screen_signal_path.webp" id="screenSignalPath" alt="Audio signal path analysis screen" width="1080" height="2376">
             <img src="screenshots/screen_library.webp" id="screenLibrary" alt="Music library songs list" width="1080" height="2376">
@@ -159,6 +165,81 @@
       </div>
     </section>
 
+    <!-- Desktop 16:9 Showcase Section -->
+    <section id="desktop" class="container">
+      <div class="section-header">
+        <span class="section-pill">Windows Desktop</span>
+        <h2 class="section-title">Built for the Big Screen</h2>
+        <p class="section-desc">Experience Node Player in full 16:9 widescreen on Windows 10 & 11 with keyboard hotkeys, mouse-wheel seeking, and bit-perfect WASAPI direct output.</p>
+      </div>
+
+      <div class="glass-panel" style="padding: 32px; border-radius: 24px; margin-bottom: 32px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; align-items: center;">
+          <div>
+            <div style="display: inline-block; padding: 6px 14px; border-radius: 9999px; background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); font-size: 13px; font-weight: 600; margin-bottom: 12px;">
+              Compose Multiplatform Desktop
+            </div>
+            <h3 style="font-size: 26px; font-weight: 800; margin-bottom: 12px; color: #ffffff;">Desktop 16:9 Liquid Glass Shell</h3>
+            <p style="color: var(--text-muted); font-size: 15px; line-height: 1.6; margin-bottom: 18px;">
+              Engineered with a responsive sidebar that smoothly expands on hover, animated liquid glass shaders, Now Playing centerpiece, and zero-latency mouse scrubbing.
+            </p>
+            <ul style="list-style: none; display: flex; flex-direction: column; gap: 10px; color: var(--text-main); font-size: 14px;">
+              <li style="display: flex; align-items: center; gap: 8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><strong>WASAPI Exclusive & Shared Modes</strong> — Direct hardware audio streaming up to 768 kHz with 0 OS resampling.</span>
+              </li>
+              <li style="display: flex; align-items: center; gap: 8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><strong>Mouse-Wheel Scrubbing</strong> — Scroll anywhere over the seek bar to jump &plusmn;5s with instant audio seek.</span>
+              </li>
+              <li style="display: flex; align-items: center; gap: 8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><strong>Zero-Estimation Scanner</strong> — Real metadata read strictly from file headers (FLAC, WAV, MP3, M4A, OGG).</span>
+              </li>
+              <li style="display: flex; align-items: center; gap: 8px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span><strong>Full Keyboard Control</strong> — Space to Play/Pause, Left/Right Seek, Up/Down Volume, Ctrl+F Search.</span>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Desktop Hotkeys & Spec Card -->
+          <div class="glass-panel" style="padding: 24px; border-radius: 16px; background: rgba(15, 23, 42, 0.7);">
+            <h4 style="font-size: 16px; margin-bottom: 14px; color: var(--accent-cyan); display: flex; align-items: center; gap: 8px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="10" y2="8"/><line x1="14" y1="8" x2="14" y2="8"/><line x1="18" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="18" y2="12"/><line x1="7" y1="16" x2="17" y2="16"/></svg>
+              Desktop Keyboard Shortcuts
+            </h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+              <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                <span style="color: var(--text-muted);">Play / Pause</span>
+                <kbd style="background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Space</kbd>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                <span style="color: var(--text-muted);">Seek &plusmn;5s</span>
+                <kbd style="background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; font-family: monospace;">← / →</kbd>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                <span style="color: var(--text-muted);">Volume &plusmn;5%</span>
+                <kbd style="background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; font-family: monospace;">↑ / ↓</kbd>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                <span style="color: var(--text-muted);">Instant Search</span>
+                <kbd style="background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Ctrl + F</kbd>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                <span style="color: var(--text-muted);">Mouse Scrub</span>
+                <kbd style="background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; font-family: monospace;">Wheel</kbd>
+              </div>
+              <div style="display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.05); border-radius: 6px;">
+                <span style="color: var(--text-muted);">Media Keys</span>
+                <kbd style="background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 4px; font-family: monospace;">SMTC</kbd>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- Features Grid -->
     <section id="features" class="container">
       <div class="section-header">
@@ -172,16 +253,16 @@
           <div class="feature-icon">
             <svg viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
           </div>
-          <h3>64-Bit Float Audio Engine</h3>
-          <p>ExoPlayer decoding feeds double-precision 64-bit floating point biquad IIR filters with automated gain staging to prevent clipping distortion.</p>
+          <h3>Pure 64-Bit Float DSP Engine</h3>
+          <p>Double-precision 64-bit floating point biquad IIR filters with automated gain staging and soft-knee limiter shared across Windows and Android.</p>
         </div>
 
         <div class="glass-panel feature-card">
           <div class="feature-icon">
             <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
           </div>
-          <h3>AGSL Runtime Shaders</h3>
-          <p>Realtime liquid glassmorphism powered by Android 13+ AGSL shaders featuring specular highlights, caustic light pulses, and chromatic refraction.</p>
+          <h3>Liquid Glass & Optical Refraction</h3>
+          <p>Real-time organic fluid canvas shaders, Snell's law optical lens bubbles, and frosted specular rims running at 120fps with zero UI stutter.</p>
         </div>
 
         <div class="glass-panel feature-card">
@@ -189,7 +270,7 @@
             <svg viewBox="0 0 24 24"><path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H8V4h12v12z"/></svg>
           </div>
           <h3>4 Home Screen Widgets</h3>
-          <p>Square, Lyrics (4x3), Card, and Pill static widgets with baked-in liquid-glass shimmer look, re-rendered on playback events, and an instant draggable scrub sheet.</p>
+          <p>Square, Synced Lyrics (4x3), Card, and Pill static widgets with baked-in liquid-glass shimmer look, re-rendered on playback events, and an instant draggable scrub sheet.</p>
         </div>
 
         <div class="glass-panel feature-card">
@@ -197,7 +278,7 @@
             <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
           </div>
           <h3>100% Offline & Private</h3>
-          <p>Zero internet requests made by default. Zero analytics, zero ad SDKs, zero user tracking. Your library and listening habits remain strictly on-device.</p>
+          <p>Zero internet requests by default. Zero analytics, zero ad SDKs, zero user tracking. Your library and listening habits remain strictly on-device.</p>
         </div>
 
         <div class="glass-panel feature-card">
@@ -212,8 +293,8 @@
           <div class="feature-icon">
             <svg viewBox="0 0 24 24"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
           </div>
-          <h3>Hardware Verified</h3>
-          <p>DSP pipeline tuned, profiled, and verified on Qualcomm Snapdragon 7+ Gen 3 (realme GT 6T / ColorOS 14) for sub-10ms buffer latencies.</p>
+          <h3>Exact Zero-Estimation Metadata</h3>
+          <p>Zero guesswork. Directly extracts STREAMINFO total samples from FLAC, data chunk bytes from WAV, TLEN and Xing from MP3, and timescale from M4A.</p>
         </div>
       </div>
     </section>
@@ -306,15 +387,15 @@
       <div class="section-header">
         <span class="section-pill">Audio Architecture</span>
         <h2 class="section-title">End-to-End Signal Pipeline</h2>
-        <p class="section-desc">From source audio decoding to hardware AudioTrack output, every step preserves Bit-Perfect clarity with 64-bit headroom.</p>
+        <p class="section-desc">From source audio decoding to hardware WASAPI & AudioTrack sinks, every step preserves Bit-Perfect clarity with 64-bit headroom.</p>
       </div>
 
       <div class="dsp-pipeline">
         <div class="glass-panel dsp-stage">
           <div class="stage-num">1</div>
           <div class="stage-info">
-            <div class="stage-title">ExoPlayer 32-bit Float Audio Sink</div>
-            <div class="stage-desc">Direct PCM extraction supporting high-res FLAC, ALAC, WAV, DSD, AAC, and Opus.</div>
+            <div class="stage-title">Multiplatform 32-bit Float Audio Decoders</div>
+            <div class="stage-desc">Direct PCM extraction supporting high-res FLAC up to 32-bit/768kHz, WAV, MP3, ALAC, AAC, and Opus.</div>
           </div>
           <div class="stage-badge">PCM 32-Bit Float</div>
         </div>
@@ -324,7 +405,7 @@
           <div class="stage-num">2</div>
           <div class="stage-info">
             <div class="stage-title">High-Precision Resampler</div>
-            <div class="stage-desc">Hardware sink alignment (44.1kHz, 48kHz, 96kHz, 192kHz) with band-limited sinc interpolation.</div>
+            <div class="stage-desc">Direct sink alignment with band-limited sinc interpolation when needed, or zero-resampling bit-perfect pass-through.</div>
           </div>
           <div class="stage-badge">Polyphase Filter</div>
         </div>
@@ -354,7 +435,7 @@
           <div class="stage-num">5</div>
           <div class="stage-info">
             <div class="stage-title">Spatializer & Reverb Convolver</div>
-            <div class="stage-desc">Ear-canal crossfeed modeling and subtle room acoustic reflections for fatigue-free headphone listening.</div>
+            <div class="stage-desc">Ear-canal crossfeed modeling, Freeverb 4-comb diffusion, and room acoustic reflections.</div>
           </div>
           <div class="stage-badge">Binaural Crossfeed</div>
         </div>
@@ -364,40 +445,70 @@
           <div class="stage-num">6</div>
           <div class="stage-info">
             <div class="stage-title">Soft-Knee Lookahead Dynamics Limiter</div>
-            <div class="stage-desc">Transparent 1ms lookahead limiter prevents analog saturation when pushing master output gains.</div>
+            <div class="stage-desc">Transparent lookahead limiter prevents analog saturation when pushing master output gains.</div>
           </div>
           <div class="stage-badge">0dB Ceiling</div>
         </div>
       </div>
-
-      <div class="hw-callout">
-        <div class="hw-icon">⚡</div>
-        <div class="hw-text">
-          <h4>Hardware Tuned & Verified</h4>
-          <p>Audio output pipeline, buffer sizes, and low-latency DSP thread priorities were hardware-verified on Qualcomm Snapdragon 7+ Gen 3 (realme GT 6T / ColorOS 14) ensuring 0 dropped frames during 120Hz UI animations.</p>
-        </div>
-      </div>
     </section>
 
-    <!-- Home Screen Widgets Showcase -->
-    <section id="widgets" class="container">
+    <!-- Downloads Section -->
+    <section id="downloads" class="container">
       <div class="section-header">
-        <span class="section-pill">Desktop Experience</span>
-        <h2 class="section-title">Liquid Glass on Your Home Screen</h2>
-        <p class="section-desc">Four distinct glanceable static widgets with baked-in liquid-glass shimmer bitmaps that update on playback events.</p>
+        <span class="section-pill">Universal Release</span>
+        <h2 class="section-title">Download Node Player v1.5.0</h2>
+        <p class="section-desc">Free and open source under GPL-3.0. Choose your platform below.</p>
       </div>
 
-      <div class="widgets-gallery">
-        <div class="glass-panel widget-showcase-card">
-          <img src="screenshots/screen_widgets_dark.webp" class="widget-preview-img" alt="All 4 widgets on dark home screen" width="1080" height="2376">
-          <h3>4 Unique Form Factors</h3>
-          <p>Square, Pill, Card, and Synced Lyrics (4x3). Designed with subtle refraction borders that complement Material You dynamic system colors.</p>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; max-width: 900px; margin: 0 auto;">
+        <!-- Windows Card -->
+        <div class="glass-panel" style="padding: 28px; border-radius: 20px; text-align: left; border: 1px solid var(--border-cyan);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--accent-blue)"><path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.749-1.5L24 0v11.551H10.749V1.949zM0 12.549h9.75v9.451L0 20.651v-8.102zm10.749 0H24V24l-13.251-1.95v-9.501z"/></svg>
+              <h3 style="font-size: 20px; font-weight: 700; color: #ffffff;">Windows 10 / 11</h3>
+            </div>
+            <span style="font-size: 12px; background: rgba(56, 189, 248, 0.2); color: var(--accent-blue); padding: 4px 10px; border-radius: 9999px; font-weight: 600;">v1.5.0</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
+            Native Compose Multiplatform desktop player with 16:9 layout, mouse wheel scrubbing, keyboard hotkeys, and bit-perfect WASAPI direct output.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0.msi" class="btn btn-primary" style="justify-content: center; text-align: center;">
+              Download MSI Installer (106 MB)
+            </a>
+            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0-windows-x64.zip" class="btn btn-glass" style="justify-content: center; text-align: center; font-size: 13px;">
+              Download Portable Zip (110 MB)
+            </a>
+          </div>
+          <div style="font-size: 11px; color: var(--text-dim); font-family: monospace; word-break: break-all;">
+            SHA-256 (MSI): c2b528988eac69ebe2bb6d00059d74e0e97c42d1c6b93e390bc92bc6c2f4d452
+          </div>
         </div>
 
-        <div class="glass-panel widget-showcase-card">
-          <img src="screenshots/screen_scrub_sheet.webp" class="widget-preview-img" alt="Translucent scrub sheet opened from widget" width="1080" height="2376">
-          <h3>Translucent Scrub Sheet</h3>
-          <p>Tap the timestamp on any home screen widget to launch the instant floating seek sheet without interrupting your active application context.</p>
+        <!-- Android Card -->
+        <div class="glass-panel" style="padding: 28px; border-radius: 20px; text-align: left;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="#3DDC84"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.411 13.8533 8.084 12 8.084s-3.5902.327-5.1368.8657L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>
+              <h3 style="font-size: 20px; font-weight: 700; color: #ffffff;">Android 8.0 – 14+</h3>
+            </div>
+            <span style="font-size: 12px; background: rgba(61, 220, 132, 0.2); color: #3DDC84; padding: 4px 10px; border-radius: 9999px; font-weight: 600;">v1.5.0</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
+            Fluid 120fps liquid glass player with 4 home-screen widgets, translucent scrub sheet, system-wide audio effects, and Last.fm scrobbler.
+          </p>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk" class="btn btn-primary" style="justify-content: center; text-align: center; background: linear-gradient(135deg, #10B981, #059669);">
+              Download Official APK (4.74 MB)
+            </a>
+            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-staging.apk" class="btn btn-glass" style="justify-content: center; text-align: center; font-size: 13px;">
+              Download Staging Test APK (.staging)
+            </a>
+          </div>
+          <div style="font-size: 11px; color: var(--text-dim); font-family: monospace; word-break: break-all;">
+            SHA-256: b5ee393b7f6db7c646160391ecdc6734f836acd663a6d667f7caf6d15dfd31c1
+          </div>
         </div>
       </div>
     </section>
@@ -416,12 +527,12 @@
           <p>No Firebase Analytics, no Google Crashlytics, no telemetry daemons. Node Player communicates with zero reporting servers.</p>
         </div>
         <div class="glass-panel feature-card">
-          <h3>Local SQLite Database</h3>
+          <h3>Local Storage Only</h3>
           <p>Play history, smart playlists, custom EQ presets, and yearly recap statistics are saved locally in private sandbox storage.</p>
         </div>
         <div class="glass-panel feature-card">
-          <h3>Strictly 3 Opt-In Network Features</h3>
-          <p>Online LRCLIB lyrics, Last.fm scrobbling, and in-app update checks (GitHub Releases) are strictly opt-in. When disabled, zero network sockets are ever opened.</p>
+          <h3>Strictly Opt-In Network Features</h3>
+          <p>Online LRCLIB lyrics, Last.fm scrobbling, and in-app update checks are strictly opt-in. When disabled, zero network sockets are ever opened.</p>
         </div>
       </div>
     </section>
@@ -435,17 +546,17 @@
 
       <div class="faq-grid">
         <details class="glass-panel faq-item">
-          <summary>How does the in-app update system work and what data is sent?</summary>
-          <p>Starting with v1.2.0, Node Player can check for updates directly from GitHub Releases. It is strictly opt-in: on first run, the app explicitly asks "Check for updates automatically?" with Yes and No options, and you can change this anytime in Settings &rarr; Updates. When checking, it sends a standard HTTPS request with <code>User-Agent: NodePlayer/&lt;version&gt;</code> to GitHub Releases, which reveals your IP address and installed version to GitHub under GitHub's Privacy Statement. Downloaded APKs are verified against official SHA-256 hashes and matched against the app's cryptographic signing certificate before installation.</p>
+          <summary>Does Node Player for Windows require administrative rights?</summary>
+          <p>The standard MSI installer installs to your per-user Program Files directory with start menu shortcuts. If you prefer zero installation, simply download the <strong>Portable Zip</strong>, extract it anywhere, and run <code>NodePlayer.exe</code> directly.</p>
         </details>
         <details class="glass-panel faq-item">
-          <summary>What makes Node Player's DSP different from standard Android players?</summary>
-          <p>Standard players rely on Android's default 16-bit integer system AudioEffect chain, which often suffers from low headroom and quantization noise. Node Player intercepts audio at the decoder level and runs double-precision 64-bit floating point biquad IIR filters with automated gain staging and a soft-knee lookahead limiter directly into a 32-bit float hardware AudioTrack sink.</p>
+          <summary>What makes Node Player's DSP different from standard players?</summary>
+          <p>Standard players rely on fixed 16-bit integer system audio effects, which often suffer from low headroom and quantization distortion. Node Player intercepts audio at the decoder level and runs double-precision 64-bit floating point biquad IIR filters with automated gain staging and a soft-knee lookahead limiter directly into a 32-bit float hardware AudioTrack or bit-perfect WASAPI sink.</p>
         </details>
 
         <details class="glass-panel faq-item">
-          <summary>Does Node Player require root access or special permissions?</summary>
-          <p>No. Node Player requires only standard Android Media Permissions (`READ_MEDIA_AUDIO` on Android 13+) to index your music files. No root, no Shizuku, and no accessibility services are needed.</p>
+          <summary>How does WASAPI Exclusive mode work on Windows?</summary>
+          <p>In Settings &rarr; Audio, you can enable WASAPI Exclusive Mode. When active, Node Player opens an exclusive direct stream with your DAC, completely bypassing the Windows Audio Engine mixer and resampler. This ensures bit-perfect playback at the native sample rate and bit depth of your lossless files.</p>
         </details>
 
         <details class="faq-item glass-panel">
@@ -454,13 +565,8 @@
         </details>
 
         <details class="glass-panel faq-item">
-          <summary>What Android versions and hardware are supported?</summary>
-          <p>Node Player is built for Android 9.0+ (API 28+). Full AGSL liquid-glass shaders and RuntimeShader caustics require Android 13+ (API 33+), with graceful fallback to frosted acrylic blur on older releases. Hardware-verified on Qualcomm Snapdragon 7+ Gen 3 (realme GT 6T / ColorOS 14).</p>
-        </details>
-
-        <details class="glass-panel faq-item">
-          <summary>If something looks wrong (graphics glitches or shader bugs)?</summary>
-          <p>Node Player includes an automated offscreen shader self-test and hardware diagnostics engine. If you encounter rendering artifacts or GPU quirks on specific chipsets, navigate to <strong>More &rarr; Graphics Diagnostics</strong> (or Settings &rarr; Glass Shader, or long-press the app version in About). You can switch to <em>Safe Graphics Mode</em> immediately or generate a <strong>Diagnostics Dump</strong> (<code>nodeplayer-diagnostics-&lt;date&gt;.zip</code>) with one tap to attach to a GitHub issue. Dumps include GPU/display metrics, recent graphics events, and an in-app window screenshot—with zero personal data or file paths.</p>
+          <summary>What platforms and hardware are supported?</summary>
+          <p><strong>Windows</strong>: Windows 10 (version 1809+) and Windows 11 64-bit, compatible with DirectX 12 / DirectWrite. <strong>Android</strong>: Android 8.0+ (API 26+) with full AGSL shaders and runtime caustics on Android 13+.</p>
         </details>
 
         <details class="glass-panel faq-item">
@@ -510,27 +616,30 @@
             <span class="brand-title">Node Player</span>
           </a>
           <p style="font-size: 14px; color: var(--text-muted); line-height: 1.6;">
-            Precision local music player for Android with 64-bit float DSP, 10-band biquad EQ, and dynamic AGSL liquid glassmorphism.
+            Precision local music player for Windows & Android with 64-bit float DSP, 10-band biquad EQ, bit-perfect WASAPI, and liquid glassmorphism.
           </p>
         </div>
 
         <div class="footer-links-col">
           <h4>Navigation</h4>
           <ul>
+            <li><a href="#desktop">Desktop 16:9</a></li>
             <li><a href="#features">Features</a></li>
             <li><a href="#equalizer">Equalizer</a></li>
             <li><a href="#dsp">DSP Signal Path</a></li>
-            <li><a href="#widgets">Widgets</a></li>
+            <li><a href="#downloads">Downloads</a></li>
             <li><a href="#privacy">Privacy</a></li>
             <li><a href="#support">Support</a></li>
           </ul>
         </div>
 
         <div class="footer-links-col">
-          <h4>Downloads</h4>
+          <h4>Downloads (v1.5.0)</h4>
           <ul>
-            <li><a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk">Latest Release (v1.4.0)</a></li>
-            <li><a href="https://github.com/Krighz/node-player/releases">Older Releases</a></li>
+            <li><a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0.msi">Windows MSI Installer</a></li>
+            <li><a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0-windows-x64.zip">Windows Portable Zip</a></li>
+            <li><a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk">Android Release APK</a></li>
+            <li><a href="https://github.com/Krighz/node-player/releases">All Releases & Tags</a></li>
             <li><a href="https://github.com/Krighz/node-player/blob/main/CHANGELOG.md" target="_blank" rel="noopener noreferrer">Changelog</a></li>
           </ul>
         </div>
@@ -541,15 +650,14 @@
             <li><a href="https://github.com/Krighz/node-player" target="_blank" rel="noopener noreferrer">GitHub Repository</a></li>
             <li><a href="https://github.com/Krighz/node-player/discussions" target="_blank" rel="noopener noreferrer">Discussions & Feedback</a></li>
             <li><a href="https://github.com/Krighz/node-player/issues" target="_blank" rel="noopener noreferrer">Report a Bug</a></li>
-            <li><a href="https://github.com/Krighz/node-player/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License (Apache 2.0)</a></li>
-            <li><a href="https://github.com/Krighz/node-player/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing</a></li>
+            <li><a href="https://github.com/Krighz/node-player/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License (GPL-3.0)</a></li>
           </ul>
         </div>
       </div>
 
       <div class="footer-bottom">
         <p>&copy; 2026 Krighz. Licensed under GPL-3.0. Zero trackers, zero ads.</p>
-        <p>Built with Jetpack Compose & AGSL.</p>
+        <p>Built with Compose Multiplatform & Kotlin.</p>
       </div>
     </div>
   </footer>
