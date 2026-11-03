@@ -10,6 +10,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -19,10 +20,11 @@ import androidx.compose.ui.unit.dp
 import com.nodeplayer.model.GlassThemeConfig
 
 data class GlassTokensData(
-    val opacity: Float = 0.65f,
+    val opacity: Float = 0.55f,
     val blurStrength: Float = 0.70f,
-    val grainStrength: Float = 0.40f,
-    val rimStrength: Float = 0.60f,
+    val grainStrength: Float = 0.35f,
+    val rimStrength: Float = 0.65f,
+    val refractionStrength: Float = 0.85f,
     val isFullyTransparent: Boolean = false,
     val keepTextReadable: Boolean = true,
     val isPerformanceMode: Boolean = false,
@@ -45,24 +47,24 @@ data class GlassTokensData(
 
     fun liquidBorderBrush(isOled: Boolean = false): Brush {
         val rimScale = if (isFullyTransparent) 1.0f else rimStrength.coerceIn(0.1f, 1.0f)
-        val alphaWhite = (0xCC * rimScale).toInt().coerceIn(0, 255)
-        val alphaSoft = (0x44 * rimScale).toInt().coerceIn(0, 255)
-        val alphaSide = (0x15 * rimScale).toInt().coerceIn(0, 255)
+        val alphaWhite = (0xEE * rimScale).toInt().coerceIn(0, 255)
+        val alphaSoft = (0x55 * rimScale).toInt().coerceIn(0, 255)
+        val alphaSide = (0x18 * rimScale).toInt().coerceIn(0, 255)
 
         return Brush.verticalGradient(
             colors = listOf(
                 Color(alphaWhite shl 24 or 0x00FFFFFF),
                 Color(alphaSoft shl 24 or 0x00FFFFFF),
                 Color(alphaSide shl 24 or 0x00FFFFFF),
-                Color(0x05000000)
+                Color(0x04000000)
             )
         )
     }
 
     fun oledBorderBrush(): Brush = Brush.verticalGradient(
         colors = listOf(
-            Color(0x88FFFFFF),
-            Color(0x22FFFFFF),
+            Color(0xAAFFFFFF),
+            Color(0x33FFFFFF),
             Color.Transparent
         )
     )
@@ -99,7 +101,7 @@ object GlassTokens {
 
 /**
  * Multiplatform liquid glass surface modifier.
- * Renders glass background tint, specular rim highlights, and frosted borders.
+ * Renders glass background tint, specular Fresnel rim highlights, and frosted crystal borders.
  */
 @Composable
 fun Modifier.glassSurface(
@@ -113,23 +115,67 @@ fun Modifier.glassSurface(
     val masterOpacity = tokens.effectiveTintAlpha
     val effectiveAlpha = when {
         tokens.isFullyTransparent -> 0.0f
-        tintAlpha != null -> (tintAlpha * (masterOpacity / 0.65f).coerceIn(0.15f, 2.0f)).coerceIn(0.0f, 1.0f)
+        tintAlpha != null -> (tintAlpha * (masterOpacity / 0.55f).coerceIn(0.15f, 2.0f)).coerceIn(0.0f, 1.0f)
         else -> masterOpacity
     }
 
-    val baseTint = when {
-        tokens.isFullyTransparent -> Color.Transparent
-        customTint != null -> customTint.copy(alpha = effectiveAlpha)
-        isOled -> Color(0xFF000000).copy(alpha = 0.88f * effectiveAlpha)
-        isDark -> Color(0xFF131520).copy(alpha = effectiveAlpha)
-        else -> Color(0xFFEBF0FA).copy(alpha = effectiveAlpha)
-    }
-
+    val rimStrength = tokens.rimStrength.coerceIn(0.1f, 1.0f)
     val borderBrush = if (isOled) tokens.oledBorderBrush() else tokens.liquidBorderBrush(isOled)
 
     return this
         .clip(shape)
-        .background(baseTint)
+        .drawBehind {
+            val width = size.width
+            val height = size.height
+
+            // 1. Base glass fill with ambient depth gradient
+            if (!tokens.isFullyTransparent) {
+                if (isOled) {
+                    drawRect(color = Color.Black.copy(alpha = 0.92f * effectiveAlpha))
+                } else {
+                    val topTint = (customTint ?: Color(0xFF161B2E)).copy(alpha = 0.40f * effectiveAlpha)
+                    val botTint = (customTint ?: Color(0xFF0B0E18)).copy(alpha = 0.65f * effectiveAlpha)
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(topTint, botTint),
+                            startY = 0f,
+                            endY = height
+                        )
+                    )
+                }
+            }
+
+            // 2. Specular Fresnel gloss sheen on upper half
+            if (!tokens.isPerformanceMode) {
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.08f * rimStrength),
+                            Color.White.copy(alpha = 0.02f * rimStrength),
+                            Color.Transparent
+                        ),
+                        startY = 0f,
+                        endY = height * 0.55f
+                    )
+                )
+
+                // 3. Top crystal rim edge line
+                drawLine(
+                    brush = Brush.horizontalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.White.copy(alpha = 0.50f * rimStrength),
+                            Color.White.copy(alpha = 0.70f * rimStrength),
+                            Color.White.copy(alpha = 0.50f * rimStrength),
+                            Color.Transparent
+                        )
+                    ),
+                    start = Offset(16f, 0.5f),
+                    end = Offset(width - 16f, 0.5f),
+                    strokeWidth = 1.2f
+                )
+            }
+        }
         .border(
             width = tokens.borderWidth,
             brush = borderBrush,
@@ -166,7 +212,7 @@ fun Modifier.liquidGlass(
         brush = Brush.horizontalGradient(
             colors = listOf(
                 Color.White.copy(alpha = 0.05f),
-                Color.White.copy(alpha = 0.35f),
+                Color.White.copy(alpha = 0.65f),
                 Color.White.copy(alpha = 0.05f)
             )
         ),
@@ -179,8 +225,9 @@ fun Modifier.liquidGlass(
     drawRoundRect(
         brush = Brush.verticalGradient(
             colors = listOf(
-                Color.White.copy(alpha = 0.25f),
-                Color.White.copy(alpha = 0.05f)
+                Color.White.copy(alpha = 0.45f),
+                Color.White.copy(alpha = 0.15f),
+                Color.White.copy(alpha = 0.03f)
             )
         ),
         cornerRadius = CornerRadius(radiusPx, radiusPx),

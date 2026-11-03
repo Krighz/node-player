@@ -3,20 +3,21 @@ package com.nodeplayer.desktop.audio
 import com.nodeplayer.common.platform.AudioDecoder
 import com.nodeplayer.common.platform.AudioSourceMetadata
 import org.jflac.FLACDecoder
-import org.jflac.PCMProcessor
-import org.jflac.metadata.StreamInfo
-import org.jflac.util.ByteData
+import org.jflac.io.RandomFileInputStream
 import java.io.BufferedInputStream
 import java.io.File
 import java.io.FileInputStream
+import java.io.InputStream
 
 /**
  * Pure Java FLAC Decoder using jFLAC.
- * Decodes lossless FLAC streams into 32-bit float PCM buffers.
+ * Decodes lossless FLAC streams (16-bit, 24-bit, 32-bit, multi-rate) into 32-bit float PCM buffers.
+ * Directly extracts integer subframe samples from channel data to guarantee bit-perfect fidelity.
  */
-class FlacAudioDecoder : AudioDecoder, PCMProcessor {
+class FlacAudioDecoder : AudioDecoder {
 
-    private var fileInputStream: FileInputStream? = null
+    private var rawInputStream: InputStream? = null
+    private var randomFileStream: RandomFileInputStream? = null
     private var flacDecoder: FLACDecoder? = null
     override var metadata: AudioSourceMetadata? = null
         private set
@@ -25,7 +26,7 @@ class FlacAudioDecoder : AudioDecoder, PCMProcessor {
     private var channels = 2
     private var bitDepth = 16
 
-    private var pcmBuffer = FloatArray(8192)
+    private var pcmBuffer = FloatArray(16384)
     private var pcmCount = 0
     private var pcmOffset = 0
 
@@ -35,14 +36,22 @@ class FlacAudioDecoder : AudioDecoder, PCMProcessor {
         if (!file.exists() || !file.canRead()) return false
 
         return try {
-            val fis = FileInputStream(file)
-            fileInputStream = fis
-            val bis = BufferedInputStream(fis, 65536)
-            val dec = FLACDecoder(bis)
+            val dec = try {
+                val rfs = RandomFileInputStream(file)
+                randomFileStream = rfs
+                FLACDecoder(rfs)
+            } catch (e: Exception) {
+                val fis = FileInputStream(file)
+                val bis = BufferedInputStream(fis, 65536)
+                rawInputStream = bis
+                FLACDecoder(bis)
+            }
             flacDecoder = dec
-            dec.addPCMProcessor(this)
 
-            val streamInfo = dec.readStreamInfo()
+            // Read all metadata blocks (StreamInfo, Vorbis Comments, SeekTable, etc.)
+            // so the stream is correctly positioned at the first audio frame.
+            dec.readMetadata()
+            val streamInfo = dec.streamInfo
             if (streamInfo == null) {
                 close()
                 return false
@@ -68,51 +77,6 @@ class FlacAudioDecoder : AudioDecoder, PCMProcessor {
         }
     }
 
-    override fun processStreamInfo(info: StreamInfo) {
-        sampleRate = info.sampleRate
-        channels = info.channels
-        bitDepth = info.bitsPerSample
-    }
-
-    override fun processPCM(pcmData: ByteData) {
-        val bytes = pcmData.data
-        val length = pcmData.len
-        val bytesPerSample = bitDepth / 8
-        val samplesInPacket = length / bytesPerSample
-
-        if (pcmBuffer.size < samplesInPacket) {
-            pcmBuffer = FloatArray(samplesInPacket)
-        }
-
-        var idx = 0
-        var b = 0
-        while (b < length && idx < samplesInPacket) {
-            val sample = if (bitDepth == 16) {
-                val b0 = bytes[b].toInt() and 0xFF
-                val b1 = bytes[b + 1].toInt()
-                val s16 = (b1 shl 8) or b0
-                b += 2
-                s16 / 32768.0f
-            } else if (bitDepth == 24) {
-                val b0 = bytes[b].toInt() and 0xFF
-                val b1 = bytes[b + 1].toInt() and 0xFF
-                val b2 = bytes[b + 2].toInt()
-                val s24 = (b2 shl 16) or (b1 shl 8) or b0
-                b += 3
-                s24 / 8388608.0f
-            } else {
-                val b0 = bytes[b].toInt() and 0xFF
-                val b1 = bytes[b + 1].toInt()
-                b += 2
-                ((b1 shl 8) or b0) / 32768.0f
-            }
-            pcmBuffer[idx++] = sample
-        }
-
-        pcmCount = idx
-        pcmOffset = 0
-    }
-
     override fun decodeFrame(interleavedOutput: FloatArray): Int {
         val dec = flacDecoder ?: return -1
         var outOffset = 0
@@ -129,7 +93,36 @@ class FlacAudioDecoder : AudioDecoder, PCMProcessor {
             }
 
             try {
-                dec.readNextFrame() ?: break
+                // readNextFrame parses the frame and populates channelData with decoded samples
+                val frame = dec.readNextFrame() ?: break
+                val blockSize = frame.header.blockSize
+                if (blockSize <= 0) break
+
+                val chData = dec.channelData
+                val numChannels = minOf(channels, chData.size)
+                val totalSamples = blockSize * numChannels
+
+                if (pcmBuffer.size < totalSamples) {
+                    pcmBuffer = FloatArray(totalSamples)
+                }
+
+                val normFactor = when (bitDepth) {
+                    8 -> 128.0f
+                    16 -> 32768.0f
+                    24 -> 8388608.0f
+                    32 -> 2147483648.0f
+                    else -> (1L shl (bitDepth - 1)).toFloat()
+                }
+
+                var idx = 0
+                for (s in 0 until blockSize) {
+                    for (c in 0 until numChannels) {
+                        val rawSample = chData[c].output[s]
+                        pcmBuffer[idx++] = (rawSample.toFloat() / normFactor).coerceIn(-1.0f, 1.0f)
+                    }
+                }
+                pcmCount = idx
+                pcmOffset = 0
             } catch (e: Exception) {
                 break
             }
@@ -139,16 +132,31 @@ class FlacAudioDecoder : AudioDecoder, PCMProcessor {
     }
 
     override fun seekTo(positionMs: Long): Boolean {
-        return false
+        val dec = flacDecoder ?: return false
+        val targetSample = (positionMs * sampleRate) / 1000L
+        return try {
+            dec.seek(targetSample)
+            pcmCount = 0
+            pcmOffset = 0
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     override fun close() {
         try {
-            fileInputStream?.close()
+            randomFileStream?.close()
         } catch (e: Exception) {
             // Ignored
         }
-        fileInputStream = null
+        try {
+            rawInputStream?.close()
+        } catch (e: Exception) {
+            // Ignored
+        }
+        randomFileStream = null
+        rawInputStream = null
         flacDecoder = null
         metadata = null
         pcmCount = 0

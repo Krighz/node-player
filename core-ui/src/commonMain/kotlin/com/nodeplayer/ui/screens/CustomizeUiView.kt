@@ -35,21 +35,23 @@ fun CustomizeUiView(
     val scrollState = rememberScrollState()
 
     val palettes = listOf(
-        "Cyberpunk" to Color(0xFF8B5CF6),
-        "Sapphire" to Color(0xFF0284C7),
-        "Emerald" to Color(0xFF10B981),
-        "Sunset" to Color(0xFFF97316),
-        "Rose" to Color(0xFFF43F5E),
-        "Monolith" to Color(0xFF94A3B8)
+        Triple("Cyberpunk", 0xFF8B5CF6L, Color(0xFF8B5CF6)),
+        Triple("Sapphire", 0xFF0284C7L, Color(0xFF0284C7)),
+        Triple("Emerald", 0xFF10B981L, Color(0xFF10B981)),
+        Triple("Sunset", 0xFFF97316L, Color(0xFFF97316)),
+        Triple("Rose", 0xFFF43F5EL, Color(0xFFF43F5E)),
+        Triple("Monolith", 0xFF94A3B8L, Color(0xFF94A3B8)),
+        Triple("Amber", 0xFFF59E0BL, Color(0xFFF59E0B)),
+        Triple("Amethyst", 0xFF6366F1L, Color(0xFF6366F1))
     )
 
     val shaders = listOf(
-        "LIQUID_BLOBS" to "Liquid Blobs",
-        "AURORA" to "Aurora Waves",
-        "MESH_GRADIENT" to "Mesh Gradient",
-        "ALBUM_ART_BLUR" to "Album Art Blur",
-        "SLOW_CAUSTICS" to "Slow Caustics",
-        "STATIC" to "Frozen Glass (Static)"
+        "LIQUID_BLOBS" to "Liquid Blobs (Organic Chromatic Metaballs)",
+        "AURORA" to "Aurora Waves (Harmonic Curtains)",
+        "MESH_GRADIENT" to "Mesh Gradient (4-Quadrant Energy Fields)",
+        "ALBUM_ART_BLUR" to "Album Art Blur (Dynamic Color Bleed)",
+        "SLOW_CAUSTICS" to "Slow Caustics (Refractive Optical Filaments)",
+        "STATIC" to "Frozen Glass (Zero CPU Overhead)"
     )
 
     Column(
@@ -63,7 +65,7 @@ fun CustomizeUiView(
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold)
         )
         Text(
-            text = "Real-time liquid glass shaders, physics tokens and color themes",
+            text = "Real-time liquid glass shaders, physics tokens, and optical refraction",
             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
         )
 
@@ -81,15 +83,14 @@ fun CustomizeUiView(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    palettes.forEach { (name, color) ->
-                        val colorArgbLong = (color.value.toLong() shr 32) and 0xFFFFFFFFL
-                        val isSelected = (themeConfig.fixedAccentColorArgb and 0xFFFFFFFFL) == colorArgbLong
+                    palettes.forEach { (name, colorArgb, color) ->
+                        val isSelected = (themeConfig.fixedAccentColorArgb and 0xFFFFFFFFL) == (colorArgb and 0xFFFFFFFFL)
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.clickable {
                                 onThemeConfigChange(
                                     themeConfig.copy(
-                                        fixedAccentColorArgb = colorArgbLong,
+                                        fixedAccentColorArgb = colorArgb,
                                         backgroundColorSource = "CUSTOM"
                                     )
                                 )
@@ -97,7 +98,7 @@ fun CustomizeUiView(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(36.dp)
                                     .clip(CircleShape)
                                     .background(color)
                                     .border(
@@ -134,7 +135,7 @@ fun CustomizeUiView(
                             .clickable {
                                 onThemeConfigChange(themeConfig.copy(backgroundAnimationStyle = styleKey))
                             }
-                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -218,11 +219,11 @@ fun CustomizeUiView(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 4. Glass Refraction & Optical Physics
+        // 4. Glass Surface & Refraction Optics
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "Glass Refraction & Optics",
+                    text = "Glass Surface & Optics",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
                 Spacer(modifier = Modifier.height(10.dp))
@@ -231,13 +232,13 @@ fun CustomizeUiView(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Refraction Strength", fontSize = 13.sp)
-                    Text("%.2f".format(themeConfig.lensRefractionStrength), fontSize = 13.sp, color = accent)
+                    Text("Glass Opacity (Translucency)", fontSize = 13.sp)
+                    Text("${(themeConfig.glassOpacity * 100).toInt()}%", fontSize = 13.sp, color = accent)
                 }
                 Slider(
-                    value = themeConfig.lensRefractionStrength,
-                    onValueChange = { onThemeConfigChange(themeConfig.copy(lensRefractionStrength = it)) },
-                    valueRange = 0.5f..1.5f,
+                    value = themeConfig.glassOpacity,
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(glassOpacity = it)) },
+                    valueRange = 0.0f..1.0f,
                     colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
                 )
 
@@ -263,7 +264,23 @@ fun CustomizeUiView(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Glass Optical Grain", fontSize = 13.sp)
+                    Text("Refraction Lens Strength", fontSize = 13.sp)
+                    Text("%.2f".format(themeConfig.lensRefractionStrength), fontSize = 13.sp, color = accent)
+                }
+                Slider(
+                    value = themeConfig.lensRefractionStrength,
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(lensRefractionStrength = it)) },
+                    valueRange = 0.2f..1.5f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Glass Optical Texture / Grain", fontSize = 13.sp)
                     Text("${(themeConfig.glassTexture * 100).toInt()}%", fontSize = 13.sp, color = accent)
                 }
                 Slider(
@@ -272,6 +289,24 @@ fun CustomizeUiView(
                     valueRange = 0.0f..1.0f,
                     colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Full Transparency", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Makes glass backgrounds completely clear, keeping only crystal rim outlines", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                    }
+                    Switch(
+                        checked = themeConfig.isFullyTransparent,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isFullyTransparent = it)) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    )
+                }
             }
         }
 
@@ -310,26 +345,8 @@ fun CustomizeUiView(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Anti-Banding Dithering", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Smooths gradient color banding on 8-bit displays", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
-                    }
-                    Switch(
-                        checked = themeConfig.antiBandingDithering,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(antiBandingDithering = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
                         Text("Performance Mode", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Disables continuous GPU shaders for minimum battery/CPU usage", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                        Text("Freezes continuous GPU animations for minimum battery/CPU usage", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                     }
                     Switch(
                         checked = themeConfig.isPerformanceMode,

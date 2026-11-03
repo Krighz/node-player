@@ -30,7 +30,10 @@ import com.nodeplayer.ui.screens.EqualizerView
 import com.nodeplayer.ui.screens.LibraryView
 import com.nodeplayer.ui.screens.SettingsView
 import com.nodeplayer.ui.theme.GlassTokens
+import com.nodeplayer.ui.theme.GlassTokensData
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassTokens
+import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.liquidGlass
 
 enum class PlayerNavDestination(val title: String, val icon: ImageVector) {
@@ -81,6 +84,7 @@ fun SharedPlayerLayout(
     onGaplessToggle: (Boolean) -> Unit = {},
     onReplayGainModeChange: (ReplayGainMode) -> Unit = {},
     onLastFmToggle: (Boolean) -> Unit = {},
+    currentMusicFolder: String = "",
     onRescanLibrary: () -> Unit = {},
     onSelectMusicFolder: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -90,9 +94,23 @@ fun SharedPlayerLayout(
     var showNowPlayingOverlay by remember { mutableStateOf(false) }
 
     val accent = Color(themeConfig.fixedAccentColorArgb)
+    val glassTokens = remember(themeConfig) {
+        GlassTokensData(
+            opacity = themeConfig.glassOpacity,
+            blurStrength = themeConfig.blurStrength,
+            grainStrength = themeConfig.glassTexture,
+            rimStrength = themeConfig.edgeHighlightStrength,
+            refractionStrength = themeConfig.lensRefractionStrength,
+            isFullyTransparent = themeConfig.isFullyTransparent,
+            keepTextReadable = themeConfig.keepTextReadable,
+            isPerformanceMode = themeConfig.isPerformanceMode
+        )
+    }
 
     CompositionLocalProvider(
-        LocalAccentColor provides accent
+        LocalAccentColor provides accent,
+        LocalGlassTokens provides glassTokens,
+        LocalGlassThemeConfig provides themeConfig
     ) {
         Box(modifier = modifier.fillMaxSize()) {
             // 1. Full Dynamic Liquid Glass Background with all 6 shader animation styles
@@ -177,21 +195,6 @@ fun SharedPlayerLayout(
                                 Spacer(modifier = Modifier.height(4.dp))
                             }
                         }
-
-                        // Bottom Folder Scan Action
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color.White.copy(alpha = 0.06f))
-                                .clickable { onSelectMusicFolder() }
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Rounded.FolderOpen, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text("Music Folder", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
                     }
 
                     // Central Active Screen Area
@@ -236,8 +239,11 @@ fun SharedPlayerLayout(
                                 onReplayGainModeChange = onReplayGainModeChange,
                                 lastFmEnabled = lastFmEnabled,
                                 onLastFmToggle = onLastFmToggle,
+                                currentMusicFolder = currentMusicFolder,
                                 onSelectMusicFolder = onSelectMusicFolder,
+                                onRescanLibrary = onRescanLibrary,
                                 onOpenCustomizeUi = { currentNav = PlayerNavDestination.CUSTOMIZE },
+                                onOpenEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
                                 trackCount = tracks.size
                             )
                         }
@@ -282,8 +288,11 @@ fun SharedPlayerLayout(
                                 onReplayGainModeChange = onReplayGainModeChange,
                                 lastFmEnabled = lastFmEnabled,
                                 onLastFmToggle = onLastFmToggle,
+                                currentMusicFolder = currentMusicFolder,
                                 onSelectMusicFolder = onSelectMusicFolder,
+                                onRescanLibrary = onRescanLibrary,
                                 onOpenCustomizeUi = { currentNav = PlayerNavDestination.CUSTOMIZE },
+                                onOpenEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
                                 trackCount = tracks.size
                             )
                         }

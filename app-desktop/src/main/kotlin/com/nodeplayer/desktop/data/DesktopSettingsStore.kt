@@ -116,4 +116,131 @@ class DesktopSettingsStore : KeyValueStore {
         memoryMap.clear()
         saveToFile()
     }
+
+    fun getLastMusicFolder(): String {
+        return getString("last_music_folder", "")
+    }
+
+    fun setLastMusicFolder(path: String) {
+        putString("last_music_folder", path)
+    }
+
+    fun loadThemeConfig(): com.nodeplayer.model.GlassThemeConfig {
+        return com.nodeplayer.model.GlassThemeConfig(
+            fixedAccentColorArgb = getLong("fixedAccentColorArgb", 0xFF8B5CF6L),
+            backgroundAnimationStyle = getString("backgroundAnimationStyle", "LIQUID_BLOBS"),
+            backgroundAnimationSpeed = getFloat("backgroundAnimationSpeed", 1.0f),
+            backgroundAnimationIntensity = getFloat("backgroundAnimationIntensity", 0.8f),
+            backgroundColorSource = getString("backgroundColorSource", "CUSTOM"),
+            glassOpacity = getFloat("glassOpacity", 0.55f),
+            blurStrength = getFloat("blurStrength", 0.70f),
+            edgeHighlightStrength = getFloat("edgeHighlightStrength", 0.65f),
+            lensRefractionStrength = getFloat("lensRefractionStrength", 0.85f),
+            glassTexture = getFloat("glassTexture", 0.35f),
+            isOledBlack = getBoolean("isOledBlack", false),
+            isPerformanceMode = getBoolean("isPerformanceMode", false),
+            animateOnlyWhilePlaying = getBoolean("animateOnlyWhilePlaying", false),
+            isFullyTransparent = getBoolean("isFullyTransparent", false),
+            keepTextReadable = getBoolean("keepTextReadable", true)
+        )
+    }
+
+    fun saveThemeConfig(cfg: com.nodeplayer.model.GlassThemeConfig) {
+        putLong("fixedAccentColorArgb", cfg.fixedAccentColorArgb)
+        putString("backgroundAnimationStyle", cfg.backgroundAnimationStyle)
+        putFloat("backgroundAnimationSpeed", cfg.backgroundAnimationSpeed)
+        putFloat("backgroundAnimationIntensity", cfg.backgroundAnimationIntensity)
+        putString("backgroundColorSource", cfg.backgroundColorSource)
+        putFloat("glassOpacity", cfg.glassOpacity)
+        putFloat("blurStrength", cfg.blurStrength)
+        putFloat("edgeHighlightStrength", cfg.edgeHighlightStrength)
+        putFloat("lensRefractionStrength", cfg.lensRefractionStrength)
+        putFloat("glassTexture", cfg.glassTexture)
+        putBoolean("isOledBlack", cfg.isOledBlack)
+        putBoolean("isPerformanceMode", cfg.isPerformanceMode)
+        putBoolean("animateOnlyWhilePlaying", cfg.animateOnlyWhilePlaying)
+        putBoolean("isFullyTransparent", cfg.isFullyTransparent)
+        putBoolean("keepTextReadable", cfg.keepTextReadable)
+    }
+
+    fun loadEffectConfig(): com.nodeplayer.model.AudioEffectConfig {
+        val defaultConfig = com.nodeplayer.model.AudioEffectConfig()
+        val eqEnabled = getBoolean("eq_enabled", false)
+        val presetName = getString("eq_preset", "Flat")
+        val preampGainDb = getFloat("eq_preamp", 0.0f)
+        val limiterEnabled = getBoolean("limiter_enabled", true)
+        val stereoWidth = getFloat("stereo_width", 1.0f)
+
+        val updatedBands = defaultConfig.bands.mapIndexed { idx, band ->
+            val gain = getFloat("eq_band_$idx", band.gainDb)
+            band.copy(gainDb = gain)
+        }
+
+        val tone = com.nodeplayer.model.ToneControlConfig(
+            bassGainDb = getFloat("tone_bass", 0.0f),
+            trebleGainDb = getFloat("tone_treble", 0.0f)
+        )
+
+        val loudness = com.nodeplayer.model.LoudnessConfig(
+            enabled = getBoolean("loudness_enabled", false),
+            strength = getFloat("loudness_strength", 0.5f)
+        )
+
+        val harmonic = com.nodeplayer.model.HarmonicBassConfig(
+            enabled = getBoolean("harmonic_bass_enabled", false),
+            frequencyHz = getFloat("harmonic_bass_freq", 60.0f),
+            harmonicGain = getFloat("harmonic_bass_gain", 0.5f),
+            highPassOriginal = getBoolean("harmonic_bass_hipass", false)
+        )
+
+        val reverb = com.nodeplayer.model.ReverbConfig(
+            enabled = getBoolean("reverb_enabled", false),
+            roomSize = getFloat("reverb_room_size", 0.5f),
+            damping = getFloat("reverb_damping", 0.5f),
+            wetLevel = getFloat("reverb_wet", 0.25f),
+            preset = getString("reverb_preset", "Studio")
+        )
+
+        return defaultConfig.copy(
+            eqEnabled = eqEnabled,
+            presetName = presetName,
+            preampGainDb = preampGainDb,
+            bands = updatedBands,
+            limiterEnabled = limiterEnabled,
+            stereoWidth = stereoWidth,
+            toneControls = tone,
+            loudnessConfig = loudness,
+            harmonicBassConfig = harmonic,
+            reverbConfig = reverb
+        )
+    }
+
+    fun saveEffectConfig(cfg: com.nodeplayer.model.AudioEffectConfig) {
+        putBoolean("eq_enabled", cfg.eqEnabled)
+        putString("eq_preset", cfg.presetName)
+        putFloat("eq_preamp", cfg.preampGainDb)
+        putBoolean("limiter_enabled", cfg.limiterEnabled)
+        putFloat("stereo_width", cfg.stereoWidth)
+
+        cfg.bands.forEachIndexed { idx, band ->
+            putFloat("eq_band_$idx", band.gainDb)
+        }
+
+        putFloat("tone_bass", cfg.toneControls.bassGainDb)
+        putFloat("tone_treble", cfg.toneControls.trebleGainDb)
+
+        putBoolean("loudness_enabled", cfg.loudnessConfig.enabled)
+        putFloat("loudness_strength", cfg.loudnessConfig.strength)
+
+        putBoolean("harmonic_bass_enabled", cfg.harmonicBassConfig.enabled)
+        putFloat("harmonic_bass_freq", cfg.harmonicBassConfig.frequencyHz)
+        putFloat("harmonic_bass_gain", cfg.harmonicBassConfig.harmonicGain)
+        putBoolean("harmonic_bass_hipass", cfg.harmonicBassConfig.highPassOriginal)
+
+        putBoolean("reverb_enabled", cfg.reverbConfig.enabled)
+        putFloat("reverb_room_size", cfg.reverbConfig.roomSize)
+        putFloat("reverb_damping", cfg.reverbConfig.damping)
+        putFloat("reverb_wet", cfg.reverbConfig.wetLevel)
+        putString("reverb_preset", cfg.reverbConfig.preset)
+    }
 }

@@ -4,11 +4,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
-import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import com.nodeplayer.desktop.audio.WindowsPlaybackEngine
 import com.nodeplayer.desktop.data.DesktopSettingsStore
 import com.nodeplayer.desktop.data.DesktopTrackDatabase
@@ -25,32 +24,22 @@ import javax.swing.SwingUtilities
 import javax.swing.UIManager
 
 fun main() = application {
-    val windowState = remember { WindowState(size = DpSize(1240.dp, 720.dp)) }
-
-    val engine = remember { WindowsPlaybackEngine() }
-    val database = remember { DesktopTrackDatabase() }
-    val settingsStore = remember { DesktopSettingsStore() }
-    val scanner = remember { WindowsFileScanner() }
+    val windowState = rememberWindowState(width = 1200.dp, height = 750.dp)
     val coroutineScope = rememberCoroutineScope()
+
+    val settingsStore = remember { DesktopSettingsStore() }
+    val database = remember { DesktopTrackDatabase() }
+    val scanner = remember { WindowsFileScanner() }
+    val engine = remember { WindowsPlaybackEngine() }
 
     var trackList by remember { mutableStateOf<List<Track>>(emptyList()) }
     var albums by remember { mutableStateOf<List<Album>>(emptyList()) }
     var artists by remember { mutableStateOf<List<Artist>>(emptyList()) }
     var folders by remember { mutableStateOf<List<MusicFolder>>(emptyList()) }
 
-    var audioEffectConfig by remember { mutableStateOf(AudioEffectConfig()) }
-    var themeConfig by remember {
-        mutableStateOf(
-            GlassThemeConfig(
-                fixedAccentColorArgb = settingsStore.getLong("fixedAccentColorArgb", 0xFF8B5CF6L),
-                backgroundAnimationStyle = settingsStore.getString("backgroundAnimationStyle", "LIQUID_BLOBS"),
-                backgroundAnimationSpeed = settingsStore.getFloat("backgroundAnimationSpeed", 1.0f),
-                backgroundAnimationIntensity = settingsStore.getFloat("backgroundAnimationIntensity", 0.8f),
-                isOledBlack = settingsStore.getBoolean("isOledBlack", false),
-                isPerformanceMode = settingsStore.getBoolean("isPerformanceMode", false)
-            )
-        )
-    }
+    var audioEffectConfig by remember { mutableStateOf(settingsStore.loadEffectConfig()) }
+    var themeConfig by remember { mutableStateOf(settingsStore.loadThemeConfig()) }
+    var currentMusicFolder by remember { mutableStateOf(settingsStore.getLastMusicFolder()) }
 
     val currentTrack by engine.currentTrack.collectAsState()
     val isPlaying by engine.isPlaying.collectAsState()
@@ -79,8 +68,9 @@ fun main() = application {
         }
     }
 
-    // Load initial library on startup
+    // Apply saved audio DSP config and load library on startup
     LaunchedEffect(Unit) {
+        engine.applyEffectConfig(audioEffectConfig)
         refreshLibrary()
     }
 
@@ -95,13 +85,24 @@ fun main() = application {
             chooser.fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
             chooser.isAcceptAllFileFilterUsed = false
 
+            if (currentMusicFolder.isNotBlank()) {
+                val currentDir = File(currentMusicFolder)
+                if (currentDir.exists()) {
+                    chooser.currentDirectory = currentDir
+                }
+            }
+
             val result = chooser.showOpenDialog(null)
             if (result == JFileChooser.APPROVE_OPTION) {
                 val selectedDir = chooser.selectedFile
                 if (selectedDir != null && selectedDir.exists()) {
+                    val path = selectedDir.absolutePath
+                    currentMusicFolder = path
+                    settingsStore.setLastMusicFolder(path)
+
                     coroutineScope.launch(Dispatchers.IO) {
                         val tracks = mutableListOf<Track>()
-                        scanner.scanPath(selectedDir.absolutePath) { meta ->
+                        scanner.scanPath(path) { meta ->
                             tracks.add(scanner.toTrack(meta))
                         }
                         database.insertOrUpdateTracks(tracks)
@@ -110,6 +111,24 @@ fun main() = application {
                 }
             }
         }
+    }
+
+    fun rescanCurrentFolder() {
+        if (currentMusicFolder.isNotBlank()) {
+            val dir = File(currentMusicFolder)
+            if (dir.exists()) {
+                coroutineScope.launch(Dispatchers.IO) {
+                    val tracks = mutableListOf<Track>()
+                    scanner.scanPath(dir.absolutePath) { meta ->
+                        tracks.add(scanner.toTrack(meta))
+                    }
+                    database.insertOrUpdateTracks(tracks)
+                    refreshLibrary()
+                }
+                return
+            }
+        }
+        pickAndScanFolder()
     }
 
     Window(
@@ -125,8 +144,8 @@ fun main() = application {
         MaterialTheme(
             colorScheme = darkColorScheme(
                 primary = Color(themeConfig.fixedAccentColorArgb),
-                background = Color(0xFF090C15),
-                surface = Color(0xFF131728)
+                background = Color(0xFF070912),
+                surface = Color(0xFF111424)
             )
         ) {
             SharedPlayerLayout(
@@ -155,6 +174,7 @@ fun main() = application {
                     format = "WASAPI 32-bit Float"
                 ),
                 isExclusiveMode = isExclusiveMode,
+                currentMusicFolder = currentMusicFolder,
                 onPlayTrack = { track, list ->
                     engine.setQueue(list, list.indexOf(track))
                 },
@@ -169,18 +189,14 @@ fun main() = application {
                 onAudioEffectConfigChange = { cfg ->
                     audioEffectConfig = cfg
                     engine.applyEffectConfig(cfg)
+                    settingsStore.saveEffectConfig(cfg)
                 },
                 onThemeConfigChange = { cfg ->
                     themeConfig = cfg
-                    settingsStore.putLong("fixedAccentColorArgb", cfg.fixedAccentColorArgb)
-                    settingsStore.putString("backgroundAnimationStyle", cfg.backgroundAnimationStyle)
-                    settingsStore.putFloat("backgroundAnimationSpeed", cfg.backgroundAnimationSpeed)
-                    settingsStore.putFloat("backgroundAnimationIntensity", cfg.backgroundAnimationIntensity)
-                    settingsStore.putBoolean("isOledBlack", cfg.isOledBlack)
-                    settingsStore.putBoolean("isPerformanceMode", cfg.isPerformanceMode)
+                    settingsStore.saveThemeConfig(cfg)
                 },
                 onToggleExclusiveMode = { engine.setExclusiveMode(it) },
-                onRescanLibrary = { refreshLibrary() },
+                onRescanLibrary = { rescanCurrentFolder() },
                 onSelectMusicFolder = { pickAndScanFolder() }
             )
         }

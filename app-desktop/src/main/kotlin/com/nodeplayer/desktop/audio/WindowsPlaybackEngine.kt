@@ -54,6 +54,7 @@ class WindowsPlaybackEngine(
     val isExclusiveMode: StateFlow<Boolean> = _isExclusiveMode.asStateFlow()
 
     private val isPaused = AtomicBoolean(false)
+    private var currentEffectConfig = AudioEffectConfig()
 
     init {
         audioOutput.open(
@@ -100,6 +101,7 @@ class WindowsPlaybackEngine(
             }
 
             dspChain.sampleRate = meta.sampleRate
+            dspChain.applyConfig(currentEffectConfig)
 
             audioOutput.open(
                 AudioFormatConfig(
@@ -255,6 +257,7 @@ class WindowsPlaybackEngine(
     }
 
     fun applyEffectConfig(config: AudioEffectConfig) {
+        currentEffectConfig = config
         dspChain.applyConfig(config)
     }
 

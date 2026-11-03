@@ -20,6 +20,7 @@ import com.nodeplayer.model.AudioOutputInfo
 import com.nodeplayer.model.CrossfadeConfig
 import com.nodeplayer.model.ReplayGainMode
 import com.nodeplayer.ui.components.GlassBadge
+import com.nodeplayer.ui.components.GlassButton
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.theme.LocalAccentColor
 
@@ -36,8 +37,11 @@ fun SettingsView(
     onReplayGainModeChange: (ReplayGainMode) -> Unit = {},
     lastFmEnabled: Boolean = false,
     onLastFmToggle: (Boolean) -> Unit = {},
+    currentMusicFolder: String = "",
     onSelectMusicFolder: () -> Unit = {},
+    onRescanLibrary: () -> Unit = {},
     onOpenCustomizeUi: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
     trackCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
@@ -55,13 +59,71 @@ fun SettingsView(
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold)
         )
         Text(
-            text = "Audio engine, DSP routing, scrobbling and playback preferences",
+            text = "Audio engine, DSP routing, music library folders, and playback preferences",
             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
         )
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // 1. Audio Engine & WASAPI Output Card
+        // 1. Music Folders & Library Management Card (Prominently featured inside Settings)
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Music Folders & Library",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = if (currentMusicFolder.isNotBlank()) "Folder: $currentMusicFolder" else "No folder selected yet",
+                            fontSize = 12.sp,
+                            color = if (currentMusicFolder.isNotBlank()) accent else Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                    GlassBadge(
+                        text = "$trackCount TRACKS",
+                        color = accent
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = onSelectMusicFolder,
+                        colors = ButtonDefaults.buttonColors(containerColor = accent),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Select Music Folder", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = onRescanLibrary,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Rescan Library", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 2. Audio Engine & WASAPI Output Card
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -94,7 +156,7 @@ fun SettingsView(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("WASAPI Exclusive Mode (Bit-Perfect)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Bypasses Windows audio engine mixer for bit-exact audiophile output", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                        Text("Bypasses Windows mixer for bit-exact audiophile output", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                     }
                     Switch(
                         checked = isExclusiveMode,
@@ -107,14 +169,18 @@ fun SettingsView(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Current Precision", fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+                    Column {
+                        Text("Pipeline Format", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("32-bit Float Internal Processing • Hardware Direct", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                    }
                     Text(
-                        "${if (audioOutputInfo.sampleRate > 0) "${audioOutputInfo.sampleRate} Hz" else "48000 Hz"} • 32-bit Float",
-                        fontSize = 12.sp,
+                        text = "${if (audioOutputInfo.sampleRate > 0) audioOutputInfo.sampleRate else 48000} Hz",
+                        color = accent,
                         fontWeight = FontWeight.Bold,
-                        color = accent
+                        fontSize = 13.sp
                     )
                 }
             }
@@ -122,28 +188,25 @@ fun SettingsView(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 2. Playback & Crossfade Card
+        // 3. Playback Transitions & Signal Conditioning Card
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = "Playback & Crossfade",
+                    text = "Playback & Transitions",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Crossfade Duration", fontSize = 13.sp)
-                    Text(
-                        if (crossfadeSeconds > 0.1f) "%.1f s".format(crossfadeSeconds) else "Off",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = accent
-                    )
+                    Text("Dual-Player Crossfade", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("%.1fs".format(crossfadeSeconds), color = accent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
+
                 Slider(
                     value = crossfadeSeconds,
                     onValueChange = onCrossfadeChange,
@@ -203,34 +266,49 @@ fun SettingsView(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 3. Music Folders & Library Card
-        GlassCard(
+        // 4. Equalizer & Customize UI Quick Jump Cards
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            onClick = onSelectMusicFolder
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            GlassCard(
+                modifier = Modifier.weight(1f),
+                onClick = onOpenEqualizer
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Music Folders & Library",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                    Text(
-                        text = "Current tracks loaded: $trackCount • Click to add music folders",
-                        fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
+                Row(
+                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.Equalizer, contentDescription = null, tint = accent, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text("Sound Lab & EQ", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("10-Band Biquad, DSP", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                    }
                 }
-                Icon(Icons.Rounded.FolderOpen, contentDescription = null, tint = accent)
+            }
+
+            GlassCard(
+                modifier = Modifier.weight(1f),
+                onClick = onOpenCustomizeUi
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Rounded.Palette, contentDescription = null, tint = accent, modifier = Modifier.size(24.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text("Customize UI", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        Text("Shaders, Palettes", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                    }
+                }
             }
         }
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 4. Last.fm Scrobbling Card
+        // 5. Last.fm Scrobbler Card
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier.padding(16.dp).fillMaxWidth(),
@@ -253,33 +331,6 @@ fun SettingsView(
                     onCheckedChange = onLastFmToggle,
                     colors = SwitchDefaults.colors(checkedThumbColor = accent)
                 )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // 5. Customize UI Shortcut Card
-        GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onOpenCustomizeUi
-        ) {
-            Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Customize UI & Shaders",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                    Text(
-                        text = "Change color palettes, liquid backdrop animations, and glass refraction",
-                        fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
-                }
-                Icon(Icons.Rounded.Palette, contentDescription = null, tint = accent)
             }
         }
 

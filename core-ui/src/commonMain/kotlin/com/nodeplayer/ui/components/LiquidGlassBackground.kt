@@ -168,6 +168,7 @@ fun LiquidGlassBackground(
                         secondary = secondaryColor,
                         pulse = 1.0f,
                         intensity = intensity,
+                        progress = 0f,
                         isPerformanceMode = true
                     )
                 }
@@ -180,6 +181,7 @@ fun LiquidGlassBackground(
                         secondary = secondaryColor,
                         pulse = pulse,
                         intensity = intensity,
+                        progress = animProgress,
                         isPerformanceMode = perfMode
                     )
                 }
@@ -196,8 +198,12 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLiquidBlobsStyl
     secondary: Color,
     pulse: Float,
     intensity: Float,
+    progress: Float,
     isPerformanceMode: Boolean
 ) {
+    val twoPi = (Math.PI * 2).toFloat()
+    val timeRad = progress * twoPi
+
     if (isLight) {
         drawRect(
             brush = Brush.verticalGradient(
@@ -206,29 +212,28 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLiquidBlobsStyl
         )
         if (isPerformanceMode) return
 
-        val crestPath = Path().apply {
-            moveTo(-50f, height * 0.20f)
-            cubicTo(
-                width * 0.35f, height * 0.08f * pulse,
-                width * 0.65f, height * 0.35f * pulse,
-                width + 50f, height * 0.18f
-            )
-        }
-        drawPath(
-            path = crestPath,
-            brush = Brush.horizontalGradient(
-                listOf(Color.Transparent, primary.copy(alpha = 0.20f * intensity), Color.Transparent)
+        val blob1X = width * (0.35f + 0.15f * sin(timeRad))
+        val blob1Y = height * (0.30f + 0.12f * cos(timeRad))
+        val blob2X = width * (0.65f + 0.14f * cos(timeRad * 0.8f))
+        val blob2Y = height * (0.70f + 0.12f * sin(timeRad * 0.8f))
+
+        drawCircle(
+            brush = Brush.radialGradient(
+                listOf(primary.copy(alpha = 0.20f * intensity), Color.Transparent),
+                center = Offset(blob1X, blob1Y),
+                radius = width * 0.55f * pulse
             ),
-            style = Stroke(width = 2.dp.toPx())
+            radius = width * 0.55f * pulse,
+            center = Offset(blob1X, blob1Y)
         )
         drawCircle(
             brush = Brush.radialGradient(
-                listOf(primary.copy(alpha = 0.12f * intensity), Color.Transparent),
-                center = Offset(width * 0.5f, height * 0.75f),
-                radius = width * 0.7f
+                listOf(secondary.copy(alpha = 0.18f * intensity), Color.Transparent),
+                center = Offset(blob2X, blob2Y),
+                radius = width * 0.50f * pulse
             ),
-            radius = width * 0.7f,
-            center = Offset(width * 0.5f, height * 0.75f)
+            radius = width * 0.50f * pulse,
+            center = Offset(blob2X, blob2Y)
         )
         return
     }
@@ -241,42 +246,77 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLiquidBlobsStyl
     )
     if (isPerformanceMode) return
 
-    val crestPath = Path().apply {
-        moveTo(-50f, height * 0.18f)
-        cubicTo(
-            width * 0.35f, height * 0.04f * pulse,
-            width * 0.65f, height * 0.32f * pulse,
-            width + 50f, height * 0.16f
-        )
-    }
+    val blob1X = width * (0.32f + 0.18f * sin(timeRad))
+    val blob1Y = height * (0.32f + 0.14f * cos(timeRad))
+    val blob2X = width * (0.72f + 0.15f * cos(timeRad * 0.75f))
+    val blob2Y = height * (0.68f + 0.16f * sin(timeRad * 0.75f))
+    val blob3X = width * (0.22f + 0.12f * sin(timeRad * 1.2f + 1.2f))
+    val blob3Y = height * (0.78f + 0.10f * cos(timeRad * 1.2f + 1.2f))
 
-    val path1 = Path().apply {
-        addPath(crestPath)
-        lineTo(width + 50f, -50f)
-        lineTo(-50f, -50f)
-        close()
-    }
-
-    drawPath(
-        path = path1,
+    // 1. Primary glowing liquid blob
+    drawCircle(
         brush = Brush.radialGradient(
             listOf(
-                Color(0xFF282A38).copy(alpha = 0.7f * intensity),
-                Color(0xFF151722).copy(alpha = 0.4f * intensity),
+                primary.copy(alpha = 0.35f * intensity),
+                primary.copy(alpha = 0.12f * intensity),
                 Color.Transparent
             ),
-            center = Offset(width * 0.5f, height * 0.15f),
-            radius = width * 0.8f
-        )
+            center = Offset(blob1X, blob1Y),
+            radius = width * 0.60f * pulse
+        ),
+        radius = width * 0.60f * pulse,
+        center = Offset(blob1X, blob1Y)
     )
+
+    // 2. Secondary chromatic caustic blob
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(
+                secondary.copy(alpha = 0.30f * intensity),
+                secondary.copy(alpha = 0.08f * intensity),
+                Color.Transparent
+            ),
+            center = Offset(blob2X, blob2Y),
+            radius = width * 0.55f * pulse
+        ),
+        radius = width * 0.55f * pulse,
+        center = Offset(blob2X, blob2Y)
+    )
+
+    // 3. Ambient deep purple/blue third contour blob
+    drawCircle(
+        brush = Brush.radialGradient(
+            listOf(
+                Color(0xFF4338CA).copy(alpha = 0.22f * intensity),
+                Color.Transparent
+            ),
+            center = Offset(blob3X, blob3Y),
+            radius = width * 0.50f
+        ),
+        radius = width * 0.50f,
+        center = Offset(blob3X, blob3Y)
+    )
+
+    // 4. Floating Snell's law refracted chromatic crest lines
+    val crestWave1 = sin(timeRad) * 25f
+    val crestWave2 = cos(timeRad * 0.8f) * 30f
+
+    val crestPath = Path().apply {
+        moveTo(-50f, height * 0.18f + crestWave1)
+        cubicTo(
+            width * 0.35f, height * 0.04f * pulse + crestWave2,
+            width * 0.65f, height * 0.32f * pulse - crestWave1,
+            width + 50f, height * 0.16f + crestWave2
+        )
+    }
 
     drawPath(
         path = crestPath,
         brush = Brush.horizontalGradient(
             listOf(
                 Color.Transparent,
-                Color.White.copy(alpha = 0.80f * intensity),
-                Color.White.copy(alpha = 0.95f * intensity),
+                Color.White.copy(alpha = 0.50f * intensity),
+                Color.White.copy(alpha = 0.85f * intensity),
                 Color.Transparent
             )
         ),
@@ -284,59 +324,29 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawLiquidBlobsStyl
     )
 
     val midContourPath = Path().apply {
-        moveTo(-50f, height * 0.48f)
+        moveTo(-50f, height * 0.48f - crestWave2)
         cubicTo(
-            width * 0.30f, height * 0.34f,
-            width * 0.60f, height * 0.68f * pulse,
-            width + 50f, height * 0.46f
+            width * 0.30f, height * 0.34f + crestWave1,
+            width * 0.60f, height * 0.68f * pulse - crestWave2,
+            width + 50f, height * 0.46f + crestWave1
         )
     }
-
-    val path2 = Path().apply {
-        addPath(midContourPath)
-        lineTo(width + 50f, height + 50f)
-        lineTo(-50f, height + 50f)
-        close()
-    }
-
-    drawPath(
-        path = path2,
-        brush = Brush.radialGradient(
-            listOf(
-                Color(0xFF1B1D2A).copy(alpha = 0.8f * intensity),
-                Color(0xFF10121A).copy(alpha = 0.5f * intensity),
-                Color(0xFF06070D)
-            ),
-            center = Offset(width * 0.4f, height * 0.55f),
-            radius = width * 0.9f
-        )
-    )
 
     drawPath(
         path = midContourPath,
         brush = Brush.horizontalGradient(
             listOf(
                 Color.Transparent,
-                Color(0xFFFF9500).copy(alpha = 0.85f * intensity),
-                secondary.copy(alpha = 0.80f * intensity),
-                Color(0xFFFF3B30).copy(alpha = 0.90f * intensity),
-                Color(0xFFE040FB).copy(alpha = 0.50f * intensity),
-                Color(0xFF00E5FF).copy(alpha = 0.75f * intensity),
-                Color(0xFF007AFF).copy(alpha = 0.80f * intensity),
+                Color(0xFFFF9500).copy(alpha = 0.70f * intensity),
+                secondary.copy(alpha = 0.75f * intensity),
+                Color(0xFFFF3B30).copy(alpha = 0.70f * intensity),
+                Color(0xFFE040FB).copy(alpha = 0.45f * intensity),
+                Color(0xFF00E5FF).copy(alpha = 0.65f * intensity),
+                Color(0xFF007AFF).copy(alpha = 0.70f * intensity),
                 Color.Transparent
             )
         ),
         style = Stroke(width = 2.5.dp.toPx())
-    )
-
-    drawCircle(
-        brush = Brush.radialGradient(
-            listOf(primary.copy(alpha = 0.18f * intensity), Color.Transparent),
-            center = Offset(width * 0.5f, height * 0.78f),
-            radius = width * 0.75f
-        ),
-        radius = width * 0.75f,
-        center = Offset(width * 0.5f, height * 0.78f)
     )
 }
 
