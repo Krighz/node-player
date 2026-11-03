@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 class WindowsPlaybackEngine(
     val audioOutput: WasapiAudioOutput = WasapiAudioOutput(),
@@ -19,6 +20,7 @@ class WindowsPlaybackEngine(
 
     private val engineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var playbackJob: Job? = null
+    private val pendingSeekMs = AtomicLong(-1L)
 
     private val _queue = MutableStateFlow<List<Track>>(emptyList())
     val queue: StateFlow<List<Track>> = _queue.asStateFlow()
@@ -126,6 +128,14 @@ class WindowsPlaybackEngine(
                         continue
                     }
 
+                    val seekTarget = pendingSeekMs.getAndSet(-1L)
+                    if (seekTarget >= 0L) {
+                        decoder.seekTo(seekTarget)
+                        audioOutput.flush()
+                        framesPlayed = (seekTarget * meta.sampleRate) / 1000L
+                        _currentPositionMs.value = seekTarget
+                    }
+
                     val samplesRead = decoder.decodeFrame(buffer)
                     if (samplesRead <= 0) {
                         break
@@ -230,8 +240,8 @@ class WindowsPlaybackEngine(
     fun seekTo(positionMs: Long) {
         val track = _currentTrack.value ?: return
         val clamped = positionMs.coerceIn(0L, track.durationMs)
-        decoder.seekTo(clamped)
         _currentPositionMs.value = clamped
+        pendingSeekMs.set(clamped)
     }
 
     fun setVolume(vol: Float) {

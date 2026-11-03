@@ -127,8 +127,8 @@ class DesktopSettingsStore : KeyValueStore {
 
     fun loadThemeConfig(): com.nodeplayer.model.GlassThemeConfig {
         return com.nodeplayer.model.GlassThemeConfig(
-            fixedAccentColorArgb = getLong("fixedAccentColorArgb", 0xFF8B5CF6L),
-            backgroundAnimationStyle = getString("backgroundAnimationStyle", "LIQUID_BLOBS"),
+            fixedAccentColorArgb = getLong("fixedAccentColorArgb", 0xFFE8D5B7L),
+            backgroundAnimationStyle = getString("backgroundAnimationStyle", "AURORA"),
             backgroundAnimationSpeed = getFloat("backgroundAnimationSpeed", 1.0f),
             backgroundAnimationIntensity = getFloat("backgroundAnimationIntensity", 0.8f),
             backgroundColorSource = getString("backgroundColorSource", "CUSTOM"),

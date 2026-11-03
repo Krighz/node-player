@@ -19,6 +19,7 @@ class JvmAudioDecoder : AudioDecoder {
     override var metadata: AudioSourceMetadata? = null
         private set
 
+    private var currentFilePath: String? = null
     private var targetChannels = 2
     private var sampleSizeBits = 16
     private var sampleRate = 44100
@@ -27,6 +28,7 @@ class JvmAudioDecoder : AudioDecoder {
 
     override fun open(filePath: String): Boolean {
         close()
+        currentFilePath = filePath
         val file = File(filePath)
         if (!file.exists() || !file.canRead()) return false
 
@@ -130,14 +132,41 @@ class JvmAudioDecoder : AudioDecoder {
     }
 
     override fun seekTo(positionMs: Long): Boolean {
-        val stream = audioStream ?: return false
-        val targetFrame = (positionMs * sampleRate) / 1000L
-        val bytesPerFrame = (maxOf(1, sampleSizeBits / 8)) * targetChannels
-        val bytesToSkip = targetFrame * bytesPerFrame
+        val path = currentFilePath ?: return false
+        val file = File(path)
+        if (!file.exists()) return false
 
         return try {
-            stream.reset()
-            stream.skip(bytesToSkip)
+            try { audioStream?.close() } catch (_: Exception) {}
+            val baseStream = AudioSystem.getAudioInputStream(file)
+            val baseFormat = baseStream.format
+            val stream = if (baseFormat.encoding == AudioFormat.Encoding.PCM_SIGNED ||
+                baseFormat.encoding == AudioFormat.Encoding.PCM_FLOAT) {
+                baseStream
+            } else {
+                val decodedFormat = AudioFormat(
+                    AudioFormat.Encoding.PCM_SIGNED,
+                    baseFormat.sampleRate,
+                    16,
+                    baseFormat.channels,
+                    2 * baseFormat.channels,
+                    baseFormat.sampleRate,
+                    false
+                )
+                if (AudioSystem.isConversionSupported(decodedFormat, baseFormat)) {
+                    AudioSystem.getAudioInputStream(decodedFormat, baseStream)
+                } else {
+                    baseStream
+                }
+            }
+            audioStream = stream
+
+            val targetFrame = (positionMs * sampleRate) / 1000L
+            val bytesPerFrame = (maxOf(1, sampleSizeBits / 8)) * targetChannels
+            val bytesToSkip = targetFrame * bytesPerFrame
+            if (bytesToSkip > 0) {
+                stream.skip(bytesToSkip)
+            }
             true
         } catch (e: Exception) {
             false

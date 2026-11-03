@@ -39,7 +39,7 @@ fun main() = application {
     var folders by remember { mutableStateOf<List<MusicFolder>>(emptyList()) }
 
     var audioEffectConfig by remember { mutableStateOf(settingsStore.loadEffectConfig()) }
-    var themeConfig by remember { mutableStateOf(settingsStore.loadThemeConfig()) }
+    var themeConfig by remember { mutableStateOf(settingsStore.loadThemeConfig().copy(isOledBlack = false)) }
     var currentMusicFolder by remember { mutableStateOf(settingsStore.getLastMusicFolder()) }
 
     val currentTrack by engine.currentTrack.collectAsState()

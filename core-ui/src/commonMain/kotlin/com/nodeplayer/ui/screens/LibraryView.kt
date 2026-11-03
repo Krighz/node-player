@@ -29,6 +29,7 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.SoundWaveVisualizer
+import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.theme.LocalAccentColor
 
 @Composable
@@ -50,6 +51,7 @@ fun LibraryView(
     val accent = LocalAccentColor.current
     var selectedTab by remember { mutableIntStateOf(0) }
     var isGridView by remember { mutableStateOf(false) }
+    var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) }
     val tabs = listOf("Songs", "Albums", "Artists", "Folders")
 
     val filteredTracks = remember(tracks, searchQuery) {
@@ -236,24 +238,11 @@ fun LibraryView(
                                         .padding(horizontal = 14.dp, vertical = 10.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(42.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(if (isCurrent) accent.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.08f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (isCurrent && isPlaying) {
-                                            SoundWaveVisualizer(isPlaying = true, barColor = accent, maxHeight = 18.dp)
-                                        } else {
-                                            Icon(
-                                                imageVector = Icons.Rounded.MusicNote,
-                                                contentDescription = null,
-                                                tint = if (isCurrent) accent else Color.White.copy(alpha = 0.5f),
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
+                                    TrackArtwork(
+                                        track = track,
+                                        modifier = Modifier.size(42.dp),
+                                        cornerRadius = 8.dp
+                                    )
 
                                     Spacer(modifier = Modifier.width(12.dp))
 
@@ -375,29 +364,166 @@ fun LibraryView(
                 }
             }
             3 -> {
-                // Folders Tab
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 120.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(folders, key = { it.path }) { folder ->
-                        GlassCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                val folderTracks = tracks.filter { it.path.startsWith(folder.path) }
-                                if (folderTracks.isNotEmpty()) onTrackClick(folderTracks.first(), folderTracks)
-                            }
+                // Folders Tab: Drill down to folder songs or show folder list
+                val activeFolder = selectedFolder
+                if (activeFolder != null) {
+                    val folderTracks = remember(tracks, activeFolder) {
+                        tracks.filter { it.path.startsWith(activeFolder.path) }
+                    }
+
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Folder Header with Back button and Play All
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(
-                                modifier = Modifier.padding(14.dp).fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
                             ) {
-                                Icon(Icons.Rounded.Folder, contentDescription = null, tint = accent, modifier = Modifier.size(28.dp))
+                                IconButton(
+                                    onClick = { selectedFolder = null },
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.08f))
+                                ) {
+                                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Back to Folders", tint = Color.White)
+                                }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
-                                    Text(folder.name, fontWeight = FontWeight.Bold)
-                                    Text(folder.path, fontSize = 11.sp, color = Color.White.copy(alpha = 0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        text = activeFolder.name,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "${folderTracks.size} tracks • ${activeFolder.path}",
+                                        style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.5f)),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            if (folderTracks.isNotEmpty()) {
+                                Button(
+                                    onClick = { onTrackClick(folderTracks.first(), folderTracks) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = accent),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color(0xFF131728), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Play All", color = Color(0xFF131728), fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(bottom = 120.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            items(folderTracks, key = { it.id }) { track ->
+                                val isCurrent = currentTrack?.id == track.id
+                                GlassCard(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    isDark = true,
+                                    onClick = { onTrackClick(track, folderTracks) }
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        TrackArtwork(
+                                            track = track,
+                                            modifier = Modifier.size(42.dp),
+                                            cornerRadius = 8.dp
+                                        )
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = track.title,
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                                                    color = if (isCurrent) accent else Color.White
+                                                ),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = "${track.artist} • ${track.album}",
+                                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.6f)),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+
+                                        if (track.isLossless) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            GlassBadge(text = "LOSSLESS", color = accent)
+                                        }
+
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = track.durationFormatted,
+                                            style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.5f))
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(bottom = 120.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(folders, key = { it.path }) { folder ->
+                            val folderSongCount = remember(tracks, folder.path) {
+                                tracks.count { it.path.startsWith(folder.path) }
+                            }
+                            GlassCard(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = { selectedFolder = folder }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(CircleShape)
+                                            .background(accent.copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Rounded.Folder, contentDescription = null, tint = accent, modifier = Modifier.size(24.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(folder.name, fontWeight = FontWeight.Bold)
+                                        Text(
+                                            "$folderSongCount tracks • ${folder.path}",
+                                            fontSize = 11.sp,
+                                            color = Color.White.copy(alpha = 0.5f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                    Icon(Icons.Rounded.ChevronRight, contentDescription = "Open Folder", tint = Color.White.copy(alpha = 0.4f))
                                 }
                             }
                         }

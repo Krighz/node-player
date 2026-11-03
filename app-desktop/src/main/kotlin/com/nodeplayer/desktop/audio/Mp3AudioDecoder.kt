@@ -16,6 +16,7 @@ import java.io.FileInputStream
  */
 class Mp3AudioDecoder : AudioDecoder {
 
+    private var currentFilePath: String? = null
     private var fileInputStream: FileInputStream? = null
     private var bitstream: Bitstream? = null
     private var decoder: Decoder? = null
@@ -30,6 +31,7 @@ class Mp3AudioDecoder : AudioDecoder {
 
     override fun open(filePath: String): Boolean {
         close()
+        currentFilePath = filePath
         val file = File(filePath)
         if (!file.exists() || !file.canRead()) return false
 
@@ -123,7 +125,38 @@ class Mp3AudioDecoder : AudioDecoder {
     }
 
     override fun seekTo(positionMs: Long): Boolean {
-        return false
+        val path = currentFilePath ?: return false
+        val file = File(path)
+        if (!file.exists()) return false
+        val totalMs = metadata?.durationMs ?: 0L
+        if (totalMs <= 0L) return false
+
+        return try {
+            val targetByte = ((positionMs.toDouble() / totalMs.toDouble()) * file.length()).toLong().coerceIn(0L, maxOf(0L, file.length() - 4096L))
+            
+            try { bitstream?.close() } catch (_: Exception) {}
+            try { fileInputStream?.close() } catch (_: Exception) {}
+
+            val fis = FileInputStream(file)
+            fileInputStream = fis
+            if (targetByte > 0L) {
+                fis.channel.position(targetByte)
+            }
+            val bis = BufferedInputStream(fis, 65536)
+            val bs = Bitstream(bis)
+            bitstream = bs
+            decoder = Decoder()
+
+            val header = bs.readFrame()
+            if (header != null) {
+                bs.closeFrame()
+            }
+            cachedCount = 0
+            cachedOffset = 0
+            true
+        } catch (e: Exception) {
+            false
+        }
     }
 
     override fun close() {

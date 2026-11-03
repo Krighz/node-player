@@ -21,6 +21,8 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.SoundWaveVisualizer
+import com.nodeplayer.ui.components.TrackArtwork
+import com.nodeplayer.ui.components.onScrubberWheel
 import com.nodeplayer.ui.theme.LocalAccentColor
 
 @Composable
@@ -93,7 +95,14 @@ fun BottomPlayerDock(
                             onSeek((dragFraction * durationMs).toLong())
                         }
                     },
-                    modifier = Modifier.weight(1f).height(16.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(16.dp)
+                        .onScrubberWheel { deltaY ->
+                            val stepMs = 5000L
+                            val newPos = if (deltaY < 0f) positionMs + stepMs else positionMs - stepMs
+                            onSeek(newPos.coerceIn(0L, durationMs))
+                        },
                     colors = SliderDefaults.colors(
                         thumbColor = accent,
                         activeTrackColor = accent,
@@ -126,19 +135,11 @@ fun BottomPlayerDock(
                         .padding(vertical = 4.dp, horizontal = 2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(accent.copy(alpha = 0.25f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isPlaying) {
-                            SoundWaveVisualizer(isPlaying = true, barColor = accent, maxHeight = 22.dp)
-                        } else {
-                            Icon(Icons.Rounded.MusicNote, contentDescription = null, tint = accent, modifier = Modifier.size(24.dp))
-                        }
-                    }
+                    TrackArtwork(
+                        track = currentTrack,
+                        modifier = Modifier.size(44.dp),
+                        cornerRadius = 10.dp
+                    )
 
                     Spacer(modifier = Modifier.width(12.dp))
 

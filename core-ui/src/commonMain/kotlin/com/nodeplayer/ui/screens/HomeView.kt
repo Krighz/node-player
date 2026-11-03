@@ -33,6 +33,7 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.NodePlayerLogo
+import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.pressScale
 import java.util.Calendar
@@ -57,6 +58,7 @@ fun HomeView(
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    var sessionSeed by remember { mutableStateOf(System.currentTimeMillis()) }
 
     // Greeting based on time of day
     val greeting = remember {
@@ -69,33 +71,34 @@ fun HomeView(
         }
     }
 
-    // Curated Carousels matching Android HomeScreen logic
-    val recentlyPlayed = remember(tracks) {
+    // Curated Carousels dynamically renewed on each opening and seed refresh
+    val recentlyPlayed = remember(tracks, sessionSeed) {
         val filtered = tracks.filter { it.lastPlayedTimestamp > 0L }.sortedByDescending { it.lastPlayedTimestamp }
-        if (filtered.isNotEmpty()) filtered.take(16) else tracks.take(16)
-    }
-
-    val heavyRotation = remember(tracks) {
-        val filtered = tracks.filter { it.playCount > 0 }.sortedByDescending { it.playCount }
         if (filtered.isNotEmpty()) filtered.take(16) else tracks.shuffled().take(16)
     }
 
-    val audiophileVault = remember(tracks) {
-        tracks.filter {
+    val heavyRotation = remember(tracks, sessionSeed) {
+        val filtered = tracks.filter { it.playCount > 0 }.sortedByDescending { it.playCount }
+        if (filtered.isNotEmpty()) filtered.take(30).shuffled().take(16) else tracks.shuffled().take(16)
+    }
+
+    val audiophileVault = remember(tracks, sessionSeed) {
+        val pool = tracks.filter {
             it.isLossless || it.bitDepth >= 24 || it.sampleRate >= 88200 || it.formatDescription.contains("FLAC", ignoreCase = true)
-        }.take(16)
+        }
+        pool.shuffled().take(16)
     }
 
-    val freshDiscoveries = remember(tracks) {
-        val unplayed = tracks.filter { it.playCount == 0 }
-        if (unplayed.isNotEmpty()) unplayed.take(16) else emptyList()
+    val freshDiscoveries = remember(tracks, sessionSeed) {
+        val unplayed = tracks.filter { it.playCount <= 1 }
+        if (unplayed.isNotEmpty()) unplayed.shuffled().take(16) else tracks.shuffled().take(16)
     }
 
-    val favorites = remember(tracks) {
-        tracks.filter { it.isFavorite }.take(16)
+    val favorites = remember(tracks, sessionSeed) {
+        tracks.filter { it.isFavorite }.shuffled().take(16)
     }
 
-    val heroTrack = currentTrack ?: recentlyPlayed.firstOrNull() ?: tracks.firstOrNull()
+    val heroTrack = currentTrack ?: recentlyPlayed.firstOrNull() ?: tracks.shuffled().firstOrNull()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -128,17 +131,8 @@ fun HomeView(
                         )
                     }
 
-                    // Audiophile Node Player Badge
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        NodePlayerLogo(size = 32.dp, accentColor = accent)
-                        GlassBadge(
-                            text = "HI-FI PURE",
-                            color = accent
-                        )
-                    }
+                    // Mobile Disc Logo
+                    NodePlayerLogo(size = 36.dp, accentColor = accent)
                 }
 
                 // Quick Action Chips Row
@@ -146,6 +140,12 @@ fun HomeView(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    HomeActionChip(
+                        icon = Icons.Rounded.Autorenew,
+                        label = "Renew Flow",
+                        accent = accent,
+                        onClick = { sessionSeed = System.currentTimeMillis() }
+                    )
                     HomeActionChip(
                         icon = Icons.Rounded.Shuffle,
                         label = "Quick Shuffle",
@@ -166,7 +166,7 @@ fun HomeView(
                     )
                     HomeActionChip(
                         icon = Icons.Rounded.Refresh,
-                        label = "Rescan Library",
+                        label = "Rescan",
                         accent = accent,
                         onClick = onRescanClick
                     )
@@ -241,24 +241,11 @@ fun HomeView(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Hero Disc Artwork Thumbnail
-                        Box(
-                            modifier = Modifier
-                                .size(76.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(accent.copy(alpha = 0.25f), Color.White.copy(alpha = 0.05f))
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.MusicNote,
-                                contentDescription = null,
-                                tint = accent.copy(alpha = 0.85f),
-                                modifier = Modifier.size(38.dp)
-                            )
-                        }
+                        TrackArtwork(
+                            track = heroTrack,
+                            modifier = Modifier.size(76.dp),
+                            cornerRadius = 18.dp
+                        )
 
                         Spacer(modifier = Modifier.width(20.dp))
 
@@ -524,24 +511,13 @@ private fun HomeTrackCard(
             .padding(10.dp)
     ) {
         Box(
-            modifier = Modifier
-                .size(128.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            if (isCurrent) accent.copy(alpha = 0.35f) else Color.White.copy(alpha = 0.08f),
-                            Color.Black.copy(alpha = 0.4f)
-                        )
-                    )
-                ),
+            modifier = Modifier.size(128.dp),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = if (isPlaying) Icons.Rounded.GraphicEq else Icons.Rounded.MusicNote,
-                contentDescription = null,
-                tint = if (isCurrent) accent else Color.White.copy(alpha = 0.35f),
-                modifier = Modifier.size(44.dp)
+            TrackArtwork(
+                track = track,
+                modifier = Modifier.size(128.dp),
+                cornerRadius = 12.dp
             )
 
             // Badge overlay (Lossless or Studio)

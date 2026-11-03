@@ -28,6 +28,8 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.SoundWaveVisualizer
+import com.nodeplayer.ui.components.TrackArtwork
+import com.nodeplayer.ui.components.onScrubberWheel
 import com.nodeplayer.ui.theme.LocalAccentColor
 
 @Composable
@@ -198,25 +200,18 @@ fun NowPlayingView(
                 }
             }
         } else {
-            // Artwork & Big Visualizer Centerpiece
+            // Artwork Centerpiece
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(24.dp))
-                    .background(Color.White.copy(alpha = 0.05f)),
+                    .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Rounded.MusicNote,
-                        contentDescription = null,
-                        tint = accent.copy(alpha = 0.8f),
-                        modifier = Modifier.size(96.dp)
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent, maxHeight = 36.dp)
-                }
+                TrackArtwork(
+                    track = currentTrack,
+                    modifier = Modifier.size(280.dp),
+                    cornerRadius = 24.dp
+                )
             }
         }
 
@@ -267,7 +262,13 @@ fun NowPlayingView(
                     onSeek((dragFraction * durationMs).toLong())
                     isDragging = false
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onScrubberWheel { deltaY ->
+                        val stepMs = 5000L
+                        val newPos = if (deltaY < 0f) positionMs + stepMs else positionMs - stepMs
+                        onSeek(newPos.coerceIn(0L, durationMs))
+                    },
                 colors = SliderDefaults.colors(
                     thumbColor = accent,
                     activeTrackColor = accent,
