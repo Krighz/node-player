@@ -15,6 +15,7 @@ import android.os.Process
 import android.util.Log
 import android.view.PixelCopy
 import androidx.core.content.FileProvider
+import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.music.ui.components.AGSL_REFRACTION_SRC
 import kotlinx.coroutines.*
 import java.io.BufferedReader
@@ -37,7 +38,7 @@ data class DumpContentSummary(
     val deviceInfoText: String
 )
 
-object DiagnosticsDumpManager {
+object DiagnosticsDumpManager : DiagnosticsFeatureApi {
 
     private const val TAG = "DiagnosticsDumpManager"
     private const val AUTO_DUMP_FILENAME = "auto_graphics_dump.zip"
@@ -47,10 +48,20 @@ object DiagnosticsDumpManager {
     var isRecording: Boolean = false
         private set
 
+    override suspend fun generateDiagnosticsDump(
+        context: Context,
+        activity: Activity?,
+        includeScreenshot: Boolean
+    ): DumpContentSummary? = withContext(Dispatchers.IO) {
+        if (activity != null) {
+            createDiagnosticsZip(activity, "NORMAL")
+        } else null
+    }
+
     /**
      * Sanitizes plain text by removing file paths, audio track names, storage URIs, and user tokens.
      */
-    fun sanitizeText(input: String): String {
+    override fun sanitizeText(input: String): String {
         var clean = input
         // Scrub absolute Android storage paths
         clean = clean.replace(Regex("""/storage/[^\s"',]+"""), "[REDACTED_PATH]")
@@ -195,6 +206,16 @@ object DiagnosticsDumpManager {
             zos.write(logcatContent.toByteArray(Charsets.UTF_8))
             zos.closeEntry()
             includedFiles.add("logcat.txt")
+
+            // 4b. NodeLog grouped by feature
+            val nodeLogGrouped = NodeLog.getEntriesGroupedByFeature().entries.joinToString("\n\n") { (feature, entries) ->
+                "=== FEATURE: $feature (${entries.size} entries) ===\n" +
+                        entries.joinToString("\n") { "[${it.level}] ${it.tag}: ${it.message}" }
+            }
+            zos.putNextEntry(ZipEntry("node_log_by_feature.txt"))
+            zos.write(sanitizeText(nodeLogGrouped).toByteArray(Charsets.UTF_8))
+            zos.closeEntry()
+            includedFiles.add("node_log_by_feature.txt")
 
             // 5. Timeline recording if present
             if (timelineCsv != null) {
