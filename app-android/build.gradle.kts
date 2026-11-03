@@ -143,6 +143,7 @@ dependencies {
     implementation(project(":core-dsp"))
     implementation(project(":core-library"))
     implementation(project(":integration-api"))
+    implementation(project(":core-ui"))
 
     // Compose
     implementation(platform("androidx.compose:compose-bom:2024.05.00"))

@@ -1,0 +1,137 @@
+package com.nodeplayer.ui.components
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.nodeplayer.ui.theme.GlassTokens
+import com.nodeplayer.ui.theme.glassSurface
+import com.nodeplayer.ui.theme.pressScale
+
+@Composable
+fun GlassCard(
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(GlassTokens.cardCornerRadius),
+    isOled: Boolean = false,
+    isDark: Boolean = true,
+    tintAlpha: Float? = null,
+    customTint: Color? = null,
+    onClick: (() -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val clickModifier = if (onClick != null) {
+        Modifier.pressScale(targetScale = 0.97f, onClick = onClick)
+    } else Modifier
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .then(clickModifier)
+    ) {
+        // 1. Frosted Glass Background Layer
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .glassSurface(
+                    shape = shape,
+                    isOled = isOled,
+                    isDark = isDark,
+                    tintAlpha = tintAlpha,
+                    customTint = customTint
+                )
+        )
+        // 2. High-contrast Crisp Foreground Content
+        CompositionLocalProvider(LocalContentColor provides Color.White) {
+            content()
+        }
+    }
+}
+
+@Composable
+fun GlassButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(GlassTokens.pillCornerRadius),
+    isOled: Boolean = false,
+    isDark: Boolean = true,
+    content: @Composable RowScope.() -> Unit
+) {
+    GlassCard(
+        modifier = modifier,
+        shape = shape,
+        isOled = isOled,
+        isDark = isDark,
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
+            content = content
+        )
+    }
+}
+
+@Composable
+fun GlassIconButton(
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    size: Dp = 44.dp,
+    tint: Color = Color.White,
+    contentDescription: String? = null
+) {
+    GlassCard(
+        modifier = modifier.size(size),
+        shape = CircleShape,
+        onClick = onClick
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier
+                .size(size * 0.52f)
+                .align(Alignment.Center)
+        )
+    }
+}
+
+@Composable
+fun GlassBadge(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color(0xFF6366F1),
+    textColor: Color = Color.White
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .glassSurface(
+                shape = RoundedCornerShape(6.dp),
+                customTint = color,
+                tintAlpha = 0.28f
+            )
+            .padding(horizontal = 7.dp, vertical = 2.5.dp)
+    ) {
+        Text(
+            text = text,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            color = textColor
+        )
+    }
+}

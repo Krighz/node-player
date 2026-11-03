@@ -1,0 +1,571 @@
+package com.nodeplayer.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.nodeplayer.model.*
+import com.nodeplayer.ui.components.GlassCard
+import com.nodeplayer.ui.components.ParametricEqCurveGraph
+import com.nodeplayer.ui.theme.LocalAccentColor
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EqualizerView(
+    config: AudioEffectConfig,
+    onConfigChange: (AudioEffectConfig) -> Unit,
+    activePresetLabel: String? = null,
+    currentTrack: Track? = null,
+    currentDeviceName: String = "Default Audio Output",
+    onToggleAbCompare: () -> Unit = {},
+    onImportAutoEq: (String, String) -> Unit = { _, _ -> },
+    onSaveTrackPreset: () -> Unit = {},
+    onSaveAlbumPreset: () -> Unit = {},
+    onClearPreset: () -> Unit = {},
+    rmsLevel: Float = 0.0f,
+    isPerformanceMode: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    val accent = LocalAccentColor.current
+    val scrollState = rememberScrollState()
+
+    var showAutoEqDialog by remember { mutableStateOf(false) }
+    var autoEqText by remember { mutableStateOf("") }
+    var autoEqName by remember { mutableStateOf("Custom AutoEQ") }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(16.dp)
+    ) {
+        // 1. Header with Master EQ Toggle
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Equalizer & DSP Chain",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold)
+                )
+                Text(
+                    text = "Target: $currentDeviceName • 32-bit Float Precision",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                )
+            }
+
+            Switch(
+                checked = config.eqEnabled,
+                onCheckedChange = { onConfigChange(config.copy(eqEnabled = it)) },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = accent,
+                    checkedTrackColor = accent.copy(alpha = 0.5f)
+                )
+            )
+        }
+
+        // 2. Toolbar Actions: A/B Compare, AutoEQ Import, Track Preset
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FilterChip(
+                selected = config.isAbComparing,
+                onClick = onToggleAbCompare,
+                label = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            if (config.isAbComparing) Icons.Rounded.CompareArrows else Icons.Rounded.SwapHoriz,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (config.isAbComparing) "A/B Match: %+.1f dB".format(config.abLoudnessOffsetDb) else "A/B Compare",
+                            fontSize = 11.sp,
+                            fontWeight = if (config.isAbComparing) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = accent.copy(alpha = 0.3f),
+                    selectedLabelColor = accent
+                )
+            )
+
+            AssistChip(
+                onClick = { showAutoEqDialog = true },
+                label = { Text("AutoEQ Import", fontSize = 11.sp) },
+                leadingIcon = { Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(16.dp)) }
+            )
+
+            if (currentTrack != null) {
+                AssistChip(
+                    onClick = onSaveTrackPreset,
+                    label = { Text("Save Track Preset", fontSize = 11.sp) },
+                    leadingIcon = { Icon(Icons.Rounded.BookmarkAdd, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                )
+                AssistChip(
+                    onClick = onSaveAlbumPreset,
+                    label = { Text("Save Album Preset", fontSize = 11.sp) },
+                    leadingIcon = { Icon(Icons.Rounded.Album, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                )
+            }
+        }
+
+        if (activePresetLabel != null) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(accent.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = activePresetLabel,
+                    style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.SemiBold)
+                )
+                TextButton(
+                    onClick = onClearPreset,
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text("Clear", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 3. Interactive Parametric Frequency Curve Graph
+        ParametricEqCurveGraph(
+            bands = config.bands,
+            onBandsChange = { updated ->
+                onConfigChange(config.copy(bands = updated, eqEnabled = true))
+            },
+            eqEnabled = config.eqEnabled,
+            accentColor = accent,
+            rmsLevel = rmsLevel,
+            showSpectrum = true
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 4. Presets Chips Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AudioEffectConfig.PRESETS.keys.forEach { preset ->
+                val isSelected = config.presetName == preset
+                FilterChip(
+                    selected = isSelected,
+                    onClick = {
+                        val gains = AudioEffectConfig.PRESETS[preset] ?: return@FilterChip
+                        val updatedBands = config.bands.mapIndexed { idx, band ->
+                            band.copy(gainDb = gains.getOrElse(idx) { 0f })
+                        }
+                        onConfigChange(config.copy(presetName = preset, bands = updatedBands, eqEnabled = true))
+                    },
+                    label = { Text(preset, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = accent.copy(alpha = 0.25f),
+                        selectedLabelColor = accent
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSelected,
+                        borderColor = if (isSelected) accent else Color.White.copy(alpha = 0.2f),
+                        selectedBorderColor = accent
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 5. Preamp Gain Card
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Preamp Gain",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Text(
+                        text = "%+.1f dB".format(config.preampGainDb),
+                        style = MaterialTheme.typography.bodyMedium.copy(color = accent, fontWeight = FontWeight.Bold)
+                    )
+                }
+                Slider(
+                    value = config.preampGainDb,
+                    onValueChange = { onConfigChange(config.copy(preampGainDb = it)) },
+                    valueRange = -12f..12f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 6. 10-Band Biquad Graphic Equalizer Sliders
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "10-Band Biquad Filters",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    config.bands.forEachIndexed { index, band ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(
+                                text = "%+.1f".format(band.gainDb),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (band.gainDb != 0f) accent else Color.White.copy(alpha = 0.5f)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            // Vertical Slider
+                            Slider(
+                                value = band.gainDb,
+                                onValueChange = { newGain ->
+                                    val updated = config.bands.toMutableList()
+                                    updated[index] = band.copy(gainDb = (newGain * 2f).toInt() / 2f)
+                                    onConfigChange(config.copy(bands = updated, eqEnabled = true))
+                                },
+                                valueRange = -12f..12f,
+                                modifier = Modifier.height(130.dp),
+                                colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            val freqLabel = when {
+                                band.centerFreq >= 1000f -> "${(band.centerFreq / 1000f).toInt()}k"
+                                else -> "${band.centerFreq.toInt()}"
+                            }
+                            Text(
+                                text = freqLabel,
+                                fontSize = 10.sp,
+                                color = Color.White.copy(alpha = 0.7f),
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 7. Sound Lab & Advanced Audio Processors
+        Text(
+            text = "Advanced DSP & Sound Lab",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            modifier = Modifier.padding(vertical = 8.dp)
+        )
+
+        // Tone Controls (Bass & Treble Shelves)
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Tone Controls",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Bass Shelf (100 Hz)", fontSize = 12.sp)
+                    Text("%+.1f dB".format(config.toneControls.bassGainDb), fontSize = 12.sp, color = accent)
+                }
+                Slider(
+                    value = config.toneControls.bassGainDb,
+                    onValueChange = { onConfigChange(config.copy(toneControls = config.toneControls.copy(bassGainDb = it))) },
+                    valueRange = -12f..12f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Treble Shelf (10 kHz)", fontSize = 12.sp)
+                    Text("%+.1f dB".format(config.toneControls.trebleGainDb), fontSize = 12.sp, color = accent)
+                }
+                Slider(
+                    value = config.toneControls.trebleGainDb,
+                    onValueChange = { onConfigChange(config.copy(toneControls = config.toneControls.copy(trebleGainDb = it))) },
+                    valueRange = -12f..12f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Fletcher-Munson Loudness Equalizer
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Loudness Equalizer (ISO 226)",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                        Text(
+                            text = "Dynamic Fletcher-Munson bass/treble compensation for low volumes",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = config.loudnessConfig.enabled,
+                        onCheckedChange = { onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(enabled = it))) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    )
+                }
+                if (config.loudnessConfig.enabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Slider(
+                        value = config.loudnessConfig.strength,
+                        onValueChange = { onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(strength = it))) },
+                        valueRange = 0f..1f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Harmonic Bass Exciter
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Harmonic Bass Exciter",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                        Text(
+                            text = "Psychoacoustic upper-harmonic sub-bass generation",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = config.harmonicBassConfig.enabled,
+                        onCheckedChange = { onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(enabled = it))) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    )
+                }
+                if (config.harmonicBassConfig.enabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Harmonic Blend", fontSize = 12.sp)
+                        Text("${(config.harmonicBassConfig.harmonicGain * 100).toInt()}%", fontSize = 12.sp, color = accent)
+                    }
+                    Slider(
+                        value = config.harmonicBassConfig.harmonicGain,
+                        onValueChange = { onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(harmonicGain = it))) },
+                        valueRange = 0f..1f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Spatial Stereo Width Expansion
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Spatial Stereo Width",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Text(
+                        text = "${(config.stereoWidth * 100).toInt()}%",
+                        fontSize = 12.sp,
+                        color = accent,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Slider(
+                    value = config.stereoWidth,
+                    onValueChange = { onConfigChange(config.copy(stereoWidth = it)) },
+                    valueRange = 0f..2f,
+                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Studio Reverb
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Studio Reverb",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                        )
+                        Text(
+                            text = "Schroeder/Moorer algorithmic acoustic room simulator",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                    }
+                    Switch(
+                        checked = config.reverbConfig.enabled,
+                        onCheckedChange = { onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(enabled = it))) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    )
+                }
+                if (config.reverbConfig.enabled) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Room Size", fontSize = 12.sp)
+                        Text("${(config.reverbConfig.roomSize * 100).toInt()}%", fontSize = 12.sp, color = accent)
+                    }
+                    Slider(
+                        value = config.reverbConfig.roomSize,
+                        onValueChange = { onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(roomSize = it))) },
+                        valueRange = 0f..1f,
+                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Peak Limiter & Clip Guard
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Lookahead Peak Limiter & Clip Guard",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                    Text(
+                        text = "Zero-distortion lookahead gain ceiling to prevent digital DAC clipping",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+                Switch(
+                    checked = config.limiterEnabled,
+                    onCheckedChange = { onConfigChange(config.copy(limiterEnabled = it)) },
+                    colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(40.dp))
+    }
+
+    // AutoEQ Import Dialog
+    if (showAutoEqDialog) {
+        AlertDialog(
+            onDismissRequest = { showAutoEqDialog = false },
+            title = { Text("Import AutoEQ Profile") },
+            text = {
+                Column {
+                    Text("Paste parametric EQ filter settings exported from AutoEQ or Peace GUI:", fontSize = 12.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = autoEqName,
+                        onValueChange = { autoEqName = it },
+                        label = { Text("Profile Name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = autoEqText,
+                        onValueChange = { autoEqText = it },
+                        label = { Text("AutoEQ Filter String") },
+                        modifier = Modifier.fillMaxWidth().height(140.dp),
+                        maxLines = 8
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onImportAutoEq(autoEqName, autoEqText)
+                        showAutoEqDialog = false
+                    }
+                ) {
+                    Text("Import")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAutoEqDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
