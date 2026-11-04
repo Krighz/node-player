@@ -26,6 +26,8 @@
 | 🪟 **Windows** | Portable Executable | `.exe` | x64 | [Download NodePlayer.exe](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.exe) |
 | 🤖 **Android** | Signed Release APK | `.apk` | Universal | [Download NodePlayer.apk](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk) |
 
+> **Security & Signing Notice**: Android APKs are signed with the official release key (APK Signature Scheme v2). Windows packages (MSI, ZIP, EXE) are currently Authenticode-unsigned; Windows SmartScreen will display an "Unknown Publisher" protection notice on first launch until an EV signing certificate is integrated. Always trust and verify files using the authoritative **SHA-256** checksums listed in the release notes.
+
 [Screenshots](#-photo-gallery--screenshots) • [Architecture](#-modular-architecture) • [DSP Suite](#-high-precision-32-bit-float-dsp-suite) • [Desktop Features](#-desktop-experience-windows-1011) • [Settings Reference](#-comprehensive-settings-reference) • [Building](#-building-and-releasing)
 
 </div>
@@ -46,7 +48,7 @@
 - **💾 Complete Backup & M3U Import**: Unified `.nodebackup` export and import for playlists, play counts, favorites, EQ profiles, and themes, alongside full M3U playlist file compatibility.
 - **📱 Four Static Liquid Glass Home-Screen Widgets**: Hardware offscreen rendered static glass widgets (`RenderNode` + `HardwareRenderer` + `ImageReader`) in 4 responsive sizes on Android.
 - **🎵 Synchronized Lyrics & Scrobbling**: Real-time synced `.lrc` lyrics with active line prominence and smooth auto-scrolling. Bundled Last.fm scrobbler with browser authorization flow and offline retry queue.
-- **🛡️ 100% Private, Local Diagnostics & Open Source**: Zero network uploads, zero telemetry, zero ads, zero tracking. Licensed under Apache 2.0.
+- **🛡️ Privacy-First & No Network Use Unless Opted In**: Zero telemetry, zero analytics, zero ads, zero tracking. All network operations (GitHub updates, Last.fm, lyrics, Node Connect local Wi-Fi sync) are strictly opt-in and off by default. Licensed under Apache 2.0.
 
 ---
 

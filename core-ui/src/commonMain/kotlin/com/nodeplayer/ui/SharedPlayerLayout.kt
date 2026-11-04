@@ -238,8 +238,22 @@ fun SharedPlayerLayout(
                                         .background(if (isPlaying) accent else Color.Gray)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
+                                val outputStatusText = if (isPlaying) {
+                                    val srcRate = currentTrack?.sampleRate ?: 0
+                                    val srcDepth = currentTrack?.bitDepth ?: 0
+                                    val isBitPerfect = audioOutputInfo.isTrulyBitPerfect(srcRate, srcDepth, audioEffectConfig.isDspBypassed)
+                                    if (isBitPerfect) {
+                                        if (isExclusiveMode) "WASAPI Exclusive (Bit-Perfect)" else "Bit-Perfect Output"
+                                    } else if (audioEffectConfig.isDspBypassed) {
+                                        if (audioOutputInfo.sampleRate > 0) "Direct (${audioOutputInfo.sampleRate / 1000} kHz)" else "Direct Output"
+                                    } else {
+                                        "32-bit Float DSP Active"
+                                    }
+                                } else {
+                                    "Ready"
+                                }
                                 Text(
-                                    text = if (isPlaying) "Bit-Perfect Output" else "Ready",
+                                    text = outputStatusText,
                                     fontSize = 11.sp,
                                     color = Color.White.copy(alpha = 0.5f),
                                     maxLines = 1

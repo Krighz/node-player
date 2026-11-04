@@ -1,8 +1,8 @@
 # Privacy Policy for Node Player
 
-**Last Updated:** November 2, 2026
+**Last Updated:** November 4, 2026
 
-**Node Player** is designed with a privacy-first, local-first architecture. We believe your personal music library and listening habits belong exclusively to you.
+**Node Player** is designed with a privacy-first, local-first architecture. We believe your personal music library, listening habits, and network data belong exclusively to you.
 
 ---
 
@@ -13,32 +13,38 @@
 
 ---
 
-## 2. Network Usage & Optional Online Features
-Node Player functions 100% offline as a local audio player. Exactly **three** network uses exist in the application, and all three are strictly **opt-in** and user-controlled:
+## 2. Network Usage: No Network Use Unless You Opt In
+Node Player performs **no network use unless you opt in**. It functions as an offline local audio player by default. Exactly **four** opt-in network capabilities exist in the application, and all four are strictly user-controlled and off until enabled:
 
-1. **Synchronized Lyrics (LRCLIB)**:
-   - When enabled by the user in Settings, Node Player queries the public [LRCLIB](https://lrclib.net) API using the track's artist, title, and album names to fetch synchronized `.lrc` lyrics.
-   - When disabled (the default), no network requests are dispatched for lyrics.
+1. **In-App Update Check (GitHub Releases)**:
+   - When opted into by the user (prompted once after installation with an explicit Yes/No dialog, and togglable in Settings &rarr; Updates), Node Player queries GitHub's official Releases API (`https://api.github.com/repos/Krighz/node-player/releases/latest`) to check for newer versions and download official release packages.
+   - The check transmits an HTTP `User-Agent: NodePlayer/<version>` header. GitHub receives this request and your IP address under [GitHub's Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement).
+   - When disabled (the default unless opted in), zero update requests are dispatched.
 
 2. **Last.fm Scrobbling**:
-   - When opted into by the user, Node Player communicates with Last.fm's API to record track plays ("scrobble") and update "Now Playing" status using user-authorized OAuth credentials.
+   - When opted into by the user in Settings, Node Player communicates with Last.fm's API to record track plays ("scrobble") and update "Now Playing" status using user-authorized OAuth credentials.
    - If offline, scrobbles are queued locally in device storage and synced only when network connectivity resumes.
    - When disabled (the default), zero Last.fm network requests are dispatched.
 
-3. **In-App Update Check (GitHub Releases)**:
-   - When opted into by the user (prompted once after installation with an explicit Yes/No dialog, and togglable in Settings &rarr; Updates), Node Player queries GitHub's official Releases API (`https://api.github.com/repos/Krighz/node-player/releases/latest`) to check for newer versions and download official release APKs.
-   - The check transmits an HTTP `User-Agent: NodePlayer/<version>` header. As with any HTTPS connection, GitHub receives this request and your IP address under [GitHub's Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement).
-   - When disabled (default unless opted in), zero update requests are dispatched.
+3. **Synchronized Lyrics (LRCLIB)**:
+   - When opted into by the user in Settings, Node Player queries the public [LRCLIB](https://lrclib.net) API using the track's artist, title, and album names to fetch synchronized `.lrc` lyrics.
+   - When disabled (the default), no external network requests are dispatched for lyrics; local `.lrc` files are used.
+
+4. **Node Connect (Local Network Only)**:
+   - When enabled by the user in Settings / Device Connect, Node Player discovers and connects to your other paired devices (Android phone, Windows PC) exclusively across your **local Wi-Fi / LAN network** using mutual TLS (mTLS) over gRPC.
+   - **Zero Cloud Servers**: Audio streaming, remote control, and data sync flow directly peer-to-peer over your local network. No external servers, no cloud relay, and no telemetry.
+   - When disabled (the default), all discovery services and network listening sockets remain completely closed.
 
 ---
 
 ## 3. On-Device Permissions
-Node Player requests only the permissions strictly required for its local music playback and user-initiated features:
+Node Player requests only permissions strictly required for local music playback and user-initiated features:
 - **`READ_MEDIA_AUDIO` / `READ_EXTERNAL_STORAGE`**: To scan and decode local music files and embedded album artwork.
-- **`POST_NOTIFICATIONS`**: To present standard Android media playback notifications with transport controls and background download progress.
-- **`FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_MEDIA_PLAYBACK`**: To maintain continuous, uninterrupted audio playback when the app is in the background.
+- **`POST_NOTIFICATIONS`**: To present standard Android media playback notifications with transport controls, cast banners, and background download progress.
+- **`FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_MEDIA_PLAYBACK`**: To maintain continuous, uninterrupted audio playback and audio streaming when the screen is off.
 - **`REQUEST_INSTALL_PACKAGES`**: To allow the Android `PackageInstaller` to install validated APK updates when initiated by the user.
-- **`INTERNET` & `ACCESS_NETWORK_STATE`**: Strictly used for the 3 opt-in features described above (lyrics, Last.fm scrobbler, and update checks).
+- **`INTERNET` & `ACCESS_NETWORK_STATE`**: Strictly used for the 4 opt-in features described above (updates, Last.fm, lyrics, and local-network Node Connect).
+- **`NEARBY_WIFI_DEVICES`**: On Android 13+, strictly used for local mDNS peer discovery in Node Connect when opted in.
 
 ---
 
