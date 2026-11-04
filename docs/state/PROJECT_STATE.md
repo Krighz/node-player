@@ -1,15 +1,37 @@
 # Node Player - Project State
 
-Last Updated: 2026-11-03 16:25:00 +05:30
-Current Version: v1.5.0
-Current Branch: `feature/shared-ui`
+Last Updated: 2026-11-04 16:49:00 +05:30
+Current Version: v1.6.0
+Current Branch: `feature/node-connect`
 
 > [!NOTE]
-> Unified Universal Release v1.5.0: Compose Multiplatform UI across Android and Windows Desktop, bit-perfect WASAPI audio output, exact zero-estimation header metadata extraction, and decoupled artwork loading restoring 120fps fluid performance on Android.
+> Unified Universal Release v1.6.0: Complete Windows UI Overhaul matching reference image (Search Capsule, Device Connect Pill, Optical Rail Lens Dock with convex spring bubble, For You mix cards with dynamic collages, Rediscover row, pinned floating waveform player deck, 2-column mobile-matching Settings hub) + Node Connect ecosystem (mTLS zero-trust EC-256 cert pinning, discovery, remote control, remote library browsing with zero path exposure, pre-DSP PCM audio casting with jitter buffer and zero-lag seek flush, mid-track handoff, sleep timer sync, conflict-free HLC sync rail with tombstones and 3-snapshot undo, third-party session display & control with zero audio capture guarantee).
 
 ---
 
 ## 1. What Is Built
+
+### Node Connect Ecosystem (`:core-network`)
+- **Zero-Trust mTLS Security**: EC-256 (secp256r1) keypair generation, pure Kotlin ASN.1 DER self-signed X.509 cert builder (zero native dependencies or license obligations), SHA-256 cert fingerprinting, and strict pinning trust manager aborting untrusted handshakes immediately.
+- **Secure Key Storage**: Windows DPAPI key storage in `%APPDATA%\NodePlayer\keys`, Android Keystore.
+- **Local Discovery & Pairing**: Local network multicast UDP discovery, 6-digit PIN and One-Time Token (OTT) pairing state machine, and persistent `DeviceRegistry` with granular role permissions and instant revocation.
+- **Binary Framing Protocol**: 4-byte magic (`NODE`), versioning, 2-byte message types, sequence ID, CRC32 payload checksum.
+- **Remote Control Plane**: `NodeConnectControlService` executing transport commands and broadcasting playback state.
+- **Remote Library Browsing**: `NodeConnectLibraryService` for remote search and album art retrieval. Guaranteed zero absolute path exposure over the network.
+- **Live Pre-DSP PCM Audio Casting**: `NodeConnectCastService` streaming uncompressed raw PCM audio chunks without file transfers or disk writes. `JitterBuffer` ring buffer (150-300ms) with instant flush on seek/track change.
+- **Playback Handoff & Sleep Timer Sync**: `NodeConnectHandoffService` moving track, position, queue, EQ profile, and sleep timer to target device mid-track.
+- **Conflict-Free Sync Rail**: `SyncEngine` with Hybrid Logical Clock (HLC), 30-day tombstones preventing resurrecting deleted items, play stats union merge, and 3-snapshot undo engine allowing 1-click rollback of sync operations.
+- **Third-Party Session Control**: `ExternalSessionService` for Spotify and YouTube Music metadata display and control. Strict zero audio capture guarantee.
+
+### Windows UI Overhaul (`:core-ui`)
+- **Search Capsule**: Top-centered capsule with Ctrl+F auto-focus and quick clear button.
+- **Device Connect Pill**: Top-right pill button with glowing connection status dot (Cyan / Amber / Gray) and peer management modal.
+- **Optical Rail Lens Dock**: Left navigation rail with a draggable convex liquid-glass optical lens bubble featuring spring physics animation and pop-out magnification.
+- **Waveform Seekbar**: Real audio peak rendering with smooth scrubbing and linear fallback.
+- **Bottom Player Deck**: Floating liquid glass player deck pinned to bottom edge matching reference image (`media_1793787814079_13a6cdd8.jpg`) with track artwork, favorite button, transport controls, waveform seekbar, volume control, authoritative quality pill (`Track.formatBadgeText`), and cast icon.
+- **Home View Overhaul**: FOR YOU local genre mix cards (multi-artwork collages), REDISCOVER row with real play-history badges ("Last played 6 months ago", "Old favorite"), and RECENTLY PLAYED row with horizontal mouse-wheel scrolling.
+- **Settings Hub**: 2-column mobile-matching liquid glass card grid with search bar, Audio Routing / DAC (WASAPI Exclusive switch), DSP & EQ, Appearance & Glass (OLED Pure Black switch), General (hotkey sheet, library rescan), and Node Connect Sync Center.
+- **Keyboard Shortcuts**: <kbd>Space</kbd>, <kbd>Ctrl+F</kbd>, <kbd>Ctrl+1/2/3</kbd>, <kbd>Arrows</kbd>, <kbd>M</kbd>. Android portrait layout 100% intact.
 
 ### Compose Multiplatform Architecture (`:core-ui`)
 - **Shared UI Layer**: Complete port of Node Player's interface into Compose Multiplatform (commonMain, androidMain, desktopMain):
