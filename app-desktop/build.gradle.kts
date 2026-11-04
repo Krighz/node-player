@@ -14,6 +14,7 @@ dependencies {
     implementation(project(":core-model"))
     implementation(project(":core-dsp"))
     implementation(project(":core-library"))
+    implementation(project(":core-network"))
     implementation(project(":integration-api"))
     implementation(project(":core-ui"))
 

@@ -12,8 +12,13 @@ import androidx.compose.ui.window.rememberWindowState
 import com.nodeplayer.desktop.audio.WindowsPlaybackEngine
 import com.nodeplayer.desktop.data.DesktopSettingsStore
 import com.nodeplayer.desktop.data.DesktopTrackDatabase
+import com.nodeplayer.desktop.data.DesktopTrackRepositoryAdapter
 import com.nodeplayer.desktop.data.WindowsFileScanner
 import com.nodeplayer.model.*
+import com.nodeplayer.network.protocol.ControlStateEventMessage
+import com.nodeplayer.network.service.ConnectState
+import com.nodeplayer.network.service.LocalPlayerController
+import com.nodeplayer.network.service.NodeConnectHub
 import com.nodeplayer.ui.SharedPlayerLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -33,6 +38,21 @@ fun main() = application {
     val scanner = remember { WindowsFileScanner() }
     val engine = remember { WindowsPlaybackEngine() }
 
+    val trackRepo = remember { DesktopTrackRepositoryAdapter(database) }
+    val localController = remember {
+        object : LocalPlayerController {
+            override fun play() { if (!engine.isPlaying.value) engine.playPause() }
+            override fun pause() { if (engine.isPlaying.value) engine.playPause() }
+            override fun playPause() { engine.playPause() }
+            override fun seekTo(positionMs: Long) { engine.seekTo(positionMs) }
+            override fun skipToNext() { engine.next() }
+            override fun skipToPrevious() { engine.previous() }
+            override fun setVolume(volume: Float) { engine.setVolume(volume) }
+            override fun toggleShuffle() { engine.toggleShuffle() }
+            override fun cycleRepeat() { engine.cycleRepeatMode() }
+        }
+    }
+
     var trackList by remember { mutableStateOf<List<Track>>(emptyList()) }
     var albums by remember { mutableStateOf<List<Album>>(emptyList()) }
     var artists by remember { mutableStateOf<List<Artist>>(emptyList()) }
@@ -41,6 +61,41 @@ fun main() = application {
     var audioEffectConfig by remember { mutableStateOf(settingsStore.loadEffectConfig()) }
     var themeConfig by remember { mutableStateOf(settingsStore.loadThemeConfig().copy(isOledBlack = false)) }
     var currentMusicFolder by remember { mutableStateOf(settingsStore.getLastMusicFolder()) }
+
+    val hub = remember {
+        NodeConnectHub(
+            trackRepository = trackRepo,
+            localController = localController,
+            onIncomingCastStream = { session, jitter ->
+                engine.playIncomingCastStream(jitter, session)
+            },
+            onIncomingHandoff = { handoff ->
+                val matched = trackList.firstOrNull { it.title.equals(handoff.trackTitle, ignoreCase = true) }
+                if (matched != null) {
+                    engine.playTrack(matched)
+                    engine.seekTo(handoff.positionMs)
+                }
+                true
+            }
+        )
+    }
+
+    LaunchedEffect(hub) {
+        engine.preDspPcmTap = { pcmBytes, ptsMs ->
+            coroutineScope.launch {
+                hub.castService.sendPcmAudioChunk(pcmBytes, ptsMs)
+            }
+        }
+        engine.onSeekFlushCallback = { ptsMs ->
+            coroutineScope.launch {
+                hub.castService.flushSenderStream(ptsMs)
+            }
+        }
+    }
+
+    val connectState by hub.connectionState.collectAsState()
+    val connectedDeviceCount by hub.connectedDeviceCount.collectAsState()
+    val isNodeConnectOn = connectState != ConnectState.OFF
 
     val currentTrack by engine.currentTrack.collectAsState()
     val isPlaying by engine.isPlaying.collectAsState()
@@ -69,10 +124,35 @@ fun main() = application {
         }
     }
 
-    // Apply saved audio DSP config and load library on startup
+    // Apply saved audio DSP config, load library, and start Node Connect on startup
     LaunchedEffect(Unit) {
         engine.applyEffectConfig(audioEffectConfig)
         refreshLibrary()
+        hub.start(
+            deviceName = "Node Player PC (${System.getProperty("user.name", "Windows")})",
+            platform = "Windows"
+        )
+    }
+
+    // Broadcast playback state to connected controllers
+    LaunchedEffect(currentTrack, isPlaying, positionMs) {
+        val t = currentTrack
+        if (t != null && isNodeConnectOn && connectedDeviceCount > 0) {
+            hub.controlService.broadcastLocalState(
+                ControlStateEventMessage(
+                    isPlaying = isPlaying,
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                    volume = volume,
+                    trackTitle = t.title,
+                    artist = t.artist,
+                    album = t.album,
+                    isShuffle = isShuffle,
+                    repeatMode = repeatMode,
+                    formatBadge = t.formatBadgeText
+                )
+            )
+        }
     }
 
     fun pickAndScanFolder() {
@@ -134,6 +214,7 @@ fun main() = application {
 
     Window(
         onCloseRequest = {
+            hub.stop()
             engine.release()
             exitApplication()
         },
@@ -176,6 +257,18 @@ fun main() = application {
                     format = "WASAPI 32-bit Float"
                 ),
                 isExclusiveMode = isExclusiveMode,
+                nodeConnectEnabled = isNodeConnectOn,
+                connectedDeviceCount = connectedDeviceCount,
+                onToggleNodeConnect = { enabled ->
+                    if (enabled) {
+                        hub.start(
+                            deviceName = "Node Player PC (${System.getProperty("user.name", "Windows")})",
+                            platform = "Windows"
+                        )
+                    } else {
+                        hub.stop()
+                    }
+                },
                 currentMusicFolder = currentMusicFolder,
                 onPlayTrack = { track, list ->
                     engine.setQueue(list, list.indexOf(track))
@@ -198,6 +291,24 @@ fun main() = application {
                     settingsStore.saveThemeConfig(cfg)
                 },
                 onToggleExclusiveMode = { engine.setExclusiveMode(it) },
+                onCastToPeer = { peer ->
+                    coroutineScope.launch {
+                        val t = currentTrack
+                        if (t != null) {
+                            val conn = hub.activeConnections.firstOrNull { it.peerDeviceId == peer.id }
+                            if (conn != null) {
+                                hub.castService.startCastAsSender(conn, t, positionMs)
+                            }
+                        }
+                    }
+                },
+                onOpenSyncCenter = {
+                    coroutineScope.launch {
+                        for (conn in hub.activeConnections) {
+                            hub.syncService.pushSyncPackage(conn)
+                        }
+                    }
+                },
                 onRescanLibrary = { rescanCurrentFolder() },
                 onSelectMusicFolder = { pickAndScanFolder() }
             )

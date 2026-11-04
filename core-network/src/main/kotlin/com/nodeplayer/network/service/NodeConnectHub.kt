@@ -5,11 +5,20 @@ import com.nodeplayer.network.crypto.NodeDeviceIdentity
 import com.nodeplayer.network.crypto.SecureKeyStorage
 import com.nodeplayer.network.discovery.DiscoveredNodePeer
 import com.nodeplayer.network.discovery.NodeDiscovery
+import com.nodeplayer.network.cast.ActiveCastSession
+import com.nodeplayer.network.cast.JitterBuffer
+import com.nodeplayer.network.cast.NodeConnectCastService
+import com.nodeplayer.network.handoff.HandoffPayload
+import com.nodeplayer.network.handoff.NodeConnectHandoffService
 import com.nodeplayer.network.pairing.DeviceRegistry
 import com.nodeplayer.network.pairing.PairedDevice
 import com.nodeplayer.network.pairing.PairingManager
 import com.nodeplayer.network.pairing.PairingSession
 import com.nodeplayer.network.protocol.ControlStateEventMessage
+import com.nodeplayer.network.session.ExternalSessionService
+import com.nodeplayer.network.session.PlatformMediaSessionBridge
+import com.nodeplayer.network.sync.NodeConnectTransferService
+import com.nodeplayer.network.sync.SyncEngine
 import com.nodeplayer.network.transport.NodeClient
 import com.nodeplayer.network.transport.NodeConnection
 import com.nodeplayer.network.transport.NodeServer
@@ -28,19 +37,32 @@ enum class ConnectState {
 
 /**
  * NodeConnectHub: Main coordination hub for Node Connect.
- * Integrates Discovery, mTLS Server, Client, Registry, Pairing, Library, and Control planes.
+ * Integrates Discovery, mTLS Server, Client, Registry, Pairing, Library, Control, Cast, Handoff, Sync, and External Session planes.
  */
 class NodeConnectHub(
-    private val keyStorage: SecureKeyStorage = SecureKeyStorage(),
-    private val registry: DeviceRegistry = DeviceRegistry(),
-    private val trackRepository: TrackRepository? = null,
-    private val localController: LocalPlayerController? = null,
-    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val keyStorage: SecureKeyStorage = SecureKeyStorage(),
+    val registry: DeviceRegistry = DeviceRegistry(),
+    val trackRepository: TrackRepository? = null,
+    val localController: LocalPlayerController? = null,
+    val onIncomingCastStream: ((ActiveCastSession, JitterBuffer) -> Unit)? = null,
+    val onIncomingHandoff: ((HandoffPayload) -> Boolean)? = null,
+    val platformMediaSessionBridge: PlatformMediaSessionBridge? = null,
+    val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) {
     val pairingManager = PairingManager(registry)
     val libraryService = NodeConnectLibraryService(trackRepository)
     val controlService = NodeConnectControlService(localController, registry)
     val mirrorService = NodeConnectMirrorService()
+    val castService = NodeConnectCastService(
+        registry = registry,
+        onStreamStartedLocally = onIncomingCastStream
+    )
+    val handoffService = NodeConnectHandoffService(
+        onHandoffReceived = onIncomingHandoff
+    )
+    val syncEngine = SyncEngine()
+    val syncService = NodeConnectTransferService(syncEngine)
+    val externalSessionService = ExternalSessionService(platformMediaSessionBridge, registry)
 
     private var identity: NodeDeviceIdentity? = null
     private var server: NodeServer? = null
@@ -167,7 +189,11 @@ class NodeConnectHub(
                 for (frame in conn.incomingFrames) {
                     val handled = libraryService.handleFrame(frame, conn) ||
                             controlService.handleFrame(frame, conn) ||
-                            mirrorService.handleFrame(frame)
+                            mirrorService.handleFrame(frame) ||
+                            castService.handleFrame(frame, conn) ||
+                            handoffService.handleFrame(frame, conn) ||
+                            syncService.handleFrame(frame, conn) ||
+                            externalSessionService.handleFrame(frame, conn)
                 }
             } finally {
                 activeConnections.remove(conn)

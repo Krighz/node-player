@@ -14,6 +14,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
+import android.media.AudioFormat
+import android.media.AudioTrack
+import com.nodeplayer.network.cast.ActiveCastSession
+import com.nodeplayer.network.cast.JitterBuffer
+import com.nodeplayer.network.discovery.DiscoveredNodePeer
+import com.nodeplayer.network.protocol.ControlStateEventMessage
+import com.nodeplayer.network.service.LocalPlayerController
+import com.nodeplayer.network.service.NodeConnectHub
 import android.os.Build
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -49,6 +57,10 @@ class PlaybackService : MediaSessionService() {
     lateinit var crossfadeManager: com.nodeplayer.music.audio.CrossfadePlayerManager
     lateinit var sleepTimerManager: SleepTimerManager
         private set
+    lateinit var nodeConnectHub: NodeConnectHub
+        private set
+    private var incomingCastJob: Job? = null
+    private var incomingAudioTrack: AudioTrack? = null
     val statsTracker = com.nodeplayer.library.PlaybackStatsTracker()
     private val scrobbledTrackIds = mutableSetOf<Long>()
 
@@ -92,7 +104,95 @@ class PlaybackService : MediaSessionService() {
         ) {
             if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                 statsTracker.onSeek()
+                if (::nodeConnectHub.isInitialized) {
+                    serviceScope.launch(Dispatchers.IO) {
+                        nodeConnectHub.castService.flushSenderStream(newPosition.positionMs)
+                    }
+                }
             }
+        }
+    }
+
+    fun playIncomingCastStream(session: ActiveCastSession, jitter: JitterBuffer) {
+        incomingCastJob?.cancel()
+        try {
+            incomingAudioTrack?.stop()
+            incomingAudioTrack?.release()
+        } catch (_: Exception) {}
+
+        incomingCastJob = serviceScope.launch(Dispatchers.IO) {
+            val minBufSize = AudioTrack.getMinBufferSize(
+                session.sampleRate,
+                if (session.channels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO,
+                if (session.bitDepth == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_FLOAT
+            )
+            val bufferSize = minBufSize.coerceAtLeast(8192)
+
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(if (session.bitDepth == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_FLOAT)
+                        .setSampleRate(session.sampleRate)
+                        .setChannelMask(if (session.channels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufferSize)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+
+            incomingAudioTrack = track
+            track.play()
+
+            val buf = ByteArray(4096)
+            try {
+                while (isActive) {
+                    val read = jitter.read(buf, 0, buf.size)
+                    if (read > 0) {
+                        track.write(buf, 0, read)
+                    } else {
+                        delay(5)
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                try {
+                    track.stop()
+                    track.release()
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    fun startAudioCasting(targetPeer: DiscoveredNodePeer) {
+        serviceScope.launch(Dispatchers.IO) {
+            val conn = nodeConnectHub.connectToPeer(targetPeer) ?: return@launch
+            val track = crossfadeManager.currentPlayingTrack ?: return@launch
+            nodeConnectHub.castService.startCastAsSender(conn, track, crossfadeManager.activePlayer.currentPosition)
+
+            crossfadeManager.dspAudioProcessorA.preDspPcmTap = { bytes, _, _, _ ->
+                serviceScope.launch(Dispatchers.IO) {
+                    nodeConnectHub.castService.sendPcmAudioChunk(bytes, crossfadeManager.activePlayer.currentPosition)
+                }
+            }
+            crossfadeManager.dspAudioProcessorB.preDspPcmTap = { bytes, _, _, _ ->
+                serviceScope.launch(Dispatchers.IO) {
+                    nodeConnectHub.castService.sendPcmAudioChunk(bytes, crossfadeManager.activePlayer.currentPosition)
+                }
+            }
+        }
+    }
+
+    fun stopAudioCasting() {
+        serviceScope.launch(Dispatchers.IO) {
+            nodeConnectHub.castService.stopCastAsSender()
+            crossfadeManager.dspAudioProcessorA.preDspPcmTap = null
+            crossfadeManager.dspAudioProcessorB.preDspPcmTap = null
         }
     }
 
@@ -439,6 +539,64 @@ class PlaybackService : MediaSessionService() {
         }
 
         registerHeadsetReceiver()
+        val localController = object : LocalPlayerController {
+            override fun play() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.play() }
+            }
+            override fun pause() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.pause() }
+            }
+            override fun playPause() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.togglePlayPause() }
+            }
+            override fun seekTo(positionMs: Long) {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.seekTo(positionMs) }
+            }
+            override fun skipToNext() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.skipNext() }
+            }
+            override fun skipToPrevious() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.skipPrevious() }
+            }
+            override fun setVolume(volume: Float) {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.activePlayer.volume = volume }
+            }
+            override fun toggleShuffle() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.setShuffle(!crossfadeManager.isShuffleEnabled) }
+            }
+            override fun cycleRepeat() {
+                serviceScope.launch(Dispatchers.Main) {
+                    val nextMode = (crossfadeManager.activePlayer.repeatMode + 1) % 3
+                    crossfadeManager.activePlayer.repeatMode = nextMode
+                }
+            }
+        }
+
+        nodeConnectHub = NodeConnectHub(
+            localController = localController,
+            onIncomingCastStream = { session, jitter ->
+                playIncomingCastStream(session, jitter)
+            },
+            onIncomingHandoff = { handoff ->
+                serviceScope.launch(Dispatchers.Main) {
+                    val tracks = crossfadeManager.currentQueue
+                    val matchedIdx = tracks.indexOfFirst { it.title.equals(handoff.trackTitle, ignoreCase = true) }
+                    if (matchedIdx >= 0) {
+                        crossfadeManager.playQueue(tracks, matchedIdx, handoff.positionMs)
+                    }
+                }
+                true
+            }
+        )
+
+        val connectPrefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+        val nodeConnectEnabled = connectPrefs.getBoolean("node_connect_enabled", false)
+        if (nodeConnectEnabled) {
+            nodeConnectHub.start(
+                deviceName = Build.MODEL,
+                platform = "Android"
+            )
+        }
     }
 
     private fun registerHeadsetReceiver() {
@@ -584,6 +742,14 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        if (::nodeConnectHub.isInitialized) {
+            nodeConnectHub.stop()
+        }
+        incomingCastJob?.cancel()
+        try {
+            incomingAudioTrack?.stop()
+            incomingAudioTrack?.release()
+        } catch (_: Exception) {}
         if (::sleepTimerManager.isInitialized) {
             sleepTimerManager.release()
         }

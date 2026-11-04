@@ -22,6 +22,9 @@ class WindowsPlaybackEngine(
     private var playbackJob: Job? = null
     private val pendingSeekMs = AtomicLong(-1L)
 
+    var preDspPcmTap: ((ByteArray, Long) -> Unit)? = null
+    var onSeekFlushCallback: ((Long) -> Unit)? = null
+
     private val _queue = MutableStateFlow<List<Track>>(emptyList())
     val queue: StateFlow<List<Track>> = _queue.asStateFlow()
 
@@ -146,6 +149,12 @@ class WindowsPlaybackEngine(
                         break
                     }
 
+                    // Pre-DSP PCM Audio Streaming Tap for Node Connect
+                    if (preDspPcmTap != null && samplesRead > 0) {
+                        val pcmBytes = floatToBytes16(buffer, samplesRead)
+                        preDspPcmTap?.invoke(pcmBytes, _currentPositionMs.value)
+                    }
+
                     dspChain.processInterleavedFloat(buffer, 0, samplesRead)
                     audioOutput.write(buffer, 0, samplesRead)
 
@@ -247,6 +256,81 @@ class WindowsPlaybackEngine(
         val clamped = positionMs.coerceIn(0L, track.durationMs)
         _currentPositionMs.value = clamped
         pendingSeekMs.set(clamped)
+        onSeekFlushCallback?.invoke(clamped)
+    }
+
+    private fun floatToBytes16(floatBuffer: FloatArray, count: Int): ByteArray {
+        val bytes = ByteArray(count * 2)
+        var bIdx = 0
+        for (i in 0 until count) {
+            val s = (floatBuffer[i].coerceIn(-1.0f, 1.0f) * 32767.0f).toInt().toShort()
+            bytes[bIdx++] = (s.toInt() and 0xFF).toByte()
+            bytes[bIdx++] = ((s.toInt() shr 8) and 0xFF).toByte()
+        }
+        return bytes
+    }
+
+    fun playIncomingCastStream(jitter: com.nodeplayer.network.cast.JitterBuffer, session: com.nodeplayer.network.cast.ActiveCastSession) {
+        playbackJob?.cancel()
+        _currentTrack.value = Track(
+            id = session.sequenceId,
+            title = session.trackTitle,
+            artist = session.artist,
+            album = session.album,
+            durationMs = session.durationMs,
+            path = "nodeconnect://cast/${session.streamId}",
+            sampleRate = session.sampleRate,
+            bitDepth = session.bitDepth,
+            channels = session.channels,
+            formatDescription = "Cast PCM (${session.sampleRate / 1000}kHz)",
+            isLossless = true
+        )
+        _durationMs.value = session.durationMs
+        _currentPositionMs.value = 0L
+
+        audioOutput.open(
+            AudioFormatConfig(
+                sampleRate = session.sampleRate,
+                channelCount = session.channels,
+                isFloat32 = true,
+                isExclusiveMode = _isExclusiveMode.value
+            )
+        )
+        _isPlaying.value = true
+        isPaused.set(false)
+
+        playbackJob = engineScope.launch {
+            val byteBuffer = ByteArray(4096)
+            val floatBuffer = FloatArray(2048)
+            var framesPlayed = 0L
+
+            try {
+                while (isActive) {
+                    val read = jitter.read(byteBuffer, 0, byteBuffer.size)
+                    if (read <= 0) {
+                        delay(10)
+                        continue
+                    }
+
+                    val sampleCount = read / 2
+                    for (i in 0 until sampleCount) {
+                        val low = byteBuffer[i * 2].toInt() and 0xFF
+                        val high = byteBuffer[i * 2 + 1].toInt()
+                        val s16 = ((high shl 8) or low).toShort()
+                        floatBuffer[i] = s16 / 32768.0f
+                    }
+
+                    dspChain.processInterleavedFloat(floatBuffer, 0, sampleCount)
+                    audioOutput.write(floatBuffer, 0, sampleCount)
+
+                    framesPlayed += (sampleCount / session.channels)
+                    val posMs = (framesPlayed * 1000L) / session.sampleRate
+                    _currentPositionMs.value = posMs
+                }
+            } catch (e: Exception) {
+                // Cancelled
+            }
+        }
     }
 
     fun setVolume(vol: Float) {

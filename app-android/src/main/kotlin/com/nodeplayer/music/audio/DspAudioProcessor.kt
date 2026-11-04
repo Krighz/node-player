@@ -26,6 +26,9 @@ class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
     var actualEncoding: String = "PCM_16BIT"
         private set
 
+    @Volatile
+    var preDspPcmTap: ((pcmBytes: ByteArray, sampleRate: Int, channels: Int, bitDepth: Int) -> Unit)? = null
+
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT && inputAudioFormat.encoding != C.ENCODING_PCM_FLOAT) {
             return AudioProcessor.AudioFormat.NOT_SET
@@ -52,6 +55,18 @@ class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
             val floatCount = remaining / 4
             val floatArray = FloatArray(floatCount)
             inputBuffer.asFloatBuffer().get(floatArray)
+
+            // Tap pre-DSP PCM audio before applying EQ / DSP chain
+            val tap = preDspPcmTap
+            if (tap != null) {
+                val pcmBytes = ByteArray(floatCount * 2)
+                for (i in 0 until floatCount) {
+                    val s = (floatArray[i] * 32767.0f).coerceIn(-32768.0f, 32767.0f).toInt().toShort()
+                    pcmBytes[i * 2] = (s.toInt() and 0xFF).toByte()
+                    pcmBytes[i * 2 + 1] = ((s.toInt() shr 8) and 0xFF).toByte()
+                }
+                tap(pcmBytes, sampleRate, channels, 16)
+            }
 
             // Compute real RMS amplitude of audio buffer
             var sumSq = 0.0
@@ -81,6 +96,15 @@ class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
             inputBuffer.position(inputBuffer.limit())
 
         } else if (inputFormat.encoding == C.ENCODING_PCM_16BIT) {
+            val tap = preDspPcmTap
+            if (tap != null) {
+                val markPos = inputBuffer.position()
+                val pcmBytes = ByteArray(remaining)
+                inputBuffer.get(pcmBytes)
+                inputBuffer.position(markPos)
+                tap(pcmBytes, sampleRate, channels, 16)
+            }
+
             val sampleCount = remaining / 2
             val floatArray = FloatArray(sampleCount)
 

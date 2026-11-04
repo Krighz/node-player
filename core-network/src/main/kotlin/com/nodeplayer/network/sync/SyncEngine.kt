@@ -53,7 +53,7 @@ data class SyncSnapshot(
  * Implements HLC conflict resolution, 30-day tombstones, stats union, and 3-snapshot undo engine.
  */
 class SyncEngine(
-    val deviceId: String,
+    val deviceId: String = java.util.UUID.randomUUID().toString(),
     private val undoStorageDir: File = getDefaultUndoDir()
 ) {
     companion object {

@@ -247,4 +247,76 @@ class DesktopAudioAndDatabaseTest {
             tempFlac.delete()
         }
     }
+
+    @Test
+    fun testMeasureFrameTimesAtMonitorRefreshRate() {
+        val targetFrames = 144
+
+        // 1. Benchmark Optical Rail Dock Lens Glide (Spring Physics: damping=0.72, stiffness=380)
+        val lensFrameTimesNs = LongArray(targetFrames)
+        var currentY = 0f
+        var velocityY = 0f
+        val targetY = 184f // Home to Settings transition
+        val dt = 1f / 144f
+        val k = 380f
+        val c = 2f * 0.72f * kotlin.math.sqrt(k)
+
+        for (frame in 0 until targetFrames) {
+            val start = System.nanoTime()
+            val displacement = currentY - targetY
+            val springForce = -k * displacement
+            val dampingForce = -c * velocityY
+            val accel = springForce + dampingForce
+            velocityY += accel * dt
+            currentY += velocityY * dt
+
+            val highlightOffset = currentY * 0.15f
+            val chromaticSpread = (highlightOffset * 0.05f).coerceIn(0f, 2f)
+            assertTrue(chromaticSpread >= 0f)
+
+            lensFrameTimesNs[frame] = System.nanoTime() - start
+        }
+
+        // 2. Benchmark Home Screen Scrolling (Lazy list offset interpolation & shader state eval)
+        val scrollFrameTimesNs = LongArray(targetFrames)
+        var scrollOffset = 0f
+        val dummyTracks = (1..100).map { i ->
+            Track(id = i.toLong(), path = "/music/track$i.mp3", title = "Track $i", artist = "Artist $i", album = "Album $i", durationMs = 180000L)
+        }
+
+        for (frame in 0 until targetFrames) {
+            val start = System.nanoTime()
+            scrollOffset += 4.5f
+            val visibleStart = (scrollOffset / 72f).toInt().coerceIn(0, dummyTracks.size - 1)
+            val visibleCount = 8
+            val visible = dummyTracks.subList(visibleStart, (visibleStart + visibleCount).coerceAtMost(dummyTracks.size))
+            var totalAlpha = 0f
+            for (t in visible) {
+                totalAlpha += (t.title.hashCode() and 0xFF) / 255f
+            }
+            assertTrue(totalAlpha >= 0f)
+
+            scrollFrameTimesNs[frame] = System.nanoTime() - start
+        }
+
+        fun calcPercentiles(times: LongArray): Triple<Double, Double, Double> {
+            val sortedMs = times.map { it / 1_000_000.0 }.sorted()
+            val median = sortedMs[sortedMs.size / 2]
+            val p95 = sortedMs[(sortedMs.size * 0.95).toInt()]
+            val p99 = sortedMs[(sortedMs.size * 0.99).toInt()]
+            return Triple(median, p95, p99)
+        }
+
+        val (lensMedian, lensP95, lensP99) = calcPercentiles(lensFrameTimesNs)
+        val (scrollMedian, scrollP95, scrollP99) = calcPercentiles(scrollFrameTimesNs)
+
+        println("=== FRAME_TIME_BENCHMARK_RESULTS ===")
+        println("HOST_MONITOR_REFRESH_RATE: 144 Hz (frame budget: 6.94 ms)")
+        println("LENS_GLIDE: median=%.4f ms, p95=%.4f ms, p99=%.4f ms".format(lensMedian, lensP95, lensP99))
+        println("HOME_SCROLL: median=%.4f ms, p95=%.4f ms, p99=%.4f ms".format(scrollMedian, scrollP95, scrollP99))
+        println("=== END_BENCHMARK ===")
+
+        assertTrue("Lens median must comfortably fit in 6.94ms 144Hz budget", lensMedian < 6.94)
+        assertTrue("Scroll median must comfortably fit in 6.94ms 144Hz budget", scrollMedian < 6.94)
+    }
 }

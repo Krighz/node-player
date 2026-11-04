@@ -15,6 +15,11 @@ class CryptoTest {
         assertNotNull(identity.certificate)
         assertEquals("test-node-1", identity.deviceId)
 
+        // Export cert.der for OpenSSL and certutil verification
+        val certFile = File("build/test-results/test_cert.der")
+        certFile.parentFile.mkdirs()
+        certFile.writeBytes(identity.certificate.encoded)
+
         // Verify X.509 signature using self public key
         identity.certificate.verify(identity.keyPair.public)
 
