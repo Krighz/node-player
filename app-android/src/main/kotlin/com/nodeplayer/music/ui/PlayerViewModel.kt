@@ -1310,6 +1310,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         app.startService(intent)
     }
 
+    val isNodeConnectEnabled = MutableStateFlow(prefs.getBoolean("node_connect_enabled", true))
+
+    val nodeConnectHub get() = PlaybackService.instance?.nodeConnectHub
+
+    fun setNodeConnectEnabled(enabled: Boolean) {
+        isNodeConnectEnabled.value = enabled
+        PlaybackService.instance?.setNodeConnectEnabled(enabled)
+    }
+
+    fun castAudioToPeer(peer: com.nodeplayer.network.discovery.DiscoveredNodePeer) {
+        PlaybackService.instance?.startAudioCasting(peer)
+    }
+
+    fun stopAudioCasting() {
+        PlaybackService.instance?.stopAudioCasting()
+    }
+
     override fun onCleared() {
         super.onCleared()
         progressJob?.cancel()

@@ -27,6 +27,7 @@ kotlin {
                 implementation(project(":core-model"))
                 implementation(project(":core-dsp"))
                 implementation(project(":core-library"))
+                implementation(project(":core-network"))
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(compose.material3)

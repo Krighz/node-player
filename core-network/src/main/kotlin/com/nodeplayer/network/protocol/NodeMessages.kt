@@ -8,6 +8,8 @@ object NodeMessageTypes {
     const val PING: Short = 0x0003
     const val PONG: Short = 0x0004
     const val DISCONNECT: Short = 0x0005
+    const val PAIRING_REQ: Short = 0x0008
+    const val PAIRING_RESP: Short = 0x0009
 
     // Control Plane (0x0010 - 0x001F)
     const val CONTROL_CMD: Short = 0x0010
@@ -326,6 +328,55 @@ data class ExternalSessionStateMessage(
                 isPlaying = map["isPlaying"]?.toBooleanStrictOrNull() ?: false,
                 positionMs = map["positionMs"]?.toLongOrNull() ?: 0L,
                 durationMs = map["durationMs"]?.toLongOrNull() ?: 0L
+            )
+        }
+    }
+}
+
+// 6. Pairing Messages
+data class PairingRequestMessage(
+    val tokenOrPin: String,
+    val deviceId: String,
+    val deviceName: String,
+    val platform: String
+) {
+    fun toBytes(): ByteArray {
+        val json = """{"tokenOrPin":"${SimpleJson.escape(tokenOrPin)}","deviceId":"${SimpleJson.escape(deviceId)}","deviceName":"${SimpleJson.escape(deviceName)}","platform":"${SimpleJson.escape(platform)}"}"""
+        return json.toByteArray(StandardCharsets.UTF_8)
+    }
+
+    companion object {
+        fun fromBytes(bytes: ByteArray): PairingRequestMessage {
+            val map = SimpleJson.parseStringMap(String(bytes, StandardCharsets.UTF_8))
+            return PairingRequestMessage(
+                tokenOrPin = map["tokenOrPin"] ?: "",
+                deviceId = map["deviceId"] ?: "",
+                deviceName = map["deviceName"] ?: "",
+                platform = map["platform"] ?: ""
+            )
+        }
+    }
+}
+
+data class PairingResponseMessage(
+    val success: Boolean,
+    val message: String,
+    val serverDeviceId: String,
+    val serverDeviceName: String
+) {
+    fun toBytes(): ByteArray {
+        val json = """{"success":$success,"message":"${SimpleJson.escape(message)}","serverDeviceId":"${SimpleJson.escape(serverDeviceId)}","serverDeviceName":"${SimpleJson.escape(serverDeviceName)}"}"""
+        return json.toByteArray(StandardCharsets.UTF_8)
+    }
+
+    companion object {
+        fun fromBytes(bytes: ByteArray): PairingResponseMessage {
+            val map = SimpleJson.parseStringMap(String(bytes, StandardCharsets.UTF_8))
+            return PairingResponseMessage(
+                success = map["success"]?.toBooleanStrictOrNull() ?: false,
+                message = map["message"] ?: "",
+                serverDeviceId = map["serverDeviceId"] ?: "",
+                serverDeviceName = map["serverDeviceName"] ?: ""
             )
         }
     }

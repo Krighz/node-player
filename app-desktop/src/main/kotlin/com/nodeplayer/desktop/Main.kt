@@ -20,7 +20,9 @@ import com.nodeplayer.network.service.ConnectState
 import com.nodeplayer.network.service.LocalPlayerController
 import com.nodeplayer.network.service.NodeConnectHub
 import com.nodeplayer.ui.SharedPlayerLayout
+import com.nodeplayer.ui.components.NodeConnectPairingDialog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.awt.Dimension
@@ -96,6 +98,23 @@ fun main() = application {
     val connectState by hub.connectionState.collectAsState()
     val connectedDeviceCount by hub.connectedDeviceCount.collectAsState()
     val isNodeConnectOn = connectState != ConnectState.OFF
+
+    var showPairingDialog by remember { mutableStateOf(false) }
+    var pairingProgress by remember { mutableStateOf(false) }
+    var pairingStatusMsg by remember { mutableStateOf<String?>(null) }
+    val activeSession by hub.activePairingSession.collectAsState()
+    val discoveredPeers by hub.discoveredPeers.collectAsState()
+
+    val localIpAddress = remember {
+        try {
+            java.net.NetworkInterface.getNetworkInterfaces().asSequence()
+                .flatMap { it.inetAddresses.asSequence() }
+                .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }
+                ?.hostAddress ?: java.net.InetAddress.getLocalHost().hostAddress
+        } catch (e: Exception) {
+            "127.0.0.1"
+        }
+    }
 
     val currentTrack by engine.currentTrack.collectAsState()
     val isPlaying by engine.isPlaying.collectAsState()
@@ -291,6 +310,13 @@ fun main() = application {
                     settingsStore.saveThemeConfig(cfg)
                 },
                 onToggleExclusiveMode = { engine.setExclusiveMode(it) },
+                onPairNewDevice = {
+                    if (hub.activePairingSession.value == null) {
+                        hub.startPairingSession()
+                    }
+                    pairingStatusMsg = null
+                    showPairingDialog = true
+                },
                 onCastToPeer = { peer ->
                     coroutineScope.launch {
                         val t = currentTrack
@@ -312,6 +338,36 @@ fun main() = application {
                 onRescanLibrary = { rescanCurrentFolder() },
                 onSelectMusicFolder = { pickAndScanFolder() }
             )
+
+            if (showPairingDialog) {
+                NodeConnectPairingDialog(
+                    onDismissRequest = { showPairingDialog = false },
+                    activeSession = activeSession,
+                    localIp = localIpAddress,
+                    localDeviceId = hub.activeDeviceId ?: "pc-host",
+                    localDeviceName = "Node Player PC (${System.getProperty("user.name", "Windows")})",
+                    discoveredPeers = discoveredPeers,
+                    onStartSession = { hub.startPairingSession() },
+                    onCancelSession = { hub.cancelPairingSession() },
+                    onPairWithHost = { host, port, pin ->
+                        coroutineScope.launch {
+                            pairingProgress = true
+                            pairingStatusMsg = "Connecting to $host:$port..."
+                            val res = hub.pairWithHost(host, port, pin)
+                            pairingProgress = false
+                            if (res.isSuccess) {
+                                pairingStatusMsg = "Successfully paired with ${res.getOrNull()}!"
+                                delay(1200)
+                                showPairingDialog = false
+                            } else {
+                                pairingStatusMsg = "Pairing failed: ${res.exceptionOrNull()?.message}"
+                            }
+                        }
+                    },
+                    isPairingInProgress = pairingProgress,
+                    pairingStatusMessage = pairingStatusMsg
+                )
+            }
         }
     }
 }

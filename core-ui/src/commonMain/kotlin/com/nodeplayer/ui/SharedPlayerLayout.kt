@@ -84,6 +84,7 @@ fun SharedPlayerLayout(
     onReplayGainModeChange: (ReplayGainMode) -> Unit = {},
     onLastFmToggle: (Boolean) -> Unit = {},
     onToggleNodeConnect: (Boolean) -> Unit = {},
+    onPairNewDevice: () -> Unit = {},
     onCastToPeer: (DiscoveredPeerInfo) -> Unit = {},
     onOpenSyncCenter: () -> Unit = {},
     currentMusicFolder: String = "",
@@ -197,13 +198,13 @@ fun SharedPlayerLayout(
                     }
                 }
         ) {
-            // 1. Full Dynamic Liquid Glass Background with all 6 shader animation styles
+            // 1. Full Dynamic Liquid Glass Background (freezes during pause/idle for maximum performance)
             LiquidGlassBackground(
                 accentColor = accent,
                 isOled = themeConfig.isOledBlack,
                 isPlaying = isPlaying,
                 isPerformanceMode = themeConfig.isPerformanceMode,
-                animatedBackdrop = true,
+                animatedBackdrop = themeConfig.animatedBackdrop && isPlaying,
                 themeConfig = themeConfig
             )
 
@@ -243,6 +244,7 @@ fun SharedPlayerLayout(
                             connectedDeviceCount = connectedDeviceCount,
                             allowCastingToThisDevice = nodeConnectEnabled,
                             onToggleAllowCasting = onToggleNodeConnect,
+                            onPairNewDevice = onPairNewDevice,
                             onCastToDevice = onCastToPeer,
                             onOpenSyncCenter = {
                                 currentNav = PlayerNavDestination.SETTINGS

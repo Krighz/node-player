@@ -213,7 +213,7 @@ data class GlassThemeConfig(
     val backgroundAnimationSpeed: Float = 1.0f,            // 0.2f to 3.0f
     val backgroundAnimationIntensity: Float = 0.8f,        // 0.1f to 1.0f
     val backgroundColorSource: String = "ARTWORK",         // ARTWORK, PALETTE, CUSTOM
-    val animateOnlyWhilePlaying: Boolean = false,
+    val animateOnlyWhilePlaying: Boolean = true,
     val frameRateCap: String = "AUTO",                     // AUTO, 60, 90, 120
     val renderQuality: String = "MAX_NATIVE",              // MAX_NATIVE, HIGH, BALANCED, LOW, AUTO_ADAPTIVE
     val antiBandingDithering: Boolean = true,

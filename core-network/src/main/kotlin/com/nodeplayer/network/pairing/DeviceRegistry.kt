@@ -31,7 +31,17 @@ class DeviceRegistry(
             val baseDir = if (!appData.isNullOrBlank()) {
                 File(appData, "NodePlayer/registry")
             } else {
-                File(System.getProperty("user.home", "."), ".nodeplayer/registry")
+                val androidFiles = File("/data/data/com.nodeplayer.music/files")
+                if (androidFiles.exists()) {
+                    File(androidFiles, "nodeplayer/registry")
+                } else {
+                    val userHome = System.getProperty("user.home", ".")
+                    if (userHome == "/" || userHome == ".") {
+                        File(System.getProperty("java.io.tmpdir", "."), ".nodeplayer/registry")
+                    } else {
+                        File(userHome, ".nodeplayer/registry")
+                    }
+                }
             }
             baseDir.mkdirs()
             return File(baseDir, "paired_devices.txt")

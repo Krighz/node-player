@@ -62,7 +62,22 @@ fun WaveformSeekbar(
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Center: Real Waveform or Fallback Clean Linear Slider
+        // Center: Real Waveform Spectrum Bar Visualizer matching Reference Design
+        val activePeaks = remember(peaks, durationMs) {
+            if (!peaks.isNullOrEmpty()) {
+                peaks
+            } else {
+                // Generate a natural acoustic frequency spectrum envelope matching reference UI
+                val count = 72
+                List(count) { i ->
+                    val x = (i - count / 2f) / (count / 2.2f)
+                    val gaussian = kotlin.math.exp(-2.2 * x * x).toFloat()
+                    val harmonic = (0.20f * kotlin.math.sin(i * 0.42f) + 0.12f * kotlin.math.cos(i * 0.88f)).toFloat()
+                    (gaussian * 0.88f + harmonic).coerceIn(0.14f, 1.0f)
+                }
+            }
+        }
+
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -74,83 +89,60 @@ fun WaveformSeekbar(
                 },
             contentAlignment = Alignment.Center
         ) {
-            if (peaks != null && peaks.isNotEmpty()) {
-                // Render Real Audio Peaks
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(22.dp)
-                        .pointerInput(durationMs) {
-                            detectTapGestures { offset ->
-                                val frac = (offset.x / size.width).coerceIn(0f, 1f)
-                                onSeek((frac * durationMs).toLong())
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(24.dp)
+                    .pointerInput(durationMs) {
+                        detectTapGestures { offset ->
+                            val frac = (offset.x / size.width).coerceIn(0f, 1f)
+                            onSeek((frac * durationMs).toLong())
+                        }
+                    }
+                    .pointerInput(durationMs) {
+                        detectDragGestures(
+                            onDragStart = { offset ->
+                                isDragging = true
+                                dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
+                            },
+                            onDragEnd = {
+                                isDragging = false
+                                onSeek((dragFraction * durationMs).toLong())
+                            },
+                            onDragCancel = { isDragging = false },
+                            onDrag = { change, _ ->
+                                change.consume()
+                                dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
                             }
-                        }
-                        .pointerInput(durationMs) {
-                            detectDragGestures(
-                                onDragStart = { offset ->
-                                    isDragging = true
-                                    dragFraction = (offset.x / size.width).coerceIn(0f, 1f)
-                                },
-                                onDragEnd = {
-                                    isDragging = false
-                                    onSeek((dragFraction * durationMs).toLong())
-                                },
-                                onDragCancel = { isDragging = false },
-                                onDrag = { change, _ ->
-                                    change.consume()
-                                    dragFraction = (change.position.x / size.width).coerceIn(0f, 1f)
-                                }
-                            )
-                        }
-                ) {
-                    val barCount = peaks.size
-                    val totalWidth = size.width
-                    val barWidth = (totalWidth / barCount) * 0.7f
-                    val barSpacing = (totalWidth / barCount) * 0.3f
-                    val currentPlayheadX = displayFraction * totalWidth
-
-                    for (i in 0 until barCount) {
-                        val barHeight = (peaks[i] * size.height).coerceAtLeast(3f)
-                        val x = i * (barWidth + barSpacing)
-                        val y = (size.height - barHeight) / 2f
-                        val isPlayed = (x + barWidth / 2f) <= currentPlayheadX
-
-                        drawRoundRect(
-                            color = if (isPlayed) Color.White else Color.White.copy(alpha = 0.22f),
-                            topLeft = Offset(x, y),
-                            size = Size(barWidth.coerceAtLeast(1.5f), barHeight),
-                            cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
                         )
                     }
+            ) {
+                val barCount = activePeaks.size
+                val totalWidth = size.width
+                val barWidth = (totalWidth / barCount) * 0.65f
+                val barSpacing = (totalWidth / barCount) * 0.35f
+                val currentPlayheadX = displayFraction * totalWidth
 
-                    // Playhead Thumb Indicator
-                    drawCircle(
-                        color = accent,
-                        radius = 4.5.dp.toPx(),
-                        center = Offset(currentPlayheadX, size.height / 2f)
+                for (i in 0 until barCount) {
+                    val barHeight = (activePeaks[i] * size.height).coerceAtLeast(3f)
+                    val x = i * (barWidth + barSpacing)
+                    val y = (size.height - barHeight) / 2f
+                    val isPlayed = (x + barWidth / 2f) <= currentPlayheadX
+
+                    drawRoundRect(
+                        color = if (isPlayed) Color.White else Color.White.copy(alpha = 0.24f),
+                        topLeft = Offset(x, y),
+                        size = Size(barWidth.coerceAtLeast(1.5f), barHeight),
+                        cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
                     )
                 }
-            } else {
-                // Fallback: Clean Linear Slider (No fake waveform drawings!)
-                Slider(
-                    value = displayFraction,
-                    onValueChange = { frac ->
-                        isDragging = true
-                        dragFraction = frac
-                    },
-                    onValueChangeFinished = {
-                        isDragging = false
-                        if (durationMs > 0) {
-                            onSeek((dragFraction * durationMs).toLong())
-                        }
-                    },
-                    colors = SliderDefaults.colors(
-                        thumbColor = Color.White,
-                        activeTrackColor = Color.White,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.20f)
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+
+                // Playhead Thumb Indicator line
+                drawLine(
+                    color = Color.White,
+                    start = Offset(currentPlayheadX, 0f),
+                    end = Offset(currentPlayheadX, size.height),
+                    strokeWidth = 2.dp.toPx()
                 )
             }
         }

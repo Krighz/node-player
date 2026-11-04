@@ -51,6 +51,10 @@ import com.nodeplayer.music.update.InstallUnknownAppsDialog
 import com.nodeplayer.music.update.PlaybackStopConfirmDialog
 import com.nodeplayer.music.update.WhatsNewSheet
 import android.widget.Toast
+import com.nodeplayer.ui.components.NodeConnectPairingDialog
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -171,6 +175,12 @@ class MainActivity : ComponentActivity() {
                 var pendingApkToInstall by remember { mutableStateOf<File?>(null) }
                 val downloadStatus by UpdateManager.downloadStatus.collectAsState()
                 var showSearchSheet by remember { mutableStateOf(false) }
+                var showPairingDialog by remember { mutableStateOf(false) }
+                var pairingProgress by remember { mutableStateOf(false) }
+                var pairingStatusMsg by remember { mutableStateOf<String?>(null) }
+                val hub = com.nodeplayer.music.service.PlaybackService.instance?.nodeConnectHub
+                val activeSession by (hub?.activePairingSession ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
+                val discoveredPeers by (hub?.discoveredPeers ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
 
                 LaunchedEffect(Unit) {
                     UpdateManager.init(this@MainActivity)
@@ -250,6 +260,7 @@ class MainActivity : ComponentActivity() {
                                 onOpenSmartPlaylists = { currentRoute = "smart_playlists" },
                                 onOpenStats = { currentRoute = "stats" },
                                 onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
+                                onOpenNodeConnect = { showPairingDialog = true },
                                 onInstallUpdate = {
                                     val readyApk = (downloadStatus as? DownloadStatus.ReadyToInstall)?.apkFile
                                         ?: UpdateDownloadManager.getDownloadedApk(this@MainActivity, UpdateManager.availableUpdate.value?.versionName ?: "")
@@ -377,6 +388,7 @@ class MainActivity : ComponentActivity() {
                                 onThemeConfigChange = { viewModel.updateThemeConfig(it) },
                                 onApplySafeGraphicsMode = { viewModel.applySafeGraphicsMode() },
                                 onReportProblem = { showDiagnosticsDialog = true },
+                                onPairNewDevice = { showPairingDialog = true },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
                                 hazeState = null
                             )
@@ -588,6 +600,46 @@ class MainActivity : ComponentActivity() {
                             onDismiss = { showSearchSheet = false }
                         )
                     }
+                    if (showPairingDialog) {
+                        val localIp = remember {
+                            try {
+                                java.net.NetworkInterface.getNetworkInterfaces().asSequence()
+                                    .flatMap { it.inetAddresses.asSequence() }
+                                    .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }
+                                    ?.hostAddress ?: "127.0.0.1"
+                            } catch (e: Exception) {
+                                "127.0.0.1"
+                            }
+                        }
+                        NodeConnectPairingDialog(
+                            onDismissRequest = { showPairingDialog = false },
+                            activeSession = activeSession,
+                            localIp = localIp,
+                            localDeviceId = hub?.activeDeviceId ?: android.os.Build.MODEL,
+                            localDeviceName = android.os.Build.MODEL,
+                            discoveredPeers = discoveredPeers,
+                            onStartSession = { hub?.startPairingSession() },
+                            onCancelSession = { hub?.cancelPairingSession() },
+                            onPairWithHost = { host, port, pin ->
+                                lifecycleScope.launch {
+                                    pairingProgress = true
+                                    pairingStatusMsg = "Connecting to $host:$port..."
+                                    val res = hub?.pairWithHost(host, port, pin)
+                                    pairingProgress = false
+                                    if (res != null && res.isSuccess) {
+                                        pairingStatusMsg = "Successfully paired with ${res.getOrNull()}!"
+                                        delay(1200)
+                                        showPairingDialog = false
+                                    } else {
+                                        pairingStatusMsg = "Pairing failed: ${res?.exceptionOrNull()?.message ?: "Host unreachable"}"
+                                    }
+                                }
+                            },
+                            isPairingInProgress = pairingProgress,
+                            pairingStatusMessage = pairingStatusMsg
+                        )
+                    }
+
                 }
             }
         }

@@ -13,7 +13,8 @@ data class PairingSession(
     val isExpired: Boolean get() = System.currentTimeMillis() > expiresAtTimestampMs
 
     fun toQrPayload(localIp: String, deviceId: String, deviceName: String): String {
-        return "nodeconnect://$localIp:$port?id=$deviceId&name=${deviceName.replace(" ", "%20")}&fp=$localFingerprint&ott=$sessionToken&pin=$sixDigitPin"
+        val sanitizedName = deviceName.filter { it.isLetterOrDigit() || it == '-' || it == '_' }.take(16)
+        return "nodeconnect://$localIp:$port?ott=$sessionToken&pin=$sixDigitPin&dev=$sanitizedName"
     }
 }
 

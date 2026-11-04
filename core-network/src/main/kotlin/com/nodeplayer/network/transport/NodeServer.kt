@@ -36,12 +36,28 @@ class NodeServer(
         val sslContext = NodeSslContext.create(identity, trustManager)
 
         val factory = sslContext.serverSocketFactory
-        val ss = factory.createServerSocket() as SSLServerSocket
-        ss.needClientAuth = true // Enforce Mutual TLS: client MUST provide cert
-        ss.reuseAddress = true
-        ss.bind(InetSocketAddress(port))
+        var boundSocket: SSLServerSocket? = null
+        var currentPort = port
+        var lastEx: Exception? = null
+
+        // Try requested port first, then fall back to next 10 ports
+        for (attempt in 0..10) {
+            try {
+                val candidate = factory.createServerSocket() as SSLServerSocket
+                candidate.needClientAuth = true // Enforce Mutual TLS: client MUST provide cert
+                candidate.reuseAddress = true
+                candidate.bind(InetSocketAddress(currentPort))
+                boundSocket = candidate
+                activePort = candidate.localPort
+                break
+            } catch (e: Exception) {
+                lastEx = e
+                currentPort = port + attempt + 1
+            }
+        }
+
+        val ss = boundSocket ?: throw (lastEx ?: IOException("Failed to bind SSLServerSocket on $port..${port + 10}"))
         serverSocket = ss
-        activePort = ss.localPort
 
         listenJob = scope.launch(Dispatchers.IO) {
             try {

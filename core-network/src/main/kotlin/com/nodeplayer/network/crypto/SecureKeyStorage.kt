@@ -21,12 +21,25 @@ class SecureKeyStorage(
     companion object {
         fun getDefaultStorageDir(): File {
             val appData = System.getenv("APPDATA")
-            return if (!appData.isNullOrBlank()) {
-                File(appData, "NodePlayer/keys")
+            if (!appData.isNullOrBlank()) {
+                val dir = File(appData, "NodePlayer/keys")
+                dir.mkdirs()
+                return dir
+            }
+            val androidFiles = File("/data/data/com.nodeplayer.music/files")
+            if (androidFiles.exists()) {
+                val dir = File(androidFiles, "nodeplayer/keys")
+                dir.mkdirs()
+                return dir
+            }
+            val userHome = System.getProperty("user.home", ".")
+            val base = if (userHome == "/" || userHome == ".") {
+                File(System.getProperty("java.io.tmpdir", "."), ".nodeplayer/keys")
             } else {
-                val userHome = System.getProperty("user.home", ".")
                 File(userHome, ".nodeplayer/keys")
             }
+            base.mkdirs()
+            return base
         }
     }
 

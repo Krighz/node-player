@@ -572,7 +572,12 @@ class PlaybackService : MediaSessionService() {
             }
         }
 
+        val keysDir = File(filesDir, "nodeplayer/keys").apply { mkdirs() }
+        val regFile = File(filesDir, "nodeplayer/registry/paired_devices.txt").apply { parentFile?.mkdirs() }
+
         nodeConnectHub = NodeConnectHub(
+            keyStorage = com.nodeplayer.network.crypto.SecureKeyStorage(keysDir),
+            registry = com.nodeplayer.network.pairing.DeviceRegistry(regFile),
             localController = localController,
             onIncomingCastStream = { session, jitter ->
                 playIncomingCastStream(session, jitter)
@@ -590,12 +595,29 @@ class PlaybackService : MediaSessionService() {
         )
 
         val connectPrefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
-        val nodeConnectEnabled = connectPrefs.getBoolean("node_connect_enabled", false)
+        val nodeConnectEnabled = connectPrefs.getBoolean("node_connect_enabled", true)
         if (nodeConnectEnabled) {
             nodeConnectHub.start(
                 deviceName = Build.MODEL,
                 platform = "Android"
             )
+        }
+    }
+
+    fun setNodeConnectEnabled(enabled: Boolean) {
+        val connectPrefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+        connectPrefs.edit().putBoolean("node_connect_enabled", enabled).apply()
+        if (enabled) {
+            if (::nodeConnectHub.isInitialized) {
+                nodeConnectHub.start(
+                    deviceName = Build.MODEL,
+                    platform = "Android"
+                )
+            }
+        } else {
+            if (::nodeConnectHub.isInitialized) {
+                nodeConnectHub.stop()
+            }
         }
     }
 
