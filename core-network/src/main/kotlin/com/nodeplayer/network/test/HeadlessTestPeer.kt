@@ -34,6 +34,9 @@ class HeadlessTestPeer(
     val receivedAudioChunks = CopyOnWriteArrayList<ByteArray>()
     val receivedAudioChunkCount = AtomicInteger(0)
 
+    // Optional custom frame listener for service integration
+    var onFrameReceived: (suspend (NodeFraming.Frame, NodeConnection) -> Boolean)? = null
+
     // Fault Injection Flags
     var dropProbability: Float = 0.0f
     var artificialDelayMs: Long = 0L
@@ -89,14 +92,17 @@ class HeadlessTestPeer(
                     delay(artificialDelayMs)
                 }
 
-                when (frame.messageType) {
-                    NodeMessageTypes.CONTROL_CMD -> {
-                        val cmd = ControlCommandMessage.fromBytes(frame.payload)
-                        receivedControlCommands.add(cmd)
-                    }
-                    NodeMessageTypes.CAST_PCM_CHUNK -> {
-                        receivedAudioChunks.add(frame.payload)
-                        receivedAudioChunkCount.incrementAndGet()
+                val handled = onFrameReceived?.invoke(frame, conn) ?: false
+                if (!handled) {
+                    when (frame.messageType) {
+                        NodeMessageTypes.CONTROL_CMD -> {
+                            val cmd = ControlCommandMessage.fromBytes(frame.payload)
+                            receivedControlCommands.add(cmd)
+                        }
+                        NodeMessageTypes.CAST_PCM_CHUNK -> {
+                            receivedAudioChunks.add(frame.payload)
+                            receivedAudioChunkCount.incrementAndGet()
+                        }
                     }
                 }
             }
