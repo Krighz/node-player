@@ -1,5 +1,6 @@
 package com.nodeplayer.network.transport
 
+import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.network.crypto.KeyManager
 import com.nodeplayer.network.crypto.NodeDeviceIdentity
 import com.nodeplayer.network.crypto.NodeSslContext
@@ -7,90 +8,147 @@ import com.nodeplayer.network.crypto.PinningTrustManager
 import kotlinx.coroutines.*
 import java.io.IOException
 import java.net.InetSocketAddress
+import java.net.ServerSocket
+import java.net.Socket
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLServerSocket
 import javax.net.ssl.SSLSocket
 
+enum class SecurityLevel {
+    SIMPLE, STRICT
+}
+
 /**
- * mTLS Server Socket for Node Connect.
- * Listens on a local port, performs mutual TLS handshake, enforces certificate pinning,
- * and yields established NodeConnection instances to an incoming connection listener.
+ * Server Socket for Node Connect.
+ * Supports Simple Mode (unauthenticated TLS or plain TCP for instant setup)
+ * and Strict Mode (Mutual TLS with cryptographic certificate pinning).
+ * Automatically binds across all network interfaces (0.0.0.0) with dynamic port fallback.
  */
 class NodeServer(
     val identity: NodeDeviceIdentity,
     private val isTrustedFingerprint: (String) -> Boolean,
     private val port: Int = DEFAULT_PORT,
+    val securityLevel: SecurityLevel = SecurityLevel.SIMPLE,
+    val encryptionEnabled: Boolean = true,
     private val scope: CoroutineScope
 ) {
     companion object {
         const val DEFAULT_PORT = 54820
     }
 
-    private var serverSocket: SSLServerSocket? = null
+    private var serverSocket: ServerSocket? = null
     private var listenJob: Job? = null
     var activePort: Int = port
         private set
 
     fun start(onNewConnection: (NodeConnection) -> Unit) {
-        val trustManager = PinningTrustManager(isTrustedFingerprint)
-        val sslContext = NodeSslContext.create(identity, trustManager)
-
-        val factory = sslContext.serverSocketFactory
-        var boundSocket: SSLServerSocket? = null
+        var boundSocket: ServerSocket? = null
         var currentPort = port
         var lastEx: Exception? = null
 
-        // Try requested port first, then fall back to next 10 ports
+        NodeLog.i(
+            "nodeconnect/server",
+            "Starting NodeServer (securityLevel=$securityLevel, encryption=$encryptionEnabled) on base port $port..."
+        )
+
+        // Try requested port first, then fall back through next 10 ports
         for (attempt in 0..10) {
             try {
-                val candidate = factory.createServerSocket() as SSLServerSocket
-                candidate.needClientAuth = true // Enforce Mutual TLS: client MUST provide cert
-                candidate.reuseAddress = true
-                candidate.bind(InetSocketAddress(currentPort))
-                boundSocket = candidate
-                activePort = candidate.localPort
+                if (encryptionEnabled) {
+                    val sslContext = if (securityLevel == SecurityLevel.SIMPLE) {
+                        NodeSslContext.createPermissive(identity)
+                    } else {
+                        val trustManager = PinningTrustManager(isTrustedFingerprint)
+                        NodeSslContext.create(identity, trustManager)
+                    }
+                    val factory = sslContext.serverSocketFactory
+                    val candidate = factory.createServerSocket() as SSLServerSocket
+                    candidate.needClientAuth = (securityLevel == SecurityLevel.STRICT)
+                    candidate.reuseAddress = true
+                    candidate.bind(InetSocketAddress(currentPort))
+                    boundSocket = candidate
+                } else {
+                    val candidate = ServerSocket()
+                    candidate.reuseAddress = true
+                    candidate.bind(InetSocketAddress(currentPort))
+                    boundSocket = candidate
+                }
+                activePort = boundSocket.localPort
+                NodeLog.i("nodeconnect/server", "Server successfully bound to 0.0.0.0:$activePort")
                 break
             } catch (e: Exception) {
                 lastEx = e
+                NodeLog.w("nodeconnect/server", "Port $currentPort unavailable (${e.message}), trying next...")
                 currentPort = port + attempt + 1
             }
         }
 
-        val ss = boundSocket ?: throw (lastEx ?: IOException("Failed to bind SSLServerSocket on $port..${port + 10}"))
+        val ss = boundSocket ?: throw (lastEx ?: IOException("Failed to bind ServerSocket on $port..${port + 10}"))
         serverSocket = ss
 
         listenJob = scope.launch(Dispatchers.IO) {
             try {
                 while (isActive && !ss.isClosed) {
-                    val socket = ss.accept() as SSLSocket
+                    val clientSocket = try {
+                        ss.accept()
+                    } catch (e: Exception) {
+                        if (!ss.isClosed) {
+                            NodeLog.e("nodeconnect/server", "Exception while accepting socket: ${e.message}", e)
+                        }
+                        break
+                    }
+
+                    NodeLog.i(
+                        "nodeconnect/server",
+                        "Accepted incoming connection from ${clientSocket.remoteSocketAddress}"
+                    )
+
                     launch {
                         try {
-                            socket.startHandshake()
-                            val peerCerts = socket.session.peerCertificates
-                            val peerCert = peerCerts[0] as X509Certificate
-                            val fp = KeyManager.computeSha256Fingerprint(peerCert)
-                            val peerId = peerCert.subjectX500Principal.name.substringAfter("CN=").substringBefore(",")
+                            val (peerId, fp) = if (clientSocket is SSLSocket) {
+                                clientSocket.startHandshake()
+                                val peerCerts = try { clientSocket.session.peerCertificates } catch (_: Exception) { null }
+                                if (!peerCerts.isNullOrEmpty()) {
+                                    val peerCert = peerCerts[0] as X509Certificate
+                                    val f = KeyManager.computeSha256Fingerprint(peerCert)
+                                    val id = peerCert.subjectX500Principal.name.substringAfter("CN=").substringBefore(",")
+                                    id to f
+                                } else {
+                                    "anonymous" to "unauthenticated"
+                                }
+                            } else {
+                                "plain_client" to "none"
+                            }
 
-                            val conn = NodeConnection(socket, peerId, fp, scope)
+                            NodeLog.i("nodeconnect/server", "Connection established with peerId=$peerId, fp=$fp")
+                            val conn = NodeConnection(clientSocket, peerId, fp, scope)
                             conn.start()
                             onNewConnection(conn)
                         } catch (e: Exception) {
-                            try { socket.close() } catch (ignored: Exception) {}
+                            NodeLog.e(
+                                "nodeconnect/server",
+                                "Handshake failure from ${clientSocket.remoteSocketAddress}: ${e.message}",
+                                e
+                            )
+                            try { clientSocket.close() } catch (_: Exception) {}
                         }
                     }
                 }
             } catch (e: Exception) {
-                // Server closed or network reset
+                if (isActive) {
+                    NodeLog.e("nodeconnect/server", "Server listener crashed: ${e.message}", e)
+                }
             }
         }
     }
 
     fun stop() {
+        NodeLog.i("nodeconnect/server", "Stopping NodeServer on port $activePort...")
         listenJob?.cancel()
         try {
             serverSocket?.close()
         } catch (e: Exception) {
-            // Ignore
+            NodeLog.w("nodeconnect/server", "Error closing server socket: ${e.message}")
         }
         serverSocket = null
     }
@@ -99,33 +157,56 @@ class NodeServer(
 }
 
 /**
- * mTLS Outgoing Client for Node Connect.
+ * Outgoing Client for Node Connect.
  */
 class NodeClient(
     val identity: NodeDeviceIdentity,
     private val isTrustedFingerprint: (String) -> Boolean,
+    val securityLevel: SecurityLevel = SecurityLevel.SIMPLE,
+    val encryptionEnabled: Boolean = true,
     private val scope: CoroutineScope
 ) {
     suspend fun connect(
         host: String,
         port: Int,
-        timeoutMs: Int = 5000
+        timeoutMs: Int = 4000
     ): NodeConnection = withContext(Dispatchers.IO) {
-        val trustManager = PinningTrustManager(isTrustedFingerprint)
-        val sslContext = NodeSslContext.create(identity, trustManager)
+        NodeLog.i("nodeconnect/connect", "Initiating connection to $host:$port (security=$securityLevel, enc=$encryptionEnabled)...")
+        val socket: Socket
 
-        val socket = sslContext.socketFactory.createSocket() as SSLSocket
-        socket.connect(InetSocketAddress(host, port), timeoutMs)
-        socket.soTimeout = 30000
-        socket.startHandshake()
+        if (encryptionEnabled) {
+            val sslContext = if (securityLevel == SecurityLevel.SIMPLE) {
+                NodeSslContext.createPermissive(identity)
+            } else {
+                val trustManager = PinningTrustManager(isTrustedFingerprint)
+                NodeSslContext.create(identity, trustManager)
+            }
+            val sslSocket = sslContext.socketFactory.createSocket() as SSLSocket
+            sslSocket.connect(InetSocketAddress(host, port), timeoutMs)
+            sslSocket.soTimeout = 30000
+            sslSocket.startHandshake()
 
-        val peerCerts = socket.session.peerCertificates
-        val peerCert = peerCerts[0] as X509Certificate
-        val fp = KeyManager.computeSha256Fingerprint(peerCert)
-        val peerId = peerCert.subjectX500Principal.name.substringAfter("CN=").substringBefore(",")
-
-        val conn = NodeConnection(socket, peerId, fp, scope)
-        conn.start()
-        conn
+            val peerCerts = try { sslSocket.session.peerCertificates } catch (_: Exception) { null }
+            val (peerId, fp) = if (!peerCerts.isNullOrEmpty()) {
+                val peerCert = peerCerts[0] as X509Certificate
+                val f = KeyManager.computeSha256Fingerprint(peerCert)
+                val id = peerCert.subjectX500Principal.name.substringAfter("CN=").substringBefore(",")
+                id to f
+            } else {
+                "server" to "unauthenticated"
+            }
+            NodeLog.i("nodeconnect/connect", "TLS handshake success with $host:$port (peerId=$peerId)")
+            val conn = NodeConnection(sslSocket, peerId, fp, scope)
+            conn.start()
+            conn
+        } else {
+            val plainSocket = Socket()
+            plainSocket.connect(InetSocketAddress(host, port), timeoutMs)
+            plainSocket.soTimeout = 30000
+            NodeLog.i("nodeconnect/connect", "Plain TCP socket connected to $host:$port")
+            val conn = NodeConnection(plainSocket, "plain_peer", "none", scope)
+            conn.start()
+            conn
+        }
     }
 }

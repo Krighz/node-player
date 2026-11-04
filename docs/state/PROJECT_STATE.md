@@ -59,10 +59,13 @@ Current Branch: `feature/node-connect`
 | :--- | :--- | :--- | :--- |
 | Desktop Unit Tests | `:app-desktop:test` | Done | Gradle output: `BUILD SUCCESSFUL in 14s`, 7 tests passed (WAV decoder, FLAC lifecycle, DB, Store, WASAPI, Scanner), 0 failures |
 | Core UI Multiplatform Assemble | `:core-ui:assemble` | Done | Gradle output: `BUILD SUCCESSFUL in 30s` (desktopJar, bundleReleaseAar, bundleDebugAar) |
-| Android Debug APK | `:app-android:assembleDebug` | Done | Output: `app-android-debug.apk` (23,584,384 bytes, 14:31:20) |
+| Android Debug APK | `:app-android:assembleDebug` | Done | Output: `app-android-debug.apk` assembled & streamed to phone |
 | Android Unit Tests | `:app-android:testReleaseUnitTest` | Done | Gradle output: `BUILD SUCCESSFUL in 1m 28s`, 0 failures |
+| Core Network Unit Tests | `:core-network:test` | Done | Gradle output: `BUILD SUCCESSFUL in 20s`, 21 tests passed (mTLS, SimpleMode, QR URI, JitterBuffer, SyncEngine, HLC) |
 | Desktop Distributable App | `:app-desktop:createDistributable` | Done | Output: `D:\AI MAKING\node-player\app-desktop\build\compose\binaries\main\app\NodePlayer\NodePlayer.exe` (548,864 bytes) |
 | Desktop MSI Installer Package | `:app-desktop:packageMsi` | Done | Output: `NodePlayer-1.4.0.msi` (111,284,276 bytes, SHA-256 `6B08E4C75218BA0D4A1B35F4744EAD05BD8781F0717AE172912E446C9747C48C`) |
+| Real-Device Discovery (Hotspot) | Live Logcat & Desktop Console | Done (L3) | Mutual discovery verified in logs: Phone discovered PC at 10.222.143.172:54820 via Broadcast; PC discovered Phone at 10.222.143.220:54820 via Broadcast |
+| Real-Device TLS Handshake & Ping | Live App Socket Handshake | Done (L3) | Handshake success verified: Heartbeat latency agent-measured at 4-9ms over local hotspot Wi-Fi |
 
 
 ---

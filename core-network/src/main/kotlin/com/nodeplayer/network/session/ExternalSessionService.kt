@@ -38,6 +38,7 @@ class ExternalSessionService(
     suspend fun handleFrame(frame: NodeFraming.Frame, connection: NodeConnection): Boolean {
         // Enforce permission check
         val paired = registry?.getPairedDeviceByFingerprint(connection.peerFingerprint)
+            ?: registry?.getPairedDeviceById(connection.peerDeviceId)
         if (paired != null && !paired.permissions.canControlExternalSessions) {
             return false // Blocked by permission switch
         }

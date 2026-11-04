@@ -1,5 +1,12 @@
 package com.nodeplayer.common.logging
 
+import java.io.File
+import java.io.FileWriter
+import java.io.PrintWriter
+import java.io.StringWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedDeque
 
 enum class LogLevel {
@@ -15,6 +22,19 @@ data class LogEntry(
 ) {
     val feature: String
         get() = tag.substringBefore('/')
+
+    fun format(): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+        val timeStr = sdf.format(Date(timestampMs))
+        val base = "[$timeStr] [${level.name}] [$tag] $message"
+        return if (throwable != null) {
+            val sw = StringWriter()
+            throwable.printStackTrace(PrintWriter(sw))
+            "$base\n$sw"
+        } else {
+            base
+        }
+    }
 }
 
 fun interface LogSink {
@@ -23,8 +43,23 @@ fun interface LogSink {
 
 object NodeLog {
     private val sinks = mutableListOf<LogSink>()
-    private const val MAX_HISTORY = 500
+    private const val MAX_HISTORY = 1000
     private val history = ConcurrentLinkedDeque<LogEntry>()
+    private var logFile: File? = null
+    private var fileWriter: PrintWriter? = null
+    var isVerbose: Boolean = true
+
+    @Synchronized
+    fun initFileLogging(file: File) {
+        try {
+            file.parentFile?.mkdirs()
+            logFile = file
+            fileWriter = PrintWriter(FileWriter(file, true), true)
+            i("nodeconnect/logging", "Persistent file logging initialized at: ${file.absolutePath}")
+        } catch (e: Exception) {
+            e("nodeconnect/logging", "Failed to initialize persistent log file: ${e.message}", e)
+        }
+    }
 
     @Synchronized
     fun addSink(sink: LogSink) {
@@ -45,10 +80,22 @@ object NodeLog {
     fun e(tag: String, message: String, throwable: Throwable? = null) = log(LogLevel.ERROR, tag, message, throwable)
 
     fun log(level: LogLevel, tag: String, message: String, throwable: Throwable? = null) {
+        if (!isVerbose && level == LogLevel.VERBOSE) return
+
         val entry = LogEntry(tag = tag, level = level, message = message, throwable = throwable)
         history.addLast(entry)
         while (history.size > MAX_HISTORY) {
             history.pollFirst()
+        }
+
+        // Write to persistent file if configured
+        fileWriter?.let { writer ->
+            try {
+                synchronized(this) {
+                    writer.println(entry.format())
+                }
+            } catch (_: Throwable) {
+            }
         }
 
         val currentSinks = synchronized(this) { sinks.toList() }
@@ -61,6 +108,10 @@ object NodeLog {
     }
 
     fun getHistory(): List<LogEntry> = history.toList()
+
+    fun exportFormattedLog(): String {
+        return history.joinToString("\n") { it.format() }
+    }
 
     fun getEntriesByFeature(featurePrefix: String): List<LogEntry> {
         val prefix = featurePrefix.trimEnd('/')

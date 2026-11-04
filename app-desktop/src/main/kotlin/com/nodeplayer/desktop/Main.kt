@@ -1,5 +1,6 @@
 package com.nodeplayer.desktop
 
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
@@ -34,6 +35,16 @@ import javax.swing.UIManager
 fun main() = application {
     val windowState = rememberWindowState(width = 1200.dp, height = 750.dp)
     val coroutineScope = rememberCoroutineScope()
+
+    remember {
+        val appData = System.getenv("APPDATA") ?: System.getProperty("user.home", ".")
+        val logDir = File(appData, "NodePlayer/logs").apply { mkdirs() }
+        com.nodeplayer.common.logging.NodeLog.initFileLogging(File(logDir, "node_connect.log"))
+        com.nodeplayer.common.logging.NodeLog.addSink { level, tag, msg, tr ->
+            println("[${level.name}] [$tag] $msg")
+            tr?.printStackTrace()
+        }
+    }
 
     val settingsStore = remember { DesktopSettingsStore() }
     val database = remember { DesktopTrackDatabase() }
@@ -339,6 +350,51 @@ fun main() = application {
                 onSelectMusicFolder = { pickAndScanFolder() }
             )
 
+            var pendingAllowPrompt by remember { mutableStateOf<Pair<String, (Boolean, Boolean) -> Unit>?>(null) }
+            LaunchedEffect(hub) {
+                hub.onAllowPrompt = { name, id, callback ->
+                    pendingAllowPrompt = name to callback
+                }
+            }
+
+            if (pendingAllowPrompt != null) {
+                val prompt = pendingAllowPrompt!!
+                androidx.compose.material3.AlertDialog(
+                    onDismissRequest = {
+                        prompt.second(false, false)
+                        pendingAllowPrompt = null
+                    },
+                    title = { androidx.compose.material3.Text("Allow Connection?", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = androidx.compose.ui.graphics.Color.White) },
+                    text = {
+                        androidx.compose.material3.Text("Device '${prompt.first}' is requesting to connect to Node Player on this PC.", color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f))
+                    },
+                    confirmButton = {
+                        androidx.compose.material3.Button(onClick = {
+                            prompt.second(true, true)
+                            pendingAllowPrompt = null
+                        }) {
+                            androidx.compose.material3.Text("Always Allow")
+                        }
+                    },
+                    dismissButton = {
+                        Row {
+                            androidx.compose.material3.TextButton(onClick = {
+                                prompt.second(true, false)
+                                pendingAllowPrompt = null
+                            }) {
+                                androidx.compose.material3.Text("Allow Once")
+                            }
+                            androidx.compose.material3.TextButton(onClick = {
+                                prompt.second(false, false)
+                                pendingAllowPrompt = null
+                            }) {
+                                androidx.compose.material3.Text("Deny", color = androidx.compose.ui.graphics.Color(0xFFEF4444))
+                            }
+                        }
+                    }
+                )
+            }
+
             if (showPairingDialog) {
                 NodeConnectPairingDialog(
                     onDismissRequest = { showPairingDialog = false },
@@ -346,6 +402,8 @@ fun main() = application {
                     localIp = localIpAddress,
                     localDeviceId = hub.activeDeviceId ?: "pc-host",
                     localDeviceName = "Node Player PC (${System.getProperty("user.name", "Windows")})",
+                    localPort = hub.activePort,
+                    localCandidateIps = hub.getLocalCandidateIps().ifEmpty { listOf(localIpAddress) },
                     discoveredPeers = discoveredPeers,
                     onStartSession = { hub.startPairingSession() },
                     onCancelSession = { hub.cancelPairingSession() },
@@ -363,6 +421,65 @@ fun main() = application {
                                 pairingStatusMsg = "Pairing failed: ${res.exceptionOrNull()?.message}"
                             }
                         }
+                    },
+                    onConnectToPeerDirectly = { peer ->
+                        coroutineScope.launch {
+                            pairingProgress = true
+                            pairingStatusMsg = "Connecting to ${peer.deviceName}..."
+                            val conn = hub.connectToPeer(peer)
+                            pairingProgress = false
+                            if (conn != null) {
+                                pairingStatusMsg = "Connected to ${peer.deviceName}!"
+                                delay(1000)
+                                showPairingDialog = false
+                            } else {
+                                pairingStatusMsg = "Connection failed to ${peer.deviceName}"
+                            }
+                        }
+                    },
+                    onConnectToAddress = { host, port ->
+                        coroutineScope.launch {
+                            pairingProgress = true
+                            pairingStatusMsg = "Connecting to $host:$port..."
+                            val peer = com.nodeplayer.network.discovery.DiscoveredNodePeer(
+                                deviceId = "manual_${host.replace('.', '_')}",
+                                deviceName = "Node Peer ($host)",
+                                platform = "Manual",
+                                hostAddress = host,
+                                port = port,
+                                certificateFingerprintSha256 = "",
+                                candidateAddresses = listOf(host),
+                                discoveryMethod = "Manual IP"
+                            )
+                            val conn = hub.connectToPeer(peer)
+                            pairingProgress = false
+                            if (conn != null) {
+                                pairingStatusMsg = "Connected to $host:$port!"
+                                delay(1000)
+                                showPairingDialog = false
+                            } else {
+                                pairingStatusMsg = "Failed to connect to $host:$port"
+                            }
+                        }
+                    },
+                    onScanNetworkClicked = { hub.triggerSubnetScan() },
+                    onProbeGatewayClicked = { hub.triggerGatewayProbe() },
+                    onTestPingClicked = { host, port, cb ->
+                        coroutineScope.launch {
+                            val res = hub.testConnectionTo(host, port)
+                            cb(res)
+                        }
+                    },
+                    onCopyLogClicked = {
+                        val log = com.nodeplayer.common.logging.NodeLog.exportFormattedLog()
+                        java.awt.Toolkit.getDefaultToolkit().systemClipboard.setContents(java.awt.datatransfer.StringSelection(log), null)
+                    },
+                    onExportLogClicked = {
+                        val log = com.nodeplayer.common.logging.NodeLog.exportFormattedLog()
+                        val appData = System.getenv("APPDATA") ?: System.getProperty("user.home", ".")
+                        val out = File(appData, "NodePlayer/logs/node_connect_export.txt")
+                        out.parentFile?.mkdirs()
+                        out.writeText(log)
                     },
                     isPairingInProgress = pairingProgress,
                     pairingStatusMessage = pairingStatusMsg

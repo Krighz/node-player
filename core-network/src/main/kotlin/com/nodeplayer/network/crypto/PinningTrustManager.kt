@@ -57,6 +57,21 @@ class PinningTrustManager(
 }
 
 /**
+ * Permissive Trust Manager for Simple Security Mode.
+ * Encrypts communication over TLS with local self-signed certificates,
+ * but allows any peer certificate without requiring upfront pinning or PIN exchange.
+ */
+class PermissiveTrustManager : X509ExtendedTrustManager() {
+    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?, socket: Socket?) {}
+    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?, engine: SSLEngine?) {}
+    override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+    override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?, socket: Socket?) {}
+    override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?, engine: SSLEngine?) {}
+    override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+    override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+}
+
+/**
  * Creates and configures standard TLSv1.3 / TLSv1.2 mTLS SSLContext.
  */
 object NodeSslContext {
@@ -65,7 +80,7 @@ object NodeSslContext {
 
     fun create(
         identity: NodeDeviceIdentity,
-        trustManager: PinningTrustManager
+        trustManager: X509ExtendedTrustManager
     ): SSLContext {
         // Build In-Memory KeyStore containing local device EC key and self-signed certificate
         val keyStore = KeyStore.getInstance(KeyStore.getDefaultType())
@@ -84,5 +99,9 @@ object NodeSslContext {
 
         sslContext.init(kmf.keyManagers, arrayOf(trustManager), SecureRandom())
         return sslContext
+    }
+
+    fun createPermissive(identity: NodeDeviceIdentity): SSLContext {
+        return create(identity, PermissiveTrustManager())
     }
 }

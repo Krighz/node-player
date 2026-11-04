@@ -22,6 +22,8 @@ import com.nodeplayer.network.discovery.DiscoveredNodePeer
 import com.nodeplayer.network.protocol.ControlStateEventMessage
 import com.nodeplayer.network.service.LocalPlayerController
 import com.nodeplayer.network.service.NodeConnectHub
+import android.net.wifi.WifiManager
+import com.nodeplayer.common.logging.NodeLog
 import android.os.Build
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -61,6 +63,32 @@ class PlaybackService : MediaSessionService() {
         private set
     private var incomingCastJob: Job? = null
     private var incomingAudioTrack: AudioTrack? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
+
+    private fun acquireMulticastLock() {
+        try {
+            val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            multicastLock = wifi?.createMulticastLock("node_player_discovery")?.apply {
+                setReferenceCounted(true)
+                acquire()
+            }
+            NodeLog.i("nodeconnect/discovery", "Acquired Android WifiManager.MulticastLock")
+        } catch (e: Exception) {
+            NodeLog.w("nodeconnect/discovery", "Failed to acquire MulticastLock: ${e.message}")
+        }
+    }
+
+    private fun releaseMulticastLock() {
+        try {
+            if (multicastLock?.isHeld == true) {
+                multicastLock?.release()
+                NodeLog.i("nodeconnect/discovery", "Released Android WifiManager.MulticastLock")
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
+        multicastLock = null
+    }
     val statsTracker = com.nodeplayer.library.PlaybackStatsTracker()
     private val scrobbledTrackIds = mutableSetOf<Long>()
 
@@ -597,6 +625,7 @@ class PlaybackService : MediaSessionService() {
         val connectPrefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
         val nodeConnectEnabled = connectPrefs.getBoolean("node_connect_enabled", true)
         if (nodeConnectEnabled) {
+            acquireMulticastLock()
             nodeConnectHub.start(
                 deviceName = Build.MODEL,
                 platform = "Android"
@@ -609,6 +638,7 @@ class PlaybackService : MediaSessionService() {
         connectPrefs.edit().putBoolean("node_connect_enabled", enabled).apply()
         if (enabled) {
             if (::nodeConnectHub.isInitialized) {
+                acquireMulticastLock()
                 nodeConnectHub.start(
                     deviceName = Build.MODEL,
                     platform = "Android"
@@ -617,6 +647,7 @@ class PlaybackService : MediaSessionService() {
         } else {
             if (::nodeConnectHub.isInitialized) {
                 nodeConnectHub.stop()
+                releaseMulticastLock()
             }
         }
     }
@@ -766,6 +797,7 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         if (::nodeConnectHub.isInitialized) {
             nodeConnectHub.stop()
+            releaseMulticastLock()
         }
         incomingCastJob?.cancel()
         try {

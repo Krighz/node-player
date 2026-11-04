@@ -1,5 +1,6 @@
 package com.nodeplayer.network.transport
 
+import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.network.protocol.NodeFraming
 import com.nodeplayer.network.protocol.NodeMessageTypes
 import kotlinx.coroutines.*
@@ -16,15 +17,18 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Encapsulates an active mTLS connection between two Node Player devices.
- * Handles framed packet serialization, heartbeat ping/pong, and non-blocking coroutine streaming.
+ * Encapsulates an active TCP/TLS connection between two Node Player devices.
+ * Handles framed packet serialization, heartbeat ping/pong every 5s, and non-blocking coroutine streaming.
  */
 class NodeConnection(
     val socket: Socket,
-    val peerDeviceId: String,
-    val peerFingerprint: String,
+    var peerDeviceId: String,
+    var peerFingerprint: String,
     private val scope: CoroutineScope
 ) {
+    val peerHostAddress: String get() = socket.inetAddress?.hostAddress ?: "unknown"
+    val peerPort: Int get() = socket.port
+
     private val inputStream = BufferedInputStream(socket.getInputStream(), 64 * 1024)
     private val outputStream = BufferedOutputStream(socket.getOutputStream(), 64 * 1024)
     private val writeMutex = Mutex()
@@ -40,6 +44,8 @@ class NodeConnection(
     private var readJob: Job? = null
 
     fun start() {
+        NodeLog.i("nodeconnect/connect", "Starting connection pump for peer $peerDeviceId ($peerHostAddress:$peerPort)")
+
         // 1. Continuous Read Loop
         readJob = scope.launch(Dispatchers.IO) {
             try {
@@ -47,10 +53,11 @@ class NodeConnection(
                     val frame = try {
                         NodeFraming.readFrame(inputStream)
                     } catch (e: EOFException) {
+                        NodeLog.i("nodeconnect/connect", "EOF received from peer $peerDeviceId ($peerHostAddress)")
                         break
                     } catch (e: Exception) {
                         if (!isClosed.get()) {
-                            // Log or handle
+                            NodeLog.w("nodeconnect/connect", "Socket read error from $peerHostAddress: ${e.message}")
                         }
                         break
                     }
@@ -71,6 +78,7 @@ class NodeConnection(
                         }
                         if (sentTime > 0L) {
                             lastPingLatencyMs = (System.currentTimeMillis() - sentTime).coerceAtLeast(0L)
+                            NodeLog.v("nodeconnect/connect", "Heartbeat latency to $peerDeviceId: ${lastPingLatencyMs}ms")
                         }
                     } else {
                         incomingFrames.send(frame)
@@ -81,10 +89,10 @@ class NodeConnection(
             }
         }
 
-        // 2. Heartbeat Ping Job (every 15 seconds)
+        // 2. Heartbeat Ping Job (every 5 seconds)
         pingJob = scope.launch(Dispatchers.IO) {
             while (!isClosed.get() && isActive) {
-                delay(15_000L)
+                delay(5_000L)
                 val timeBytes = System.currentTimeMillis().toString().toByteArray()
                 val pingFrame = NodeFraming.Frame(
                     messageType = NodeMessageTypes.PING,
@@ -94,6 +102,7 @@ class NodeConnection(
                 try {
                     sendFrame(pingFrame)
                 } catch (e: Exception) {
+                    NodeLog.w("nodeconnect/connect", "Ping failed to $peerDeviceId ($peerHostAddress): ${e.message}")
                     break
                 }
             }
@@ -101,7 +110,7 @@ class NodeConnection(
     }
 
     suspend fun sendFrame(frame: NodeFraming.Frame) {
-        if (isClosed.get()) throw IOException("NodeConnection is closed")
+        if (isClosed.get()) throw IOException("NodeConnection is closed ($peerHostAddress)")
         writeMutex.withLock {
             withContext(Dispatchers.IO) {
                 NodeFraming.writeFrame(frame, outputStream)
@@ -121,13 +130,14 @@ class NodeConnection(
 
     fun close() {
         if (isClosed.compareAndSet(false, true)) {
+            NodeLog.i("nodeconnect/connect", "Closing connection to peer $peerDeviceId ($peerHostAddress)")
             pingJob?.cancel()
             readJob?.cancel()
             incomingFrames.close()
             try {
                 socket.close()
             } catch (e: Exception) {
-                // Ignore
+                NodeLog.v("nodeconnect/connect", "Socket close: ${e.message}")
             }
         }
     }

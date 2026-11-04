@@ -9,6 +9,7 @@ import com.nodeplayer.network.protocol.*
 import com.nodeplayer.network.transport.NodeClient
 import com.nodeplayer.network.transport.NodeConnection
 import com.nodeplayer.network.transport.NodeServer
+import com.nodeplayer.network.transport.SecurityLevel
 import kotlinx.coroutines.*
 import java.io.File
 import java.util.concurrent.CopyOnWriteArrayList
@@ -41,11 +42,12 @@ class HeadlessTestPeer(
     var dropProbability: Float = 0.0f
     var artificialDelayMs: Long = 0L
 
-    fun startServer(port: Int = 0): Int {
+    fun startServer(port: Int = 0, securityLevel: SecurityLevel = SecurityLevel.STRICT): Int {
         val s = NodeServer(
             identity = identity,
             isTrustedFingerprint = { fp -> registry.isTrustedFingerprint(fp) },
             port = port,
+            securityLevel = securityLevel,
             scope = peerScope
         )
         s.start { conn ->
@@ -67,10 +69,11 @@ class HeadlessTestPeer(
         registry.registerDevice(paired)
     }
 
-    suspend fun connectTo(host: String, port: Int): NodeConnection {
+    suspend fun connectTo(host: String, port: Int, securityLevel: SecurityLevel = SecurityLevel.STRICT): NodeConnection {
         val client = NodeClient(
             identity = identity,
             isTrustedFingerprint = { fp -> registry.isTrustedFingerprint(fp) },
+            securityLevel = securityLevel,
             scope = peerScope
         )
         val conn = client.connect(host, port)

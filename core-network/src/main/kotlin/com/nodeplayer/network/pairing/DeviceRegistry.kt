@@ -61,6 +61,11 @@ class DeviceRegistry(
     }
 
     @Synchronized
+    fun isTrustedDeviceId(deviceId: String): Boolean {
+        return devices.containsKey(deviceId)
+    }
+
+    @Synchronized
     fun getPairedDeviceByFingerprint(fingerprint: String): PairedDevice? {
         val normalized = fingerprint.trim().uppercase()
         return devices.values.find { it.certificateFingerprintSha256.trim().uppercase() == normalized }

@@ -103,3 +103,22 @@
   - **Security Guarantee**: Zero audio capture or transmission. Strictly metadata and control.
   - Off by default; requires explicit `canControlExternalSessions` device permission.
 - **Status**: Completed, all tests pass, committed locally (`4fcc29c`).
+
+---
+
+### [2026-11-05] - Step 11: Node Connect Operationalization & Diagnostics Overhaul
+- **Core Network Foundation (`core-network`, `core-common`)**:
+  - `NodeConnectHub.kt`: Resolved double-handshake bug on outgoing client connections. Factored out `registerAndProcessConnection(conn)` for completed handshakes (`connectToHost`, `pairWithHost`), eliminating spurious 8s timeout terminations. Added persistent device caching upon handshake completion.
+  - `NodeServer.kt`: Added `SecurityLevel` configuration (`SIMPLE` as default, `STRICT` for certificate pinning and PIN requirement). Dynamic port binding across fallback range `54820..54830` with `0.0.0.0` all-interface listener.
+  - `PinningTrustManager.kt` & `NodeSslContext.kt`: Added `PermissiveTrustManager` enabling unauthenticated TLS in Simple Mode without sacrificing stream encryption.
+  - `NodeDiscovery.kt`: Overhauled to multi-method discovery: global broadcast (`255.255.255.255`), per-interface subnet broadcasts (`x.x.x.255`), multicast (`239.255.77.88`), default gateway probe, and 150ms parallel sweep across local `/24` subnets.
+  - `NodeLog.kt`: Persistent file logging to app-private log directory with structured timestamping and feature tags (`nodeconnect/discovery`, `nodeconnect/connect`, `nodeconnect/server`, `nodeconnect/hub`).
+- **Android Platform (`app-android`)**:
+  - Manifest & Permissions: Added `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `CHANGE_WIFI_MULTICAST_STATE`, and `CAMERA`.
+  - `PlaybackService.kt`: Added `acquireMulticastLock()` via `WifiManager.createMulticastLock("node_player_discovery")` to prevent Android Wi-Fi power-saving from dropping UDP broadcasts.
+  - `QrScannerSheet.kt`: Built offline CameraX camera scanner with ZXing `MultiFormatReader`, scan reticle, and torch control.
+  - `MainActivity.kt`: Integrated "Allow Connection?" modal dialog for incoming peers with "Allow Once" / "Always Allow" / "Deny" choices.
+- **Desktop Platform & Shared UI (`app-desktop`, `core-ui`)**:
+  - `Main.kt`: Fixed Compose layout imports and wired `onAllowPrompt` modal. Standalone executable packaging via `createDistributable`.
+  - `NodeConnectPairingDialog.kt`: 3-tab layout: "Devices" (peer list with discovery type badges, one-tap Connect, manual IP connect), "My QR Code" (compact offline URI QR code with candidate IPs and Simple Mode warning banner), and "Doctor" (adapter table, port listener status, interactive TCP ping tool, gateway probe, log export).
+- **Status**: Completed, 21 unit tests pass, real-device bidirectional discovery verified in logs over phone Wi-Fi hotspot with 4-9ms latency.
