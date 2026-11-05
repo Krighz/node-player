@@ -98,6 +98,7 @@ fun SettingsScreen(
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
     onApplySafeGraphicsMode: () -> Unit = {},
     onReportProblem: () -> Unit = {},
+    onPairNewDevice: () -> Unit = {},
     onRescanLibrary: () -> Unit,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
@@ -107,10 +108,11 @@ fun SettingsScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
+    val sharedPrefs = remember { context.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE) }
+    var nodeConnectOn by remember { mutableStateOf(sharedPrefs.getBoolean("node_connect_enabled", true)) }
     var gaplessEnabled by remember { mutableStateOf(true) }
     var crossfadeSeconds by remember { mutableFloatStateOf(2.0f) }
     var lrclibOptIn by remember { mutableStateOf(false) }
-    val sharedPrefs = remember { context.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE) }
     val coroutineScope = rememberCoroutineScope()
 
     var fakeHiRes by remember { mutableStateOf(sharedPrefs.getBoolean("fake_hires_enabled", true)) }
@@ -314,6 +316,7 @@ fun SettingsScreen(
 
         val hubSections = remember {
             listOf(
+                SettingsHubItem("node_connect", "Node Connect", "Audio sharing without files, mTLS pairing, sync", Icons.Rounded.CastConnected),
                 SettingsHubItem("sound_eq", "Sound & EQ", "Audio output, 32-bit float, resampler, DSP", Icons.Rounded.Tune),
                 SettingsHubItem("playback", "Playback & Gestures", "Gapless, crossfade, headset, gestures, timer", Icons.Rounded.PlayCircle),
                 SettingsHubItem("library", "Library & Folders", "Storage paths, duration filter, exclusions", Icons.Rounded.Folder),
@@ -484,6 +487,7 @@ fun SettingsScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    SettingsHubCard("Node Connect", "Audio sharing & mTLS pairing", Icons.Rounded.CastConnected) { activeSection = "node_connect" }
                     SettingsHubCard("Sound & EQ", "Audio output, 32-bit float, resampler, DSP", Icons.Rounded.Tune) { activeSection = "sound_eq" }
                     SettingsHubCard("Playback & Gestures", "Gapless, crossfade, headset, gestures, timer", Icons.Rounded.PlayCircle) { activeSection = "playback" }
                     SettingsHubCard("Library & Folders", "Storage paths, duration filter, exclusions", Icons.Rounded.Folder) { activeSection = "library" }
@@ -510,6 +514,7 @@ fun SettingsScreen(
             // Subpage Navigation Header
             if (activeSection != null && searchQuery.isBlank()) {
                 val currentTitle = when (activeSection) {
+                    "node_connect" -> "Node Connect"
                     "sound_eq" -> "Sound & EQ"
                     "playback" -> "Playback & Gestures"
                     "library" -> "Library & Folders"
@@ -2962,6 +2967,277 @@ fun SettingsScreen(
 
                 }
 
+        if (shouldShow("node_connect")) {
+            Text(
+                text = "NODE CONNECT & LOCAL SYNC",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = accent
+                )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            GlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                hazeState = hazeState
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Enable Node Connect",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Color.White
+                            )
+                            Text(
+                                text = "mTLS zero-cloud audio streaming, remote control & sync across PC and phone.",
+                                fontSize = 11.5.sp,
+                                color = Color.White.copy(alpha = 0.65f)
+                            )
+                        }
+                        Switch(
+                            checked = nodeConnectOn,
+                            onCheckedChange = { isChecked ->
+                                nodeConnectOn = isChecked
+                                sharedPrefs.edit().putBoolean("node_connect_enabled", isChecked).apply()
+                                com.nodeplayer.music.service.PlaybackService.instance?.setNodeConnectEnabled(isChecked)
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        )
+                    }
+
+                    if (nodeConnectOn) {
+                        Spacer(modifier = Modifier.height(14.dp))
+                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        val hub = com.nodeplayer.music.service.PlaybackService.instance?.nodeConnectHub
+                        val connectedCount by (hub?.connectedDeviceCount ?: kotlinx.coroutines.flow.MutableStateFlow(0)).collectAsState()
+                        val pairedList by (hub?.pairedDevices ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.White.copy(alpha = 0.05f))
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(if (connectedCount > 0) Color(0xFF00F0FF) else Color(0xFF10B981))
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = if (connectedCount > 0) "$connectedCount device(s) connected" else "Listening on local network (mTLS)",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Port: 54820 · Device: ${android.os.Build.MODEL}",
+                                    fontSize = 10.5.sp,
+                                    color = Color.White.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Button(
+                            onClick = onPairNewDevice,
+                            modifier = Modifier.fillMaxWidth().height(44.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = accent),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Rounded.QrCode, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.Black)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Pair New Device (PIN / QR)", fontWeight = FontWeight.Bold, color = Color.Black)
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "NODE CONNECT FEATURE SWITCHES",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White.copy(alpha = 0.5f),
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val ncSettingsStore = remember {
+                            val prefs = context.getSharedPreferences("node_connect_settings", android.content.Context.MODE_PRIVATE)
+                            com.nodeplayer.network.service.NodeConnectSettingsStore(com.nodeplayer.music.data.AndroidKeyValueStore(prefs))
+                        }
+                        var ncConfig by remember { mutableStateOf(ncSettingsStore.config.value) }
+
+                        // 1. Audio Cast
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Audio Cast (Direct Streaming)", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
+                                Text("Stream uncompressed live PCM audio directly to connected nodes", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
+                            }
+                            Switch(
+                                checked = ncConfig.audioCastEnabled,
+                                onCheckedChange = { isChecked ->
+                                    val updated = ncConfig.copy(audioCastEnabled = isChecked)
+                                    ncConfig = updated
+                                    ncSettingsStore.saveConfig(updated)
+                                    hub?.config = updated
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                            )
+                        }
+
+                        // Mute Local Device While Casting
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Mute Local Device While Casting", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
+                                Text("Silence local phone speakers and output sound only on receiving PC", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
+                            }
+                            Switch(
+                                checked = ncConfig.muteLocalOutputDuringCast,
+                                onCheckedChange = { isChecked ->
+                                    val updated = ncConfig.copy(muteLocalOutputDuringCast = isChecked)
+                                    ncConfig = updated
+                                    ncSettingsStore.saveConfig(updated)
+                                    hub?.config = updated
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                            )
+                        }
+
+                        // 2. Remote Control
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Remote Control", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
+                                Text("Allow play, pause, and skip commands across connected devices", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
+                            }
+                            Switch(
+                                checked = ncConfig.remoteControlEnabled,
+                                onCheckedChange = { isChecked ->
+                                    val updated = ncConfig.copy(remoteControlEnabled = isChecked)
+                                    ncConfig = updated
+                                    ncSettingsStore.saveConfig(updated)
+                                    hub?.config = updated
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                            )
+                        }
+
+                        // 3. Library Sharing
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Library Sharing & Search", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
+                                Text("Permit cross-device song searching (zero file path exposure)", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
+                            }
+                            Switch(
+                                checked = ncConfig.shareLibraryEnabled,
+                                onCheckedChange = { isChecked ->
+                                    val updated = ncConfig.copy(shareLibraryEnabled = isChecked)
+                                    ncConfig = updated
+                                    ncSettingsStore.saveConfig(updated)
+                                    hub?.config = updated
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                            )
+                        }
+
+                        // 4. Playback Handoff
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Playback Handoff", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
+                                Text("Seamlessly shift playback queue and position between devices", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
+                            }
+                            Switch(
+                                checked = ncConfig.handoffEnabled,
+                                onCheckedChange = { isChecked ->
+                                    val updated = ncConfig.copy(handoffEnabled = isChecked)
+                                    ncConfig = updated
+                                    ncSettingsStore.saveConfig(updated)
+                                    hub?.config = updated
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                            )
+                        }
+
+                        if (pairedList.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "PAIRED TRUSTED DEVICES (${pairedList.size})",
+                                fontSize = 10.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.5f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            pairedList.forEach { paired ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.White.copy(alpha = 0.04f))
+                                        .padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            if (paired.platform == "Android") Icons.Rounded.PhoneAndroid else Icons.Rounded.Laptop,
+                                            contentDescription = null,
+                                            tint = accent,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(paired.deviceName, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                            Text("Pinned SHA-256 mTLS", fontSize = 10.sp, color = Color.White.copy(alpha = 0.45f))
+                                        }
+                                    }
+                                    TextButton(
+                                        onClick = { hub?.revokeDevice(paired.deviceId) },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text("Revoke", fontSize = 11.sp, color = Color(0xFFEF4444))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+
         if (shouldShow("about")) {
         // 7. About Section
         Text(
@@ -3324,6 +3600,9 @@ fun SettingsScreen(
             containerColor = Color(0xFF16181F)
         )
     }
+
+
+
 }
 
 

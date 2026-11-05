@@ -39,8 +39,8 @@ android {
         applicationId = "com.nodeplayer.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "1.5.0"
+        versionCode = 10
+        versionName = "1.6.0-Alpha"
 
         manifestPlaceholders["appName"] = "Node Player"
 
@@ -142,6 +142,7 @@ dependencies {
     implementation(project(":core-model"))
     implementation(project(":core-dsp"))
     implementation(project(":core-library"))
+    implementation(project(":core-network"))
     implementation(project(":integration-api"))
     implementation(project(":core-ui"))
 
@@ -186,6 +187,13 @@ dependencies {
 
     // Core
     implementation("androidx.core:core-ktx:1.13.1")
+
+    // CameraX and ZXing Core for QR Scanner (100% offline, pure local)
+    val cameraxVersion = "1.3.3"
+    implementation("androidx.camera:camera-camera2:$cameraxVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
+    implementation("androidx.camera:camera-view:$cameraxVersion")
+    implementation("com.google.zxing:core:3.5.3")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")

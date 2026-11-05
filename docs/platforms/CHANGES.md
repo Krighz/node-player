@@ -1,0 +1,175 @@
+# Platform Implementation Changes (v1.6.0)
+
+**Branch:** `feature/node-connect`  
+**Base Release:** v1.5.0  
+
+---
+
+## Change Log
+
+### [2026-11-04] - Step 1: Documentation Honesty & Dynamic Verification Pass
+- **Shared Code (`core-model`, `core-library`, `core-ui`)**:
+  - `AudioEffectConfig.kt`: Added `isDspBypassed` calculating whether all 8 DSP modules are flat/bypassed.
+  - `AudioOutputInfo.kt`: Added `isTrulyBitPerfect(srcRate, srcDepth, dspBypassed)`.
+  - `AudioHeaderParser.kt`: Restored in-memory `parseBytes` function and sub-parsers (`parseFlacBytes`, `parseWavBytes`, `parseMp3Bytes`, `parseOggOrOpusBytes`, `parseM4aOrAlacBytes`) to ensure full test suite compatibility.
+  - `SharedPlayerLayout.kt`: Dynamically computes truthful output status string (e.g. "Bit-Perfect Output" vs. "32-bit Float DSP Active" vs. "Direct").
+- **Android (`app-android`)**:
+  - `TrackDetailsSheet.kt`: Evaluates `isBitPerfect` strictly against source format and DSP bypass state. Shows "Bit-perfect direct stream" only when true.
+- **Documentation**:
+  - `PRIVACY.md`: Updated to "No network use unless you opt in" and documented the 4 opt-in network capabilities.
+  - `README.md` & `site/index.html`: Replaced "100% offline" with opt-in disclosures. Clarified that Windows MSI/EXE are Authenticode-unsigned (SmartScreen prompt on initial run) and APK is signed with release keystore (v2 scheme). Emphasized SHA-256 as primary trust hash. Added v0.1.0 to version history.
+- **Status**: Completed, tests pass, committed locally (`bf47ffb`).
+
+---
+
+### [2026-11-04] - Step 2: Node Connect & UI Overhaul Specification
+- **Ecosystem Specs Created**:
+  - `docs/ecosystem/NODE_CONNECT.md`: Comprehensive protocol, roles, gRPC service definitions, message flows, and timing constants.
+  - `docs/ecosystem/NODE_CONNECT_SECURITY.md`: Zero-trust mTLS architecture, QR / PIN pairing, Android Keystore & Windows DPAPI key storage, and granular permissions.
+  - `docs/ecosystem/SYNC_CATEGORIES.md`: Complete sync category rules, shared/per-platform scopes, Murmur3+MD5 track fingerprint, and 3-snapshot undo engine.
+  - `docs/ecosystem/NODE_CONNECT_TESTS.md`: Automated test matrix for mTLS, fault injection, streaming, and conflict resolution.
+  - `docs/ecosystem/NODE_CONNECT_DEVICE_TESTS.md`: Human verification sheet with 23 step-by-step test cases.
+  - `docs/platforms/windows-ui.md`: Windows UI overhaul reference map and token definitions.
+- **Status**: Completed, specification ready for implementation.
+
+---
+
+### [2026-11-04] - Step 3: Windows UI Overhaul Matching Reference Image
+- **Compose Multiplatform Components (`core-ui`)**:
+  - `SearchCapsule.kt`: Top-centered search bar with Ctrl+F auto-focus and quick clear button.
+  - `DeviceConnectPill.kt`: Top-right pill button with dynamic glowing status indicator dot (Cyan = Connected, Amber = Discovering, Gray = Disconnected) and peer quick-sheet.
+  - `OpticalRailDock.kt`: Left navigation rail featuring a convex liquid-glass optical lens bubble with spring physics animation and pop-out scale on drag/selection.
+  - `WaveformSeekbar.kt`: Real audio peak rendering with smooth scrub support, unplayed bar dimming, and linear fallback.
+  - `BottomPlayerDeck.kt`: Floating liquid glass player deck pinned to bottom edge matching reference image (`media_1793787814079_13a6cdd8.jpg`) with track artwork, favorite toggle, transport controls, waveform seekbar, volume control, authoritative quality pill (`Track.formatBadgeText`), and cast icon.
+  - `HomeView.kt`: Overhauled with FOR YOU local genre mix cards (dynamic multi-artwork collages), REDISCOVER row with real play-history badges ("Last played 6 months ago", "Old favorite"), and RECENTLY PLAYED row with horizontal mouse-wheel scrolling.
+  - `SettingsView.kt`: Re-architected into 2-column liquid glass card grid with search filtering, sub-sections for Audio Routing / DAC (WASAPI Exclusive mode switch), DSP & EQ, Appearance & Glass (OLED Pure Black switch), General (hotkey sheet, library rescan), and Node Connect Sync Center.
+  - `SharedPlayerLayout.kt`: Unified expanded 16:9 layout with global keyboard shortcuts (<kbd>Space</kbd>, <kbd>Ctrl+F</kbd>, <kbd>Ctrl+1/2/3</kbd>, <kbd>Arrows</kbd>, <kbd>M</kbd>), keeping Android portrait layout 100% intact.
+- **Status**: Completed, tests pass, committed locally (`facfbff`).
+
+---
+
+### [2026-11-04] - Step 4: Foundation (`core-network` Module & mTLS Security)
+- **Module Creation (`core-network`)**:
+  - Added `:core-network` module in `settings.gradle.kts` and configured `build.gradle.kts` (JVM 17 / Kotlin Multiplatform).
+  - `KeyManager.kt`: EC-256 (secp256r1) keypair generation, pure Kotlin ASN.1 DER self-signed X.509 certificate generator (10-year validity, zero external dependencies/licenses), and colon-hex SHA-256 cert fingerprinting.
+  - `PinningTrustManager.kt` & `NodeSslContext.kt`: Enforces mutual TLS (TLSv1.3 with TLSv1.2 fallback) with certificate pinning. Untrusted / unpinned certificates rejected during TLS handshake before byte processing.
+  - `SecureKeyStorage.kt`: Persistent device key storage in `%APPDATA%\NodePlayer\keys` (Windows) and app-private directory (Android).
+  - `NodeFraming.kt`: Binary packet framing with 4-byte magic (`NODE`), version byte, 2-byte message type, sequence ID, length, and CRC32 payload checksum.
+  - `NodeMessages.kt`: Zero-reflection JSON/binary message serializers for handshakes, control commands, audio cast chunks, and sync payloads.
+  - `DeviceRegistry.kt` & `PairingManager.kt`: One-Time Token (OTT) and 6-digit PIN pairing state machine with role permissions and instant revocation.
+  - `HeadlessTestPeer.kt`: In-process peer runner for automated integration testing and fault injection (packet drop, jitter delay).
+- **Status**: Completed, all tests pass, committed locally (`8936ec7`).
+
+---
+
+### [2026-11-04] - Step 5: Control Plane (Remote Control, Library Browse & Mirror)
+- **Services (`core-network`)**:
+  - `NodeConnectLibraryService.kt`: Remote library browse and universal search with pagination. Privacy guarantee: local absolute filesystem paths are replaced with virtual remote identifiers (`nodeconnect://remote/track/<id>`). Remote album art thumbnail retrieval.
+  - `NodeConnectControlService.kt`: Remote transport command execution (Play, Pause, Seek, Next, Prev, Volume, Shuffle, Repeat) and state broadcasting to authorized controllers.
+  - `NodeConnectMirrorService.kt`: Now Playing mirror service for displaying remote playback on larger screens (display only; zero local audio output).
+  - `NodeConnectHub.kt`: Central lifecycle coordinator binding discovery, server, registry, and control services.
+- **Status**: Completed, all tests pass, committed locally (`fb99b51`).
+
+---
+
+### [2026-11-04] - Step 6: Audio Sharing (Pre-DSP PCM Streaming & Jitter Buffer)
+- **Audio Streaming Engine (`core-network`)**:
+  - `NodeConnectCastService.kt`: Live pre-DSP raw PCM audio streamer. Zero file transmission, receiver never writes audio bytes to disk. Immediate `CAST_FLUSH` packet on seek/skip with sequence counter increment.
+  - `JitterBuffer.kt`: Dynamic ring buffer (target 150-300ms) with stale packet dropping, buffer underrun/overrun protection, and instant zero-latency flush on track seek.
+- **Status**: Completed, all tests pass, committed locally (`ccbe5c6`).
+
+---
+
+### [2026-11-04] - Step 7: Handoff & Sync Extras
+- **Handoff Service (`core-network`)**:
+  - `NodeConnectHandoffService.kt`: Seamless mid-track playback handoff moving active track, millisecond position, play queue, active EQ preset, and sleep timer remaining milliseconds to the target device.
+- **Status**: Completed, all tests pass, committed locally (`c36e1c4`).
+
+---
+
+### [2026-11-04] - Step 8: Data Transfer & Sync Rail
+- **Conflict-Free Sync Engine (`core-network`)**:
+  - `HlcClock.kt`: Hybrid Logical Clock tracking causality across distributed devices without synchronized wall clocks.
+  - `SyncEngine.kt`: Multi-domain synchronization (Playlists, Favorites, Play History & Stats, EQ Profiles). 30-day tombstones preventing resurrected deleted items. Stats union merge (`max(playCount)`, `max(lastPlayedTimestamp)`).
+  - **3-Snapshot Undo Engine**: Automatically captures pre-sync snapshots before applying remote changes. Allows rolling back the last 3 sync operations with a single click.
+  - `NodeConnectTransferService.kt`: Low-priority chunked transfer in 256 KB slices over TLS with progress tracking.
+- **Status**: Completed, all tests pass, committed locally (`31e60f0`).
+
+---
+
+### [2026-11-04] - Step 9: Third-Party Media Sessions
+- **Session Bridge (`core-network`)**:
+  - `ExternalSessionService.kt`: Transmits now-playing metadata and forwards play, pause, and skip commands for third-party media players (Spotify, YouTube Music).
+  - **Security Guarantee**: Zero audio capture or transmission. Strictly metadata and control.
+  - Off by default; requires explicit `canControlExternalSessions` device permission.
+- **Status**: Completed, all tests pass, committed locally (`4fcc29c`).
+
+---
+
+### [2026-11-05] - Step 11: Node Connect Operationalization & Diagnostics Overhaul
+- **Core Network Foundation (`core-network`, `core-common`)**:
+  - `NodeConnectHub.kt`: Resolved double-handshake bug on outgoing client connections. Factored out `registerAndProcessConnection(conn)` for completed handshakes (`connectToHost`, `pairWithHost`), eliminating spurious 8s timeout terminations. Added persistent device caching upon handshake completion.
+  - `NodeServer.kt`: Added `SecurityLevel` configuration (`SIMPLE` as default, `STRICT` for certificate pinning and PIN requirement). Dynamic port binding across fallback range `54820..54830` with `0.0.0.0` all-interface listener.
+  - `PinningTrustManager.kt` & `NodeSslContext.kt`: Added `PermissiveTrustManager` enabling unauthenticated TLS in Simple Mode without sacrificing stream encryption.
+  - `NodeDiscovery.kt`: Overhauled to multi-method discovery: global broadcast (`255.255.255.255`), per-interface subnet broadcasts (`x.x.x.255`), multicast (`239.255.77.88`), default gateway probe, and 150ms parallel sweep across local `/24` subnets.
+  - `NodeLog.kt`: Persistent file logging to app-private log directory with structured timestamping and feature tags (`nodeconnect/discovery`, `nodeconnect/connect`, `nodeconnect/server`, `nodeconnect/hub`).
+- **Android Platform (`app-android`)**:
+  - Manifest & Permissions: Added `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE`, `CHANGE_WIFI_MULTICAST_STATE`, and `CAMERA`.
+  - `PlaybackService.kt`: Added `acquireMulticastLock()` via `WifiManager.createMulticastLock("node_player_discovery")` to prevent Android Wi-Fi power-saving from dropping UDP broadcasts.
+  - `QrScannerSheet.kt`: Built offline CameraX camera scanner with ZXing `MultiFormatReader`, scan reticle, and torch control.
+  - `MainActivity.kt`: Integrated "Allow Connection?" modal dialog for incoming peers with "Allow Once" / "Always Allow" / "Deny" choices.
+- **Desktop Platform & Shared UI (`app-desktop`, `core-ui`)**:
+  - `Main.kt`: Fixed Compose layout imports and wired `onAllowPrompt` modal. Standalone executable packaging via `createDistributable`.
+  - `NodeConnectPairingDialog.kt`: 3-tab layout: "Devices" (peer list with discovery type badges, one-tap Connect, manual IP connect), "My QR Code" (compact offline URI QR code with candidate IPs and Simple Mode warning banner), and "Doctor" (adapter table, port listener status, interactive TCP ping tool, gateway probe, log export).
+- **Status**: Completed, 21 unit tests pass, real-device bidirectional discovery verified in logs over phone Wi-Fi hotspot with 4-9ms latency.
+
+---
+
+### [2026-11-05] - Step 12: Live Control Verification, USB ADB Link & Granular Feature Switches
+- **Core Network & Discovery (`core-network`)**:
+  - `AdbBridge.kt`: Implemented deterministic zero-Wi-Fi USB debugging tunnel using `adb forward tcp:54825 tcp:54820` (PC to Phone) and `adb reverse tcp:54826 tcp:54820` (Phone to PC). Added `AdbBridgeTest.kt` unit test.
+  - `NodeConnectHub.kt`: Surfaced `connectedPeers: StateFlow<List<ConnectedPeer>>` with live heartbeat RTT (down to 5-8ms). Added `startUsbDebuggingLink()` and transport helper functions (`sendRemotePlayPause`, `sendRemoteNext`, `sendRemotePrevious`, `sendRemoteSeek`, `sendRemoteVolume`, `disconnectDevice`).
+  - `NodeConnectConfig.kt`: Expanded config to support 10 granular feature toggles, discovery method toggles (mDNS, UDP Broadcast, Hotspot Gateway Probe, Subnet Scan), Transport Encryption (TLS 1.3), Security Level (Simple vs Strict), and Verbose Network Logging with persistent storage.
+- **Shared UI & Components (`core-ui`)**:
+  - `NodeConnectPairingDialog.kt`:
+    - Tab 0 (Devices): Active connection card with live RTT latency badge, transport controls (`[⏮]`, `[▶⏸]`, `[⏭]`), Disconnect button, and action buttons (`[Cast Audio]`, `[⇄ Handoff]`). Added Simple Mode security warning banner.
+    - Tab 1 (My QR): Clean offline QR code containing candidate IP list without certificate pinning or PIN code bloat.
+    - Tab 2 (Doctor): Added 1-click `[Setup USB Debugging Link (ADB 127.0.0.1)]` button alongside Socket Ping Test and Gateway Probe.
+    - Tab 3 (Settings): Added 4 sections: Master & Access, Security & Trust (Security Level, Trust All, TLS 1.3 toggle), Discovery Methods (mDNS, UDP broadcast, Gateway probe, Subnet scan), Feature Toggles (10 independent switches), and Advanced / Tuning (Verbose logging, Jitter buffer, Keepalive interval).
+- **Live Physical Verification (realme RMX3853 Android 16 ↔ Windows 11 PC)**:
+  - Verified remote control execution from phone to PC with real log lines: `PLAY_PAUSE`, `NEXT`, `PREVIOUS` executed locally on PC playback engine.
+  - Verified ADB USB loopback forwarding with `TcpTestSucceeded: True` and `REVERSE_SUCCESS`.
+- **Status**: Completed (L3 Evidence achieved across all core functions).
+
+---
+
+### [2026-11-05] - Step 13: Pre-DSP PCM Audio Casting, Handoff & L4 User Verification
+- **Audio Cast & ExoPlayer Threading (`app-android`, `core-network`)**:
+  - `PlaybackService.kt`: Resolved `IllegalStateException: Player is accessed on the wrong thread` by reading `currentPosition` strictly on the main thread before dispatching raw PCM capture taps to `Dispatchers.IO`.
+  - `NodeConnectCastService.kt`: Added `nodeconnect/cast` logging tags and clean start/stop lifecycle management.
+  - `WindowsPlaybackEngine.kt`: Added handler for incoming remote cast stream initialization and PCM audio buffer queuing.
+- **Mid-Track Handoff (`core-network`)**:
+  - `NodeConnectHandoffService.kt`: Implemented fuzzy track matching fallback on desktop when identical local file paths do not exist.
+- **Live Evidence & L4 User Verification**:
+  - Audio Cast start and stop confirmed live between realme RMX3853 and Windows PC.
+  - User confirmed core Node Connect functionality: **L4 Verified by User** ("its working").
+- **Status**: Completed (L4 achieved for Core Link, Remote Control, Audio Cast, and Handoff).
+
+
+
+### [2026-11-05] - Step 7: Node Connect UI Polish, Cross-Platform Search, Sleep Timer & Stability
+- **Phone UI & Shaders**:
+  - `GlassRefractionShader.kt` & `FrostedNavAndPlayer.kt`: Removed `glassLensBubble` AGSL shader distortion from the dock tab selector pill. Flattened the middle field and softened the border to 0.75dp glass shimmer (`alpha = 0.14f`), completely eliminating the "Saturn / satin ring" artifact while maintaining crystal-clear liquid-glass transparency.
+  - `CrossfadePlayerManager.kt`: Fixed playback `FileNotFoundException` by checking local filesystem paths (`java.io.File(track.path)`) with `Uri.fromFile` before falling back to MediaStore IDs. Resolves song playback failures for re-scanned or searched tracks.
+- **Desktop UI & Navigation**:
+  - `OpticalRailDock.kt`: Removed pointer drag gesture handler that previously snapped navigation back to Home (index 0) upon clicking Library or other tabs. Dock container made translucent (`Color(0xFF0F172A).copy(alpha = 0.22f)`).
+  - `SharedPlayerLayout.kt`: Enhanced Search Capsule to transition directly from Home or any screen into Library search results upon typing. Added dynamic artwork accent extraction (`extractVibrantColor`) using Skia that smoothly animates the desktop aura and highlights (650ms tween).
+  - `BottomPlayerDeck.kt`: Added Sleep Timer button with dropdown menu (15, 30, 45, 60, 90 mins, turn off).
+- **Node Connect Cross-Platform Search & Artwork Transfer**:
+  - `NodeConnectLibraryService.kt`: Added `sequenceId = reqId` in `sendPayload` for `ARTWORK_RESULT` frames, fixing thumbnail request-response matching. Added string unescaping.
+  - `NodeConnection.kt`: Supported explicit `sequenceId` in `sendPayload`.
+  - `NodeConnectHub.kt` & `PlaybackService.kt`: Passed `artworkProvider` lambda returning compressed JPEG thumbnail bytes. Prefetched and cached remote artwork into in-memory `ArtworkCache`.
+  - `PlatformArtworkProvider.desktop.kt`: Checked `ArtworkCache.getBytes` in `loadArtwork` before attempting local file reads, enabling instant rendering of remote peer thumbnails and cast album art.
+- **Audio Streaming & Jitter Buffer**:
+  - `JitterBuffer.kt` & `NodeConnectCastService.kt`: Increased buffer settings (`targetBufferMs = 700`, `minBufferMs = 450`, `maxBufferMs = 2500`) to eliminate audio jitter and micro-underruns over Wi-Fi.
+  - `WindowsPlaybackEngine.kt`: Improved underrun handling by cleanly pre-buffering to `isReadyForPlayback` before resuming stream consumption. Protected WASAPI line writes against race conditions.

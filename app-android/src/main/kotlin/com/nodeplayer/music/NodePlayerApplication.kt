@@ -47,6 +47,8 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
                 android.util.Log.println(androidPriority, tag, message)
             }
         }
+        NodeLog.initFileLogging(java.io.File(filesDir, "logs/node_connect.log"))
+        NodeLog.isVerbose = true
         NodeLog.i("app/lifecycle", "NodePlayerApplication initialized")
 
         com.nodeplayer.music.diagnostics.LocalCrashLogger.init(this)

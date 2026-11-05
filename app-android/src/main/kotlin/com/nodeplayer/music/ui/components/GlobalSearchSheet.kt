@@ -26,6 +26,7 @@ import coil.compose.AsyncImage
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import dev.chrisbanes.haze.HazeState
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,16 +39,50 @@ fun GlobalSearchSheet(
     var query by remember { mutableStateOf("") }
     val accent = LocalAccentColor.current
 
-    val filteredTracks = remember(query, tracks) {
+    val searchScope = rememberCoroutineScope()
+    var remoteTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
+    val hub = com.nodeplayer.music.service.PlaybackService.instance?.nodeConnectHub
+
+    LaunchedEffect(query) {
+        if (query.isNotBlank() && hub != null) {
+            val list = mutableListOf<Track>()
+            hub.activeConnections.forEach { conn ->
+                try {
+                    val res = hub.libraryService.queryRemoteLibrary(conn, query = query, limit = 30)
+                    if (res != null) {
+                        list.addAll(res.tracks)
+                        for (remoteTrack in res.tracks) {
+                            searchScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                try {
+                                    val artBytes = hub.libraryService.fetchRemoteArtwork(conn, remoteTrack.id)
+                                    if (artBytes != null && artBytes.isNotEmpty()) {
+                                        com.nodeplayer.ui.components.ArtworkCache.putBytes(remoteTrack.path, artBytes)
+                                        com.nodeplayer.ui.components.ArtworkCache.putBytes(remoteTrack.id.toString(), artBytes)
+                                        com.nodeplayer.ui.components.ArtworkCache.putBytes(remoteTrack.title + remoteTrack.artist, artBytes)
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+            remoteTracks = list
+        } else {
+            remoteTracks = emptyList()
+        }
+    }
+
+    val filteredTracks = remember(query, tracks, remoteTracks) {
         if (query.isBlank()) {
             emptyList()
         } else {
             val q = query.trim().lowercase()
-            tracks.filter { track ->
+            val local = tracks.filter { track ->
                 track.title.lowercase().contains(q) ||
                 track.artist.lowercase().contains(q) ||
                 track.album.lowercase().contains(q)
             }.take(30)
+            (local + remoteTracks).distinctBy { it.id to it.title }
         }
     }
 
@@ -148,7 +183,7 @@ fun GlobalSearchSheet(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
-                    items(filteredTracks, key = { it.id }) { track ->
+                    items(filteredTracks, key = { "${it.path}_${it.id}" }) { track ->
                         GlassCard(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -187,15 +222,32 @@ fun GlobalSearchSheet(
                                 }
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = track.title,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color.White
-                                        ),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = track.title,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White
+                                            ),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                        if (track.path.startsWith("nodeconnect://")) {
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "NODE CONNECT",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontSize = 8.5.sp,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    color = Color(0xFF06B6D4)
+                                                ),
+                                                modifier = Modifier
+                                                    .background(Color(0xFF06B6D4).copy(alpha = 0.18f), RoundedCornerShape(4.dp))
+                                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
                                     Text(
                                         text = "${track.artist} • ${track.album}",
                                         style = MaterialTheme.typography.bodySmall.copy(

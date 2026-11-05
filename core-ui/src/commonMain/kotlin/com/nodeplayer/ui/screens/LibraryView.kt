@@ -46,6 +46,7 @@ fun LibraryView(
     onAddToQueue: (Track) -> Unit = {},
     searchQuery: String = "",
     onSearchChange: (String) -> Unit = {},
+    remoteTracks: List<Track> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -54,12 +55,20 @@ fun LibraryView(
     var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) }
     val tabs = listOf("Songs", "Albums", "Artists", "Folders")
 
-    val filteredTracks = remember(tracks, searchQuery) {
+    val filteredTracks = remember(tracks, remoteTracks, searchQuery) {
         if (searchQuery.isBlank()) tracks
-        else tracks.filter {
-            it.title.contains(searchQuery, ignoreCase = true) ||
-            it.artist.contains(searchQuery, ignoreCase = true) ||
-            it.album.contains(searchQuery, ignoreCase = true)
+        else {
+            val local = tracks.filter {
+                it.title.contains(searchQuery, ignoreCase = true) ||
+                it.artist.contains(searchQuery, ignoreCase = true) ||
+                it.album.contains(searchQuery, ignoreCase = true)
+            }
+            val remote = remoteTracks.filter {
+                it.title.contains(searchQuery, ignoreCase = true) ||
+                it.artist.contains(searchQuery, ignoreCase = true) ||
+                it.album.contains(searchQuery, ignoreCase = true)
+            }
+            local + remote
         }
     }
 
@@ -267,6 +276,10 @@ fun LibraryView(
                                             } else if (track.isLossless) {
                                                 Spacer(modifier = Modifier.width(6.dp))
                                                 GlassBadge(text = "LOSSLESS", color = accent)
+                                            }
+                                            if (track.path.startsWith("nodeconnect://")) {
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                GlassBadge(text = "NODE CONNECT", color = Color(0xFF06B6D4))
                                             }
                                         }
 

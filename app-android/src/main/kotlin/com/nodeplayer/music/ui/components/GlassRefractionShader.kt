@@ -195,12 +195,12 @@ internal const val AGSL_LENS_BUBBLE_SRC = """
         float mag = 1.0 + magnification * clamp(1.0 - r * r, 0.0, 1.0);
         float2 magDelta = delta / max(mag, 0.01);
 
-        // 2. Peripheral refractive displacement (bending towards center at curved edge)
-        float edgeBend = smoothstep(0.40, 0.98, r) * 0.07 * refractionIndex;
+        // 2. Pure smooth optical magnification with zero ring artifact in the middle field
+        float edgeBend = smoothstep(0.85, 1.0, r) * 0.03 * refractionIndex;
         float2 displacedDelta = magDelta + delta * edgeBend;
 
-        // 3. Chromatic dispersion prism split at perimeter
-        float fringe = smoothstep(0.45, 0.96, r) * 0.014 * chromaticFringe;
+        // 3. Subtle perimeter fringe (only at the extreme boundary, not in the field)
+        float fringe = smoothstep(0.88, 1.0, r) * 0.006 * chromaticFringe;
         float2 uvR = clamp(float2(0.5, 0.5) + displacedDelta * (1.0 + fringe), 0.0, 1.0);
         float2 uvG = clamp(float2(0.5, 0.5) + displacedDelta, 0.0, 1.0);
         float2 uvB = clamp(float2(0.5, 0.5) + displacedDelta * (1.0 - fringe), 0.0, 1.0);
@@ -211,13 +211,7 @@ internal const val AGSL_LENS_BUBBLE_SRC = """
 
         float3 col = float3(cR.r, cG.g, cB.b);
 
-        // 4. Specular rim highlight (golden / warm highlight arcs)
-        float rimMask = smoothstep(0.70, 0.92, r) * (1.0 - smoothstep(0.96, 1.02, r));
-        float angleGlow = 0.6 + 0.4 * abs(delta.y) * 2.5;
-        float3 specular = rimColor.rgb * (rimMask * angleGlow * rimStrength * 1.6);
-        col += specular;
-
-        // Subtle tactile grain
+        // 4. Subtle tactile grain (clean optical glass, zero artificial ring in field)
         if (grainStrength > 0.001) {
             float wrappedTime = time - 3600.0 * floor(time / 3600.0);
             float grain = (hash(fragCoord + float2(wrappedTime, wrappedTime * 1.618)) - 0.5) * 0.02 * grainStrength;

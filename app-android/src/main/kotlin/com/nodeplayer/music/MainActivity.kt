@@ -51,6 +51,10 @@ import com.nodeplayer.music.update.InstallUnknownAppsDialog
 import com.nodeplayer.music.update.PlaybackStopConfirmDialog
 import com.nodeplayer.music.update.WhatsNewSheet
 import android.widget.Toast
+import com.nodeplayer.ui.components.NodeConnectPairingDialog
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -171,6 +175,21 @@ class MainActivity : ComponentActivity() {
                 var pendingApkToInstall by remember { mutableStateOf<File?>(null) }
                 val downloadStatus by UpdateManager.downloadStatus.collectAsState()
                 var showSearchSheet by remember { mutableStateOf(false) }
+                var showPairingDialog by remember { mutableStateOf(false) }
+                var pairingProgress by remember { mutableStateOf(false) }
+                var pairingStatusMsg by remember { mutableStateOf<String?>(null) }
+                var showQrScanner by remember { mutableStateOf(false) }
+                var pendingAllowPrompt by remember { mutableStateOf<Pair<String, (Boolean, Boolean) -> Unit>?>(null) }
+                val hub = com.nodeplayer.music.service.PlaybackService.instance?.nodeConnectHub
+                val activeSession by (hub?.activePairingSession ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
+                val discoveredPeers by (hub?.discoveredPeers ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
+                val connectedPeers by (hub?.connectedPeers ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
+
+                LaunchedEffect(hub) {
+                    hub?.onAllowPrompt = { name, id, callback ->
+                        pendingAllowPrompt = name to callback
+                    }
+                }
 
                 LaunchedEffect(Unit) {
                     UpdateManager.init(this@MainActivity)
@@ -250,6 +269,7 @@ class MainActivity : ComponentActivity() {
                                 onOpenSmartPlaylists = { currentRoute = "smart_playlists" },
                                 onOpenStats = { currentRoute = "stats" },
                                 onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
+                                onOpenNodeConnect = { showPairingDialog = true },
                                 onInstallUpdate = {
                                     val readyApk = (downloadStatus as? DownloadStatus.ReadyToInstall)?.apkFile
                                         ?: UpdateDownloadManager.getDownloadedApk(this@MainActivity, UpdateManager.availableUpdate.value?.versionName ?: "")
@@ -377,6 +397,7 @@ class MainActivity : ComponentActivity() {
                                 onThemeConfigChange = { viewModel.updateThemeConfig(it) },
                                 onApplySafeGraphicsMode = { viewModel.applySafeGraphicsMode() },
                                 onReportProblem = { showDiagnosticsDialog = true },
+                                onPairNewDevice = { showPairingDialog = true },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
                                 hazeState = null
                             )
@@ -582,12 +603,309 @@ class MainActivity : ComponentActivity() {
                         GlobalSearchSheet(
                             tracks = allTracks,
                             onTrackClick = { track ->
-                                viewModel.playTrack(track, allTracks)
+                                if (track.path.startsWith("nodeconnect://")) {
+                                    val conn = hub?.activeConnections?.firstOrNull()
+                                    if (conn != null) {
+                                        lifecycleScope.launch {
+                                            hub.controlService.sendRemoteCommand(
+                                                connection = conn,
+                                                action = com.nodeplayer.network.protocol.ControlAction.PLAY_TRACK,
+                                                trackId = track.id,
+                                                trackTitle = track.title
+                                            )
+                                            safeToast("Playing '${track.title}' from ${conn.peerDeviceName}...", android.widget.Toast.LENGTH_SHORT)
+                                        }
+                                    }
+                                } else {
+                                    viewModel.playTrack(track, allTracks)
+                                }
                                 showSearchSheet = false
                             },
                             onDismiss = { showSearchSheet = false }
                         )
                     }
+                    if (showPairingDialog) {
+                        val ncSettingsStore = remember {
+                            val prefs = getSharedPreferences("node_connect_settings", android.content.Context.MODE_PRIVATE)
+                            com.nodeplayer.network.service.NodeConnectSettingsStore(com.nodeplayer.music.data.AndroidKeyValueStore(prefs))
+                        }
+                        var ncConfig by remember { mutableStateOf(ncSettingsStore.config.value) }
+                        LaunchedEffect(ncConfig) {
+                            hub?.config = ncConfig
+                        }
+
+                        val localIp = remember {
+                            try {
+                                java.net.NetworkInterface.getNetworkInterfaces().asSequence()
+                                    .flatMap { it.inetAddresses.asSequence() }
+                                    .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }
+                                    ?.hostAddress ?: "127.0.0.1"
+                            } catch (e: Exception) {
+                                "127.0.0.1"
+                            }
+                        }
+                        NodeConnectPairingDialog(
+                            onDismissRequest = { showPairingDialog = false },
+                            activeSession = activeSession,
+                            localIp = localIp,
+                            localDeviceId = hub?.activeDeviceId ?: android.os.Build.MODEL,
+                            localDeviceName = android.os.Build.MODEL,
+                            localPort = hub?.activePort ?: 54820,
+                            localCandidateIps = hub?.getLocalCandidateIps() ?: listOf(localIp),
+                            discoveredPeers = discoveredPeers,
+                            config = ncConfig,
+                            onConfigChange = { updated ->
+                                ncConfig = updated
+                                ncSettingsStore.saveConfig(updated)
+                                hub?.config = updated
+                            },
+                            onStartSession = { hub?.startPairingSession() },
+                            onCancelSession = { hub?.cancelPairingSession() },
+                            onPairWithHost = { host, port, pin ->
+                                lifecycleScope.launch {
+                                    pairingProgress = true
+                                    pairingStatusMsg = "Connecting to $host:$port..."
+                                    val res = hub?.pairWithHost(host, port, pin)
+                                    pairingProgress = false
+                                    if (res != null && res.isSuccess) {
+                                        pairingStatusMsg = "Successfully paired with ${res.getOrNull()}!"
+                                        delay(1200)
+                                        pairingStatusMsg = null
+                                    } else {
+                                        pairingStatusMsg = "Pairing failed: ${res?.exceptionOrNull()?.message ?: "Host unreachable"}"
+                                    }
+                                }
+                            },
+                            onConnectToPeerDirectly = { peer ->
+                                lifecycleScope.launch {
+                                    pairingProgress = true
+                                    pairingStatusMsg = "Connecting to ${peer.deviceName}..."
+                                    val conn = hub?.connectToPeer(peer)
+                                    pairingProgress = false
+                                    if (conn != null) {
+                                        safeToast("Connected to ${peer.deviceName}!", Toast.LENGTH_SHORT)
+                                        pairingStatusMsg = null
+                                    } else {
+                                        pairingStatusMsg = "Connection failed to ${peer.deviceName}"
+                                    }
+                                }
+                            },
+                            onConnectToAddress = { host, port ->
+                                lifecycleScope.launch {
+                                    pairingProgress = true
+                                    pairingStatusMsg = "Connecting to $host:$port..."
+                                    val peer = com.nodeplayer.network.discovery.DiscoveredNodePeer(
+                                        deviceId = "manual_${host.replace('.', '_')}",
+                                        deviceName = "Node Peer ($host)",
+                                        platform = "Manual",
+                                        hostAddress = host,
+                                        port = port,
+                                        certificateFingerprintSha256 = "",
+                                        candidateAddresses = listOf(host),
+                                        discoveryMethod = "Manual IP"
+                                    )
+                                    val conn = hub?.connectToPeer(peer)
+                                    pairingProgress = false
+                                    if (conn != null) {
+                                        safeToast("Connected to $host:$port!", Toast.LENGTH_SHORT)
+                                        pairingStatusMsg = null
+                                    } else {
+                                        pairingStatusMsg = "Failed to connect to $host:$port"
+                                    }
+                                }
+                            },
+                            onScanQrClicked = { showQrScanner = true },
+                            onScanNetworkClicked = { hub?.triggerSubnetScan() },
+                            onProbeGatewayClicked = { hub?.triggerGatewayProbe() },
+                            onTestPingClicked = { host, port, cb ->
+                                lifecycleScope.launch {
+                                    val res = hub?.testConnectionTo(host, port)
+                                    if (res != null) cb(res)
+                                }
+                            },
+                            onCopyLogClicked = {
+                                val log = com.nodeplayer.common.logging.NodeLog.exportFormattedLog()
+                                val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                                cm?.setPrimaryClip(android.content.ClipData.newPlainText("NodeLog", log))
+                                safeToast("Debug log copied to clipboard (${log.length} chars)", Toast.LENGTH_SHORT)
+                            },
+                            onExportLogClicked = {
+                                val log = com.nodeplayer.common.logging.NodeLog.exportFormattedLog()
+                                val out = java.io.File(filesDir, "logs/node_connect_export.txt")
+                                out.parentFile?.mkdirs()
+                                out.writeText(log)
+                                safeToast("Log exported to ${out.name}", Toast.LENGTH_SHORT)
+                            },
+                            isPairingInProgress = pairingProgress,
+                            onStartUsbLink = {
+                                lifecycleScope.launch {
+                                    pairingProgress = true
+                                    pairingStatusMsg = "Connecting over USB ADB link (127.0.0.1:54826)..."
+                                    val peer = com.nodeplayer.network.discovery.DiscoveredNodePeer(
+                                        deviceId = "usb_adb_pc",
+                                        deviceName = "PC via USB ADB",
+                                        platform = "Windows via USB",
+                                        hostAddress = "127.0.0.1",
+                                        port = 54826,
+                                        certificateFingerprintSha256 = "",
+                                        candidateAddresses = listOf("127.0.0.1"),
+                                        discoveryMethod = "USB Debugging"
+                                    )
+                                    val conn = hub?.connectToPeer(peer)
+                                    pairingProgress = false
+                                    if (conn != null) {
+                                        safeToast("Connected to PC over USB link!", Toast.LENGTH_SHORT)
+                                        pairingStatusMsg = null
+                                    } else {
+                                        pairingStatusMsg = "USB Link failed. Ensure 'adb reverse tcp:54826 tcp:54820' is active."
+                                    }
+                                }
+                            },
+                            pairingStatusMessage = pairingStatusMsg,
+                            connectedPeers = connectedPeers,
+                            onSendRemotePlayPause = { deviceId ->
+                                lifecycleScope.launch { hub?.sendRemotePlayPause(deviceId) }
+                            },
+                            onSendRemotePrevious = { deviceId ->
+                                lifecycleScope.launch { hub?.sendRemotePrevious(deviceId) }
+                            },
+                            onSendRemoteNext = { deviceId ->
+                                lifecycleScope.launch { hub?.sendRemoteNext(deviceId) }
+                            },
+                            onDisconnectPeer = { deviceId ->
+                                hub?.disconnectDevice(deviceId)
+                            },
+                            onTriggerAudioCast = { deviceId ->
+                                val conn = hub?.activeConnections?.firstOrNull { it.peerDeviceId == deviceId }
+                                val srv = com.nodeplayer.music.service.PlaybackService.instance
+                                val currentTrack = srv?.crossfadeManager?.currentPlayingTrack
+                                if (conn != null && srv != null) {
+                                    if (hub?.castService?.isCasting == true) {
+                                        srv.stopAudioCasting()
+                                        safeToast("Audio Cast stopped", Toast.LENGTH_SHORT)
+                                    } else if (currentTrack != null) {
+                                        try {
+                                            srv.startAudioCasting(conn, currentTrack)
+                                            safeToast("Audio Cast started to ${conn.peerDeviceName}!", Toast.LENGTH_SHORT)
+                                        } catch (e: Exception) {
+                                            safeToast("Audio Cast failed: ${e.message}", Toast.LENGTH_SHORT)
+                                        }
+                                    } else {
+                                        safeToast("No track currently playing to cast", Toast.LENGTH_SHORT)
+                                    }
+                                } else {
+                                    safeToast("Device not connected or playback service inactive", Toast.LENGTH_SHORT)
+                                }
+                            },
+                            onTriggerHandoff = { deviceId ->
+                                lifecycleScope.launch {
+                                    val conn = hub?.activeConnections?.firstOrNull { it.peerDeviceId == deviceId }
+                                    val srv = com.nodeplayer.music.service.PlaybackService.instance
+                                    val currentTrack = srv?.crossfadeManager?.currentPlayingTrack
+                                    if (conn != null && currentTrack != null) {
+                                        try {
+                                            val pos = srv.player.currentPosition
+                                            val isPlaying = srv.player.isPlaying
+                                            hub?.handoffService?.initiateHandoff(conn, currentTrack, pos, isPlaying)
+                                            srv.player.pause()
+                                            safeToast("Handoff transferred to ${conn.peerDeviceName}!", Toast.LENGTH_SHORT)
+                                        } catch (e: Exception) {
+                                            safeToast("Handoff failed: ${e.message}", Toast.LENGTH_SHORT)
+                                        }
+                                    } else {
+                                        safeToast("No active track to handoff", Toast.LENGTH_SHORT)
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    if (showQrScanner) {
+                        com.nodeplayer.music.ui.components.QrScannerDialog(
+                            onDismissRequest = { showQrScanner = false },
+                            onQrCodeScanned = { qrText ->
+                                showQrScanner = false
+                                lifecycleScope.launch {
+                                    try {
+                                        val content = qrText.removePrefix("nodeconnect://")
+                                        val addressesPart = content.substringBefore("?")
+                                        val hostPart = addressesPart.substringBefore(":")
+                                        val portPart = addressesPart.substringAfter(":").toIntOrNull() ?: 54820
+                                        val candidateList = hostPart.split(",").filter { it.isNotBlank() }
+                                        val firstIp = candidateList.firstOrNull() ?: "127.0.0.1"
+
+                                        val params = content.substringAfter("?", "").split("&").associate {
+                                            val kv = it.split("=")
+                                            (kv.getOrNull(0) ?: "") to (kv.getOrNull(1) ?: "")
+                                        }
+                                        val devId = params["dev"] ?: "qr_host"
+                                        val devName = java.net.URLDecoder.decode(params["name"] ?: "Node Peer", "UTF-8")
+
+                                        safeToast("Connecting to $devName...", Toast.LENGTH_SHORT)
+
+                                        val peer = com.nodeplayer.network.discovery.DiscoveredNodePeer(
+                                            deviceId = devId,
+                                            deviceName = devName,
+                                            platform = "Desktop/QR",
+                                            hostAddress = firstIp,
+                                            port = portPart,
+                                            certificateFingerprintSha256 = "",
+                                            candidateAddresses = candidateList,
+                                            discoveryMethod = "QR Code"
+                                        )
+                                        val conn = hub?.connectToPeer(peer)
+                                        if (conn != null) {
+                                            safeToast("Connected to $devName!", Toast.LENGTH_SHORT)
+                                            pairingStatusMsg = null
+                                        } else {
+                                            safeToast("Connection to $devName failed", Toast.LENGTH_LONG)
+                                        }
+                                    } catch (e: Exception) {
+                                        safeToast("QR parse error: ${e.message}", Toast.LENGTH_LONG)
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    if (pendingAllowPrompt != null) {
+                        val prompt = pendingAllowPrompt!!
+                        AlertDialog(
+                            onDismissRequest = {
+                                prompt.second(false, false)
+                                pendingAllowPrompt = null
+                            },
+                            title = { Text("Allow Connection?", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, color = androidx.compose.ui.graphics.Color.White) },
+                            text = {
+                                Text("Device '${prompt.first}' is requesting to connect to Node Player.", color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f))
+                            },
+                            confirmButton = {
+                                Button(onClick = {
+                                    prompt.second(true, true)
+                                    pendingAllowPrompt = null
+                                }) {
+                                    Text("Always Allow")
+                                }
+                            },
+                            dismissButton = {
+                                Row {
+                                    TextButton(onClick = {
+                                        prompt.second(true, false)
+                                        pendingAllowPrompt = null
+                                    }) {
+                                        Text("Allow Once")
+                                    }
+                                    TextButton(onClick = {
+                                        prompt.second(false, false)
+                                        pendingAllowPrompt = null
+                                    }) {
+                                        Text("Deny", color = androidx.compose.ui.graphics.Color(0xFFEF4444))
+                                    }
+                                }
+                            }
+                        )
+                    }
+
                 }
             }
         }

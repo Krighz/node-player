@@ -1,18 +1,11 @@
 package com.nodeplayer.ui
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.hoverable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -20,29 +13,22 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.*
-import com.nodeplayer.ui.components.LiquidGlassBackground
-import com.nodeplayer.ui.components.NodePlayerLogo
+import com.nodeplayer.ui.components.*
+import com.nodeplayer.ui.player.BottomPlayerDeck
 import com.nodeplayer.ui.player.BottomPlayerDock
 import com.nodeplayer.ui.player.NowPlayingView
-import com.nodeplayer.ui.screens.CustomizeUiView
-import com.nodeplayer.ui.screens.EqualizerView
-import com.nodeplayer.ui.screens.HomeView
-import com.nodeplayer.ui.screens.LibraryView
-import com.nodeplayer.ui.screens.SettingsView
-import com.nodeplayer.ui.theme.GlassTokens
+import com.nodeplayer.ui.screens.*
 import com.nodeplayer.ui.theme.GlassTokensData
 import com.nodeplayer.ui.theme.LocalAccentColor
-import com.nodeplayer.ui.theme.LocalGlassTokens
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
-import com.nodeplayer.ui.theme.liquidGlass
+import com.nodeplayer.ui.theme.LocalGlassTokens
 
 enum class PlayerNavDestination(val title: String, val icon: ImageVector) {
     HOME("For You", Icons.Rounded.Home),
@@ -66,6 +52,7 @@ fun SharedPlayerLayout(
     volume: Float = 1.0f,
     isShuffle: Boolean = false,
     repeatMode: Int = 0,
+    isFavorite: Boolean = false,
     queue: List<Track> = emptyList(),
     currentQueueIndex: Int = 0,
     lrcContent: String? = null,
@@ -77,6 +64,8 @@ fun SharedPlayerLayout(
     gaplessEnabled: Boolean = true,
     replayGainMode: ReplayGainMode = ReplayGainMode.OFF,
     lastFmEnabled: Boolean = false,
+    nodeConnectEnabled: Boolean = true,
+    connectedDeviceCount: Int = 0,
     onPlayTrack: (Track, List<Track>) -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -85,6 +74,7 @@ fun SharedPlayerLayout(
     onVolumeChange: (Float) -> Unit = {},
     onToggleShuffle: () -> Unit = {},
     onCycleRepeat: () -> Unit = {},
+    onToggleFavorite: () -> Unit = {},
     onSelectQueueItem: (Int) -> Unit = {},
     onAudioEffectConfigChange: (AudioEffectConfig) -> Unit,
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
@@ -93,23 +83,44 @@ fun SharedPlayerLayout(
     onGaplessToggle: (Boolean) -> Unit = {},
     onReplayGainModeChange: (ReplayGainMode) -> Unit = {},
     onLastFmToggle: (Boolean) -> Unit = {},
+    onToggleNodeConnect: (Boolean) -> Unit = {},
+    onPairNewDevice: () -> Unit = {},
+    onCastToPeer: (DiscoveredPeerInfo) -> Unit = {},
+    onOpenSyncCenter: () -> Unit = {},
     currentMusicFolder: String = "",
     onRescanLibrary: () -> Unit = {},
     onSelectMusicFolder: () -> Unit = {},
+    remoteTracks: List<Track> = emptyList(),
+    onSearchQueryChanged: ((String) -> Unit)? = null,
+    sleepTimerRemainingSec: Long? = null,
+    onSetSleepTimer: (Int?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var currentNav by remember { mutableStateOf(PlayerNavDestination.HOME) }
     var searchQuery by remember { mutableStateOf("") }
     var showNowPlayingOverlay by remember { mutableStateOf(false) }
+    var isMuted by remember { mutableStateOf(false) }
+    var previousVolume by remember { mutableFloatStateOf(volume) }
 
-    val sidebarInteractionSource = remember { MutableInteractionSource() }
-    val isSidebarHovered by sidebarInteractionSource.collectIsHoveredAsState()
-    val sidebarWidth by animateDpAsState(
-        targetValue = if (isSidebarHovered) 230.dp else 78.dp,
-        animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing)
+    val searchFocusRequester = remember { FocusRequester() }
+
+    val baseAccent = Color(themeConfig.fixedAccentColorArgb)
+    var dynamicArtAccent by remember { mutableStateOf<Color?>(null) }
+
+    LaunchedEffect(currentTrack?.id, currentTrack?.path) {
+        val t = currentTrack
+        if (t != null) {
+            dynamicArtAccent = PlatformArtworkProvider.extractVibrantColor(t)
+        } else {
+            dynamicArtAccent = null
+        }
+    }
+
+    val targetAccent = dynamicArtAccent ?: baseAccent
+    val accent by androidx.compose.animation.animateColorAsState(
+        targetValue = targetAccent,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 650)
     )
-
-    val accent = Color(themeConfig.fixedAccentColorArgb)
     val glassTokens = remember(themeConfig) {
         GlassTokensData(
             opacity = themeConfig.glassOpacity,
@@ -128,197 +139,277 @@ fun SharedPlayerLayout(
         LocalGlassTokens provides glassTokens,
         LocalGlassThemeConfig provides themeConfig
     ) {
-        Box(modifier = modifier.fillMaxSize()) {
-            // 1. Full Dynamic Liquid Glass Background with all 6 shader animation styles
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .focusable()
+                .onPreviewKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown) {
+                        when {
+                            // Ctrl + F: Focus search capsule
+                            keyEvent.isCtrlPressed && keyEvent.key == Key.F -> {
+                                if (currentNav != PlayerNavDestination.HOME && currentNav != PlayerNavDestination.LIBRARY) {
+                                    currentNav = PlayerNavDestination.HOME
+                                }
+                                searchFocusRequester.requestFocus()
+                                true
+                            }
+                            // Ctrl + 1/2/3: Navigate tabs
+                            keyEvent.isCtrlPressed && keyEvent.key == Key.One -> {
+                                currentNav = PlayerNavDestination.HOME
+                                true
+                            }
+                            keyEvent.isCtrlPressed && keyEvent.key == Key.Two -> {
+                                currentNav = PlayerNavDestination.LIBRARY
+                                true
+                            }
+                            keyEvent.isCtrlPressed && keyEvent.key == Key.Three -> {
+                                currentNav = PlayerNavDestination.SETTINGS
+                                true
+                            }
+                            // Space: Play / Pause
+                            keyEvent.key == Key.Spacebar -> {
+                                onPlayPause()
+                                true
+                            }
+                            // Seek Left / Right ±5s
+                            !keyEvent.isShiftPressed && keyEvent.key == Key.DirectionRight -> {
+                                onSeek((positionMs + 5000L).coerceAtMost(durationMs))
+                                true
+                            }
+                            !keyEvent.isShiftPressed && keyEvent.key == Key.DirectionLeft -> {
+                                onSeek((positionMs - 5000L).coerceAtLeast(0L))
+                                true
+                            }
+                            // Shift + Left / Right: Prev / Next track
+                            keyEvent.isShiftPressed && keyEvent.key == Key.DirectionRight -> {
+                                onNext()
+                                true
+                            }
+                            keyEvent.isShiftPressed && keyEvent.key == Key.DirectionLeft -> {
+                                onPrevious()
+                                true
+                            }
+                            // Up / Down: Volume ±5%
+                            keyEvent.key == Key.DirectionUp -> {
+                                onVolumeChange((volume + 0.05f).coerceAtMost(1.0f))
+                                true
+                            }
+                            keyEvent.key == Key.DirectionDown -> {
+                                onVolumeChange((volume - 0.05f).coerceAtLeast(0.0f))
+                                true
+                            }
+                            // M: Mute toggle
+                            keyEvent.key == Key.M -> {
+                                if (isMuted) {
+                                    isMuted = false
+                                    onVolumeChange(if (previousVolume > 0f) previousVolume else 0.5f)
+                                } else {
+                                    isMuted = true
+                                    previousVolume = volume
+                                    onVolumeChange(0.0f)
+                                }
+                                true
+                            }
+                            else -> false
+                        }
+                    } else {
+                        false
+                    }
+                }
+        ) {
+            // 1. Full Dynamic Liquid Glass Background (freezes during pause/idle for maximum performance)
             LiquidGlassBackground(
                 accentColor = accent,
                 isOled = themeConfig.isOledBlack,
                 isPlaying = isPlaying,
                 isPerformanceMode = themeConfig.isPerformanceMode,
-                animatedBackdrop = true,
+                animatedBackdrop = themeConfig.animatedBackdrop && isPlaying,
                 themeConfig = themeConfig
             )
 
-            // 2. Main Layout (16:9 Expanded Desktop/Landscape vs Portrait Phone)
+            // 2. Main Layout (Expanded Desktop / Landscape vs Portrait Phone)
             if (isExpanded) {
-                // 16:9 Expanded Layout: Left Sidebar + Center Screen + Bottom Dock
-                Row(modifier = Modifier.fillMaxSize()) {
-                    // Left Navigation Glass Sidebar (Hover-animated: icon-only collapsed, full-width expanded)
-                    Column(
+                // 16:9 Expanded Layout: Top Header + (Left Optical Dock + Screen Area) + Bottom Floating Waveform Deck
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Top Bar: Search Capsule (Center) + Device Connect Pill (Right)
+                    Row(
                         modifier = Modifier
-                            .width(sidebarWidth)
-                            .fillMaxHeight()
-                            .padding(14.dp)
-                            .liquidGlass(cornerRadius = 20.dp)
-                            .hoverable(sidebarInteractionSource)
-                            .padding(
-                                start = if (isSidebarHovered) 16.dp else 8.dp,
-                                end = if (isSidebarHovered) 16.dp else 8.dp,
-                                top = 16.dp,
-                                bottom = 16.dp
-                            ),
-                        verticalArrangement = Arrangement.SpaceBetween,
-                        horizontalAlignment = if (isSidebarHovered) Alignment.Start else Alignment.CenterHorizontally
+                            .fillMaxWidth()
+                            .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(
-                            horizontalAlignment = if (isSidebarHovered) Alignment.Start else Alignment.CenterHorizontally
-                        ) {
-                            // Logo / Title
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 24.dp, top = 4.dp),
-                                horizontalArrangement = if (isSidebarHovered) Arrangement.Start else Arrangement.Center
-                            ) {
-                                NodePlayerLogo(size = 38.dp, accentColor = accent)
-                                if (isSidebarHovered) {
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column {
-                                        Text(
-                                            text = "Node Player",
-                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-                                            maxLines = 1
-                                        )
-                                        Text(
-                                            text = "v1.4.0 • Hi-Fi Pure",
-                                            style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.5f)),
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                            }
+                        // Empty placeholder on left to balance spacing with the optical dock
+                        Box(modifier = Modifier.width(96.dp))
 
-                            // Navigation Items
-                            PlayerNavDestination.values().forEach { destination ->
-                                val isSelected = currentNav == destination
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(46.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(if (isSelected) accent.copy(alpha = 0.22f) else Color.Transparent)
-                                        .clickable { currentNav = destination }
-                                        .padding(horizontal = if (isSidebarHovered) 14.dp else 0.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = if (isSidebarHovered) Arrangement.Start else Arrangement.Center
-                                ) {
-                                    Icon(
-                                        imageVector = destination.icon,
-                                        contentDescription = destination.title,
-                                        tint = if (isSelected) accent else Color.White.copy(alpha = 0.7f),
-                                        modifier = Modifier.size(22.dp)
-                                    )
-                                    if (isSidebarHovered) {
-                                        Spacer(modifier = Modifier.width(12.dp))
-                                        Text(
-                                            text = destination.title,
-                                            style = MaterialTheme.typography.bodyMedium.copy(
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.75f)
-                                            ),
-                                            maxLines = 1
-                                        )
-                                    }
+                        // Center: Search Capsule
+                        SearchCapsule(
+                            query = searchQuery,
+                            onQueryChange = {
+                                searchQuery = it
+                                onSearchQueryChanged?.invoke(it)
+                                if (it.isNotBlank() && currentNav != PlayerNavDestination.LIBRARY) {
+                                    currentNav = PlayerNavDestination.LIBRARY
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
-                            }
-                        }
+                            },
+                            focusRequester = searchFocusRequester,
+                            placeholder = "Search artists, tracks, or playlists..."
+                        )
 
-                        // Bottom status in sidebar
-                        if (isSidebarHovered) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(if (isPlaying) accent else Color.Gray)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (isPlaying) "Bit-Perfect Output" else "Ready",
-                                    fontSize = 11.sp,
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    maxLines = 1
-                                )
+                        // Right: Device Connect Pill with Glow Indicator
+                        DeviceConnectPill(
+                            status = if (nodeConnectEnabled && connectedDeviceCount > 0) DeviceConnectStatus.CONNECTED
+                            else if (nodeConnectEnabled) DeviceConnectStatus.DISCOVERING
+                            else DeviceConnectStatus.DISCONNECTED,
+                            connectedDeviceCount = connectedDeviceCount,
+                            allowCastingToThisDevice = nodeConnectEnabled,
+                            onToggleAllowCasting = onToggleNodeConnect,
+                            onPairNewDevice = onPairNewDevice,
+                            onCastToDevice = onCastToPeer,
+                            onOpenSyncCenter = {
+                                currentNav = PlayerNavDestination.SETTINGS
+                                onOpenSyncCenter()
                             }
-                        }
+                        )
                     }
 
-                    // Central Active Screen Area
-                    Column(
+                    // Content Body: Left Optical Dock + Active Center View
+                    Row(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight()
-                            .padding(bottom = if (currentTrack != null) 90.dp else 0.dp)
+                            .fillMaxWidth()
+                            .padding(bottom = if (currentTrack != null) 88.dp else 12.dp)
                     ) {
-                        when (currentNav) {
-                            PlayerNavDestination.HOME -> HomeView(
-                                tracks = tracks,
-                                currentTrack = currentTrack,
-                                isPlaying = isPlaying,
-                                onPlayTrack = onPlayTrack,
-                                onPlayPause = onPlayPause,
-                                onQuickShuffle = {
-                                    if (tracks.isNotEmpty()) {
-                                        val shuffled = tracks.shuffled()
-                                        onPlayTrack(shuffled.first(), shuffled)
-                                    }
+                        // Left: Optical Rail Dock with Spring Convex Bubble
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 20.dp, end = 12.dp, top = 8.dp),
+                            contentAlignment = Alignment.TopCenter
+                        ) {
+                            OpticalRailDock(
+                                currentNav = currentNav,
+                                onNavSelect = { destination ->
+                                    currentNav = destination
                                 },
-                                onRescanClick = onRescanLibrary,
-                                onSelectMusicFolder = onSelectMusicFolder,
-                                onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
-                                onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER }
+                                themeConfig = themeConfig
                             )
-                            PlayerNavDestination.LIBRARY -> LibraryView(
-                                tracks = tracks,
-                                albums = albums,
-                                artists = artists,
-                                folders = folders,
-                                currentTrack = currentTrack,
-                                isPlaying = isPlaying,
-                                onTrackClick = onPlayTrack,
-                                onRescanClick = onRescanLibrary,
-                                searchQuery = searchQuery,
-                                onSearchChange = { searchQuery = it }
-                            )
-                            PlayerNavDestination.EQUALIZER -> EqualizerView(
-                                config = audioEffectConfig,
-                                onConfigChange = onAudioEffectConfigChange,
-                                currentTrack = currentTrack,
-                                currentDeviceName = audioOutputInfo.outputDeviceName
-                            )
-                            PlayerNavDestination.CUSTOMIZE -> CustomizeUiView(
-                                themeConfig = themeConfig,
-                                onThemeConfigChange = onThemeConfigChange
-                            )
-                            PlayerNavDestination.SETTINGS -> SettingsView(
-                                audioOutputInfo = audioOutputInfo,
-                                isExclusiveMode = isExclusiveMode,
-                                onToggleExclusiveMode = onToggleExclusiveMode,
-                                crossfadeSeconds = crossfadeSeconds,
-                                onCrossfadeChange = onCrossfadeChange,
-                                gaplessEnabled = gaplessEnabled,
-                                onGaplessToggle = onGaplessToggle,
-                                replayGainMode = replayGainMode,
-                                onReplayGainModeChange = onReplayGainModeChange,
-                                lastFmEnabled = lastFmEnabled,
-                                onLastFmToggle = onLastFmToggle,
-                                currentMusicFolder = currentMusicFolder,
-                                onSelectMusicFolder = onSelectMusicFolder,
-                                onRescanLibrary = onRescanLibrary,
-                                onOpenCustomizeUi = { currentNav = PlayerNavDestination.CUSTOMIZE },
-                                onOpenEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
-                                trackCount = tracks.size
-                            )
+                        }
+
+                        // Center: Active Screen Area
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .padding(end = 20.dp)
+                        ) {
+                            when (currentNav) {
+                                PlayerNavDestination.HOME -> HomeView(
+                                    tracks = tracks,
+                                    currentTrack = currentTrack,
+                                    isPlaying = isPlaying,
+                                    onPlayTrack = onPlayTrack,
+                                    onPlayPause = onPlayPause,
+                                    onQuickShuffle = {
+                                        if (tracks.isNotEmpty()) {
+                                            val shuffled = tracks.shuffled()
+                                            onPlayTrack(shuffled.first(), shuffled)
+                                        }
+                                    },
+                                    onRescanClick = onRescanLibrary,
+                                    onSelectMusicFolder = onSelectMusicFolder,
+                                    onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
+                                    onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER }
+                                )
+                                PlayerNavDestination.LIBRARY -> LibraryView(
+                                    tracks = tracks,
+                                    albums = albums,
+                                    artists = artists,
+                                    folders = folders,
+                                    currentTrack = currentTrack,
+                                    isPlaying = isPlaying,
+                                    onTrackClick = onPlayTrack,
+                                    onRescanClick = onRescanLibrary,
+                                    searchQuery = searchQuery,
+                                    onSearchChange = {
+                                        searchQuery = it
+                                        onSearchQueryChanged?.invoke(it)
+                                    },
+                                    remoteTracks = remoteTracks
+                                )
+                                PlayerNavDestination.EQUALIZER -> EqualizerView(
+                                    config = audioEffectConfig,
+                                    onConfigChange = onAudioEffectConfigChange,
+                                    currentTrack = currentTrack,
+                                    currentDeviceName = audioOutputInfo.outputDeviceName
+                                )
+                                PlayerNavDestination.CUSTOMIZE -> CustomizeUiView(
+                                    themeConfig = themeConfig,
+                                    onThemeConfigChange = onThemeConfigChange
+                                )
+                                PlayerNavDestination.SETTINGS -> SettingsView(
+                                    audioOutputInfo = audioOutputInfo,
+                                    isExclusiveMode = isExclusiveMode,
+                                    onToggleExclusiveMode = onToggleExclusiveMode,
+                                    crossfadeSeconds = crossfadeSeconds,
+                                    onCrossfadeChange = onCrossfadeChange,
+                                    gaplessEnabled = gaplessEnabled,
+                                    onGaplessToggle = onGaplessToggle,
+                                    replayGainMode = replayGainMode,
+                                    onReplayGainModeChange = onReplayGainModeChange,
+                                    lastFmEnabled = lastFmEnabled,
+                                    onLastFmToggle = onLastFmToggle,
+                                    currentMusicFolder = currentMusicFolder,
+                                    onSelectMusicFolder = onSelectMusicFolder,
+                                    onRescanLibrary = onRescanLibrary,
+                                    onOpenCustomizeUi = { currentNav = PlayerNavDestination.CUSTOMIZE },
+                                    onOpenEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
+                                    onOpenSyncCenter = onOpenSyncCenter,
+                                    trackCount = tracks.size,
+                                    nodeConnectEnabled = nodeConnectEnabled,
+                                    onToggleNodeConnect = onToggleNodeConnect,
+                                    themeConfig = themeConfig,
+                                    onThemeConfigChange = onThemeConfigChange,
+                                    isExpanded = true
+                                )
+                            }
                         }
                     }
                 }
+
+                // Pinned Bottom Floating Waveform Player Deck (Expanded mode)
+                if (currentTrack != null) {
+                    BottomPlayerDeck(
+                        currentTrack = currentTrack,
+                        isPlaying = isPlaying,
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        volume = volume,
+                        isShuffle = isShuffle,
+                        repeatMode = repeatMode,
+                        isFavorite = isFavorite,
+                        audioOutputInfo = audioOutputInfo,
+                        onPlayPause = onPlayPause,
+                        onNext = onNext,
+                        onPrevious = onPrevious,
+                        onSeek = onSeek,
+                        onVolumeChange = onVolumeChange,
+                        onToggleShuffle = onToggleShuffle,
+                        onCycleRepeat = onCycleRepeat,
+                        onToggleFavorite = onToggleFavorite,
+                        onOpenSignalPath = { currentNav = PlayerNavDestination.EQUALIZER },
+                        onOpenOutputDevicePicker = { currentNav = PlayerNavDestination.SETTINGS },
+                        onCastClick = { /* open cast sheet */ },
+                        onExpandNowPlaying = { showNowPlayingOverlay = true },
+                        sleepTimerRemainingSec = sleepTimerRemainingSec,
+                        onSetSleepTimer = onSetSleepTimer,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 12.dp)
+                    )
+                }
             } else {
-                // Portrait Layout (Phone): Content + Bottom Navigation Bar
+                // Portrait Layout (Phone): Android portrait stays unchanged
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                         when (currentNav) {
@@ -378,7 +469,13 @@ fun SharedPlayerLayout(
                                 onRescanLibrary = onRescanLibrary,
                                 onOpenCustomizeUi = { currentNav = PlayerNavDestination.CUSTOMIZE },
                                 onOpenEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
-                                trackCount = tracks.size
+                                onOpenSyncCenter = onOpenSyncCenter,
+                                trackCount = tracks.size,
+                                nodeConnectEnabled = nodeConnectEnabled,
+                                onToggleNodeConnect = onToggleNodeConnect,
+                                themeConfig = themeConfig,
+                                onThemeConfigChange = onThemeConfigChange,
+                                isExpanded = false
                             )
                         }
                     }
@@ -403,28 +500,28 @@ fun SharedPlayerLayout(
                         }
                     }
                 }
-            }
 
-            // 3. Persistent Bottom Mini Player / Dock
-            if (currentTrack != null) {
-                BottomPlayerDock(
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    positionMs = positionMs,
-                    durationMs = durationMs,
-                    volume = volume,
-                    isShuffle = isShuffle,
-                    repeatMode = repeatMode,
-                    onPlayPause = onPlayPause,
-                    onNext = onNext,
-                    onPrevious = onPrevious,
-                    onSeek = onSeek,
-                    onVolumeChange = onVolumeChange,
-                    onToggleShuffle = onToggleShuffle,
-                    onCycleRepeat = onCycleRepeat,
-                    onExpandNowPlaying = { showNowPlayingOverlay = true }
-                )
+                // Persistent Bottom Mini Player / Dock for Phone Portrait
+                if (currentTrack != null) {
+                    BottomPlayerDock(
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp),
+                        currentTrack = currentTrack,
+                        isPlaying = isPlaying,
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        volume = volume,
+                        isShuffle = isShuffle,
+                        repeatMode = repeatMode,
+                        onPlayPause = onPlayPause,
+                        onNext = onNext,
+                        onPrevious = onPrevious,
+                        onSeek = onSeek,
+                        onVolumeChange = onVolumeChange,
+                        onToggleShuffle = onToggleShuffle,
+                        onCycleRepeat = onCycleRepeat,
+                        onExpandNowPlaying = { showNowPlayingOverlay = true }
+                    )
+                }
             }
 
             // 4. Expanded Now Playing Fullscreen Overlay (Lyrics, Queue, Artwork)

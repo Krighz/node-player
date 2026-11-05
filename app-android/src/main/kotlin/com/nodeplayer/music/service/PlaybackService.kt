@@ -11,9 +11,25 @@ import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ContentUris
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.provider.MediaStore
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
+import android.media.AudioFormat
+import android.media.AudioTrack
+import com.nodeplayer.network.cast.ActiveCastSession
+import com.nodeplayer.network.cast.JitterBuffer
+import com.nodeplayer.network.discovery.DiscoveredNodePeer
+import com.nodeplayer.network.protocol.ControlStateEventMessage
+import com.nodeplayer.network.service.LocalPlayerController
+import com.nodeplayer.network.service.NodeConnectHub
+import kotlinx.coroutines.withContext
+import android.net.wifi.WifiManager
+import com.nodeplayer.common.logging.NodeLog
 import android.os.Build
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -49,6 +65,36 @@ class PlaybackService : MediaSessionService() {
     lateinit var crossfadeManager: com.nodeplayer.music.audio.CrossfadePlayerManager
     lateinit var sleepTimerManager: SleepTimerManager
         private set
+    lateinit var nodeConnectHub: NodeConnectHub
+        private set
+    private var incomingCastJob: Job? = null
+    private var incomingAudioTrack: AudioTrack? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
+
+    private fun acquireMulticastLock() {
+        try {
+            val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+            multicastLock = wifi?.createMulticastLock("node_player_discovery")?.apply {
+                setReferenceCounted(true)
+                acquire()
+            }
+            NodeLog.i("nodeconnect/discovery", "Acquired Android WifiManager.MulticastLock")
+        } catch (e: Exception) {
+            NodeLog.w("nodeconnect/discovery", "Failed to acquire MulticastLock: ${e.message}")
+        }
+    }
+
+    private fun releaseMulticastLock() {
+        try {
+            if (multicastLock?.isHeld == true) {
+                multicastLock?.release()
+                NodeLog.i("nodeconnect/discovery", "Released Android WifiManager.MulticastLock")
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
+        multicastLock = null
+    }
     val statsTracker = com.nodeplayer.library.PlaybackStatsTracker()
     private val scrobbledTrackIds = mutableSetOf<Long>()
 
@@ -92,6 +138,200 @@ class PlaybackService : MediaSessionService() {
         ) {
             if (reason == Player.DISCONTINUITY_REASON_SEEK) {
                 statsTracker.onSeek()
+                if (::nodeConnectHub.isInitialized) {
+                    serviceScope.launch(Dispatchers.IO) {
+                        nodeConnectHub.castService.flushSenderStream(newPosition.positionMs)
+                    }
+                }
+            }
+        }
+    }
+
+    fun playIncomingCastStream(session: ActiveCastSession, jitter: JitterBuffer) {
+        incomingCastJob?.cancel()
+        try {
+            incomingAudioTrack?.stop()
+            incomingAudioTrack?.release()
+        } catch (_: Exception) {}
+
+        val castTrack = com.nodeplayer.model.Track(
+            id = -session.sequenceId.coerceAtLeast(1L),
+            title = session.trackTitle,
+            artist = session.artist,
+            album = session.album,
+            durationMs = session.durationMs,
+            path = "nodeconnect://cast/${session.streamId}",
+            sampleRate = session.sampleRate,
+            bitDepth = session.bitDepth,
+            channels = session.channels,
+            formatDescription = "Cast PCM (${session.sampleRate / 1000}kHz)",
+            isLossless = true
+        )
+
+        if (session.artworkBase64.isNotBlank()) {
+            try {
+                val artBytes = android.util.Base64.decode(session.artworkBase64, android.util.Base64.DEFAULT)
+                com.nodeplayer.ui.components.ArtworkCache.putBytes("nodeconnect://cast/${session.streamId}", artBytes)
+                com.nodeplayer.ui.components.ArtworkCache.putBytes(castTrack.path, artBytes)
+                com.nodeplayer.ui.components.ArtworkCache.putBytes(session.trackTitle + session.artist, artBytes)
+            } catch (_: Exception) {}
+        }
+
+        serviceScope.launch(Dispatchers.Main) {
+            if (::crossfadeManager.isInitialized && crossfadeManager.activePlayer.isPlaying) {
+                crossfadeManager.activePlayer.pause()
+            }
+            isCurrentlyPlaying = true
+            onTrackTransitionCallback?.invoke(castTrack)
+        }
+
+        incomingCastJob = serviceScope.launch(Dispatchers.IO) {
+            val minBufSize = AudioTrack.getMinBufferSize(
+                session.sampleRate,
+                if (session.channels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO,
+                if (session.bitDepth == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_FLOAT
+            )
+            val bufferSize = minBufSize.coerceAtLeast(8192)
+
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(
+                    android.media.AudioAttributes.Builder()
+                        .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(if (session.bitDepth == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_FLOAT)
+                        .setSampleRate(session.sampleRate)
+                        .setChannelMask(if (session.channels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufferSize)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .build()
+
+            incomingAudioTrack = track
+            track.play()
+
+            // Pre-buffer before initial playback to avoid DAC pop/crackling
+            while (isActive && !jitter.isReadyForPlayback) {
+                delay(15)
+            }
+
+            val buf = ByteArray(4096)
+            try {
+                while (isActive) {
+                    val read = jitter.read(buf, 0, buf.size)
+                    if (read > 0) {
+                        track.write(buf, 0, read)
+                    } else {
+                        while (isActive && !jitter.isReadyForPlayback) {
+                            delay(15)
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            } finally {
+                try {
+                    track.stop()
+                    track.release()
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    fun getTrackThumbnailBase64(track: com.nodeplayer.model.Track): String {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && track.id > 0) {
+                val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, track.id)
+                val thumb = contentResolver.loadThumbnail(trackUri, android.util.Size(120, 120), null)
+                val baos = java.io.ByteArrayOutputStream()
+                thumb.compress(Bitmap.CompressFormat.JPEG, 70, baos)
+                return android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP)
+            }
+            val file = File(track.path)
+            if (file.exists() && file.canRead()) {
+                val mmr = MediaMetadataRetriever()
+                mmr.setDataSource(file.absolutePath)
+                val pic = mmr.embeddedPicture
+                mmr.release()
+                if (pic != null) {
+                    val bm = BitmapFactory.decodeByteArray(pic, 0, pic.size)
+                    if (bm != null) {
+                        val scaled = Bitmap.createScaledBitmap(bm, 120, (120f * bm.height / bm.width).toInt().coerceAtLeast(1), true)
+                        val baos = java.io.ByteArrayOutputStream()
+                        scaled.compress(Bitmap.CompressFormat.JPEG, 70, baos)
+                        return android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return ""
+    }
+
+    fun getTrackThumbnailBytes(trackId: Long): ByteArray? {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && trackId > 0) {
+                val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, trackId)
+                val thumb = contentResolver.loadThumbnail(trackUri, android.util.Size(120, 120), null)
+                val baos = java.io.ByteArrayOutputStream()
+                thumb.compress(Bitmap.CompressFormat.JPEG, 75, baos)
+                return baos.toByteArray()
+            }
+            val track = crossfadeManager.currentQueue.firstOrNull { it.id == trackId }
+            if (track != null) {
+                val file = File(track.path)
+                if (file.exists() && file.canRead()) {
+                    val mmr = MediaMetadataRetriever()
+                    mmr.setDataSource(file.absolutePath)
+                    val pic = mmr.embeddedPicture
+                    mmr.release()
+                    if (pic != null) return pic
+                }
+            }
+        } catch (_: Exception) {}
+        return null
+    }
+
+    val sleepTimer: SleepTimerManager?
+        get() = if (::sleepTimerManager.isInitialized) sleepTimerManager else null
+
+    fun startAudioCasting(targetPeer: DiscoveredNodePeer) {
+        serviceScope.launch(Dispatchers.IO) {
+            val conn = nodeConnectHub.connectToPeer(targetPeer) ?: return@launch
+            val track = crossfadeManager.currentPlayingTrack ?: return@launch
+            startAudioCasting(conn, track)
+        }
+    }
+
+    fun startAudioCasting(connection: com.nodeplayer.network.transport.NodeConnection, track: com.nodeplayer.model.Track) {
+        val initialPos = try { crossfadeManager.activePlayer.currentPosition } catch (_: Exception) { 0L }
+        serviceScope.launch(Dispatchers.IO) {
+            val artBase64 = getTrackThumbnailBase64(track)
+            nodeConnectHub.castService.startCastAsSender(connection, track, initialPos, artBase64)
+
+            crossfadeManager.dspAudioProcessorA.preDspPcmTap = { bytes, _, _, _ ->
+                nodeConnectHub.castService.sendPcmAudioChunk(bytes, 0L)
+            }
+            crossfadeManager.dspAudioProcessorB.preDspPcmTap = { bytes, _, _, _ ->
+                nodeConnectHub.castService.sendPcmAudioChunk(bytes, 0L)
+            }
+            if (nodeConnectHub.config.muteLocalOutputDuringCast) {
+                serviceScope.launch(Dispatchers.Main) {
+                    crossfadeManager.activePlayer.volume = 0.0f
+                }
+            }
+        }
+    }
+
+    fun stopAudioCasting() {
+        serviceScope.launch(Dispatchers.IO) {
+            nodeConnectHub.castService.stopCastAsSender()
+            crossfadeManager.dspAudioProcessorA.preDspPcmTap = null
+            crossfadeManager.dspAudioProcessorB.preDspPcmTap = null
+            serviceScope.launch(Dispatchers.Main) {
+                crossfadeManager.activePlayer.volume = 1.0f
             }
         }
     }
@@ -296,6 +536,32 @@ class PlaybackService : MediaSessionService() {
                 sleepTimerManager.onTrackChanged()
                 scrobbledTrackIds.remove(track.id)
                 statsTracker.onTrackStarted(track.id)
+                if (::nodeConnectHub.isInitialized && nodeConnectHub.castService.isCasting) {
+                    val conn = nodeConnectHub.activeConnections.firstOrNull()
+                    if (conn != null) {
+                        serviceScope.launch(Dispatchers.IO) {
+                            val artBase64 = getTrackThumbnailBase64(track)
+                            nodeConnectHub.castService.flushSenderStream(0L)
+                            nodeConnectHub.castService.startCastAsSender(conn, track, 0L, artBase64)
+                        }
+                    }
+                }
+                if (::nodeConnectHub.isInitialized) {
+                    serviceScope.launch(Dispatchers.IO) {
+                        nodeConnectHub.controlService.broadcastLocalState(
+                            ControlStateEventMessage(
+                                isPlaying = isCurrentlyPlaying,
+                                positionMs = crossfadeManager.activePlayer.currentPosition,
+                                durationMs = track.durationMs,
+                                volume = crossfadeManager.activePlayer.volume,
+                                trackTitle = track.title,
+                                artist = track.artist,
+                                album = track.album,
+                                artworkBase64 = getTrackThumbnailBase64(track)
+                            )
+                        )
+                    }
+                }
                 serviceScope.launch(Dispatchers.IO) {
                     val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
                     val sk = prefs.getString("lastfm_session_key", "") ?: ""
@@ -321,6 +587,9 @@ class PlaybackService : MediaSessionService() {
             context = this,
             playerProvider = { if (::crossfadeManager.isInitialized) crossfadeManager.activePlayer else null },
             onTimerExpired = {
+                if (::crossfadeManager.isInitialized) {
+                    crossfadeManager.pause()
+                }
                 com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
             }
         )
@@ -439,6 +708,142 @@ class PlaybackService : MediaSessionService() {
         }
 
         registerHeadsetReceiver()
+        val localController = object : LocalPlayerController {
+            override fun play() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.play() }
+            }
+            override fun pause() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.pause() }
+            }
+            override fun playPause() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.togglePlayPause() }
+            }
+            override fun seekTo(positionMs: Long) {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.seekTo(positionMs) }
+            }
+            override fun skipToNext() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.skipNext() }
+            }
+            override fun skipToPrevious() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.skipPrevious() }
+            }
+            override fun setVolume(volume: Float) {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.activePlayer.volume = volume }
+            }
+            override fun toggleShuffle() {
+                serviceScope.launch(Dispatchers.Main) { crossfadeManager.setShuffle(!crossfadeManager.isShuffleEnabled) }
+            }
+            override fun cycleRepeat() {
+                serviceScope.launch(Dispatchers.Main) {
+                    val nextMode = (crossfadeManager.activePlayer.repeatMode + 1) % 3
+                    crossfadeManager.activePlayer.repeatMode = nextMode
+                }
+            }
+            override fun playTrack(trackId: Long, trackTitle: String) {
+                serviceScope.launch(Dispatchers.Main) {
+                    val db = (application as? com.nodeplayer.music.NodePlayerApplication)?.database
+                    val allTracks = withContext(Dispatchers.IO) {
+                        db?.playerDao()?.getAllTracksList()?.map { it.toTrack() } ?: emptyList()
+                    }
+                    val target = allTracks.firstOrNull { it.id == trackId }
+                        ?: allTracks.firstOrNull { it.title.equals(trackTitle, ignoreCase = true) }
+                        ?: allTracks.firstOrNull { it.title.contains(trackTitle, ignoreCase = true) }
+                    if (target != null) {
+                        val idx = allTracks.indexOf(target)
+                        crossfadeManager.playQueue(allTracks, idx, 0L)
+                        val conn = nodeConnectHub.activeConnections.firstOrNull()
+                        if (conn != null && nodeConnectHub.config.audioCastEnabled) {
+                            startAudioCasting(conn, target)
+                        }
+                    }
+                }
+            }
+        }
+
+        val keysDir = File(filesDir, "nodeplayer/keys").apply { mkdirs() }
+        val regFile = File(filesDir, "nodeplayer/registry/paired_devices.txt").apply { parentFile?.mkdirs() }
+        val db = (application as? com.nodeplayer.music.NodePlayerApplication)?.database
+
+        val trackRepoAdapter = object : com.nodeplayer.library.repository.TrackRepository {
+            override fun getAllTracks(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Track>> = kotlinx.coroutines.flow.flow {
+                emit(db?.playerDao()?.getAllTracksList()?.map { it.toTrack() } ?: emptyList())
+            }
+            override suspend fun getAllTracksList(): List<com.nodeplayer.model.Track> {
+                return db?.playerDao()?.getAllTracksList()?.map { it.toTrack() } ?: emptyList()
+            }
+            override suspend fun getTrackById(id: Long): com.nodeplayer.model.Track? = db?.playerDao()?.getTrackById(id)?.toTrack()
+            override suspend fun insertTracks(tracks: List<com.nodeplayer.model.Track>) {}
+            override suspend fun clearTracks() {}
+            override suspend fun incrementPlayCount(id: Long) { db?.playerDao()?.incrementPlayCount(id) }
+            override suspend fun setFavorite(id: Long, isFav: Boolean) { db?.playerDao()?.setFavorite(id, isFav) }
+            override fun getFavoriteTracks(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Track>> = kotlinx.coroutines.flow.emptyFlow()
+            override fun getAllScannedFolders(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.MusicFolder>> = kotlinx.coroutines.flow.emptyFlow()
+            override suspend fun insertScannedFolders(folders: List<com.nodeplayer.model.MusicFolder>) {}
+            override suspend fun setFolderEnabled(path: String, isEnabled: Boolean) {}
+            override suspend fun setTracksHiddenForFolder(folderPrefix: String, isHidden: Boolean) {}
+            override fun getAllPlaylists(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Playlist>> = kotlinx.coroutines.flow.emptyFlow()
+            override suspend fun insertPlaylist(playlist: com.nodeplayer.model.Playlist): Long = 0L
+            override suspend fun deletePlaylist(playlistId: Long) {}
+            override fun getTracksForPlaylist(playlistId: Long): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Track>> = kotlinx.coroutines.flow.emptyFlow()
+            override suspend fun updateTrackAudioAnalysis(id: Long, status: String, confidence: Float, cutoffHz: Float, lufs: Float, drScore: Int, drLabel: String) {}
+            override suspend fun recordTrackPlayed(id: Long, timestamp: Long) { db?.playerDao()?.recordTrackPlayed(id, timestamp) }
+        }
+
+        nodeConnectHub = NodeConnectHub(
+            keyStorage = com.nodeplayer.network.crypto.SecureKeyStorage(keysDir),
+            registry = com.nodeplayer.network.pairing.DeviceRegistry(regFile),
+            trackRepository = trackRepoAdapter,
+            localController = localController,
+            artworkProvider = { trackId -> getTrackThumbnailBytes(trackId) },
+            onIncomingCastStream = { session, jitter ->
+                playIncomingCastStream(session, jitter)
+            },
+            onIncomingHandoff = { handoff ->
+                if (handoff.artworkBase64.isNotBlank()) {
+                    try {
+                        val artBytes = android.util.Base64.decode(handoff.artworkBase64, android.util.Base64.DEFAULT)
+                        com.nodeplayer.ui.components.ArtworkCache.putBytes(handoff.trackTitle + handoff.artist, artBytes)
+                    } catch (_: Exception) {}
+                }
+                serviceScope.launch(Dispatchers.Main) {
+                    val tracks = crossfadeManager.currentQueue
+                    val matchedIdx = tracks.indexOfFirst { it.title.equals(handoff.trackTitle, ignoreCase = true) }
+                    if (matchedIdx >= 0) {
+                        crossfadeManager.playQueue(tracks, matchedIdx, handoff.positionMs)
+                    }
+                }
+                true
+            }
+        )
+
+        val connectPrefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+        val nodeConnectEnabled = connectPrefs.getBoolean("node_connect_enabled", true)
+        if (nodeConnectEnabled) {
+            acquireMulticastLock()
+            nodeConnectHub.start(
+                deviceName = Build.MODEL,
+                platform = "Android"
+            )
+        }
+    }
+
+    fun setNodeConnectEnabled(enabled: Boolean) {
+        val connectPrefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+        connectPrefs.edit().putBoolean("node_connect_enabled", enabled).apply()
+        if (enabled) {
+            if (::nodeConnectHub.isInitialized) {
+                acquireMulticastLock()
+                nodeConnectHub.start(
+                    deviceName = Build.MODEL,
+                    platform = "Android"
+                )
+            }
+        } else {
+            if (::nodeConnectHub.isInitialized) {
+                nodeConnectHub.stop()
+                releaseMulticastLock()
+            }
+        }
     }
 
     private fun registerHeadsetReceiver() {
@@ -584,6 +989,15 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        if (::nodeConnectHub.isInitialized) {
+            nodeConnectHub.stop()
+            releaseMulticastLock()
+        }
+        incomingCastJob?.cancel()
+        try {
+            incomingAudioTrack?.stop()
+            incomingAudioTrack?.release()
+        } catch (_: Exception) {}
         if (::sleepTimerManager.isInitialized) {
             sleepTimerManager.release()
         }

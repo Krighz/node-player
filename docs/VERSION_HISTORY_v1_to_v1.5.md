@@ -12,6 +12,7 @@
 1. [Architectural Overview & Core Design Philosophy](#1-architectural-overview--core-design-philosophy)
 2. [Module Hierarchy & Ecosystem Map](#2-module-hierarchy--ecosystem-map)
 3. [Chronological Evolution: Version by Version](#3-chronological-evolution-version-by-version)
+   - [v0.1.0 — Initial Prototype & Architecture Proof of Concept](#v010--initial-prototype--architecture-proof-of-concept-2026-11-01)
    - [v1.0.0 — Production Audio DSP & Modular Android Player](#v100--production-audio-dsp--modular-android-player-2026-11-02)
    - [v1.1.0 — AGSL Shader Hardening, Diagnostics Dump & Mali GPU Compatibility](#v110--agsl-shader-hardening-diagnostics-dump--mali-gpu-compatibility-2026-11-02)
    - [v1.2.0 — Secure In-App Update Engine & Privacy Guard](#v120--secure-in-app-update-engine--privacy-guard-2026-11-02)
@@ -32,7 +33,7 @@ Node Player was born from a singular vision: to bridge the gap between uncomprom
 
 1. **Acoustic Truthfulness**: Audio is processed strictly in 32-bit IEEE 754 floating point format. Signal paths are transparently inspected down to hardware routing sinks. No arbitrary frequency caps, no dynamic range degradation, and zero guesswork on track durations or bitrates.
 2. **True Liquid Glassmorphism**: Physical optical refraction, Snell's law domain-warped caustics, and pearl specular rim lighting rendered via native AGSL (Android Graphics Shading Language) on Android and Skia shaders on Windows Desktop.
-3. **Strict Privacy & Offline Autonomy**: Zero analytics SDKs, zero telemetry, zero advertising, and zero unauthorized background sockets. Diagnostics are strictly on-device, sanitized, and exportable solely at user discretion.
+3. **Strict Privacy & No Network Use Unless You Opt In**: Zero analytics SDKs, zero telemetry, zero advertising, and zero unauthorized background sockets. Node Player operates strictly offline by default; all network use is strictly opt-in and local-first (GitHub Releases update check, Last.fm scrobbling, synchronized lyrics via LRCLIB, and peer-to-peer Node Connect on your local Wi-Fi/LAN only). Diagnostics are strictly on-device, sanitized, and exportable solely at user discretion.
 4. **Platform-Optimized Multiplatform**: Unified Kotlin codebase sharing core models, DSP algorithms, and Compose Multiplatform UI, while completely decoupling performance-critical platform primitives (WASAPI on Windows, MediaCodec / MediaSessionService on Android).
 
 ---
@@ -54,6 +55,18 @@ node-player/
 ---
 
 ## 3. Chronological Evolution: Version by Version
+
+### v0.1.0 — Initial Prototype & Architecture Proof of Concept (2026-11-01)
+
+The inaugural baseline that proved the core principles of Node Player:
+* **Modular Multiplatform Foundation**: Initial separation of pure Kotlin modules (`:core-model`, `:core-dsp`, `:core-library`) and the Android host app (`:app-android`).
+* **32-Bit Floating Point DSP Proof**: First implementation of 10-band biquad parametric EQ equations with bilinear transforms, linear pass-through soft-knee limiter, ISO 226 loudness contour, and zero-allocation TPDF dither.
+* **Dual-Player Crossfade Engine**: Initial prototype of dual ExoPlayer instances providing smooth transitions with equal power, linear, and logarithmic curves.
+* **System-Wide EQ Interception**: Initial foreground service attaching Android software `DynamicsProcessing` to third-party audio sessions.
+* **Early Liquid Glass Experimentation**: First AGSL runtime shader prototypes on Android 13+, Haze blur integration, and offscreen launcher widget rendering.
+* **File Parsers**: Initial pure Kotlin parsers for `.lrc` lyrics, `.m3u` playlists, and AutoEQ headphone profiles.
+
+---
 
 ### v1.0.0 — Production Audio DSP & Modular Android Player (2026-11-02)
 
@@ -276,7 +289,13 @@ Node Player achieves fluid, organic glass refraction across both platforms by ut
 
 ## 7. Cryptographic Manifest & Binary Verification (v1.5.0)
 
-Every production binary in Node Player v1.5.0 is cryptographically verified and signed.
+Every production binary in Node Player v1.5.0 has verified cryptographic checksums.
+
+> [!NOTE]
+> **Authenticode & Code Signing Status**:
+> - **Android APKs (`NodePlayer.apk`, `NodePlayer-staging.apk`)**: Cryptographically signed using the official release keystore with **APK Signature Scheme v2** (verified with `apksigner`).
+> - **Windows Packages (`NodePlayer-1.5.0.msi`, `NodePlayer.exe`)**: Currently **Authenticode-unsigned**. Because they are not signed with a paid Extended Validation (EV) certificate, Windows Defender SmartScreen displays a standard "Unknown Publisher" protection prompt on first launch.
+> - **Checksum Hierarchy**: **SHA-256 is the authoritative cryptographic checksum** for verifying download integrity and release authenticity. MD5 checksums are provided strictly as secondary legacy digests.
 
 ### Hash Verification Table
 

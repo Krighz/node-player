@@ -46,6 +46,7 @@ fun HomeScreen(
     onOpenSmartPlaylists: () -> Unit,
     onOpenStats: () -> Unit,
     onOpenDuplicateFinder: () -> Unit,
+    onOpenNodeConnect: () -> Unit = {},
     onStartUpdate: (AppUpdateInfo) -> Unit = {},
     onCancelUpdate: () -> Unit = {},
     onInstallUpdate: () -> Unit = {},
@@ -146,7 +147,15 @@ fun HomeScreen(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onOpenNodeConnect,
+                        modifier = Modifier
+                            .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                            .size(38.dp)
+                    ) {
+                        Icon(Icons.Rounded.CastConnected, contentDescription = "Node Connect", tint = accent, modifier = Modifier.size(20.dp))
+                    }
                     IconButton(
                         onClick = onOpenStats,
                         modifier = Modifier

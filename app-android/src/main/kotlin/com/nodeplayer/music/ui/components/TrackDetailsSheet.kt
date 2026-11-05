@@ -33,6 +33,7 @@ import java.util.Locale
 fun TrackDetailsSheet(
     track: Track,
     audioOutputInfo: com.nodeplayer.model.AudioOutputInfo = com.nodeplayer.model.AudioOutputInfo(),
+    effectConfig: com.nodeplayer.model.AudioEffectConfig = com.nodeplayer.model.AudioEffectConfig(),
     onDismiss: () -> Unit,
     hazeState: HazeState? = null,
     onAnalyzeSong: ((Track) -> Unit)? = null,
@@ -158,12 +159,20 @@ fun TrackDetailsSheet(
                     val outEnc = if (audioOutputInfo.isTrackInitialized && audioOutputInfo.format.isNotBlank() && audioOutputInfo.format != "—") {
                         "${audioOutputInfo.format} • ${audioOutputInfo.sampleRate} Hz"
                     } else "Media3 AudioSink (Standby)"
-                    val isBitPerfect = audioOutputInfo.isBitPerfect || (audioOutputInfo.isTrackInitialized && audioOutputInfo.sampleRate == track.sampleRate && track.sampleRate > 0)
+                    val isBitPerfect = audioOutputInfo.isTrulyBitPerfect(track.sampleRate, track.bitDepth, effectConfig.isDspBypassed)
                     SignalPathStep(
                         icon = Icons.Rounded.VolumeUp,
                         title = "AudioTrack Sink",
                         primary = outEnc,
-                        secondary = if (isBitPerfect) "Bit-perfect direct stream" else if (audioOutputInfo.isTrackInitialized) "System resampler active (${audioOutputInfo.sampleRate} Hz)" else "AnalyticsListener awaiting playback initialization",
+                        secondary = if (isBitPerfect) {
+                            "Bit-perfect direct stream (DSP bypassed)"
+                        } else if (audioOutputInfo.isTrackInitialized && audioOutputInfo.sampleRate == track.sampleRate) {
+                            if (!effectConfig.isDspBypassed) "Direct sample rate • 32-bit float DSP active" else "Direct stream"
+                        } else if (audioOutputInfo.isTrackInitialized) {
+                            "System resampler active (${audioOutputInfo.sampleRate} Hz)"
+                        } else {
+                            "AnalyticsListener awaiting playback initialization"
+                        },
                         statusColor = if (isBitPerfect) Color(0xFF10B981) else if (audioOutputInfo.isTrackInitialized) Color(0xFFF59E0B) else Color.White.copy(alpha = 0.4f)
                     )
 

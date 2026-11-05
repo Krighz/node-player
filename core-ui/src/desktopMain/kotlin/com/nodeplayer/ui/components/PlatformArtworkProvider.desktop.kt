@@ -12,10 +12,25 @@ actual object PlatformArtworkProvider {
     actual suspend fun loadArtwork(track: Track): ImageBitmap? {
         val path = track.path
         if (path.isBlank()) return null
+
+        // 0. Check in-memory byte cache for Node Connect virtual streams/tracks
+        val cachedBytes = ArtworkCache.getBytes(path)
+            ?: ArtworkCache.getBytes(track.id.toString())
+            ?: ArtworkCache.getBytes(track.title + track.artist)
+        if (cachedBytes != null && cachedBytes.isNotEmpty()) {
+            return try {
+                val skiaImage = Image.makeFromEncoded(cachedBytes)
+                skiaImage.toComposeImageBitmap()
+            } catch (_: Exception) {
+                null
+            }
+        }
+
         val file = File(path)
         if (!file.exists() || !file.canRead()) return null
 
         val bytes = extractDesktopArtworkBytes(file) ?: return null
+        ArtworkCache.putBytes(track.path, bytes)
         return try {
             val skiaImage = Image.makeFromEncoded(bytes)
             skiaImage.toComposeImageBitmap()
@@ -24,7 +39,38 @@ actual object PlatformArtworkProvider {
         }
     }
 
-    private fun extractDesktopArtworkBytes(file: File): ByteArray? {
+    actual suspend fun extractVibrantColor(track: Track): androidx.compose.ui.graphics.Color? {
+        val path = track.path
+        if (path.isBlank()) return null
+        val bytes = ArtworkCache.getBytes(path)
+            ?: ArtworkCache.getBytes(track.id.toString())
+            ?: ArtworkCache.getBytes(track.title + track.artist)
+            ?: (File(path).takeIf { it.exists() && it.canRead() }?.let { extractDesktopArtworkBytes(it) })
+            ?: return null
+        return try {
+            val img = Image.makeFromEncoded(bytes)
+            val bm = org.jetbrains.skia.Bitmap.makeFromImage(img)
+            val w = bm.width
+            val h = bm.height
+            var maxSat = -1f
+            var bestColor: androidx.compose.ui.graphics.Color? = null
+            val points = listOf(w / 4 to h / 4, 3 * w / 4 to h / 4, w / 2 to h / 2, w / 4 to 3 * h / 4, 3 * w / 4 to 3 * h / 4)
+            for ((x, y) in points) {
+                val argb = bm.getColor(x.coerceIn(0, w - 1), y.coerceIn(0, h - 1))
+                val c = androidx.compose.ui.graphics.Color(argb)
+                val hsv = com.nodeplayer.ui.theme.ColorUtils.colorToHsv(c)
+                if (hsv[1] > maxSat && hsv[2] > 0.25f && hsv[1] > 0.20f) {
+                    maxSat = hsv[1]
+                    bestColor = c
+                }
+            }
+            bestColor
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun extractDesktopArtworkBytes(file: File): ByteArray? {
         // 1. Check parent folder for cover images
         val parent = file.parentFile
         if (parent != null && parent.exists()) {

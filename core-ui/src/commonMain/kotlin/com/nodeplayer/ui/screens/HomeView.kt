@@ -3,14 +3,19 @@ package com.nodeplayer.ui.screens
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,28 +26,27 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.Track
-import com.nodeplayer.ui.components.GlassBadge
-import com.nodeplayer.ui.components.GlassCard
-import com.nodeplayer.ui.components.NodePlayerLogo
 import com.nodeplayer.ui.components.TrackArtwork
+import com.nodeplayer.ui.components.onHorizontalScrollWheel
 import com.nodeplayer.ui.theme.LocalAccentColor
-import com.nodeplayer.ui.theme.pressScale
-import java.util.Calendar
+import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
-/**
- * Shared "For You" Home screen matching Android reference.
- * Provides curated flow, intelligent carousels (Jump Back In, Recently Played,
- * Heavy Rotation, Audiophile Studio Vault, Fresh Discoveries, and Smart Shortcuts).
- */
+data class LocalGenreMix(
+    val title: String,
+    val subtitle: String,
+    val gradientColors: List<Color>,
+    val tracks: List<Track>
+)
+
 @Composable
 fun HomeView(
     tracks: List<Track>,
@@ -51,514 +55,449 @@ fun HomeView(
     onPlayTrack: (Track, List<Track>) -> Unit,
     onPlayPause: () -> Unit,
     onQuickShuffle: () -> Unit,
-    onRescanClick: () -> Unit,
-    onSelectMusicFolder: () -> Unit,
-    onNavigateToLibrary: () -> Unit,
-    onNavigateToEqualizer: () -> Unit,
+    onRescanClick: () -> Unit = {},
+    onSelectMusicFolder: () -> Unit = {},
+    onNavigateToLibrary: () -> Unit = {},
+    onNavigateToEqualizer: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
-    var sessionSeed by remember { mutableStateOf(System.currentTimeMillis()) }
+    val coroutineScope = rememberCoroutineScope()
 
-    // Greeting based on time of day
-    val greeting = remember {
-        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-        when (hour) {
-            in 5..11 -> "Good morning"
-            in 12..16 -> "Good afternoon"
-            in 17..22 -> "Good evening"
-            else -> "Late night listening"
+    // 1. FOR YOU: Intelligently group local tracks into genre and acoustic style mixes
+    val mixes = remember(tracks) {
+        val list = mutableListOf<LocalGenreMix>()
+
+        val popPool = tracks.filter { it.genre?.contains("Pop", ignoreCase = true) == true || it.title.contains("Pop", ignoreCase = true) }
+        list.add(
+            LocalGenreMix(
+                title = "Pop Mixes",
+                subtitle = "Upbeat & Vocal Hits",
+                gradientColors = listOf(Color(0xFFEC4899), Color(0xFF8B5CF6), Color(0xFF1E1B4B)),
+                tracks = if (popPool.isNotEmpty()) popPool else tracks.take(12)
+            )
+        )
+
+        val cinematicPool = tracks.filter { 
+            it.genre?.contains("Soundtrack", ignoreCase = true) == true || 
+            it.genre?.contains("Classical", ignoreCase = true) == true || 
+            it.genre?.contains("Ambient", ignoreCase = true) == true 
+        }
+        list.add(
+            LocalGenreMix(
+                title = "Cinematic Mixes",
+                subtitle = "Orchestral & Deep Atmos",
+                gradientColors = listOf(Color(0xFF0284C7), Color(0xFF0F172A), Color(0xFF1E293B)),
+                tracks = if (cinematicPool.isNotEmpty()) cinematicPool else tracks.drop(4).take(12)
+            )
+        )
+
+        val electronicPool = tracks.filter { 
+            it.genre?.contains("Electronic", ignoreCase = true) == true || 
+            it.genre?.contains("Dance", ignoreCase = true) == true || 
+            it.genre?.contains("Synth", ignoreCase = true) == true 
+        }
+        list.add(
+            LocalGenreMix(
+                title = "Electronic Mixes",
+                subtitle = "Synthesizers & Heavy Bass",
+                gradientColors = listOf(Color(0xFF6366F1), Color(0xFFA855F7), Color(0xFF030712)),
+                tracks = if (electronicPool.isNotEmpty()) electronicPool else tracks.drop(8).take(12)
+            )
+        )
+
+        val studioPool = tracks.filter { it.isLossless || it.bitDepth >= 24 || it.sampleRate >= 88200 }
+        if (studioPool.isNotEmpty()) {
+            list.add(
+                LocalGenreMix(
+                    title = "Master Audio Mixes",
+                    subtitle = "24-bit Hi-Res & Studio FLAC",
+                    gradientColors = listOf(Color(0xFFD97706), Color(0xFFB45309), Color(0xFF1C1917)),
+                    tracks = studioPool
+                )
+            )
+        }
+
+        val acousticPool = tracks.filter { 
+            it.genre?.contains("Rock", ignoreCase = true) == true || 
+            it.genre?.contains("Acoustic", ignoreCase = true) == true || 
+            it.genre?.contains("Jazz", ignoreCase = true) == true 
+        }
+        list.add(
+            LocalGenreMix(
+                title = "Acoustic & Rock",
+                subtitle = "Organic Strings & Drums",
+                gradientColors = listOf(Color(0xFF10B981), Color(0xFF047857), Color(0xFF064E3B)),
+                tracks = if (acousticPool.isNotEmpty()) acousticPool else tracks.shuffled().take(12)
+            )
+        )
+
+        list
+    }
+
+    // 2. REDISCOVER: Real play history analysis (tracks not played in a while)
+    val rediscoverTracks = remember(tracks) {
+        val played = tracks.filter { it.lastPlayedTimestamp > 0L }
+        val sortedByOldest = played.sortedBy { it.lastPlayedTimestamp }
+        if (sortedByOldest.size >= 6) {
+            sortedByOldest
+        } else {
+            (sortedByOldest + tracks.filter { it.playCount == 0 }.shuffled()).distinctBy { it.id }
         }
     }
 
-    // Curated Carousels dynamically renewed on each opening and seed refresh
-    val recentlyPlayed = remember(tracks, sessionSeed) {
-        val filtered = tracks.filter { it.lastPlayedTimestamp > 0L }.sortedByDescending { it.lastPlayedTimestamp }
-        if (filtered.isNotEmpty()) filtered else tracks.shuffled()
+    // 3. RECENTLY PLAYED: Ordered by latest timestamp
+    val recentlyPlayedTracks = remember(tracks) {
+        val list = tracks.filter { it.lastPlayedTimestamp > 0L }.sortedByDescending { it.lastPlayedTimestamp }
+        if (list.isNotEmpty()) list else tracks
     }
-
-    val heavyRotation = remember(tracks, sessionSeed) {
-        val filtered = tracks.filter { it.playCount > 0 }.sortedByDescending { it.playCount }
-        if (filtered.isNotEmpty()) filtered else tracks.shuffled()
-    }
-
-    val audiophileVault = remember(tracks, sessionSeed) {
-        val pool = tracks.filter {
-            it.isLossless || it.bitDepth >= 24 || it.sampleRate >= 88200 || it.formatDescription.contains("FLAC", ignoreCase = true)
-        }
-        if (pool.isNotEmpty()) pool else tracks.filter { it.isLossless }
-    }
-
-    val freshDiscoveries = remember(tracks, sessionSeed) {
-        val unplayed = tracks.filter { it.playCount <= 1 }
-        if (unplayed.isNotEmpty()) unplayed else tracks.shuffled()
-    }
-
-    val favorites = remember(tracks, sessionSeed) {
-        tracks.filter { it.isFavorite }
-    }
-
-    val heroTrack = currentTrack ?: recentlyPlayed.firstOrNull() ?: tracks.shuffled().firstOrNull()
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 28.dp, end = 28.dp, top = 24.dp, bottom = 48.dp),
+        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
-        // 1. Top Header with Greeting & Quick Action Chips
+        // ---------------------------------------------------------------------
+        // Section 1: FOR YOU (Mix Cards)
+        // ---------------------------------------------------------------------
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(
-                            text = "For You",
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White,
-                                letterSpacing = (-0.5).sp
-                            )
-                        )
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "$greeting • Curated listening flow & shortcuts",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color.White.copy(alpha = 0.65f)
-                            )
-                        )
-                    }
-
-                    // Mobile Disc Logo
-                    NodePlayerLogo(size = 36.dp, accentColor = accent)
-                }
-
-                // Quick Action Chips Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    HomeActionChip(
-                        icon = Icons.Rounded.Autorenew,
-                        label = "Renew Flow",
-                        accent = accent,
-                        onClick = { sessionSeed = System.currentTimeMillis() }
-                    )
-                    HomeActionChip(
-                        icon = Icons.Rounded.Shuffle,
-                        label = "Quick Shuffle",
-                        accent = accent,
-                        onClick = onQuickShuffle
-                    )
-                    HomeActionChip(
-                        icon = Icons.Rounded.GraphicEq,
-                        label = "Equalizer",
-                        accent = accent,
-                        onClick = onNavigateToEqualizer
-                    )
-                    HomeActionChip(
-                        icon = Icons.Rounded.FolderOpen,
-                        label = "Change Music Folder",
-                        accent = accent,
-                        onClick = onSelectMusicFolder
-                    )
-                    HomeActionChip(
-                        icon = Icons.Rounded.Refresh,
-                        label = "Rescan",
-                        accent = accent,
-                        onClick = onRescanClick
-                    )
-                }
-            }
-        }
-
-        // Empty Library Fallback Card
-        if (tracks.isEmpty()) {
-            item {
-                GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = onSelectMusicFolder
-                ) {
-                    Row(
-                        modifier = Modifier.padding(28.dp).fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(64.dp)
-                                .clip(CircleShape)
-                                .background(accent.copy(alpha = 0.18f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Rounded.FolderOpen,
-                                contentDescription = null,
-                                tint = accent,
-                                modifier = Modifier.size(34.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(20.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Your Library is Waiting",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "Select your music folder to import FLAC, WAV, MP3 and lossless audio tracks.",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = Color.White.copy(alpha = 0.65f)
-                                )
-                            )
-                        }
-                        Button(
-                            onClick = onSelectMusicFolder,
-                            colors = ButtonDefaults.buttonColors(containerColor = accent),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Select Folder", color = Color(0xFF131728), fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-        }
-
-        // 2. Hero Card: Jump Back In / Now Playing
-        if (heroTrack != null) {
-            item {
-                GlassCard(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(20.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Hero Disc Artwork Thumbnail
-                        TrackArtwork(
-                            track = heroTrack,
-                            modifier = Modifier.size(76.dp),
-                            cornerRadius = 18.dp
-                        )
-
-                        Spacer(modifier = Modifier.width(20.dp))
-
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(
-                                    text = if (isPlaying && currentTrack?.id == heroTrack.id) "NOW PLAYING" else "JUMP BACK IN",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        color = accent,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        letterSpacing = 1.2.sp
-                                    )
-                                )
-                                if (heroTrack.isHiRes || heroTrack.bitDepth > 16 || heroTrack.sampleRate >= 88200) {
-                                    GlassBadge(text = if (heroTrack.bitDepth > 16) "${heroTrack.bitDepth}b/${heroTrack.sampleRate / 1000}k" else "HI-RES", color = Color(0xFFF59E0B))
-                                } else if (heroTrack.isLossless) {
-                                    GlassBadge(text = "LOSSLESS", color = accent)
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = heroTrack.title,
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "${heroTrack.artist} • ${heroTrack.album} • ${heroTrack.formatDescription}",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    color = Color.White.copy(alpha = 0.65f)
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        // Large Play/Pause Disc Button
-                        Box(
-                            modifier = Modifier
-                                .size(52.dp)
-                                .clip(CircleShape)
-                                .background(accent)
-                                .clickable {
-                                    if (currentTrack?.id == heroTrack.id) {
-                                        onPlayPause()
-                                    } else {
-                                        onPlayTrack(heroTrack, tracks)
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying && currentTrack?.id == heroTrack.id) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                                contentDescription = "Play/Pause",
-                                tint = Color(0xFF131728),
-                                modifier = Modifier.size(28.dp)
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. Carousel 1: Recently Played
-        if (recentlyPlayed.isNotEmpty()) {
-            item {
-                HomeCarouselSection(
-                    title = "Recently Played",
-                    subtitle = "Pick up right where your session left off",
-                    tracks = recentlyPlayed,
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    accent = accent,
-                    onTrackClick = { track -> onPlayTrack(track, recentlyPlayed) }
-                )
-            }
-        }
-
-        // 4. Carousel 2: Heavy Rotation ("On Repeat")
-        if (heavyRotation.isNotEmpty()) {
-            item {
-                HomeCarouselSection(
-                    title = "Heavy Rotation",
-                    subtitle = "Your top-tier anthems and most-played tracks",
-                    tracks = heavyRotation,
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    accent = accent,
-                    onTrackClick = { track -> onPlayTrack(track, heavyRotation) }
-                )
-            }
-        }
-
-        // 5. Carousel 3: Audiophile Master Studio Vault (FLAC & Lossless)
-        if (audiophileVault.isNotEmpty()) {
-            item {
-                HomeCarouselSection(
-                    title = "Audiophile Studio Vault",
-                    subtitle = "Bit-perfect FLAC, Lossless & Hi-Res studio masters",
-                    tracks = audiophileVault,
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    accent = accent,
-                    badgeLabel = "STUDIO",
-                    onTrackClick = { track -> onPlayTrack(track, audiophileVault) }
-                )
-            }
-        }
-
-        // 6. Carousel 4: Fresh Discoveries
-        if (freshDiscoveries.isNotEmpty()) {
-            item {
-                HomeCarouselSection(
-                    title = "Fresh Discoveries",
-                    subtitle = "Untapped tracks in your music collection waiting to be played",
-                    tracks = freshDiscoveries,
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    accent = accent,
-                    onTrackClick = { track -> onPlayTrack(track, freshDiscoveries) }
-                )
-            }
-        }
-
-        // 7. Carousel 5: Favorite Anthems
-        if (favorites.isNotEmpty()) {
-            item {
-                HomeCarouselSection(
-                    title = "Favorite Anthems",
-                    subtitle = "Your handpicked favorites",
-                    tracks = favorites,
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    accent = accent,
-                    badgeLabel = "FAVORITE",
-                    onTrackClick = { track -> onPlayTrack(track, favorites) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun HomeActionChip(
-    icon: ImageVector,
-    label: String,
-    accent: Color,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isHovered by interactionSource.collectIsHoveredAsState()
-
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isHovered) accent.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.07f))
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (isHovered) accent else Color.White.copy(alpha = 0.85f),
-            modifier = Modifier.size(16.dp)
-        )
-        Text(
-            text = label,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (isHovered) Color.White else Color.White.copy(alpha = 0.85f)
-        )
-    }
-}
-
-@Composable
-private fun HomeCarouselSection(
-    title: String,
-    subtitle: String,
-    tracks: List<Track>,
-    currentTrack: Track?,
-    isPlaying: Boolean,
-    accent: Color,
-    badgeLabel: String? = null,
-    onTrackClick: (Track) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text(
-                    text = title,
+                    text = "FOR YOU",
                     style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.2.sp,
                         color = Color.White
                     )
                 )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = Color.White.copy(alpha = 0.55f)
-                    )
-                )
-            }
 
-            Text(
-                text = "${tracks.size} tracks",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = Color.White.copy(alpha = 0.40f)
-                )
-            )
+                val rowState = rememberLazyListState()
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    LazyRow(
+                        state = rowState,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onHorizontalScrollWheel { delta ->
+                                coroutineScope.launch {
+                                    rowState.scrollBy(delta * 120f)
+                                }
+                            }
+                    ) {
+                        items(mixes) { mix ->
+                            MixCard(
+                                mix = mix,
+                                onClick = {
+                                    val first = mix.tracks.firstOrNull()
+                                    if (first != null) {
+                                        onPlayTrack(first, mix.tracks)
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
 
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(vertical = 4.dp)
-        ) {
-            items(tracks, key = { it.id }) { track ->
-                val isCurrent = currentTrack?.id == track.id
-                HomeTrackCard(
-                    track = track,
-                    isCurrent = isCurrent,
-                    isPlaying = isPlaying && isCurrent,
-                    accent = accent,
-                    badgeLabel = badgeLabel,
-                    onClick = { onTrackClick(track) }
+        // ---------------------------------------------------------------------
+        // Section 2: REDISCOVER (Haven't heard in a while)
+        // ---------------------------------------------------------------------
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "REDISCOVER",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.2.sp,
+                            color = Color.White
+                        )
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "(Haven't heard in a while)",
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = Color.White.copy(alpha = 0.50f),
+                            fontWeight = FontWeight.Normal
+                        )
+                    )
+                }
+
+                val rowState = rememberLazyListState()
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    LazyRow(
+                        state = rowState,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onHorizontalScrollWheel { delta ->
+                                coroutineScope.launch {
+                                    rowState.scrollBy(delta * 120f)
+                                }
+                            }
+                    ) {
+                        items(rediscoverTracks) { track ->
+                            RediscoverTrackCard(
+                                track = track,
+                                onClick = { onPlayTrack(track, rediscoverTracks) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------------
+        // Section 3: RECENTLY PLAYED
+        // ---------------------------------------------------------------------
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    text = "RECENTLY PLAYED",
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.2.sp,
+                        color = Color.White
+                    )
                 )
+
+                val rowState = rememberLazyListState()
+
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    LazyRow(
+                        state = rowState,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onHorizontalScrollWheel { delta ->
+                                coroutineScope.launch {
+                                    rowState.scrollBy(delta * 120f)
+                                }
+                            }
+                    ) {
+                        items(recentlyPlayedTracks) { track ->
+                            StandardTrackCard(
+                                track = track,
+                                onClick = { onPlayTrack(track, recentlyPlayedTracks) }
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
+// -----------------------------------------------------------------------------
+// Sub-Components: MixCard, RediscoverTrackCard, StandardTrackCard
+// -----------------------------------------------------------------------------
+
 @Composable
-private fun HomeTrackCard(
-    track: Track,
-    isCurrent: Boolean,
-    isPlaying: Boolean,
-    accent: Color,
-    badgeLabel: String? = null,
+private fun MixCard(
+    mix: LocalGenreMix,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
-    val scale by animateFloatAsState(targetValue = if (isHovered) 1.03f else 1.0f, animationSpec = tween(150))
 
-    Column(
+    val scale by animateFloatAsState(
+        targetValue = if (isHovered) 1.03f else 1.0f,
+        animationSpec = tween(180)
+    )
+
+    Box(
         modifier = Modifier
-            .width(148.dp)
+            .width(260.dp)
+            .height(140.dp)
             .scale(scale)
-            .clip(RoundedCornerShape(16.dp))
-            .background(if (isCurrent) accent.copy(alpha = 0.15f) else if (isHovered) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.04f))
-            .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-            .padding(10.dp)
-    ) {
-        Box(
-            modifier = Modifier.size(128.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            TrackArtwork(
-                track = track,
-                modifier = Modifier.size(128.dp),
-                cornerRadius = 12.dp
+            .shadow(
+                elevation = if (isHovered) 14.dp else 6.dp,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = mix.gradientColors.first().copy(alpha = 0.35f)
             )
-
-            // Badge overlay (Lossless or Studio)
-            if (badgeLabel != null) {
-                Box(
+            .clip(RoundedCornerShape(20.dp))
+            .background(Brush.linearGradient(mix.gradientColors))
+            .border(
+                width = 1.dp,
+                color = Color.White.copy(alpha = if (isHovered) 0.35f else 0.15f),
+                shape = RoundedCornerShape(20.dp)
+            )
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+            .padding(16.dp),
+        contentAlignment = Alignment.BottomStart
+    ) {
+        // Background Artwork Collage on right side
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = 12.dp, y = (-8).dp)
+        ) {
+            mix.tracks.take(3).forEachIndexed { i, track ->
+                TrackArtwork(
+                    track = track,
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                ) {
-                    GlassBadge(text = badgeLabel, color = accent)
-                }
-            } else if (track.isLossless) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(6.dp)
-                ) {
-                    GlassBadge(text = "LOSSLESS", color = accent)
-                }
+                        .size(56.dp)
+                        .offset(x = (-i * 18).dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .border(1.dp, Color.White.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                )
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        // Title and Subtitle on bottom left
+        Column {
+            Text(
+                text = mix.title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color.White,
+                    fontSize = 17.sp
+                )
+            )
+            Text(
+                text = mix.subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = Color.White.copy(alpha = 0.80f),
+                    fontSize = 12.sp
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun RediscoverTrackCard(
+    track: Track,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isHovered) 1.04f else 1.0f,
+        animationSpec = tween(180)
+    )
+
+    // Calculate real badge text based on lastPlayedTimestamp
+    val badgeText = remember(track.lastPlayedTimestamp, track.playCount, track.isFavorite) {
+        if (track.lastPlayedTimestamp <= 0L) {
+            if (track.isFavorite) "Old favorite" else "Fresh listen"
+        } else {
+            val diffMs = System.currentTimeMillis() - track.lastPlayedTimestamp
+            val days = TimeUnit.MILLISECONDS.toDays(diffMs)
+            when {
+                days > 150 -> "Last played 6 months ago"
+                days > 80 -> "Last played 3 months ago"
+                days > 25 -> "Last played a month ago"
+                track.playCount > 8 -> "Old favorite"
+                else -> "Rediscover"
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .width(132.dp)
+            .scale(scale)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .size(132.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .border(1.dp, Color.White.copy(alpha = if (isHovered) 0.35f else 0.10f), RoundedCornerShape(14.dp))
+        ) {
+            TrackArtwork(
+                track = track,
+                modifier = Modifier.fillMaxSize(),
+                cornerRadius = 14.dp
+            )
+
+            // Real Badge overlay at bottom of artwork (matching reference image)
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.Black.copy(alpha = 0.72f))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = badgeText,
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White.copy(alpha = 0.90f),
+                    maxLines = 1
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Text(
             text = track.title,
-            style = MaterialTheme.typography.bodySmall.copy(
-                fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.SemiBold,
-                color = if (isCurrent) accent else Color.White
-            ),
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
 
-        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = track.artist,
+            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.55f)),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun StandardTrackCard(
+    track: Track,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isHovered) 1.04f else 1.0f,
+        animationSpec = tween(180)
+    )
+
+    Column(
+        modifier = Modifier
+            .width(132.dp)
+            .scale(scale)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .size(132.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .border(1.dp, Color.White.copy(alpha = if (isHovered) 0.35f else 0.10f), RoundedCornerShape(14.dp))
+        ) {
+            TrackArtwork(
+                track = track,
+                modifier = Modifier.fillMaxSize(),
+                cornerRadius = 14.dp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = track.title,
+            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
 
         Text(
             text = track.artist,
-            style = MaterialTheme.typography.labelSmall.copy(
-                color = Color.White.copy(alpha = 0.60f)
-            ),
+            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.55f)),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

@@ -17,6 +17,13 @@ data class AudioOutputInfo(
 
     val encodingDisplay: String
         get() = if (format.isNotBlank() && format != "—") format else "—"
+
+    fun isTrulyBitPerfect(sourceSampleRate: Int, sourceBitDepth: Int, dspBypassed: Boolean): Boolean {
+        if (!dspBypassed) return false
+        if (sourceSampleRate <= 0 || sampleRate != sourceSampleRate) return false
+        if (sourceBitDepth > 0 && bitDepth > 0 && bitDepth != sourceBitDepth) return false
+        return isBitPerfect || (isTrackInitialized && !isResampled)
+    }
 }
 
 enum class ReplayGainMode {
@@ -113,6 +120,19 @@ data class AudioEffectConfig(
     val isAbComparing: Boolean = false,
     val abLoudnessOffsetDb: Float = 0.0f
 ) {
+    val isDspBypassed: Boolean
+        get() {
+            val isEqFlat = !eqEnabled || (preampGainDb == 0.0f && bands.all { it.gainDb == 0.0f })
+            val isToneFlat = toneControls.bassGainDb == 0.0f && toneControls.trebleGainDb == 0.0f
+            val isLoudnessOff = !loudnessConfig.enabled
+            val isBassOff = !harmonicBassConfig.enabled
+            val isConvolverOff = !convolverConfig.enabled
+            val isReverbOff = !reverbConfig.enabled
+            val isCrossfeedOff = !crossfeedEnabled
+            val isWidthNormal = stereoWidth == 1.0f
+            return isEqFlat && isToneFlat && isLoudnessOff && isBassOff && isConvolverOff && isReverbOff && isCrossfeedOff && isWidthNormal
+        }
+
     companion object {
         fun default10Bands(): List<EqBandConfig> = listOf(
             EqBandConfig(0, 31f, 0f, 1.414f),
@@ -193,7 +213,7 @@ data class GlassThemeConfig(
     val backgroundAnimationSpeed: Float = 1.0f,            // 0.2f to 3.0f
     val backgroundAnimationIntensity: Float = 0.8f,        // 0.1f to 1.0f
     val backgroundColorSource: String = "ARTWORK",         // ARTWORK, PALETTE, CUSTOM
-    val animateOnlyWhilePlaying: Boolean = false,
+    val animateOnlyWhilePlaying: Boolean = true,
     val frameRateCap: String = "AUTO",                     // AUTO, 60, 90, 120
     val renderQuality: String = "MAX_NATIVE",              // MAX_NATIVE, HIGH, BALANCED, LOW, AUTO_ADAPTIVE
     val antiBandingDithering: Boolean = true,
