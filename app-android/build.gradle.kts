@@ -186,7 +186,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
     // Core
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.19.1")
 
     // CameraX and ZXing Core for QR Scanner (100% offline, pure local)
     val cameraxVersion = "1.3.3"

@@ -37,7 +37,7 @@ kotlin {
         }
         val androidMain by getting {
             dependencies {
-                implementation("androidx.core:core-ktx:1.13.1")
+                implementation("androidx.core:core-ktx:1.19.1")
             }
         }
         val desktopMain by getting {
