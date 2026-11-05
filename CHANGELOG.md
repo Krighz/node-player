@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.0-Alpha] - 2026-11-05
+
+### Added
+- **Node Connect Peer-to-Peer Audio Mesh**: Decentralized, zero-configuration local Wi-Fi connectivity between Windows PC and Android devices.
+- **Bit-Perfect Audio Casting**: Pre-DSP 16-bit 48kHz PCM casting with adaptive jitter buffer, sub-100ms synchronization, and lossless packet delivery.
+- **Cross-Platform Remote Search & Click-to-Play**: Search remote library tracks across devices, tap to start playback remotely, and stream back real-time playback audio, album art, and track metadata.
+- **Live State & Transport Synchronization**: Two-way playback synchronization for play/pause, seek positions, volume adjustment, shuffle, and repeat modes.
+- **Stateful Playback Handoff**: One-tap transfer of active music playback with millisecond position persistence between phone and PC.
+- **Silent Local Casting**: Added toggle to mute the physical audio output on the sender device while maintaining continuous pre-DSP streaming to the remote receiver.
+- **Node Connect Pairing Hub**: In-app QR code discovery, manual IP connect, per-device feature permission controls (Cast, Control, Library, Handoff), and duplicate connection protection.
+
+### Fixed
+- **Artwork & Metadata Stream Sync**: Resolved issue where metadata and album art did not update on remote receiver during track transitions.
+- **Audio Packet Crackle & Jitter**: Re-tuned jitter buffer parameters (target buffer 400ms, max 2000ms) with background worker audio chunk channel to eliminate packet transition crackles.
+- **Phone UI Selector Polish**: Removed unwanted ring artifact in the middle field of the phone navigation selector pill.
+- **Cross-Platform Search Duplication**: Resolved key conflict crashes and duplicate peer entries during LAN discovery scans.
+
+---
+
 ## [1.5.0] - 2026-11-03
 
 ### Added
