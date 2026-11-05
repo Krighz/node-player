@@ -11,6 +11,11 @@ import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ContentUris
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.provider.MediaStore
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
@@ -148,6 +153,14 @@ class PlaybackService : MediaSessionService() {
             incomingAudioTrack?.release()
         } catch (_: Exception) {}
 
+        if (session.artworkBase64.isNotBlank()) {
+            try {
+                val artBytes = android.util.Base64.decode(session.artworkBase64, android.util.Base64.DEFAULT)
+                com.nodeplayer.ui.components.ArtworkCache.putBytes("nodeconnect://cast/${session.streamId}", artBytes)
+                com.nodeplayer.ui.components.ArtworkCache.putBytes(session.trackTitle + session.artist, artBytes)
+            } catch (_: Exception) {}
+        }
+
         incomingCastJob = serviceScope.launch(Dispatchers.IO) {
             val minBufSize = AudioTrack.getMinBufferSize(
                 session.sampleRate,
@@ -197,20 +210,84 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    fun getTrackThumbnailBase64(track: com.nodeplayer.model.Track): String {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && track.id > 0) {
+                val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, track.id)
+                val thumb = contentResolver.loadThumbnail(trackUri, android.util.Size(120, 120), null)
+                val baos = java.io.ByteArrayOutputStream()
+                thumb.compress(Bitmap.CompressFormat.JPEG, 70, baos)
+                return android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP)
+            }
+            val file = File(track.path)
+            if (file.exists() && file.canRead()) {
+                val mmr = MediaMetadataRetriever()
+                mmr.setDataSource(file.absolutePath)
+                val pic = mmr.embeddedPicture
+                mmr.release()
+                if (pic != null) {
+                    val bm = BitmapFactory.decodeByteArray(pic, 0, pic.size)
+                    if (bm != null) {
+                        val scaled = Bitmap.createScaledBitmap(bm, 120, (120f * bm.height / bm.width).toInt().coerceAtLeast(1), true)
+                        val baos = java.io.ByteArrayOutputStream()
+                        scaled.compress(Bitmap.CompressFormat.JPEG, 70, baos)
+                        return android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return ""
+    }
+
+    fun getTrackThumbnailBytes(trackId: Long): ByteArray? {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && trackId > 0) {
+                val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, trackId)
+                val thumb = contentResolver.loadThumbnail(trackUri, android.util.Size(120, 120), null)
+                val baos = java.io.ByteArrayOutputStream()
+                thumb.compress(Bitmap.CompressFormat.JPEG, 75, baos)
+                return baos.toByteArray()
+            }
+            val track = crossfadeManager.currentQueue.firstOrNull { it.id == trackId }
+            if (track != null) {
+                val file = File(track.path)
+                if (file.exists() && file.canRead()) {
+                    val mmr = MediaMetadataRetriever()
+                    mmr.setDataSource(file.absolutePath)
+                    val pic = mmr.embeddedPicture
+                    mmr.release()
+                    if (pic != null) return pic
+                }
+            }
+        } catch (_: Exception) {}
+        return null
+    }
+
+    val sleepTimer: SleepTimerManager?
+        get() = if (::sleepTimerManager.isInitialized) sleepTimerManager else null
+
     fun startAudioCasting(targetPeer: DiscoveredNodePeer) {
         serviceScope.launch(Dispatchers.IO) {
             val conn = nodeConnectHub.connectToPeer(targetPeer) ?: return@launch
             val track = crossfadeManager.currentPlayingTrack ?: return@launch
-            nodeConnectHub.castService.startCastAsSender(conn, track, crossfadeManager.activePlayer.currentPosition)
+            startAudioCasting(conn, track)
+        }
+    }
+
+    fun startAudioCasting(connection: com.nodeplayer.network.transport.NodeConnection, track: com.nodeplayer.model.Track) {
+        val initialPos = try { crossfadeManager.activePlayer.currentPosition } catch (_: Exception) { 0L }
+        serviceScope.launch(Dispatchers.IO) {
+            val artBase64 = getTrackThumbnailBase64(track)
+            nodeConnectHub.castService.startCastAsSender(connection, track, initialPos, artBase64)
 
             crossfadeManager.dspAudioProcessorA.preDspPcmTap = { bytes, _, _, _ ->
                 serviceScope.launch(Dispatchers.IO) {
-                    nodeConnectHub.castService.sendPcmAudioChunk(bytes, crossfadeManager.activePlayer.currentPosition)
+                    nodeConnectHub.castService.sendPcmAudioChunk(bytes, 0L)
                 }
             }
             crossfadeManager.dspAudioProcessorB.preDspPcmTap = { bytes, _, _, _ ->
                 serviceScope.launch(Dispatchers.IO) {
-                    nodeConnectHub.castService.sendPcmAudioChunk(bytes, crossfadeManager.activePlayer.currentPosition)
+                    nodeConnectHub.castService.sendPcmAudioChunk(bytes, 0L)
                 }
             }
         }
@@ -449,6 +526,9 @@ class PlaybackService : MediaSessionService() {
             context = this,
             playerProvider = { if (::crossfadeManager.isInitialized) crossfadeManager.activePlayer else null },
             onTimerExpired = {
+                if (::crossfadeManager.isInitialized) {
+                    crossfadeManager.pause()
+                }
                 com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
             }
         )
@@ -602,15 +682,49 @@ class PlaybackService : MediaSessionService() {
 
         val keysDir = File(filesDir, "nodeplayer/keys").apply { mkdirs() }
         val regFile = File(filesDir, "nodeplayer/registry/paired_devices.txt").apply { parentFile?.mkdirs() }
+        val db = (application as? com.nodeplayer.music.NodePlayerApplication)?.database
+
+        val trackRepoAdapter = object : com.nodeplayer.library.repository.TrackRepository {
+            override fun getAllTracks(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Track>> = kotlinx.coroutines.flow.flow {
+                emit(db?.playerDao()?.getAllTracksList()?.map { it.toTrack() } ?: emptyList())
+            }
+            override suspend fun getAllTracksList(): List<com.nodeplayer.model.Track> {
+                return db?.playerDao()?.getAllTracksList()?.map { it.toTrack() } ?: emptyList()
+            }
+            override suspend fun getTrackById(id: Long): com.nodeplayer.model.Track? = db?.playerDao()?.getTrackById(id)?.toTrack()
+            override suspend fun insertTracks(tracks: List<com.nodeplayer.model.Track>) {}
+            override suspend fun clearTracks() {}
+            override suspend fun incrementPlayCount(id: Long) { db?.playerDao()?.incrementPlayCount(id) }
+            override suspend fun setFavorite(id: Long, isFav: Boolean) { db?.playerDao()?.setFavorite(id, isFav) }
+            override fun getFavoriteTracks(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Track>> = kotlinx.coroutines.flow.emptyFlow()
+            override fun getAllScannedFolders(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.MusicFolder>> = kotlinx.coroutines.flow.emptyFlow()
+            override suspend fun insertScannedFolders(folders: List<com.nodeplayer.model.MusicFolder>) {}
+            override suspend fun setFolderEnabled(path: String, isEnabled: Boolean) {}
+            override suspend fun setTracksHiddenForFolder(folderPrefix: String, isHidden: Boolean) {}
+            override fun getAllPlaylists(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Playlist>> = kotlinx.coroutines.flow.emptyFlow()
+            override suspend fun insertPlaylist(playlist: com.nodeplayer.model.Playlist): Long = 0L
+            override suspend fun deletePlaylist(playlistId: Long) {}
+            override fun getTracksForPlaylist(playlistId: Long): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Track>> = kotlinx.coroutines.flow.emptyFlow()
+            override suspend fun updateTrackAudioAnalysis(id: Long, status: String, confidence: Float, cutoffHz: Float, lufs: Float, drScore: Int, drLabel: String) {}
+            override suspend fun recordTrackPlayed(id: Long, timestamp: Long) { db?.playerDao()?.recordTrackPlayed(id, timestamp) }
+        }
 
         nodeConnectHub = NodeConnectHub(
             keyStorage = com.nodeplayer.network.crypto.SecureKeyStorage(keysDir),
             registry = com.nodeplayer.network.pairing.DeviceRegistry(regFile),
+            trackRepository = trackRepoAdapter,
             localController = localController,
+            artworkProvider = { trackId -> getTrackThumbnailBytes(trackId) },
             onIncomingCastStream = { session, jitter ->
                 playIncomingCastStream(session, jitter)
             },
             onIncomingHandoff = { handoff ->
+                if (handoff.artworkBase64.isNotBlank()) {
+                    try {
+                        val artBytes = android.util.Base64.decode(handoff.artworkBase64, android.util.Base64.DEFAULT)
+                        com.nodeplayer.ui.components.ArtworkCache.putBytes(handoff.trackTitle + handoff.artist, artBytes)
+                    } catch (_: Exception) {}
+                }
                 serviceScope.launch(Dispatchers.Main) {
                     val tracks = crossfadeManager.currentQueue
                     val matchedIdx = tracks.indexOfFirst { it.title.equals(handoff.trackTitle, ignoreCase = true) }

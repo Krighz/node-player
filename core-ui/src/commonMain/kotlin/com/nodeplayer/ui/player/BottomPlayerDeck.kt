@@ -49,6 +49,8 @@ fun BottomPlayerDeck(
     onOpenOutputDevicePicker: () -> Unit = {},
     onCastClick: () -> Unit = {},
     onExpandNowPlaying: () -> Unit = {},
+    sleepTimerRemainingSec: Long? = null,
+    onSetSleepTimer: (Int?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -288,6 +290,48 @@ fun BottomPlayerDeck(
                         tint = accent,
                         modifier = Modifier.size(18.dp)
                     )
+                }
+
+                // Sleep Timer Button
+                Box {
+                    var showSleepMenu by remember { mutableStateOf(false) }
+                    IconButton(
+                        onClick = { showSleepMenu = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Bedtime,
+                            contentDescription = "Sleep Timer",
+                            tint = if (sleepTimerRemainingSec != null) Color(0xFFF59E0B) else Color.White.copy(alpha = 0.70f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = showSleepMenu,
+                        onDismissRequest = { showSleepMenu = false }
+                    ) {
+                        if (sleepTimerRemainingSec != null) {
+                            val mins = sleepTimerRemainingSec / 60
+                            val secs = sleepTimerRemainingSec % 60
+                            DropdownMenuItem(
+                                text = { Text("Active: ${mins}m ${secs}s left (Turn Off)") },
+                                onClick = {
+                                    onSetSleepTimer(null)
+                                    showSleepMenu = false
+                                }
+                            )
+                        }
+                        listOf(15, 30, 45, 60, 90).forEach { mins ->
+                            DropdownMenuItem(
+                                text = { Text("$mins minutes") },
+                                onClick = {
+                                    onSetSleepTimer(mins)
+                                    showSleepMenu = false
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }

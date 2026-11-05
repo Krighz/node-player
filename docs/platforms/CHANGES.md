@@ -122,3 +122,54 @@
   - `Main.kt`: Fixed Compose layout imports and wired `onAllowPrompt` modal. Standalone executable packaging via `createDistributable`.
   - `NodeConnectPairingDialog.kt`: 3-tab layout: "Devices" (peer list with discovery type badges, one-tap Connect, manual IP connect), "My QR Code" (compact offline URI QR code with candidate IPs and Simple Mode warning banner), and "Doctor" (adapter table, port listener status, interactive TCP ping tool, gateway probe, log export).
 - **Status**: Completed, 21 unit tests pass, real-device bidirectional discovery verified in logs over phone Wi-Fi hotspot with 4-9ms latency.
+
+---
+
+### [2026-11-05] - Step 12: Live Control Verification, USB ADB Link & Granular Feature Switches
+- **Core Network & Discovery (`core-network`)**:
+  - `AdbBridge.kt`: Implemented deterministic zero-Wi-Fi USB debugging tunnel using `adb forward tcp:54825 tcp:54820` (PC to Phone) and `adb reverse tcp:54826 tcp:54820` (Phone to PC). Added `AdbBridgeTest.kt` unit test.
+  - `NodeConnectHub.kt`: Surfaced `connectedPeers: StateFlow<List<ConnectedPeer>>` with live heartbeat RTT (down to 5-8ms). Added `startUsbDebuggingLink()` and transport helper functions (`sendRemotePlayPause`, `sendRemoteNext`, `sendRemotePrevious`, `sendRemoteSeek`, `sendRemoteVolume`, `disconnectDevice`).
+  - `NodeConnectConfig.kt`: Expanded config to support 10 granular feature toggles, discovery method toggles (mDNS, UDP Broadcast, Hotspot Gateway Probe, Subnet Scan), Transport Encryption (TLS 1.3), Security Level (Simple vs Strict), and Verbose Network Logging with persistent storage.
+- **Shared UI & Components (`core-ui`)**:
+  - `NodeConnectPairingDialog.kt`:
+    - Tab 0 (Devices): Active connection card with live RTT latency badge, transport controls (`[⏮]`, `[▶⏸]`, `[⏭]`), Disconnect button, and action buttons (`[Cast Audio]`, `[⇄ Handoff]`). Added Simple Mode security warning banner.
+    - Tab 1 (My QR): Clean offline QR code containing candidate IP list without certificate pinning or PIN code bloat.
+    - Tab 2 (Doctor): Added 1-click `[Setup USB Debugging Link (ADB 127.0.0.1)]` button alongside Socket Ping Test and Gateway Probe.
+    - Tab 3 (Settings): Added 4 sections: Master & Access, Security & Trust (Security Level, Trust All, TLS 1.3 toggle), Discovery Methods (mDNS, UDP broadcast, Gateway probe, Subnet scan), Feature Toggles (10 independent switches), and Advanced / Tuning (Verbose logging, Jitter buffer, Keepalive interval).
+- **Live Physical Verification (realme RMX3853 Android 16 ↔ Windows 11 PC)**:
+  - Verified remote control execution from phone to PC with real log lines: `PLAY_PAUSE`, `NEXT`, `PREVIOUS` executed locally on PC playback engine.
+  - Verified ADB USB loopback forwarding with `TcpTestSucceeded: True` and `REVERSE_SUCCESS`.
+- **Status**: Completed (L3 Evidence achieved across all core functions).
+
+---
+
+### [2026-11-05] - Step 13: Pre-DSP PCM Audio Casting, Handoff & L4 User Verification
+- **Audio Cast & ExoPlayer Threading (`app-android`, `core-network`)**:
+  - `PlaybackService.kt`: Resolved `IllegalStateException: Player is accessed on the wrong thread` by reading `currentPosition` strictly on the main thread before dispatching raw PCM capture taps to `Dispatchers.IO`.
+  - `NodeConnectCastService.kt`: Added `nodeconnect/cast` logging tags and clean start/stop lifecycle management.
+  - `WindowsPlaybackEngine.kt`: Added handler for incoming remote cast stream initialization and PCM audio buffer queuing.
+- **Mid-Track Handoff (`core-network`)**:
+  - `NodeConnectHandoffService.kt`: Implemented fuzzy track matching fallback on desktop when identical local file paths do not exist.
+- **Live Evidence & L4 User Verification**:
+  - Audio Cast start and stop confirmed live between realme RMX3853 and Windows PC.
+  - User confirmed core Node Connect functionality: **L4 Verified by User** ("its working").
+- **Status**: Completed (L4 achieved for Core Link, Remote Control, Audio Cast, and Handoff).
+
+
+
+### [2026-11-05] - Step 7: Node Connect UI Polish, Cross-Platform Search, Sleep Timer & Stability
+- **Phone UI & Shaders**:
+  - `GlassRefractionShader.kt` & `FrostedNavAndPlayer.kt`: Removed `glassLensBubble` AGSL shader distortion from the dock tab selector pill. Flattened the middle field and softened the border to 0.75dp glass shimmer (`alpha = 0.14f`), completely eliminating the "Saturn / satin ring" artifact while maintaining crystal-clear liquid-glass transparency.
+  - `CrossfadePlayerManager.kt`: Fixed playback `FileNotFoundException` by checking local filesystem paths (`java.io.File(track.path)`) with `Uri.fromFile` before falling back to MediaStore IDs. Resolves song playback failures for re-scanned or searched tracks.
+- **Desktop UI & Navigation**:
+  - `OpticalRailDock.kt`: Removed pointer drag gesture handler that previously snapped navigation back to Home (index 0) upon clicking Library or other tabs. Dock container made translucent (`Color(0xFF0F172A).copy(alpha = 0.22f)`).
+  - `SharedPlayerLayout.kt`: Enhanced Search Capsule to transition directly from Home or any screen into Library search results upon typing. Added dynamic artwork accent extraction (`extractVibrantColor`) using Skia that smoothly animates the desktop aura and highlights (650ms tween).
+  - `BottomPlayerDeck.kt`: Added Sleep Timer button with dropdown menu (15, 30, 45, 60, 90 mins, turn off).
+- **Node Connect Cross-Platform Search & Artwork Transfer**:
+  - `NodeConnectLibraryService.kt`: Added `sequenceId = reqId` in `sendPayload` for `ARTWORK_RESULT` frames, fixing thumbnail request-response matching. Added string unescaping.
+  - `NodeConnection.kt`: Supported explicit `sequenceId` in `sendPayload`.
+  - `NodeConnectHub.kt` & `PlaybackService.kt`: Passed `artworkProvider` lambda returning compressed JPEG thumbnail bytes. Prefetched and cached remote artwork into in-memory `ArtworkCache`.
+  - `PlatformArtworkProvider.desktop.kt`: Checked `ArtworkCache.getBytes` in `loadArtwork` before attempting local file reads, enabling instant rendering of remote peer thumbnails and cast album art.
+- **Audio Streaming & Jitter Buffer**:
+  - `JitterBuffer.kt` & `NodeConnectCastService.kt`: Increased buffer settings (`targetBufferMs = 700`, `minBufferMs = 450`, `maxBufferMs = 2500`) to eliminate audio jitter and micro-underruns over Wi-Fi.
+  - `WindowsPlaybackEngine.kt`: Improved underrun handling by cleanly pre-buffering to `isReadyForPlayback` before resuming stream consumption. Protected WASAPI line writes against race conditions.

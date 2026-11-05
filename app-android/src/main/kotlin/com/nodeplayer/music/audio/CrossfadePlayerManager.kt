@@ -695,10 +695,18 @@ class CrossfadePlayerManager(
     }
 
     private fun createMediaItem(track: Track): MediaItem {
-        val contentUri = ContentUris.withAppendedId(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            track.id
-        )
+        val contentUri = if (track.path.isNotBlank() && (track.path.startsWith("/") || track.path.startsWith("file:"))) {
+            val f = java.io.File(track.path)
+            if (f.exists() && f.canRead()) {
+                android.net.Uri.fromFile(f)
+            } else {
+                ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, track.id)
+            }
+        } else if (track.path.startsWith("content:")) {
+            android.net.Uri.parse(track.path)
+        } else {
+            ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, track.id)
+        }
         val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
         val artworkUri = ContentUris.withAppendedId(albumArtBaseUri, track.albumId)
         val metadata = MediaMetadata.Builder()

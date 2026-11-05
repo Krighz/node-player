@@ -187,10 +187,11 @@ data class ControlStateEventMessage(
     val album: String,
     val isShuffle: Boolean = false,
     val repeatMode: Int = 0,
-    val formatBadge: String = ""
+    val formatBadge: String = "",
+    val artworkBase64: String = ""
 ) {
     fun toBytes(): ByteArray {
-        val json = """{"isPlaying":$isPlaying,"positionMs":$positionMs,"durationMs":$durationMs,"volume":$volume,"trackTitle":"${SimpleJson.escape(trackTitle)}","artist":"${SimpleJson.escape(artist)}","album":"${SimpleJson.escape(album)}","isShuffle":$isShuffle,"repeatMode":$repeatMode,"formatBadge":"${SimpleJson.escape(formatBadge)}"}"""
+        val json = """{"isPlaying":$isPlaying,"positionMs":$positionMs,"durationMs":$durationMs,"volume":$volume,"trackTitle":"${SimpleJson.escape(trackTitle)}","artist":"${SimpleJson.escape(artist)}","album":"${SimpleJson.escape(album)}","isShuffle":$isShuffle,"repeatMode":$repeatMode,"formatBadge":"${SimpleJson.escape(formatBadge)}","artworkBase64":"${SimpleJson.escape(artworkBase64)}"}"""
         return json.toByteArray(StandardCharsets.UTF_8)
     }
 
@@ -207,7 +208,8 @@ data class ControlStateEventMessage(
                 album = map["album"] ?: "",
                 isShuffle = map["isShuffle"]?.toBooleanStrictOrNull() ?: false,
                 repeatMode = map["repeatMode"]?.toIntOrNull() ?: 0,
-                formatBadge = map["formatBadge"] ?: ""
+                formatBadge = map["formatBadge"] ?: "",
+                artworkBase64 = map["artworkBase64"] ?: ""
             )
         }
     }
@@ -224,10 +226,11 @@ data class CastStartMessage(
     val artist: String,
     val album: String,
     val durationMs: Long,
-    val formatName: String
+    val formatName: String,
+    val artworkBase64: String = ""
 ) {
     fun toBytes(): ByteArray {
-        val json = """{"streamId":"${SimpleJson.escape(streamId)}","sequenceId":$sequenceId,"sampleRate":$sampleRate,"bitDepth":$bitDepth,"channels":$channels,"trackTitle":"${SimpleJson.escape(trackTitle)}","artist":"${SimpleJson.escape(artist)}","album":"${SimpleJson.escape(album)}","durationMs":$durationMs,"formatName":"${SimpleJson.escape(formatName)}"}"""
+        val json = """{"streamId":"${SimpleJson.escape(streamId)}","sequenceId":$sequenceId,"sampleRate":$sampleRate,"bitDepth":$bitDepth,"channels":$channels,"trackTitle":"${SimpleJson.escape(trackTitle)}","artist":"${SimpleJson.escape(artist)}","album":"${SimpleJson.escape(album)}","durationMs":$durationMs,"formatName":"${SimpleJson.escape(formatName)}","artworkBase64":"${SimpleJson.escape(artworkBase64)}"}"""
         return json.toByteArray(StandardCharsets.UTF_8)
     }
 
@@ -244,7 +247,8 @@ data class CastStartMessage(
                 artist = map["artist"] ?: "Node Player",
                 album = map["album"] ?: "",
                 durationMs = map["durationMs"]?.toLongOrNull() ?: 0L,
-                formatName = map["formatName"] ?: "PCM"
+                formatName = map["formatName"] ?: "PCM",
+                artworkBase64 = map["artworkBase64"] ?: ""
             )
         }
     }

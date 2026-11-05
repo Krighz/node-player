@@ -36,9 +36,9 @@ class JitterBuffer(
     val sampleRate: Int = 44100,
     val bitDepth: Int = 16,
     val channels: Int = 2,
-    val targetBufferMs: Int = 200,
-    val minBufferMs: Int = 80,
-    val maxBufferMs: Int = 400
+    val targetBufferMs: Int = 700,
+    val minBufferMs: Int = 450,
+    val maxBufferMs: Int = 2500
 ) {
     private val bytesPerSample = (bitDepth / 8) * channels
     private val bytesPerMs = (sampleRate * bytesPerSample) / 1000

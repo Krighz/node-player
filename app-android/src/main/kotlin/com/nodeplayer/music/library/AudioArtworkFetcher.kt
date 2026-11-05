@@ -28,6 +28,17 @@ class AudioArtworkFetcher(
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult? {
+        // 0. Check in-memory byte cache for Node Connect virtual streams/tracks
+        val cachedBytes = com.nodeplayer.ui.components.ArtworkCache.getBytes(path)
+            ?: (if (trackId > 0) com.nodeplayer.ui.components.ArtworkCache.getBytes(trackId.toString()) else null)
+        if (cachedBytes != null && cachedBytes.isNotEmpty()) {
+            return SourceResult(
+                source = ImageSource(Buffer().write(cachedBytes), context),
+                mimeType = "image/jpeg",
+                dataSource = DataSource.MEMORY
+            )
+        }
+
         // 1. Android 10+ MediaStore thumbnail if trackId > 0
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && trackId > 0) {
             try {

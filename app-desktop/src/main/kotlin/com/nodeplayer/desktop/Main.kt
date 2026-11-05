@@ -16,6 +16,7 @@ import com.nodeplayer.desktop.data.DesktopTrackDatabase
 import com.nodeplayer.desktop.data.DesktopTrackRepositoryAdapter
 import com.nodeplayer.desktop.data.WindowsFileScanner
 import com.nodeplayer.model.*
+import com.nodeplayer.network.protocol.ControlAction
 import com.nodeplayer.network.protocol.ControlStateEventMessage
 import com.nodeplayer.network.service.ConnectState
 import com.nodeplayer.network.service.LocalPlayerController
@@ -36,7 +37,30 @@ fun main() = application {
     val windowState = rememberWindowState(width = 1200.dp, height = 750.dp)
     val coroutineScope = rememberCoroutineScope()
 
+    fun getDesktopTrackThumbnailBase64(track: Track): String {
+        try {
+            val file = File(track.path)
+            if (file.exists() && file.canRead()) {
+                val parent = file.parentFile
+                if (parent != null && parent.exists()) {
+                    val commonNames = listOf("cover.jpg", "cover.png", "folder.jpg", "folder.png", "front.jpg", "front.png", "albumart.jpg", "album.jpg")
+                    for (name in commonNames) {
+                        val candidate = File(parent, name)
+                        if (candidate.exists() && candidate.length() in 100..2_000_000) {
+                            return java.util.Base64.getEncoder().encodeToString(candidate.readBytes())
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return ""
+    }
+
     remember {
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            println("[ERROR] [FATAL] Uncaught exception on thread ${thread.name}: ${throwable.message}")
+            throwable.printStackTrace()
+        }
         val appData = System.getenv("APPDATA") ?: System.getProperty("user.home", ".")
         val logDir = File(appData, "NodePlayer/logs").apply { mkdirs() }
         com.nodeplayer.common.logging.NodeLog.initFileLogging(File(logDir, "node_connect.log"))
@@ -75,25 +99,53 @@ fun main() = application {
     var themeConfig by remember { mutableStateOf(settingsStore.loadThemeConfig().copy(isOledBlack = false)) }
     var currentMusicFolder by remember { mutableStateOf(settingsStore.getLastMusicFolder()) }
 
+    val ncSettingsStore = remember { com.nodeplayer.network.service.NodeConnectSettingsStore(settingsStore) }
+    var ncConfig by remember { mutableStateOf(ncSettingsStore.config.value) }
+    var remoteTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
+
     val hub = remember {
         NodeConnectHub(
             trackRepository = trackRepo,
             localController = localController,
             onIncomingCastStream = { session, jitter ->
+                com.nodeplayer.common.logging.NodeLog.i("nodeconnect/cast", "Desktop starting playback of incoming cast stream: '${session.trackTitle}' by '${session.artist}'")
+                if (session.artworkBase64.isNotBlank()) {
+                    try {
+                        val bytes = java.util.Base64.getDecoder().decode(session.artworkBase64)
+                        com.nodeplayer.ui.components.ArtworkCache.putBytes("nodeconnect://cast/${session.streamId}", bytes)
+                        com.nodeplayer.ui.components.ArtworkCache.putBytes(session.trackTitle + session.artist, bytes)
+                    } catch (_: Exception) {}
+                }
                 engine.playIncomingCastStream(jitter, session)
             },
             onIncomingHandoff = { handoff ->
+                com.nodeplayer.common.logging.NodeLog.i("nodeconnect/handoff", "Desktop received handoff: '${handoff.trackTitle}' pos=${handoff.positionMs}ms playing=${handoff.isPlaying}")
+                if (handoff.artworkBase64.isNotBlank()) {
+                    try {
+                        val bytes = java.util.Base64.getDecoder().decode(handoff.artworkBase64)
+                        com.nodeplayer.ui.components.ArtworkCache.putBytes(handoff.trackTitle + handoff.artist, bytes)
+                    } catch (_: Exception) {}
+                }
                 val matched = trackList.firstOrNull { it.title.equals(handoff.trackTitle, ignoreCase = true) }
+                    ?: trackList.firstOrNull { it.title.contains(handoff.trackTitle, ignoreCase = true) || handoff.trackTitle.contains(it.title, ignoreCase = true) }
+                    ?: trackList.firstOrNull()
                 if (matched != null) {
+                    com.nodeplayer.common.logging.NodeLog.i("nodeconnect/handoff", "Desktop matched track: '${matched.title}' (${matched.path})")
                     engine.playTrack(matched)
                     engine.seekTo(handoff.positionMs)
+                    if (!handoff.isPlaying && engine.isPlaying.value) {
+                        engine.playPause()
+                    }
+                } else {
+                    com.nodeplayer.common.logging.NodeLog.w("nodeconnect/handoff", "Desktop has no tracks loaded to match handoff '${handoff.trackTitle}'")
                 }
                 true
             }
         )
     }
 
-    LaunchedEffect(hub) {
+    LaunchedEffect(hub, ncConfig) {
+        hub.config = ncConfig
         engine.preDspPcmTap = { pcmBytes, ptsMs ->
             coroutineScope.launch {
                 hub.castService.sendPcmAudioChunk(pcmBytes, ptsMs)
@@ -115,6 +167,7 @@ fun main() = application {
     var pairingStatusMsg by remember { mutableStateOf<String?>(null) }
     val activeSession by hub.activePairingSession.collectAsState()
     val discoveredPeers by hub.discoveredPeers.collectAsState()
+    val connectedPeers by hub.connectedPeers.collectAsState()
 
     val localIpAddress = remember {
         try {
@@ -301,7 +354,16 @@ fun main() = application {
                 },
                 currentMusicFolder = currentMusicFolder,
                 onPlayTrack = { track, list ->
-                    engine.setQueue(list, list.indexOf(track))
+                    if (track.path.startsWith("nodeconnect://")) {
+                        coroutineScope.launch {
+                            val conn = hub.activeConnections.firstOrNull()
+                            if (conn != null) {
+                                hub.controlService.sendRemoteCommand(conn, ControlAction.PLAY)
+                            }
+                        }
+                    } else {
+                        engine.setQueue(list, list.indexOf(track))
+                    }
                 },
                 onPlayPause = { engine.playPause() },
                 onNext = { engine.next() },
@@ -334,7 +396,8 @@ fun main() = application {
                         if (t != null) {
                             val conn = hub.activeConnections.firstOrNull { it.peerDeviceId == peer.id }
                             if (conn != null) {
-                                hub.castService.startCastAsSender(conn, t, positionMs)
+                                val art = getDesktopTrackThumbnailBase64(t)
+                                hub.castService.startCastAsSender(conn, t, positionMs, artworkBase64 = art)
                             }
                         }
                     }
@@ -347,11 +410,45 @@ fun main() = application {
                     }
                 },
                 onRescanLibrary = { rescanCurrentFolder() },
-                onSelectMusicFolder = { pickAndScanFolder() }
+                onSelectMusicFolder = { pickAndScanFolder() },
+                remoteTracks = remoteTracks,
+                onSearchQueryChanged = { query ->
+                    if (query.isNotBlank()) {
+                        coroutineScope.launch {
+                            val list = mutableListOf<Track>()
+                            hub.activeConnections.forEach { conn ->
+                                try {
+                                    val res = hub.libraryService.queryRemoteLibrary(conn, query = query, limit = 30)
+                                    if (res != null) {
+                                        list.addAll(res.tracks)
+                                        for (remoteTrack in res.tracks) {
+                                            launch(Dispatchers.IO) {
+                                                try {
+                                                    val artBytes = hub.libraryService.fetchRemoteArtwork(conn, remoteTrack.id)
+                                                    if (artBytes != null && artBytes.isNotEmpty()) {
+                                                        com.nodeplayer.ui.components.ArtworkCache.putBytes(remoteTrack.path, artBytes)
+                                                        com.nodeplayer.ui.components.ArtworkCache.putBytes(remoteTrack.id.toString(), artBytes)
+                                                        com.nodeplayer.ui.components.ArtworkCache.putBytes(remoteTrack.title + remoteTrack.artist, artBytes)
+                                                    }
+                                                } catch (_: Exception) {}
+                                            }
+                                        }
+                                    }
+                                } catch (_: Exception) {}
+                            }
+                            remoteTracks = list
+                        }
+                    } else {
+                        remoteTracks = emptyList()
+                    }
+                },
+                sleepTimerRemainingSec = engine.sleepTimerRemainingSeconds.collectAsState().value,
+                onSetSleepTimer = { engine.setSleepTimer(it) }
             )
 
             var pendingAllowPrompt by remember { mutableStateOf<Pair<String, (Boolean, Boolean) -> Unit>?>(null) }
-            LaunchedEffect(hub) {
+            LaunchedEffect(hub, ncConfig) {
+        hub.config = ncConfig
                 hub.onAllowPrompt = { name, id, callback ->
                     pendingAllowPrompt = name to callback
                 }
@@ -405,6 +502,12 @@ fun main() = application {
                     localPort = hub.activePort,
                     localCandidateIps = hub.getLocalCandidateIps().ifEmpty { listOf(localIpAddress) },
                     discoveredPeers = discoveredPeers,
+                    config = ncConfig,
+                    onConfigChange = { updated ->
+                        ncConfig = updated
+                        ncSettingsStore.saveConfig(updated)
+                        hub.config = updated
+                    },
                     onStartSession = { hub.startPairingSession() },
                     onCancelSession = { hub.cancelPairingSession() },
                     onPairWithHost = { host, port, pin ->
@@ -416,7 +519,7 @@ fun main() = application {
                             if (res.isSuccess) {
                                 pairingStatusMsg = "Successfully paired with ${res.getOrNull()}!"
                                 delay(1200)
-                                showPairingDialog = false
+                                // dialog stays open to use controls
                             } else {
                                 pairingStatusMsg = "Pairing failed: ${res.exceptionOrNull()?.message}"
                             }
@@ -431,7 +534,7 @@ fun main() = application {
                             if (conn != null) {
                                 pairingStatusMsg = "Connected to ${peer.deviceName}!"
                                 delay(1000)
-                                showPairingDialog = false
+                                // dialog stays open to use controls
                             } else {
                                 pairingStatusMsg = "Connection failed to ${peer.deviceName}"
                             }
@@ -456,7 +559,7 @@ fun main() = application {
                             if (conn != null) {
                                 pairingStatusMsg = "Connected to $host:$port!"
                                 delay(1000)
-                                showPairingDialog = false
+                                // dialog stays open to use controls
                             } else {
                                 pairingStatusMsg = "Failed to connect to $host:$port"
                             }
@@ -482,7 +585,66 @@ fun main() = application {
                         out.writeText(log)
                     },
                     isPairingInProgress = pairingProgress,
-                    pairingStatusMessage = pairingStatusMsg
+                    onStartUsbLink = {
+                        coroutineScope.launch {
+                            val res = hub.startUsbDebuggingLink()
+                            if (res.isSuccess) {
+                                val peer = res.getOrNull()
+                                if (peer != null) {
+                                    hub.connectToPeer(peer)
+                                }
+                            }
+                        }
+                    },
+                    pairingStatusMessage = pairingStatusMsg,
+                    connectedPeers = connectedPeers,
+                    onSendRemotePlayPause = { deviceId ->
+                        coroutineScope.launch { hub.sendRemotePlayPause(deviceId) }
+                    },
+                    onSendRemotePrevious = { deviceId ->
+                        coroutineScope.launch { hub.sendRemotePrevious(deviceId) }
+                    },
+                    onSendRemoteNext = { deviceId ->
+                        coroutineScope.launch { hub.sendRemoteNext(deviceId) }
+                    },
+                    onDisconnectPeer = { deviceId ->
+                        hub.disconnectDevice(deviceId)
+                    },
+                    onTriggerAudioCast = { deviceId ->
+                        coroutineScope.launch {
+                            val conn = hub.activeConnections.firstOrNull { it.peerDeviceId == deviceId }
+                            val currentTrack = engine.currentTrack.value
+                            if (conn != null && currentTrack != null) {
+                                try {
+                                    val art = getDesktopTrackThumbnailBase64(currentTrack)
+                                    hub.castService.startCastAsSender(conn, currentTrack, artworkBase64 = art)
+                                } catch (e: Exception) {
+                                    // error handled
+                                }
+                            }
+                        }
+                    },
+                    onTriggerHandoff = { deviceId ->
+                        coroutineScope.launch {
+                            val conn = hub.activeConnections.firstOrNull { it.peerDeviceId == deviceId }
+                            val currentTrack = engine.currentTrack.value
+                            if (conn != null && currentTrack != null) {
+                                try {
+                                    val art = getDesktopTrackThumbnailBase64(currentTrack)
+                                    hub.handoffService.initiateHandoff(
+                                        conn,
+                                        currentTrack,
+                                        engine.currentPositionMs.value,
+                                        engine.isPlaying.value,
+                                        artworkBase64 = art
+                                    )
+                                    if (engine.isPlaying.value) engine.playPause()
+                                } catch (e: Exception) {
+                                    // error handled
+                                }
+                            }
+                        }
+                    }
                 )
             }
         }

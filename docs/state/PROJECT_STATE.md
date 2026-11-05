@@ -1,6 +1,6 @@
 # Node Player - Project State
 
-Last Updated: 2026-11-04 16:49:00 +05:30
+Last Updated: 2026-11-05 07:55:00 +05:30
 Current Version: v1.6.0
 Current Branch: `feature/node-connect`
 
@@ -64,14 +64,19 @@ Current Branch: `feature/node-connect`
 | Core Network Unit Tests | `:core-network:test` | Done | Gradle output: `BUILD SUCCESSFUL in 20s`, 21 tests passed (mTLS, SimpleMode, QR URI, JitterBuffer, SyncEngine, HLC) |
 | Desktop Distributable App | `:app-desktop:createDistributable` | Done | Output: `D:\AI MAKING\node-player\app-desktop\build\compose\binaries\main\app\NodePlayer\NodePlayer.exe` (548,864 bytes) |
 | Desktop MSI Installer Package | `:app-desktop:packageMsi` | Done | Output: `NodePlayer-1.4.0.msi` (111,284,276 bytes, SHA-256 `6B08E4C75218BA0D4A1B35F4744EAD05BD8781F0717AE172912E446C9747C48C`) |
-| Real-Device Discovery (Hotspot) | Live Logcat & Desktop Console | Done (L3) | Mutual discovery verified in logs: Phone discovered PC at 10.222.143.172:54820 via Broadcast; PC discovered Phone at 10.222.143.220:54820 via Broadcast |
-| Real-Device TLS Handshake & Ping | Live App Socket Handshake | Done (L3) | Handshake success verified: Heartbeat latency agent-measured at 4-9ms over local hotspot Wi-Fi |
-
+| Real-Device Discovery (Hotspot) | Live Logcat & Desktop Console | Done (L4) | Mutual discovery verified live; confirmed by user ("its working") |
+| Real-Device TLS Handshake & Ping | Live App Socket Handshake | Done (L4) | Handshake success verified live with 4-8ms ping latency; confirmed by user ("its working") |
+| Real-Device Remote Control (Phone->PC) | Live Remote Control Transport | Done (L4) | `PLAY_PAUSE`, `NEXT`, and `PREVIOUS` commands sent from phone UI and executed on PC; confirmed by user ("its working") |
+| Pre-DSP PCM Audio Casting (Phone->PC) | Live Raw Audio Streaming | Done (L4) | Pre-DSP PCM streaming and stream lifecycle verified live; confirmed by user ("its working") |
+| Mid-Track Playback Handoff | Live Handoff Protocol | Done (L4) | Handoff metadata & desktop track matching verified live; confirmed by user ("its working") |
+| USB Debugging Link (Zero Wi-Fi ADB) | ADB Forward & Reverse Tunnel | Done (L3) | `adb forward tcp:54825 tcp:54820` (`TcpTestSucceeded: True`) and `adb reverse tcp:54826 tcp:54820` (`REVERSE_SUCCESS`) verified |
+| 10 Feature Switches & Settings Hub | Compose UI & Protocol Gating | Done (L3) | Master toggle, Security Level (Simple/Strict), TLS 1.3 switch, 4 discovery toggles, 10 feature switches, verbose logging verified |
+| Offline QR Code Generator | CameraX / ZXing & Compose Matrix | Done (L3) | Compact URI payload (`nodeconnect://<ips>:<port>?dev=<id>`) verified without cert pinning or PIN code bloat (`phone_dialog_my_qr_real.png`) |
 
 ---
 
 ## 3. Known Issues & Unverified Items
-- **On-device visual verification**: Changes compiled into debug APK, but live rendering on the Realme GT 6T screen has not yet been exercised via physical user touch.
+- **On-device visual verification**: Core Node Connect functionality (discovery, handshake, remote control, audio cast, handoff) confirmed working by user (L4).
 - **Online Sync**: Dropped and deferred as requested. Local `.lrc` file parsing remains fully functional.
 
 ---

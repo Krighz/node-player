@@ -1,5 +1,6 @@
 package com.nodeplayer.network.cast
 
+import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.model.Track
 import com.nodeplayer.network.pairing.DeviceRegistry
 import com.nodeplayer.network.protocol.*
@@ -20,7 +21,8 @@ data class ActiveCastSession(
     val bitDepth: Int,
     val channels: Int,
     val durationMs: Long,
-    val isSender: Boolean
+    val isSender: Boolean,
+    val artworkBase64: String = ""
 )
 
 /**
@@ -36,6 +38,8 @@ class NodeConnectCastService(
     private var senderConnection: NodeConnection? = null
     private var activeStreamId: String? = null
     private val sequenceCounter = AtomicLong(1L)
+    private val sentChunkCount = AtomicLong(0L)
+    private val receivedChunkCount = AtomicLong(0L)
 
     private val _currentSession = MutableStateFlow<ActiveCastSession?>(null)
     val currentSession: StateFlow<ActiveCastSession?> = _currentSession.asStateFlow()
@@ -50,10 +54,12 @@ class NodeConnectCastService(
     suspend fun startCastAsSender(
         targetConnection: NodeConnection,
         track: Track,
-        initialPtsMs: Long = 0L
+        initialPtsMs: Long = 0L,
+        artworkBase64: String = ""
     ): String {
         // Verify receiver permissions
         val paired = registry?.getPairedDeviceByFingerprint(targetConnection.peerFingerprint)
+            ?: registry?.getPairedDeviceById(targetConnection.peerDeviceId)
         if (paired != null && !paired.permissions.canReceiveCast) {
             throw SecurityException("Remote device does not have permission to receive audio cast")
         }
@@ -73,10 +79,12 @@ class NodeConnectCastService(
             artist = track.artist,
             album = track.album,
             durationMs = track.durationMs,
-            formatName = track.formatBadgeText
+            formatName = track.formatBadgeText,
+            artworkBase64 = artworkBase64
         )
 
         targetConnection.sendPayload(NodeMessageTypes.CAST_START, startMsg.toBytes(), NodeFraming.FLAG_PRIORITY)
+        NodeLog.i("nodeconnect/cast", "Starting audio cast sender stream '${startMsg.trackTitle}' to ${targetConnection.peerDeviceId} (${targetConnection.peerHostAddress})")
 
         _currentSession.value = ActiveCastSession(
             streamId = streamId,
@@ -88,7 +96,8 @@ class NodeConnectCastService(
             bitDepth = startMsg.bitDepth,
             channels = startMsg.channels,
             durationMs = track.durationMs,
-            isSender = true
+            isSender = true,
+            artworkBase64 = artworkBase64
         )
 
         return streamId
@@ -100,6 +109,11 @@ class NodeConnectCastService(
     suspend fun sendPcmAudioChunk(pcmBytes: ByteArray, ptsMs: Long) {
         val conn = senderConnection ?: return
         if (!conn.isOpen) return
+
+        val count = sentChunkCount.incrementAndGet()
+        if (count % 50 == 1L) {
+            NodeLog.d("nodeconnect/cast", "Streaming PCM audio chunk #$count (${pcmBytes.size} bytes) pts=${ptsMs}ms")
+        }
 
         conn.sendPayload(
             messageType = NodeMessageTypes.CAST_PCM_CHUNK,
@@ -133,6 +147,7 @@ class NodeConnectCastService(
                 // Ignore
             }
         }
+        NodeLog.i("nodeconnect/cast", "Stopped audio cast as sender")
         senderConnection = null
         activeStreamId = null
         _currentSession.value = null
@@ -167,11 +182,14 @@ class NodeConnectCastService(
 
     private fun handleCastStart(payload: ByteArray, connection: NodeConnection) {
         val startMsg = CastStartMessage.fromBytes(payload)
+        NodeLog.i("nodeconnect/cast", "Received audio cast start: '${startMsg.trackTitle}' by '${startMsg.artist}' (${startMsg.sampleRate}Hz, ${startMsg.channels}ch) from ${connection.peerDeviceId}")
         val jitter = JitterBuffer(
             sampleRate = startMsg.sampleRate,
             bitDepth = startMsg.bitDepth,
             channels = startMsg.channels,
-            targetBufferMs = 200
+            targetBufferMs = 700,
+            minBufferMs = 450,
+            maxBufferMs = 2500
         )
         jitter.flush(startMsg.sequenceId)
         activeReceiverJitterBuffer = jitter
@@ -186,7 +204,8 @@ class NodeConnectCastService(
             bitDepth = startMsg.bitDepth,
             channels = startMsg.channels,
             durationMs = startMsg.durationMs,
-            isSender = false
+            isSender = false,
+            artworkBase64 = startMsg.artworkBase64
         )
         _currentSession.value = session
         onStreamStartedLocally?.invoke(session, jitter)
@@ -194,6 +213,10 @@ class NodeConnectCastService(
 
     private fun handleCastPcmChunk(frame: NodeFraming.Frame) {
         val jitter = activeReceiverJitterBuffer ?: return
+        val count = receivedChunkCount.incrementAndGet()
+        if (count % 50 == 1L) {
+            NodeLog.d("nodeconnect/cast", "Received PCM cast chunk #$count (${frame.payload.size} bytes)")
+        }
         jitter.push(
             sequenceId = frame.sequenceId,
             ptsMs = 0L,
@@ -203,10 +226,12 @@ class NodeConnectCastService(
 
     private fun handleCastFlush(payload: ByteArray) {
         val flushMsg = CastFlushMessage.fromBytes(payload)
+        NodeLog.i("nodeconnect/cast", "Cast stream flushed to sequenceId=${flushMsg.newSequenceId}")
         activeReceiverJitterBuffer?.flush(flushMsg.newSequenceId)
     }
 
     private fun handleCastStop() {
+        NodeLog.i("nodeconnect/cast", "Cast stream stopped by remote sender")
         activeReceiverJitterBuffer = null
         _currentSession.value = null
         onStreamStoppedLocally?.invoke()

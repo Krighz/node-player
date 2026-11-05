@@ -1,5 +1,7 @@
 package com.nodeplayer.network.service
 
+import com.nodeplayer.common.logging.NodeLog
+
 import com.nodeplayer.network.pairing.DeviceRegistry
 import com.nodeplayer.network.protocol.*
 import com.nodeplayer.network.transport.NodeConnection
@@ -47,11 +49,14 @@ class NodeConnectControlService(
             NodeMessageTypes.CONTROL_CMD -> {
                 // Verify peer has canRemoteControl permission
                 val paired = registry?.getPairedDeviceByFingerprint(connection.peerFingerprint)
+                    ?: registry?.getPairedDeviceById(connection.peerDeviceId)
                 if (paired != null && !paired.permissions.canRemoteControl) {
+                    NodeLog.w("nodeconnect/control", "Rejected control command: permission canRemoteControl disabled for ${connection.peerDeviceId}")
                     return true // Blocked by permission switch
                 }
 
                 val cmd = ControlCommandMessage.fromBytes(frame.payload)
+                NodeLog.i("nodeconnect/control", "Received control command: ${cmd.action} from ${connection.peerDeviceId} (${connection.peerHostAddress})")
                 executeLocalCommand(cmd)
                 return true
             }
@@ -65,7 +70,12 @@ class NodeConnectControlService(
     }
 
     private fun executeLocalCommand(cmd: ControlCommandMessage) {
-        val ctrl = localController ?: return
+        val ctrl = localController
+        if (ctrl == null) {
+            NodeLog.w("nodeconnect/control", "Cannot execute command ${cmd.action}: localController is null")
+            return
+        }
+        NodeLog.i("nodeconnect/control", "Executing local transport command: ${cmd.action}")
         when (cmd.action) {
             ControlAction.PLAY -> ctrl.play()
             ControlAction.PAUSE -> ctrl.pause()
@@ -105,6 +115,7 @@ class NodeConnectControlService(
         volume: Float = 1.0f
     ) {
         val cmd = ControlCommandMessage(action, seekPositionMs, volume)
+        NodeLog.i("nodeconnect/control", "Sending remote control command: ${cmd.action} to ${connection.peerDeviceId} (${connection.peerHostAddress})")
         connection.sendPayload(NodeMessageTypes.CONTROL_CMD, cmd.toBytes())
     }
 }

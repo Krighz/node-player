@@ -26,6 +26,10 @@ class NodeConnection(
     var peerFingerprint: String,
     private val scope: CoroutineScope
 ) {
+    var peerDeviceName: String = ""
+    var peerPlatform: String = ""
+    var onLatencyUpdated: ((Long) -> Unit)? = null
+
     val peerHostAddress: String get() = socket.inetAddress?.hostAddress ?: "unknown"
     val peerPort: Int get() = socket.port
 
@@ -79,6 +83,7 @@ class NodeConnection(
                         if (sentTime > 0L) {
                             lastPingLatencyMs = (System.currentTimeMillis() - sentTime).coerceAtLeast(0L)
                             NodeLog.v("nodeconnect/connect", "Heartbeat latency to $peerDeviceId: ${lastPingLatencyMs}ms")
+                            onLatencyUpdated?.invoke(lastPingLatencyMs)
                         }
                     } else {
                         incomingFrames.send(frame)
@@ -118,11 +123,11 @@ class NodeConnection(
         }
     }
 
-    suspend fun sendPayload(messageType: Short, payload: ByteArray, flags: Byte = 0) {
+    suspend fun sendPayload(messageType: Short, payload: ByteArray, flags: Byte = 0, sequenceId: Long = nextSeq.getAndIncrement()) {
         val frame = NodeFraming.Frame(
             messageType = messageType,
             flags = flags,
-            sequenceId = nextSeq.getAndIncrement(),
+            sequenceId = sequenceId,
             payload = payload
         )
         sendFrame(frame)

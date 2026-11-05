@@ -58,6 +58,10 @@ class WindowsPlaybackEngine(
     private val _isExclusiveMode = MutableStateFlow(false)
     val isExclusiveMode: StateFlow<Boolean> = _isExclusiveMode.asStateFlow()
 
+    private val _sleepTimerRemainingSeconds = MutableStateFlow<Long?>(null)
+    val sleepTimerRemainingSeconds: StateFlow<Long?> = _sleepTimerRemainingSeconds.asStateFlow()
+    private var sleepTimerJob: Job? = null
+
     private val isPaused = AtomicBoolean(false)
     private var currentEffectConfig = AudioEffectConfig()
 
@@ -305,10 +309,18 @@ class WindowsPlaybackEngine(
             var framesPlayed = 0L
 
             try {
+                // Wait for initial jitter buffer pre-buffering to eliminate start stutter
+                while (isActive && !jitter.isReadyForPlayback) {
+                    delay(15)
+                }
+
                 while (isActive) {
                     val read = jitter.read(byteBuffer, 0, byteBuffer.size)
                     if (read <= 0) {
-                        delay(10)
+                        // Re-buffer cleanly on underrun rather than stuttering on single packets
+                        while (isActive && !jitter.isReadyForPlayback) {
+                            delay(25)
+                        }
                         continue
                     }
 
@@ -337,6 +349,36 @@ class WindowsPlaybackEngine(
         val clamped = vol.coerceIn(0.0f, 1.0f)
         _volume.value = clamped
         audioOutput.setVolume(clamped)
+    }
+
+    fun setSleepTimer(minutes: Int?) {
+        sleepTimerJob?.cancel()
+        if (minutes == null || minutes <= 0) {
+            _sleepTimerRemainingSeconds.value = null
+            return
+        }
+        val totalSec = minutes * 60L
+        _sleepTimerRemainingSeconds.value = totalSec
+        sleepTimerJob = engineScope.launch {
+            var currentSec = totalSec
+            while (isActive && currentSec > 0) {
+                delay(1000L)
+                currentSec--
+                _sleepTimerRemainingSeconds.value = currentSec
+                // Smooth fade during the last 10 seconds
+                if (currentSec <= 10) {
+                    val progress = (currentSec / 10f).coerceIn(0f, 1f)
+                    audioOutput.setVolume(_volume.value * progress)
+                }
+            }
+            if (isActive) {
+                if (_isPlaying.value) {
+                    playPause()
+                }
+                audioOutput.setVolume(_volume.value)
+                _sleepTimerRemainingSeconds.value = null
+            }
+        }
     }
 
     fun toggleShuffle() {

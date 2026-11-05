@@ -4,6 +4,7 @@ import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.library.repository.TrackRepository
 import com.nodeplayer.network.crypto.NodeDeviceIdentity
 import com.nodeplayer.network.crypto.SecureKeyStorage
+import com.nodeplayer.network.discovery.AdbBridge
 import com.nodeplayer.network.discovery.DiscoveredNodePeer
 import com.nodeplayer.network.discovery.NodeDiscovery
 import com.nodeplayer.network.cast.ActiveCastSession
@@ -15,6 +16,7 @@ import com.nodeplayer.network.pairing.DeviceRegistry
 import com.nodeplayer.network.pairing.PairedDevice
 import com.nodeplayer.network.pairing.PairingManager
 import com.nodeplayer.network.pairing.PairingSession
+import com.nodeplayer.network.protocol.ControlAction
 import com.nodeplayer.network.protocol.ControlStateEventMessage
 import com.nodeplayer.network.protocol.HandshakeMessage
 import com.nodeplayer.network.protocol.NodeFraming
@@ -46,6 +48,15 @@ enum class ConnectState {
     CONNECTED
 }
 
+data class ConnectedPeer(
+    val deviceId: String,
+    val deviceName: String,
+    val platform: String,
+    val hostAddress: String,
+    val port: Int,
+    val latencyMs: Long = 0L
+)
+
 /**
  * NodeConnectHub: Main coordination hub for Node Connect.
  * Integrates Discovery, Server, Client, Registry, Pairing, Library, Control, Cast, Handoff, Sync, and External Session planes.
@@ -56,6 +67,7 @@ class NodeConnectHub(
     val registry: DeviceRegistry = DeviceRegistry(),
     val trackRepository: TrackRepository? = null,
     val localController: LocalPlayerController? = null,
+    val artworkProvider: ((trackId: Long) -> ByteArray?)? = null,
     val onIncomingCastStream: ((ActiveCastSession, JitterBuffer) -> Unit)? = null,
     val onIncomingHandoff: ((HandoffPayload) -> Boolean)? = null,
     val platformMediaSessionBridge: PlatformMediaSessionBridge? = null,
@@ -63,7 +75,7 @@ class NodeConnectHub(
     val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 ) {
     val pairingManager = PairingManager(registry)
-    val libraryService = NodeConnectLibraryService(trackRepository)
+    val libraryService = NodeConnectLibraryService(trackRepository, artworkProvider)
     val controlService = NodeConnectControlService(localController, registry)
     val mirrorService = NodeConnectMirrorService()
     val castService = NodeConnectCastService(
@@ -81,6 +93,17 @@ class NodeConnectHub(
     var encryptionEnabled: Boolean = true
     var trustAllOnNetwork: Boolean = false
 
+    var config: NodeConnectConfig = NodeConnectConfig()
+        set(value) {
+            field = value
+            securityLevel = value.securityLevel
+            encryptionEnabled = value.encryptionEnabled
+            trustAllOnNetwork = value.trustAllOnNetwork
+            if (value.deviceName.isNotBlank()) {
+                localDeviceName = value.deviceName
+            }
+        }
+
     private var identity: NodeDeviceIdentity? = null
     private var server: NodeServer? = null
     private var discovery: NodeDiscovery? = null
@@ -96,6 +119,9 @@ class NodeConnectHub(
 
     private val _connectedDeviceCount = MutableStateFlow(0)
     val connectedDeviceCount: StateFlow<Int> = _connectedDeviceCount.asStateFlow()
+
+    private val _connectedPeers = MutableStateFlow<List<ConnectedPeer>>(emptyList())
+    val connectedPeers: StateFlow<List<ConnectedPeer>> = _connectedPeers.asStateFlow()
 
     private val _discoveredPeers = MutableStateFlow<List<DiscoveredNodePeer>>(emptyList())
     val discoveredPeers: StateFlow<List<DiscoveredNodePeer>> = _discoveredPeers.asStateFlow()
@@ -214,6 +240,29 @@ class NodeConnectHub(
         }
     }
 
+    fun isAdbAvailable(): Boolean = AdbBridge.isAdbAvailable()
+
+    fun startUsbDebuggingLink(): Result<DiscoveredNodePeer> {
+        val res = AdbBridge.setupUsbLink()
+        return res.map { (forwardPort, _) ->
+            val usbPeer = DiscoveredNodePeer(
+                deviceId = "usb_adb_device",
+                deviceName = "Android Device (USB ADB Link)",
+                platform = "Android via USB",
+                hostAddress = "127.0.0.1",
+                port = forwardPort,
+                certificateFingerprintSha256 = "",
+                canReceiveCast = true,
+                candidateAddresses = listOf("127.0.0.1"),
+                discoveryMethod = "USB Debugging"
+            )
+            discovery?.addManualPeer("127.0.0.1", forwardPort) { peer ->
+                _discoveredPeers.value = (discoveredPeers.value.filter { it.deviceId != peer.deviceId } + peer)
+            }
+            usbPeer
+        }
+    }
+
     /**
      * Connects to a peer by trying all candidate addresses in parallel with a short timeout.
      * Keeps the first socket that connects and completes the Hello handshake.
@@ -287,6 +336,8 @@ class NodeConnectHub(
 
             val peerHs = HandshakeMessage.fromBytes(respFrame.payload)
             conn.peerDeviceId = peerHs.deviceId
+            conn.peerDeviceName = peerHs.deviceName
+            conn.peerPlatform = peerHs.platform
             NodeLog.i("nodeconnect/connect", "Handshake success! Connected to '${peerHs.deviceName}' (${peerHs.deviceId})")
 
             val pairedHost = PairedDevice(
@@ -408,17 +459,37 @@ class NodeConnectHub(
                 // Register active connection
                 activeConnections.add(conn)
                 controlService.registerController(conn)
+                conn.onLatencyUpdated = {
+                    updateConnectionStatus()
+                }
                 updateConnectionStatus()
                 NodeLog.i("nodeconnect/hub", "Peer ${conn.peerDeviceId} (${conn.peerHostAddress}) registered into active session")
 
                 for (frame in conn.incomingFrames) {
-                    val handled = libraryService.handleFrame(frame, conn) ||
-                            controlService.handleFrame(frame, conn) ||
-                            mirrorService.handleFrame(frame) ||
-                            castService.handleFrame(frame, conn) ||
-                            handoffService.handleFrame(frame, conn) ||
-                            syncService.handleFrame(frame, conn) ||
-                            externalSessionService.handleFrame(frame, conn)
+                    if (!config.remoteControlEnabled && frame.messageType == NodeMessageTypes.CONTROL_CMD) {
+                        NodeLog.w("nodeconnect/control", "Gated: Remote Control frame rejected (disabled in settings)")
+                        continue
+                    }
+                    if (!config.audioCastEnabled && (frame.messageType == NodeMessageTypes.CAST_START || frame.messageType == NodeMessageTypes.CAST_PCM_CHUNK)) {
+                        NodeLog.w("nodeconnect/cast", "Gated: Audio Cast frame rejected (disabled in settings)")
+                        continue
+                    }
+                    if (!config.handoffEnabled && frame.messageType == NodeMessageTypes.HANDOFF_REQ) {
+                        NodeLog.w("nodeconnect/handoff", "Gated: Playback Handoff frame rejected (disabled in settings)")
+                        continue
+                    }
+                    if (!config.shareLibraryEnabled && frame.messageType == NodeMessageTypes.LIBRARY_QUERY) {
+                        NodeLog.w("nodeconnect/library", "Gated: Library Sharing frame rejected (disabled in settings)")
+                        continue
+                    }
+
+                    val handled = (config.shareLibraryEnabled && libraryService.handleFrame(frame, conn)) ||
+                            (config.remoteControlEnabled && controlService.handleFrame(frame, conn)) ||
+                            (config.mirrorEnabled && mirrorService.handleFrame(frame)) ||
+                            (config.audioCastEnabled && castService.handleFrame(frame, conn)) ||
+                            (config.handoffEnabled && handoffService.handleFrame(frame, conn)) ||
+                            (config.syncRailEnabled && syncService.handleFrame(frame, conn)) ||
+                            (config.externalSessionsEnabled && externalSessionService.handleFrame(frame, conn))
                 }
             } catch (e: Exception) {
                 NodeLog.w("nodeconnect/hub", "Connection terminated for peer ${conn.peerDeviceId}: ${e.message}")
@@ -450,6 +521,11 @@ class NodeConnectHub(
     }
 
     private suspend fun handleSimpleIncomingHandshake(conn: NodeConnection) {
+        if (!config.allowIncoming) {
+            conn.sendPayload(NodeMessageTypes.DISCONNECT, "Incoming connections disabled".toByteArray())
+            throw SecurityException("Incoming connections disabled in settings")
+        }
+
         // In Simple Mode: read peer's HANDSHAKE_REQ or PAIRING_REQ
         val frame = withTimeoutOrNull(8000) {
             conn.incomingFrames.receive()
@@ -458,11 +534,13 @@ class NodeConnectHub(
         if (frame.messageType == NodeMessageTypes.HANDSHAKE_REQ) {
             val req = HandshakeMessage.fromBytes(frame.payload)
             conn.peerDeviceId = req.deviceId
+            conn.peerDeviceName = req.deviceName
+            conn.peerPlatform = req.platform
             NodeLog.i("nodeconnect/hub", "Received Handshake from '${req.deviceName}' (${req.deviceId}) on ${conn.peerHostAddress}")
 
             val isTrusted = registry.isTrustedDeviceId(req.deviceId) || trustAllOnNetwork
 
-            if (!isTrusted) {
+            if (!isTrusted && config.askBeforeAllowing) {
                 // Trigger Allow prompt if callback provided
                 val prompt = onAllowPrompt
                 if (prompt != null) {
@@ -581,6 +659,90 @@ class NodeConnectHub(
     private fun updateConnectionStatus() {
         val count = activeConnections.size
         _connectedDeviceCount.value = count
+        _connectedPeers.value = activeConnections.map { conn ->
+            ConnectedPeer(
+                deviceId = conn.peerDeviceId,
+                deviceName = conn.peerDeviceName.ifEmpty { "Node Peer (${conn.peerHostAddress})" },
+                platform = conn.peerPlatform.ifEmpty { "Unknown" },
+                hostAddress = conn.peerHostAddress,
+                port = conn.peerPort,
+                latencyMs = conn.lastPingLatencyMs
+            )
+        }
         _connectionState.value = if (count > 0) ConnectState.CONNECTED else if (server != null) ConnectState.DISCOVERING else ConnectState.OFF
+    }
+
+    suspend fun sendRemotePlayPause(targetDeviceId: String? = null) {
+        val conn = if (targetDeviceId != null) activeConnections.firstOrNull { it.peerDeviceId == targetDeviceId } else activeConnections.firstOrNull()
+        if (conn != null) {
+            controlService.sendRemoteCommand(conn, ControlAction.PLAY_PAUSE)
+        } else {
+            NodeLog.w("nodeconnect/hub", "sendRemotePlayPause failed: no active connection matching '$targetDeviceId' (active count: ${activeConnections.size})")
+        }
+    }
+
+    suspend fun sendRemotePlay(targetDeviceId: String? = null) {
+        val conn = if (targetDeviceId != null) activeConnections.firstOrNull { it.peerDeviceId == targetDeviceId } else activeConnections.firstOrNull()
+        if (conn != null) {
+            controlService.sendRemoteCommand(conn, ControlAction.PLAY)
+        } else {
+            NodeLog.w("nodeconnect/hub", "sendRemotePlay failed: no active connection matching '$targetDeviceId'")
+        }
+    }
+
+    suspend fun sendRemotePause(targetDeviceId: String? = null) {
+        val conn = if (targetDeviceId != null) activeConnections.firstOrNull { it.peerDeviceId == targetDeviceId } else activeConnections.firstOrNull()
+        if (conn != null) {
+            controlService.sendRemoteCommand(conn, ControlAction.PAUSE)
+        } else {
+            NodeLog.w("nodeconnect/hub", "sendRemotePause failed: no active connection matching '$targetDeviceId'")
+        }
+    }
+
+    suspend fun sendRemoteNext(targetDeviceId: String? = null) {
+        val conn = if (targetDeviceId != null) activeConnections.firstOrNull { it.peerDeviceId == targetDeviceId } else activeConnections.firstOrNull()
+        if (conn != null) {
+            controlService.sendRemoteCommand(conn, ControlAction.NEXT)
+        } else {
+            NodeLog.w("nodeconnect/hub", "sendRemoteNext failed: no active connection matching '$targetDeviceId'")
+        }
+    }
+
+    suspend fun sendRemotePrevious(targetDeviceId: String? = null) {
+        val conn = if (targetDeviceId != null) activeConnections.firstOrNull { it.peerDeviceId == targetDeviceId } else activeConnections.firstOrNull()
+        if (conn != null) {
+            controlService.sendRemoteCommand(conn, ControlAction.PREVIOUS)
+        } else {
+            NodeLog.w("nodeconnect/hub", "sendRemotePrevious failed: no active connection matching '$targetDeviceId'")
+        }
+    }
+
+    suspend fun sendRemoteSeek(positionMs: Long, targetDeviceId: String? = null) {
+        val conn = if (targetDeviceId != null) activeConnections.firstOrNull { it.peerDeviceId == targetDeviceId } else activeConnections.firstOrNull()
+        if (conn != null) {
+            controlService.sendRemoteCommand(conn, ControlAction.SEEK, seekPositionMs = positionMs)
+        }
+    }
+
+    suspend fun sendRemoteVolume(volume: Float, targetDeviceId: String? = null) {
+        val conn = if (targetDeviceId != null) activeConnections.firstOrNull { it.peerDeviceId == targetDeviceId } else activeConnections.firstOrNull()
+        if (conn != null) {
+            controlService.sendRemoteCommand(conn, ControlAction.SET_VOLUME, volume = volume)
+        }
+    }
+
+    fun disconnectDevice(deviceId: String) {
+        val conn = activeConnections.firstOrNull { it.peerDeviceId == deviceId }
+        conn?.close()
+        activeConnections.remove(conn)
+        updateConnectionStatus()
+    }
+
+    fun disconnectAll() {
+        for (conn in activeConnections) {
+            conn.close()
+        }
+        activeConnections.clear()
+        updateConnectionStatus()
     }
 }

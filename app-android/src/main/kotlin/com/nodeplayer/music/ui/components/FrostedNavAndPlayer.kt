@@ -377,16 +377,6 @@ fun LensDock(
                         .align(Alignment.CenterStart)
                         .width(bubbleWidthDp)
                         .height(50.dp)
-                        .glassLensBubble(
-                            shape = lensShape,
-                            enabled = shaderEnabled && !isPerformanceMode,
-                            magnification = 0.22f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
-                            refractionIndex = 0.65f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
-                            chromaticFringe = chromaticFringe,
-                            rimStrength = rimSpecular,
-                            rimColor = Color.White.copy(alpha = 0.90f * rimSpecular),
-                            grainStrength = grainStrength
-                        )
                         .glassSurface(
                             hazeState = hazeState,
                             shape = lensShape,
@@ -395,20 +385,19 @@ fun LensDock(
                         .background(
                             Brush.verticalGradient(
                                 listOf(
-                                    Color.White.copy(alpha = 0.15f * rimSpecular),
-                                    Color.White.copy(alpha = 0.02f),
-                                    Color.White.copy(alpha = 0.08f * rimSpecular)
+                                    Color.White.copy(alpha = 0.06f),
+                                    Color.Transparent,
+                                    Color.White.copy(alpha = 0.04f)
                                 )
                             ),
                             shape = lensShape
                         )
                         .border(
-                            width = 1.2.dp,
+                            width = 0.75.dp,
                             brush = Brush.verticalGradient(
                                 listOf(
-                                    Color.White.copy(alpha = 0.90f * rimSpecular),
-                                    Color(0xFFBAE6FD).copy(alpha = 0.35f * rimSpecular),
-                                    Color.White.copy(alpha = 0.50f * rimSpecular)
+                                    Color.White.copy(alpha = 0.14f),
+                                    Color.White.copy(alpha = 0.04f)
                                 )
                             ),
                             shape = lensShape

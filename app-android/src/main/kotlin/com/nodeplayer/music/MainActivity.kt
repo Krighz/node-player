@@ -183,6 +183,7 @@ class MainActivity : ComponentActivity() {
                 val hub = com.nodeplayer.music.service.PlaybackService.instance?.nodeConnectHub
                 val activeSession by (hub?.activePairingSession ?: kotlinx.coroutines.flow.MutableStateFlow(null)).collectAsState()
                 val discoveredPeers by (hub?.discoveredPeers ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
+                val connectedPeers by (hub?.connectedPeers ?: kotlinx.coroutines.flow.MutableStateFlow(emptyList())).collectAsState()
 
                 LaunchedEffect(hub) {
                     hub?.onAllowPrompt = { name, id, callback ->
@@ -602,13 +603,31 @@ class MainActivity : ComponentActivity() {
                         GlobalSearchSheet(
                             tracks = allTracks,
                             onTrackClick = { track ->
-                                viewModel.playTrack(track, allTracks)
+                                if (track.path.startsWith("nodeconnect://")) {
+                                    val conn = hub?.activeConnections?.firstOrNull()
+                                    if (conn != null) {
+                                        lifecycleScope.launch {
+                                            hub.controlService.sendRemoteCommand(conn, com.nodeplayer.network.protocol.ControlAction.PLAY)
+                                        }
+                                    }
+                                } else {
+                                    viewModel.playTrack(track, allTracks)
+                                }
                                 showSearchSheet = false
                             },
                             onDismiss = { showSearchSheet = false }
                         )
                     }
                     if (showPairingDialog) {
+                        val ncSettingsStore = remember {
+                            val prefs = getSharedPreferences("node_connect_settings", android.content.Context.MODE_PRIVATE)
+                            com.nodeplayer.network.service.NodeConnectSettingsStore(com.nodeplayer.music.data.AndroidKeyValueStore(prefs))
+                        }
+                        var ncConfig by remember { mutableStateOf(ncSettingsStore.config.value) }
+                        LaunchedEffect(ncConfig) {
+                            hub?.config = ncConfig
+                        }
+
                         val localIp = remember {
                             try {
                                 java.net.NetworkInterface.getNetworkInterfaces().asSequence()
@@ -628,6 +647,12 @@ class MainActivity : ComponentActivity() {
                             localPort = hub?.activePort ?: 54820,
                             localCandidateIps = hub?.getLocalCandidateIps() ?: listOf(localIp),
                             discoveredPeers = discoveredPeers,
+                            config = ncConfig,
+                            onConfigChange = { updated ->
+                                ncConfig = updated
+                                ncSettingsStore.saveConfig(updated)
+                                hub?.config = updated
+                            },
                             onStartSession = { hub?.startPairingSession() },
                             onCancelSession = { hub?.cancelPairingSession() },
                             onPairWithHost = { host, port, pin ->
@@ -639,7 +664,7 @@ class MainActivity : ComponentActivity() {
                                     if (res != null && res.isSuccess) {
                                         pairingStatusMsg = "Successfully paired with ${res.getOrNull()}!"
                                         delay(1200)
-                                        showPairingDialog = false
+                                        pairingStatusMsg = null
                                     } else {
                                         pairingStatusMsg = "Pairing failed: ${res?.exceptionOrNull()?.message ?: "Host unreachable"}"
                                     }
@@ -653,7 +678,7 @@ class MainActivity : ComponentActivity() {
                                     pairingProgress = false
                                     if (conn != null) {
                                         safeToast("Connected to ${peer.deviceName}!", Toast.LENGTH_SHORT)
-                                        showPairingDialog = false
+                                        pairingStatusMsg = null
                                     } else {
                                         pairingStatusMsg = "Connection failed to ${peer.deviceName}"
                                     }
@@ -677,7 +702,7 @@ class MainActivity : ComponentActivity() {
                                     pairingProgress = false
                                     if (conn != null) {
                                         safeToast("Connected to $host:$port!", Toast.LENGTH_SHORT)
-                                        showPairingDialog = false
+                                        pairingStatusMsg = null
                                     } else {
                                         pairingStatusMsg = "Failed to connect to $host:$port"
                                     }
@@ -706,7 +731,86 @@ class MainActivity : ComponentActivity() {
                                 safeToast("Log exported to ${out.name}", Toast.LENGTH_SHORT)
                             },
                             isPairingInProgress = pairingProgress,
-                            pairingStatusMessage = pairingStatusMsg
+                            onStartUsbLink = {
+                                lifecycleScope.launch {
+                                    pairingProgress = true
+                                    pairingStatusMsg = "Connecting over USB ADB link (127.0.0.1:54826)..."
+                                    val peer = com.nodeplayer.network.discovery.DiscoveredNodePeer(
+                                        deviceId = "usb_adb_pc",
+                                        deviceName = "PC via USB ADB",
+                                        platform = "Windows via USB",
+                                        hostAddress = "127.0.0.1",
+                                        port = 54826,
+                                        certificateFingerprintSha256 = "",
+                                        candidateAddresses = listOf("127.0.0.1"),
+                                        discoveryMethod = "USB Debugging"
+                                    )
+                                    val conn = hub?.connectToPeer(peer)
+                                    pairingProgress = false
+                                    if (conn != null) {
+                                        safeToast("Connected to PC over USB link!", Toast.LENGTH_SHORT)
+                                        pairingStatusMsg = null
+                                    } else {
+                                        pairingStatusMsg = "USB Link failed. Ensure 'adb reverse tcp:54826 tcp:54820' is active."
+                                    }
+                                }
+                            },
+                            pairingStatusMessage = pairingStatusMsg,
+                            connectedPeers = connectedPeers,
+                            onSendRemotePlayPause = { deviceId ->
+                                lifecycleScope.launch { hub?.sendRemotePlayPause(deviceId) }
+                            },
+                            onSendRemotePrevious = { deviceId ->
+                                lifecycleScope.launch { hub?.sendRemotePrevious(deviceId) }
+                            },
+                            onSendRemoteNext = { deviceId ->
+                                lifecycleScope.launch { hub?.sendRemoteNext(deviceId) }
+                            },
+                            onDisconnectPeer = { deviceId ->
+                                hub?.disconnectDevice(deviceId)
+                            },
+                            onTriggerAudioCast = { deviceId ->
+                                val conn = hub?.activeConnections?.firstOrNull { it.peerDeviceId == deviceId }
+                                val srv = com.nodeplayer.music.service.PlaybackService.instance
+                                val currentTrack = srv?.crossfadeManager?.currentPlayingTrack
+                                if (conn != null && srv != null) {
+                                    if (hub?.castService?.isCasting == true) {
+                                        srv.stopAudioCasting()
+                                        safeToast("Audio Cast stopped", Toast.LENGTH_SHORT)
+                                    } else if (currentTrack != null) {
+                                        try {
+                                            srv.startAudioCasting(conn, currentTrack)
+                                            safeToast("Audio Cast started to ${conn.peerDeviceName}!", Toast.LENGTH_SHORT)
+                                        } catch (e: Exception) {
+                                            safeToast("Audio Cast failed: ${e.message}", Toast.LENGTH_SHORT)
+                                        }
+                                    } else {
+                                        safeToast("No track currently playing to cast", Toast.LENGTH_SHORT)
+                                    }
+                                } else {
+                                    safeToast("Device not connected or playback service inactive", Toast.LENGTH_SHORT)
+                                }
+                            },
+                            onTriggerHandoff = { deviceId ->
+                                lifecycleScope.launch {
+                                    val conn = hub?.activeConnections?.firstOrNull { it.peerDeviceId == deviceId }
+                                    val srv = com.nodeplayer.music.service.PlaybackService.instance
+                                    val currentTrack = srv?.crossfadeManager?.currentPlayingTrack
+                                    if (conn != null && currentTrack != null) {
+                                        try {
+                                            val pos = srv.player.currentPosition
+                                            val isPlaying = srv.player.isPlaying
+                                            hub?.handoffService?.initiateHandoff(conn, currentTrack, pos, isPlaying)
+                                            srv.player.pause()
+                                            safeToast("Handoff transferred to ${conn.peerDeviceName}!", Toast.LENGTH_SHORT)
+                                        } catch (e: Exception) {
+                                            safeToast("Handoff failed: ${e.message}", Toast.LENGTH_SHORT)
+                                        }
+                                    } else {
+                                        safeToast("No active track to handoff", Toast.LENGTH_SHORT)
+                                    }
+                                }
+                            }
                         )
                     }
 
@@ -746,7 +850,7 @@ class MainActivity : ComponentActivity() {
                                         val conn = hub?.connectToPeer(peer)
                                         if (conn != null) {
                                             safeToast("Connected to $devName!", Toast.LENGTH_SHORT)
-                                            showPairingDialog = false
+                                            pairingStatusMsg = null
                                         } else {
                                             safeToast("Connection to $devName failed", Toast.LENGTH_LONG)
                                         }

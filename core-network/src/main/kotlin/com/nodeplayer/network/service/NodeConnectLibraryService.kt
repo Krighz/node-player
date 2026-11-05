@@ -115,7 +115,8 @@ class NodeConnectLibraryService(
         connection.sendPayload(
             messageType = NodeMessageTypes.ARTWORK_RESULT,
             payload = artBytes,
-            flags = 0
+            flags = 0,
+            sequenceId = reqId
         )
     }
 

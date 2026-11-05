@@ -90,6 +90,10 @@ fun SharedPlayerLayout(
     currentMusicFolder: String = "",
     onRescanLibrary: () -> Unit = {},
     onSelectMusicFolder: () -> Unit = {},
+    remoteTracks: List<Track> = emptyList(),
+    onSearchQueryChanged: ((String) -> Unit)? = null,
+    sleepTimerRemainingSec: Long? = null,
+    onSetSleepTimer: (Int?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var currentNav by remember { mutableStateOf(PlayerNavDestination.HOME) }
@@ -100,7 +104,23 @@ fun SharedPlayerLayout(
 
     val searchFocusRequester = remember { FocusRequester() }
 
-    val accent = Color(themeConfig.fixedAccentColorArgb)
+    val baseAccent = Color(themeConfig.fixedAccentColorArgb)
+    var dynamicArtAccent by remember { mutableStateOf<Color?>(null) }
+
+    LaunchedEffect(currentTrack?.id, currentTrack?.path) {
+        val t = currentTrack
+        if (t != null) {
+            dynamicArtAccent = PlatformArtworkProvider.extractVibrantColor(t)
+        } else {
+            dynamicArtAccent = null
+        }
+    }
+
+    val targetAccent = dynamicArtAccent ?: baseAccent
+    val accent by androidx.compose.animation.animateColorAsState(
+        targetValue = targetAccent,
+        animationSpec = androidx.compose.animation.core.tween(durationMillis = 650)
+    )
     val glassTokens = remember(themeConfig) {
         GlassTokensData(
             opacity = themeConfig.glassOpacity,
@@ -228,7 +248,8 @@ fun SharedPlayerLayout(
                             query = searchQuery,
                             onQueryChange = {
                                 searchQuery = it
-                                if (it.isNotBlank() && currentNav != PlayerNavDestination.HOME && currentNav != PlayerNavDestination.LIBRARY) {
+                                onSearchQueryChanged?.invoke(it)
+                                if (it.isNotBlank() && currentNav != PlayerNavDestination.LIBRARY) {
                                     currentNav = PlayerNavDestination.LIBRARY
                                 }
                             },
@@ -310,7 +331,11 @@ fun SharedPlayerLayout(
                                     onTrackClick = onPlayTrack,
                                     onRescanClick = onRescanLibrary,
                                     searchQuery = searchQuery,
-                                    onSearchChange = { searchQuery = it }
+                                    onSearchChange = {
+                                        searchQuery = it
+                                        onSearchQueryChanged?.invoke(it)
+                                    },
+                                    remoteTracks = remoteTracks
                                 )
                                 PlayerNavDestination.EQUALIZER -> EqualizerView(
                                     config = audioEffectConfig,
@@ -376,6 +401,8 @@ fun SharedPlayerLayout(
                         onOpenOutputDevicePicker = { currentNav = PlayerNavDestination.SETTINGS },
                         onCastClick = { /* open cast sheet */ },
                         onExpandNowPlaying = { showNowPlayingOverlay = true },
+                        sleepTimerRemainingSec = sleepTimerRemainingSec,
+                        onSetSleepTimer = onSetSleepTimer,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 12.dp)

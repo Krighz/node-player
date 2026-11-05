@@ -27,10 +27,12 @@ import java.util.concurrent.ConcurrentHashMap
 
 expect object PlatformArtworkProvider {
     suspend fun loadArtwork(track: Track): ImageBitmap?
+    suspend fun extractVibrantColor(track: Track): Color?
 }
 
 object ArtworkCache {
     private val memoryCache = ConcurrentHashMap<String, ImageBitmap>()
+    private val byteCache = ConcurrentHashMap<String, ByteArray>()
 
     fun get(key: String): ImageBitmap? = memoryCache[key]
     fun put(key: String, bitmap: ImageBitmap) {
@@ -38,6 +40,14 @@ object ArtworkCache {
             memoryCache.clear()
         }
         memoryCache[key] = bitmap
+    }
+
+    fun getBytes(key: String): ByteArray? = byteCache[key]
+    fun putBytes(key: String, bytes: ByteArray) {
+        if (byteCache.size > 200) {
+            byteCache.clear()
+        }
+        byteCache[key] = bytes
     }
 }
 

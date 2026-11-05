@@ -64,15 +64,11 @@ fun OpticalRailDock(
     val tabHeightDp = 84.dp
     val tabSpacingDp = 8.dp
 
-    // Draggable position state
-    var dragOffsetY by remember { mutableFloatStateOf(0f) }
-    var isDragging by remember { mutableStateOf(false) }
-
     // Target Y for active index
     val targetY = selectedIndex * (tabHeightDp.value + tabSpacingDp.value)
 
     val animatedY by animateFloatAsState(
-        targetValue = if (isDragging) dragOffsetY else targetY,
+        targetValue = targetY,
         animationSpec = spring(
             dampingRatio = 0.72f,
             stiffness = 380f
@@ -85,10 +81,10 @@ fun OpticalRailDock(
         modifier = modifier
             .width(96.dp)
             .clip(RoundedCornerShape(48.dp))
-            .background(Color(0xFF141722).copy(alpha = 0.82f))
+            .background(Color(0xFF0F172A).copy(alpha = 0.22f))
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.12f),
+                color = Color.White.copy(alpha = 0.18f),
                 shape = RoundedCornerShape(48.dp)
             )
             .padding(vertical = 12.dp, horizontal = 8.dp),
@@ -100,32 +96,32 @@ fun OpticalRailDock(
                 .offset { IntOffset(0, (animatedY * density).roundToInt()) }
                 .width(88.dp)
                 .height(tabHeightDp)
-                .scale(1.08f)
+                .scale(1.04f)
                 .shadow(
-                    elevation = 14.dp,
+                    elevation = 12.dp,
                     shape = RoundedCornerShape(32.dp),
-                    ambientColor = Color(0xFFF59E0B).copy(alpha = 0.35f),
-                    spotColor = Color.White.copy(alpha = 0.45f)
+                    ambientColor = accent.copy(alpha = 0.30f),
+                    spotColor = Color.White.copy(alpha = 0.40f)
                 )
                 .clip(RoundedCornerShape(32.dp))
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            Color(0xFFFDE68A).copy(alpha = 0.50f), // Golden pearl caustic core
-                            Color(0xFFD97706).copy(alpha = 0.35f), // Warm amber refraction
-                            Color(0xFF1E2333).copy(alpha = 0.85f)  // Obsidian base
+                            Color.White.copy(alpha = 0.28f),
+                            accent.copy(alpha = 0.35f),
+                            Color(0xFF0F172A).copy(alpha = 0.55f)
                         ),
                         center = Offset(70f, 60f),
                         radius = 160f
                     )
                 )
                 .border(
-                    width = 1.5.dp,
+                    width = 1.2.dp,
                     brush = Brush.linearGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.90f), // Specular rim top
-                            Color(0xFFBAE6FD).copy(alpha = 0.60f), // Chromatic fringe
-                            Color(0xFFF59E0B).copy(alpha = 0.30f)  // Warm underside
+                            Color.White.copy(alpha = 0.70f),
+                            Color(0xFFBAE6FD).copy(alpha = 0.40f),
+                            Color.White.copy(alpha = 0.25f)
                         )
                     ),
                     shape = RoundedCornerShape(32.dp)
@@ -133,8 +129,8 @@ fun OpticalRailDock(
                 .drawBehind {
                     // Inner specular highlight on top edge
                     drawCircle(
-                        color = Color.White.copy(alpha = 0.35f),
-                        radius = 24.dp.toPx(),
+                        color = Color.White.copy(alpha = 0.25f),
+                        radius = 20.dp.toPx(),
                         center = Offset(size.width * 0.35f, size.height * 0.25f)
                     )
                 }
@@ -142,25 +138,7 @@ fun OpticalRailDock(
 
         // Tab Items Column
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .pointerInput(Unit) {
-                    detectDragGestures(
-                        onDragStart = { isDragging = true },
-                        onDragEnd = {
-                            isDragging = false
-                            val totalStep = tabHeightDp.toPx() + tabSpacingDp.toPx()
-                            val snappedIndex = (dragOffsetY / totalStep).roundToInt().coerceIn(0, tabs.size - 1)
-                            onNavSelect(tabs[snappedIndex].destination)
-                        },
-                        onDragCancel = { isDragging = false },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            val maxOffset = (tabs.size - 1) * (tabHeightDp.toPx() + tabSpacingDp.toPx())
-                            dragOffsetY = (dragOffsetY + dragAmount.y).coerceIn(0f, maxOffset)
-                        }
-                    )
-                },
+            modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(tabSpacingDp)
         ) {
             tabs.forEachIndexed { index, tab ->

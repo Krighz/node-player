@@ -121,7 +121,11 @@ class WasapiAudioOutput : AudioOutput {
         val writeCount = if (hardwareSampleRate == currentSampleRate) count else pcmToWrite.size
 
         val bytes = convertFloatToBytes16(pcmToWrite, writeOffset, writeCount)
-        val written = line.write(bytes, 0, bytes.size)
+        val written = try {
+            line.write(bytes, 0, bytes.size)
+        } catch (_: Exception) {
+            0
+        }
         val samplesWritten = written / 2
         framesWritten += (samplesWritten / currentChannels)
         return count

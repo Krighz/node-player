@@ -363,10 +363,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun initMediaController() {
-        PlaybackService.onServiceCreated = { _ ->
+        val bindTimer: (com.nodeplayer.music.service.PlaybackService) -> Unit = { srv ->
+            val timer = srv.sleepTimer
+            if (timer != null) {
+                viewModelScope.launch(Dispatchers.Main) {
+                    timer.remainingSeconds.collect { rem ->
+                        _sleepTimerRemainingSeconds.value = rem
+                    }
+                }
+            }
+        }
+
+        PlaybackService.instance?.let { bindTimer(it) }
+
+        PlaybackService.onServiceCreated = { srv ->
             viewModelScope.launch(Dispatchers.Main) {
                 setupPlayerListener()
                 processPendingPlayRequest()
+                bindTimer(srv)
             }
         }
 
@@ -772,6 +786,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun setSleepTimer(minutes: Int?) {
         sleepTimerJob?.cancel()
+        val srv = com.nodeplayer.music.service.PlaybackService.instance
+        val timer = srv?.sleepTimer
+        if (timer != null) {
+            if (minutes == null || minutes <= 0) {
+                timer.cancel()
+                _sleepTimerRemainingSeconds.value = null
+            } else {
+                timer.startTimer(minutes, finishTrack = false)
+                _sleepTimerRemainingSeconds.value = minutes * 60L
+                viewModelScope.launch(Dispatchers.Main) {
+                    timer.remainingSeconds.collect { rem ->
+                        _sleepTimerRemainingSeconds.value = rem
+                    }
+                }
+            }
+            return
+        }
         if (minutes == null || minutes <= 0) {
             _sleepTimerRemainingSeconds.value = null
             return
