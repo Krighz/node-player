@@ -53,6 +53,7 @@
           <li><a href="#features">Features</a></li>
           <li><a href="#equalizer">Equalizer</a></li>
           <li><a href="#dsp">DSP Chain</a></li>
+          <li><a href="#node-connect">Node Connect</a></li>
           <li><a href="#downloads">Downloads</a></li>
           <li><a href="#privacy">Privacy</a></li>
           <li><a href="#faq">FAQ</a></li>
@@ -67,7 +68,7 @@
           GitHub
         </a>
         <a href="#downloads" class="btn btn-primary btn-sm">
-          Get v1.5.0
+          Get v1.6.0-Alpha
         </a>
       </div>
     </div>
@@ -79,43 +80,49 @@
       <div class="hero-content">
         <div class="hero-pill">
           <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-          <span>v1.5.0 Universal Release: Windows Desktop & Android</span>
+          <span style="background: linear-gradient(90deg, rgba(56,189,248,0.2), rgba(168,85,247,0.2)); color: #38bdf8; font-weight: 700; border: 1px solid rgba(56,189,248,0.4); padding: 4px 12px; border-radius: 9999px;">✨ New v1.6.0-Alpha: Node Connect Peer-to-Peer Ecosystem</span>
         </div>
         <h1 class="hero-title">Liquid Glass.<br>Pure Audio. Everywhere.</h1>
         <p class="hero-desc">
           Precision local music player engineered with Compose Multiplatform. One unified liquid glass aesthetic across Windows 10/11 and Android, powered by a 64-bit float DSP pipeline, 10-band biquad EQ, bit-perfect WASAPI output, and zero estimation metadata scanning.
         </p>
 
-        <!-- Dual Platform Download Actions -->
+        <!-- Dual Platform Download Actions with Alpha / Stable Tiers -->
         <div class="hero-actions">
-          <div class="hero-btn-group" style="display: flex; flex-wrap: wrap; gap: 14px;">
-            <!-- Windows Button -->
-            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0.msi" class="btn btn-primary" id="downloadWindowsBtn">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.749-1.5L24 0v11.551H10.749V1.949zM0 12.549h9.75v9.451L0 20.651v-8.102zm10.749 0H24V24l-13.251-1.95v-9.501z"/>
-              </svg>
-              Download for Windows (.msi)
-            </a>
-            <!-- Android Button -->
-            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk" class="btn btn-glass" id="downloadApkBtn">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.411 13.8533 8.084 12 8.084s-3.5902.327-5.1368.8657L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/>
-              </svg>
-              Download Android APK
-            </a>
+          <div style="background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 18px; padding: 18px 22px; margin-bottom: 18px; backdrop-filter: blur(16px);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <span style="display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: #38bdf8; font-size: 14px;">
+                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 10px #38bdf8;"></span>
+                Latest Experimental: v1.6.0-Alpha (Node Connect)
+              </span>
+              <span style="font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #7dd3fc; padding: 2px 8px; border-radius: 6px; font-weight: 600;">Active Dev Preview</span>
+            </div>
+            <div class="hero-btn-group" style="display: flex; flex-wrap: wrap; gap: 12px;">
+              <!-- Windows Button 1.6.0-Alpha -->
+              <a href="https://github.com/Krighz/node-player/releases/download/v1.6.0-Alpha/NodePlayer-1.6.0.exe" class="btn btn-primary" id="downloadWindowsAlphaBtn">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.749-1.5L24 0v11.551H10.749V1.949zM0 12.549h9.75v9.451L0 20.651v-8.102zm10.749 0H24V24l-13.251-1.95v-9.501z"/>
+                </svg>
+                Windows 1.6.0-Alpha (.exe)
+              </a>
+              <!-- Android Button 1.6.0-Alpha -->
+              <a href="https://github.com/Krighz/node-player/releases/download/v1.6.0-Alpha/NodePlayer-v1.6.0-Alpha.apk" class="btn btn-glass" id="downloadApkAlphaBtn" style="border-color: rgba(56, 189, 248, 0.4);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="#38bdf8">
+                  <path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.411 13.8533 8.084 12 8.084s-3.5902.327-5.1368.8657L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/>
+                </svg>
+                Android 1.6.0-Alpha (.apk)
+              </a>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 10px; margin-bottom: 0;">
+              ⚡ Includes Node Connect local lossless casting, remote search & click-to-play, and seamless handoff.
+            </p>
           </div>
 
-          <!-- Quick Checksum Details -->
-          <div class="hash-badge" style="margin-top: 14px;">
-            <span>SHA-256 (MSI):</span>
-            <code>c2b528988eac69ebe2bb6d00059d74e0...</code>
-            <button class="copy-btn" id="copyHashBtn" data-hash="c2b528988eac69ebe2bb6d00059d74e0e97c42d1c6b93e390bc92bc6c2f4d452" aria-label="Copy full SHA-256 checksum">
-              Copy Full
-            </button>
+          <!-- Stable release fallback link -->
+          <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <span style="font-size: 13px; color: var(--text-muted);">Looking for proven stability?</span>
+            <a href="#downloads" style="font-size: 13px; color: #a78bfa; text-decoration: underline; font-weight: 600;">Download v1.5.0 Stable Release ↓</a>
           </div>
-          <p style="font-size: 12px; color: var(--text-muted); margin-top: 10px; line-height: 1.4;">
-            📦 Available as <strong>Windows Installer (.msi)</strong>, <strong>Portable Zip (.zip)</strong>, <strong>Standalone EXE</strong>, and <strong>Signed Android APK</strong>.
-          </p>
         </div>
 
         <div class="hero-specs">
@@ -452,67 +459,108 @@
       </div>
     </section>
 
-    <!-- Downloads Section -->
-    <section id="downloads" class="container">
+    <!-- Downloads Section: Experimental & Stable -->
+    <section id="downloads" class="container" style="padding-top: 60px;">
       <div class="section-header">
-        <span class="section-pill">Universal Release</span>
-        <h2 class="section-title">Download Node Player v1.5.0</h2>
-        <p class="section-desc">Free and open source under GPL-3.0. Choose your platform below.</p>
+        <span class="section-pill">Release Channels</span>
+        <h2 class="section-title">Get Node Player</h2>
+        <p class="section-desc">Download the cutting-edge experimental build or choose the proven stable release.</p>
       </div>
 
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; max-width: 900px; margin: 0 auto;">
-        <!-- Windows Card -->
-        <div class="glass-panel" style="padding: 28px; border-radius: 20px; text-align: left; border: 1px solid var(--border-cyan);">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="var(--accent-blue)"><path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.749-1.5L24 0v11.551H10.749V1.949zM0 12.549h9.75v9.451L0 20.651v-8.102zm10.749 0H24V24l-13.251-1.95v-9.501z"/></svg>
-              <h3 style="font-size: 20px; font-weight: 700; color: #ffffff;">Windows 10 / 11</h3>
+      <!-- Channel Tabs / Dual Grid -->
+      <div style="display: flex; flex-direction: column; gap: 40px; max-width: 1000px; margin: 0 auto;">
+
+        <!-- EXPERIMENTAL v1.6.0-Alpha SECTION -->
+        <div style="background: rgba(15, 23, 42, 0.7); border: 2px solid rgba(56, 189, 248, 0.4); border-radius: 24px; padding: 32px; backdrop-filter: blur(20px); position: relative; box-shadow: 0 10px 40px rgba(56, 189, 248, 0.1);">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 24px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 24px;">🧪</span>
+                <h3 style="font-size: 24px; font-weight: 800; color: #ffffff; margin: 0;">v1.6.0-Alpha (Experimental)</h3>
+              </div>
+              <p style="color: #94a3b8; font-size: 14px; margin: 4px 0 0 0;">Latest cutting-edge build featuring Node Connect multi-device audio streaming and remote library search.</p>
             </div>
-            <span style="font-size: 12px; background: rgba(56, 189, 248, 0.2); color: var(--accent-blue); padding: 4px 10px; border-radius: 9999px; font-weight: 600;">v1.5.0</span>
+            <span style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); padding: 6px 14px; border-radius: 9999px; font-size: 13px; font-weight: 700;">Active Preview</span>
           </div>
-          <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
-            Native Compose Multiplatform desktop player with 16:9 layout, mouse wheel scrubbing, keyboard hotkeys, and bit-perfect WASAPI direct output.
-          </p>
-          <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
-            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0.msi" class="btn btn-primary" style="justify-content: center; text-align: center;">
-              Download MSI Installer (106 MB)
-            </a>
-            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0-windows-x64.zip" class="btn btn-glass" style="justify-content: center; text-align: center; font-size: 13px;">
-              Download Portable Zip (110 MB)
-            </a>
-          </div>
-          <div style="font-size: 11px; color: var(--text-dim); font-family: monospace; word-break: break-all; margin-bottom: 6px;">
-            SHA-256 (MSI): c2b528988eac69ebe2bb6d00059d74e0e97c42d1c6b93e390bc92bc6c2f4d452
-          </div>
-          <div style="font-size: 11px; color: var(--text-dim); line-height: 1.4;">
-            <em>Note: Windows packages are currently Authenticode-unsigned (SmartScreen prompt on first run). APKs are signed with release key (v2 scheme). Always trust SHA-256 checksums.</em>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+            <!-- Windows Alpha -->
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 20px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08);">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#38bdf8"><path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.749-1.5L24 0v11.551H10.749V1.949zM0 12.549h9.75v9.451L0 20.651v-8.102zm10.749 0H24V24l-13.251-1.95v-9.501z"/></svg>
+                <strong style="color: #ffffff; font-size: 16px;">Windows 10 / 11</strong>
+              </div>
+              <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">Self-contained desktop application with live cast sender and receiver.</p>
+              <a href="https://github.com/Krighz/node-player/releases/download/v1.6.0-Alpha/NodePlayer-1.6.0.exe" class="btn btn-primary" style="width: 100%; justify-content: center; text-align: center;">
+                Download Executable (.exe)
+              </a>
+            </div>
+
+            <!-- Android Alpha -->
+            <div style="background: rgba(30, 41, 59, 0.6); padding: 20px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.08);">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#3ddc84"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.411 13.8533 8.084 12 8.084s-3.5902.327-5.1368.8657L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>
+                <strong style="color: #ffffff; font-size: 16px;">Android 8.0 – 14+</strong>
+              </div>
+              <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">Mobile build with Node Connect hub, pairing scanner, and silent casting.</p>
+              <a href="https://github.com/Krighz/node-player/releases/download/v1.6.0-Alpha/NodePlayer-v1.6.0-Alpha.apk" class="btn btn-glass" style="width: 100%; justify-content: center; text-align: center; border-color: rgba(61, 220, 132, 0.4); color: #3ddc84;">
+                Download Alpha APK (.apk)
+              </a>
+            </div>
           </div>
         </div>
 
-        <!-- Android Card -->
-        <div class="glass-panel" style="padding: 28px; border-radius: 20px; text-align: left;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="#3DDC84"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.411 13.8533 8.084 12 8.084s-3.5902.327-5.1368.8657L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>
-              <h3 style="font-size: 20px; font-weight: 700; color: #ffffff;">Android 8.0 – 14+</h3>
+        <!-- STABLE v1.5.0 SECTION -->
+        <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; padding: 32px; backdrop-filter: blur(16px);">
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 24px;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 24px;">🛡️</span>
+                <h3 style="font-size: 22px; font-weight: 700; color: #ffffff; margin: 0;">v1.5.0 (Stable Release)</h3>
+              </div>
+              <p style="color: var(--text-muted); font-size: 14px; margin: 4px 0 0 0;">Rock-solid production build with zero estimation metadata scanning, bit-perfect WASAPI, and 120fps liquid UI.</p>
             </div>
-            <span style="font-size: 12px; background: rgba(61, 220, 132, 0.2); color: #3DDC84; padding: 4px 10px; border-radius: 9999px; font-weight: 600;">v1.5.0</span>
+            <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 12px; border-radius: 9999px; font-size: 12px; font-weight: 600;">Recommended for General Use</span>
           </div>
-          <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px; line-height: 1.5;">
-            Fluid 120fps liquid glass player with 4 home-screen widgets, translucent scrub sheet, system-wide audio effects, and Last.fm scrobbler.
-          </p>
-          <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
-            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk" class="btn btn-primary" style="justify-content: center; text-align: center; background: linear-gradient(135deg, #10B981, #059669);">
-              Download Official APK (4.74 MB)
-            </a>
-            <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-staging.apk" class="btn btn-glass" style="justify-content: center; text-align: center; font-size: 13px;">
-              Download Staging Test APK (.staging)
-            </a>
-          </div>
-          <div style="font-size: 11px; color: var(--text-dim); font-family: monospace; word-break: break-all;">
-            SHA-256: b5ee393b7f6db7c646160391ecdc6734f836acd663a6d667f7caf6d15dfd31c1
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+            <!-- Windows Stable -->
+            <div style="background: rgba(30, 41, 59, 0.3); padding: 20px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.05);">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#94a3b8"><path d="M0 3.449L9.75 2.1v9.451H0V3.449zm10.749-1.5L24 0v11.551H10.749V1.949zM0 12.549h9.75v9.451L0 20.651v-8.102zm10.749 0H24V24l-13.251-1.95v-9.501z"/></svg>
+                <strong style="color: #e2e8f0; font-size: 15px;">Windows 1.5.0 Stable</strong>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0.msi" class="btn btn-glass" style="justify-content: center; font-size: 13px;">
+                  MSI Installer (106 MB)
+                </a>
+                <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0-windows-x64.zip" class="btn btn-glass" style="justify-content: center; font-size: 12px; color: var(--text-muted);">
+                  Portable Zip (110 MB)
+                </a>
+              </div>
+              <div style="font-size: 10px; color: var(--text-dim); margin-top: 10px; font-family: monospace;">
+                SHA-256: c2b528988eac69ebe2bb6d00059d74e0e97c42d1...
+              </div>
+            </div>
+
+            <!-- Android Stable -->
+            <div style="background: rgba(30, 41, 59, 0.3); padding: 20px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.05);">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#94a3b8"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.411 13.8533 8.084 12 8.084s-3.5902.327-5.1368.8657L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>
+                <strong style="color: #e2e8f0; font-size: 15px;">Android 1.5.0 Stable</strong>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk" class="btn btn-glass" style="justify-content: center; font-size: 13px; color: #3ddc84; border-color: rgba(61, 220, 132, 0.3);">
+                  Signed Release APK (4.74 MB)
+                </a>
+              </div>
+              <div style="font-size: 10px; color: var(--text-dim); margin-top: 10px; font-family: monospace;">
+                SHA-256: b5ee393b7f6db7c646160391ecdc6734f836acd6...
+              </div>
+            </div>
           </div>
         </div>
+
       </div>
     </section>
 
@@ -630,15 +678,18 @@
             <li><a href="#features">Features</a></li>
             <li><a href="#equalizer">Equalizer</a></li>
             <li><a href="#dsp">DSP Signal Path</a></li>
-            <li><a href="#downloads">Downloads</a></li>
+            <li><a href="#node-connect">Node Connect</a></li>
+          <li><a href="#downloads">Downloads</a></li>
             <li><a href="#privacy">Privacy</a></li>
             <li><a href="#support">Support</a></li>
           </ul>
         </div>
 
         <div class="footer-links-col">
-          <h4>Downloads (v1.5.0)</h4>
+          <h4>Downloads</h4>
           <ul>
+            <li><a href="https://github.com/Krighz/node-player/releases/download/v1.6.0-Alpha/NodePlayer-1.6.0.exe" style="color: #38bdf8;">v1.6.0-Alpha Windows (.exe)</a></li>
+            <li><a href="https://github.com/Krighz/node-player/releases/download/v1.6.0-Alpha/NodePlayer-v1.6.0-Alpha.apk" style="color: #38bdf8;">v1.6.0-Alpha Android (.apk)</a></li>
             <li><a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0.msi">Windows MSI Installer</a></li>
             <li><a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0-windows-x64.zip">Windows Portable Zip</a></li>
             <li><a href="https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk">Android Release APK</a></li>
