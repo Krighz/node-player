@@ -36,6 +36,7 @@ data class NodeConnectConfig(
     val chatClipboardEnabled: Boolean = false,
     val filePushEnabled: Boolean = false,
     val pluginSyncEnabled: Boolean = false,
+    val muteLocalOutputDuringCast: Boolean = false,
 
     // Tuning
     val port: Int = 54820,
@@ -83,6 +84,7 @@ class NodeConnectSettingsStore(private val store: KeyValueStore) {
             chatClipboardEnabled = store.getBoolean(KEY_CHAT_CLIPBOARD_ENABLED, false),
             filePushEnabled = store.getBoolean(KEY_FILE_PUSH_ENABLED, false),
             pluginSyncEnabled = store.getBoolean(KEY_PLUGIN_SYNC_ENABLED, false),
+            muteLocalOutputDuringCast = store.getBoolean(KEY_MUTE_LOCAL_OUTPUT_DURING_CAST, false),
             port = store.getInt(KEY_PORT, 54820),
             jitterBufferTargetMs = store.getInt(KEY_JITTER_BUFFER_TARGET_MS, 100),
             keepaliveIntervalSec = store.getInt(KEY_KEEPALIVE_INTERVAL_SEC, 5),
@@ -122,6 +124,7 @@ class NodeConnectSettingsStore(private val store: KeyValueStore) {
         store.putBoolean(KEY_CHAT_CLIPBOARD_ENABLED, c.chatClipboardEnabled)
         store.putBoolean(KEY_FILE_PUSH_ENABLED, c.filePushEnabled)
         store.putBoolean(KEY_PLUGIN_SYNC_ENABLED, c.pluginSyncEnabled)
+        store.putBoolean(KEY_MUTE_LOCAL_OUTPUT_DURING_CAST, c.muteLocalOutputDuringCast)
         store.putInt(KEY_PORT, c.port)
         store.putInt(KEY_JITTER_BUFFER_TARGET_MS, c.jitterBufferTargetMs)
         store.putInt(KEY_KEEPALIVE_INTERVAL_SEC, c.keepaliveIntervalSec)
@@ -154,6 +157,7 @@ class NodeConnectSettingsStore(private val store: KeyValueStore) {
         const val KEY_CHAT_CLIPBOARD_ENABLED = "nc_chat_clipboard_enabled"
         const val KEY_FILE_PUSH_ENABLED = "nc_file_push_enabled"
         const val KEY_PLUGIN_SYNC_ENABLED = "nc_plugin_sync_enabled"
+        const val KEY_MUTE_LOCAL_OUTPUT_DURING_CAST = "nc_mute_local_output_during_cast"
         const val KEY_PORT = "nc_port"
         const val KEY_JITTER_BUFFER_TARGET_MS = "nc_jitter_buffer_target_ms"
         const val KEY_KEEPALIVE_INTERVAL_SEC = "nc_keepalive_interval_sec"

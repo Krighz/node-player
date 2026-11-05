@@ -183,7 +183,7 @@ fun GlobalSearchSheet(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
-                    items(filteredTracks, key = { it.id }) { track ->
+                    items(filteredTracks, key = { "${it.path}_${it.id}" }) { track ->
                         GlassCard(
                             modifier = Modifier
                                 .fillMaxWidth()

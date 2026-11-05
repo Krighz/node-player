@@ -30,6 +30,7 @@ actual object PlatformArtworkProvider {
         if (!file.exists() || !file.canRead()) return null
 
         val bytes = extractDesktopArtworkBytes(file) ?: return null
+        ArtworkCache.putBytes(track.path, bytes)
         return try {
             val skiaImage = Image.makeFromEncoded(bytes)
             skiaImage.toComposeImageBitmap()
@@ -69,7 +70,7 @@ actual object PlatformArtworkProvider {
         }
     }
 
-    private fun extractDesktopArtworkBytes(file: File): ByteArray? {
+    fun extractDesktopArtworkBytes(file: File): ByteArray? {
         // 1. Check parent folder for cover images
         val parent = file.parentFile
         if (parent != null && parent.exists()) {

@@ -24,6 +24,7 @@ class WindowsPlaybackEngine(
 
     var preDspPcmTap: ((ByteArray, Long) -> Unit)? = null
     var onSeekFlushCallback: ((Long) -> Unit)? = null
+    var onTrackStartedCallback: ((Track) -> Unit)? = null
 
     private val _queue = MutableStateFlow<List<Track>>(emptyList())
     val queue: StateFlow<List<Track>> = _queue.asStateFlow()
@@ -94,6 +95,7 @@ class WindowsPlaybackEngine(
 
     fun playTrack(track: Track) {
         playbackJob?.cancel()
+        onTrackStartedCallback?.invoke(track)
         pendingSeekMs.set(-1L)
         _currentTrack.value = track
         _durationMs.value = track.durationMs

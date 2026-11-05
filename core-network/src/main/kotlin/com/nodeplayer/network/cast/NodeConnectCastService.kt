@@ -5,6 +5,9 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.network.pairing.DeviceRegistry
 import com.nodeplayer.network.protocol.*
 import com.nodeplayer.network.transport.NodeConnection
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,13 +36,17 @@ data class ActiveCastSession(
 class NodeConnectCastService(
     private val registry: DeviceRegistry? = null,
     private val onStreamStartedLocally: ((ActiveCastSession, JitterBuffer) -> Unit)? = null,
-    private val onStreamStoppedLocally: (() -> Unit)? = null
+    var onStreamStoppedLocally: (() -> Unit)? = null
 ) {
     private var senderConnection: NodeConnection? = null
     private var activeStreamId: String? = null
     private val sequenceCounter = AtomicLong(1L)
     private val sentChunkCount = AtomicLong(0L)
     private val receivedChunkCount = AtomicLong(0L)
+
+    private val senderScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var senderStreamingJob: Job? = null
+    private val audioChunkChannel = Channel<ByteArray>(capacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     private val _currentSession = MutableStateFlow<ActiveCastSession?>(null)
     val currentSession: StateFlow<ActiveCastSession?> = _currentSession.asStateFlow()
@@ -69,6 +76,27 @@ class NodeConnectCastService(
         activeStreamId = streamId
         senderConnection = targetConnection
 
+        // Drain any stale chunks from previous stream
+        while (audioChunkChannel.tryReceive().isSuccess) {}
+
+        senderStreamingJob?.cancel()
+        senderStreamingJob = senderScope.launch {
+            for (chunk in audioChunkChannel) {
+                val conn = senderConnection ?: break
+                if (!conn.isOpen) break
+                try {
+                    conn.sendPayload(
+                        messageType = NodeMessageTypes.CAST_PCM_CHUNK,
+                        payload = chunk,
+                        sequenceId = sequenceCounter.get()
+                    )
+                } catch (e: Exception) {
+                    NodeLog.w("nodeconnect/cast", "Streaming PCM write failed: ${e.message}")
+                    break
+                }
+            }
+        }
+
         val startMsg = CastStartMessage(
             streamId = streamId,
             sequenceId = seqId,
@@ -83,8 +111,8 @@ class NodeConnectCastService(
             artworkBase64 = artworkBase64
         )
 
-        targetConnection.sendPayload(NodeMessageTypes.CAST_START, startMsg.toBytes(), NodeFraming.FLAG_PRIORITY)
-        NodeLog.i("nodeconnect/cast", "Starting audio cast sender stream '${startMsg.trackTitle}' to ${targetConnection.peerDeviceId} (${targetConnection.peerHostAddress})")
+        targetConnection.sendPayload(NodeMessageTypes.CAST_START, startMsg.toBytes(), NodeFraming.FLAG_PRIORITY, sequenceId = seqId)
+        NodeLog.i("nodeconnect/cast", "Starting audio cast sender stream '${startMsg.trackTitle}' to ${targetConnection.peerDeviceId} (${targetConnection.peerHostAddress}) seq=$seqId")
 
         _currentSession.value = ActiveCastSession(
             streamId = streamId,
@@ -105,20 +133,18 @@ class NodeConnectCastService(
 
     /**
      * Streams an uncompressed raw PCM audio chunk to the receiver.
+     * Non-blocking and thread-safe: callable directly from real-time audio threads.
      */
-    suspend fun sendPcmAudioChunk(pcmBytes: ByteArray, ptsMs: Long) {
+    fun sendPcmAudioChunk(pcmBytes: ByteArray, ptsMs: Long = 0L) {
         val conn = senderConnection ?: return
         if (!conn.isOpen) return
 
         val count = sentChunkCount.incrementAndGet()
-        if (count % 50 == 1L) {
+        if (count % 100 == 1L) {
             NodeLog.d("nodeconnect/cast", "Streaming PCM audio chunk #$count (${pcmBytes.size} bytes) pts=${ptsMs}ms")
         }
 
-        conn.sendPayload(
-            messageType = NodeMessageTypes.CAST_PCM_CHUNK,
-            payload = pcmBytes
-        )
+        audioChunkChannel.trySend(pcmBytes.clone())
     }
 
     /**
@@ -129,8 +155,11 @@ class NodeConnectCastService(
         val streamId = activeStreamId ?: return
         val newSeq = sequenceCounter.incrementAndGet()
 
+        // Drain pending pre-seek audio packets
+        while (audioChunkChannel.tryReceive().isSuccess) {}
+
         val flushMsg = CastFlushMessage(streamId, newSeq)
-        conn.sendPayload(NodeMessageTypes.CAST_FLUSH, flushMsg.toBytes(), NodeFraming.FLAG_PRIORITY)
+        conn.sendPayload(NodeMessageTypes.CAST_FLUSH, flushMsg.toBytes(), NodeFraming.FLAG_PRIORITY, sequenceId = newSeq)
     }
 
     /**
@@ -139,6 +168,11 @@ class NodeConnectCastService(
     suspend fun stopCastAsSender() {
         val conn = senderConnection
         val streamId = activeStreamId
+
+        senderStreamingJob?.cancel()
+        senderStreamingJob = null
+        while (audioChunkChannel.tryReceive().isSuccess) {}
+
         if (conn != null && streamId != null && conn.isOpen) {
             val stopMsg = """{"streamId":"${SimpleJson.escape(streamId)}"}""".toByteArray(Charsets.UTF_8)
             try {
@@ -182,14 +216,14 @@ class NodeConnectCastService(
 
     private fun handleCastStart(payload: ByteArray, connection: NodeConnection) {
         val startMsg = CastStartMessage.fromBytes(payload)
-        NodeLog.i("nodeconnect/cast", "Received audio cast start: '${startMsg.trackTitle}' by '${startMsg.artist}' (${startMsg.sampleRate}Hz, ${startMsg.channels}ch) from ${connection.peerDeviceId}")
+        NodeLog.i("nodeconnect/cast", "Received audio cast start: '${startMsg.trackTitle}' by '${startMsg.artist}' (${startMsg.sampleRate}Hz, ${startMsg.channels}ch, seq=${startMsg.sequenceId}) from ${connection.peerDeviceId}")
         val jitter = JitterBuffer(
             sampleRate = startMsg.sampleRate,
             bitDepth = startMsg.bitDepth,
             channels = startMsg.channels,
-            targetBufferMs = 700,
-            minBufferMs = 450,
-            maxBufferMs = 2500
+            targetBufferMs = 400,
+            minBufferMs = 180,
+            maxBufferMs = 2000
         )
         jitter.flush(startMsg.sequenceId)
         activeReceiverJitterBuffer = jitter
@@ -214,8 +248,8 @@ class NodeConnectCastService(
     private fun handleCastPcmChunk(frame: NodeFraming.Frame) {
         val jitter = activeReceiverJitterBuffer ?: return
         val count = receivedChunkCount.incrementAndGet()
-        if (count % 50 == 1L) {
-            NodeLog.d("nodeconnect/cast", "Received PCM cast chunk #$count (${frame.payload.size} bytes)")
+        if (count % 100 == 1L) {
+            NodeLog.d("nodeconnect/cast", "Received PCM cast chunk #$count (${frame.payload.size} bytes) seq=${frame.sequenceId}")
         }
         jitter.push(
             sequenceId = frame.sequenceId,

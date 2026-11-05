@@ -147,16 +147,18 @@ data class HandshakeMessage(
 
 // 2. Control Messages
 enum class ControlAction {
-    PLAY, PAUSE, PLAY_PAUSE, NEXT, PREVIOUS, SEEK, SET_VOLUME, TOGGLE_SHUFFLE, CYCLE_REPEAT
+    PLAY, PAUSE, PLAY_PAUSE, NEXT, PREVIOUS, SEEK, SET_VOLUME, TOGGLE_SHUFFLE, CYCLE_REPEAT, PLAY_TRACK
 }
 
 data class ControlCommandMessage(
     val action: ControlAction,
     val seekPositionMs: Long = 0L,
-    val volume: Float = 1.0f
+    val volume: Float = 1.0f,
+    val trackId: Long = 0L,
+    val trackTitle: String = ""
 ) {
     fun toBytes(): ByteArray {
-        val json = """{"action":"${action.name}","seekPositionMs":$seekPositionMs,"volume":$volume}"""
+        val json = """{"action":"${action.name}","seekPositionMs":$seekPositionMs,"volume":$volume,"trackId":$trackId,"trackTitle":"${SimpleJson.escape(trackTitle)}"}"""
         return json.toByteArray(StandardCharsets.UTF_8)
     }
 
@@ -171,7 +173,9 @@ data class ControlCommandMessage(
             return ControlCommandMessage(
                 action = action,
                 seekPositionMs = map["seekPositionMs"]?.toLongOrNull() ?: 0L,
-                volume = map["volume"]?.toFloatOrNull() ?: 1.0f
+                volume = map["volume"]?.toFloatOrNull() ?: 1.0f,
+                trackId = map["trackId"]?.toLongOrNull() ?: 0L,
+                trackTitle = map["trackTitle"] ?: ""
             )
         }
     }

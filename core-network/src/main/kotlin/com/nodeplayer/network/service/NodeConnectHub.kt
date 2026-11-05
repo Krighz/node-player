@@ -268,6 +268,11 @@ class NodeConnectHub(
      * Keeps the first socket that connects and completes the Hello handshake.
      */
     suspend fun connectToPeer(peer: DiscoveredNodePeer): NodeConnection? = withContext(Dispatchers.IO) {
+        val existing = activeConnections.firstOrNull { (it.peerDeviceId == peer.deviceId || it.peerHostAddress == peer.hostAddress) && it.isOpen }
+        if (existing != null) {
+            NodeLog.i("nodeconnect/connect", "Already connected to '${peer.deviceName}' (${peer.deviceId}), reusing active connection")
+            return@withContext existing
+        }
         val id = identity ?: return@withContext null
         val candidates = (peer.candidateAddresses + peer.hostAddress).distinct().filter { it.isNotBlank() }
         NodeLog.i("nodeconnect/connect", "Parallel connecting to peer '${peer.deviceName}' across candidates: $candidates (port: ${peer.port})")
@@ -456,7 +461,15 @@ class NodeConnectHub(
     private fun registerAndProcessConnection(conn: NodeConnection) {
         scope.launch {
             try {
-                // Register active connection
+                // Deduplicate: close and remove existing connection to same peer
+                val duplicates = activeConnections.filter { 
+                    (it.peerDeviceId == conn.peerDeviceId || (it.peerHostAddress == conn.peerHostAddress && it.peerPort == conn.peerPort)) && it != conn 
+                }
+                for (old in duplicates) {
+                    NodeLog.i("nodeconnect/hub", "Closing duplicate connection to ${old.peerDeviceId} (${old.peerHostAddress}:${old.peerPort})")
+                    activeConnections.remove(old)
+                    try { old.close() } catch (_: Exception) {}
+                }
                 activeConnections.add(conn)
                 controlService.registerController(conn)
                 conn.onLatencyUpdated = {
@@ -659,7 +672,7 @@ class NodeConnectHub(
     private fun updateConnectionStatus() {
         val count = activeConnections.size
         _connectedDeviceCount.value = count
-        _connectedPeers.value = activeConnections.map { conn ->
+        _connectedPeers.value = activeConnections.distinctBy { it.peerDeviceId }.map { conn ->
             ConnectedPeer(
                 deviceId = conn.peerDeviceId,
                 deviceName = conn.peerDeviceName.ifEmpty { "Node Peer (${conn.peerHostAddress})" },

@@ -390,6 +390,91 @@ fun NodeConnectPairingDialog(
                                                     Text("Handoff", fontSize = 10.sp, color = Color.White)
                                                 }
                                             }
+
+                                            Spacer(modifier = Modifier.height(10.dp))
+                                            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+                                            Spacer(modifier = Modifier.height(8.dp))
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = "ENABLED FEATURES FOR THIS LINK",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White.copy(alpha = 0.5f),
+                                                    letterSpacing = 0.8.sp
+                                                )
+                                                Text(
+                                                    text = "More Settings →",
+                                                    fontSize = 10.sp,
+                                                    color = accent,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    modifier = Modifier.clickable { selectedTab = 3 }
+                                                )
+                                            }
+
+                                            Spacer(modifier = Modifier.height(6.dp))
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                QuickFeatureChip(
+                                                    label = "Audio Cast",
+                                                    icon = Icons.Rounded.Cast,
+                                                    enabled = config.audioCastEnabled,
+                                                    onClick = { onConfigChange?.invoke(config.copy(audioCastEnabled = !config.audioCastEnabled)) },
+                                                    accent = accent,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                QuickFeatureChip(
+                                                    label = "Remote Control",
+                                                    icon = Icons.Rounded.PlayCircle,
+                                                    enabled = config.remoteControlEnabled,
+                                                    onClick = { onConfigChange?.invoke(config.copy(remoteControlEnabled = !config.remoteControlEnabled)) },
+                                                    accent = accent,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                QuickFeatureChip(
+                                                    label = "Library Share",
+                                                    icon = Icons.Rounded.LibraryMusic,
+                                                    enabled = config.shareLibraryEnabled,
+                                                    onClick = { onConfigChange?.invoke(config.copy(shareLibraryEnabled = !config.shareLibraryEnabled)) },
+                                                    accent = accent,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                QuickFeatureChip(
+                                                    label = "Handoff",
+                                                    icon = Icons.Rounded.SwapHoriz,
+                                                    enabled = config.handoffEnabled,
+                                                    onClick = { onConfigChange?.invoke(config.copy(handoffEnabled = !config.handoffEnabled)) },
+                                                    accent = accent,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.height(6.dp))
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                QuickFeatureChip(
+                                                    label = "Mute Local Audio",
+                                                    icon = Icons.Rounded.VolumeOff,
+                                                    enabled = config.muteLocalOutputDuringCast,
+                                                    onClick = { onConfigChange?.invoke(config.copy(muteLocalOutputDuringCast = !config.muteLocalOutputDuringCast)) },
+                                                    accent = accent,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -397,8 +482,14 @@ fun NodeConnectPairingDialog(
                                 Spacer(modifier = Modifier.height(14.dp))
                             }
 
+                            val unconnectedDiscovered = remember(discoveredPeers, connectedPeers) {
+                                discoveredPeers.filter { disc ->
+                                    connectedPeers.none { conn -> conn.deviceId == disc.deviceId || conn.hostAddress == disc.hostAddress }
+                                }
+                            }
+
                             Text(
-                                text = "DISCOVERED PEERS (${discoveredPeers.size})",
+                                text = "DISCOVERED PEERS (${unconnectedDiscovered.size})",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White.copy(alpha = 0.45f),
@@ -407,7 +498,7 @@ fun NodeConnectPairingDialog(
 
                             Spacer(modifier = Modifier.height(6.dp))
 
-                            if (discoveredPeers.isEmpty()) {
+                            if (unconnectedDiscovered.isEmpty()) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -430,7 +521,7 @@ fun NodeConnectPairingDialog(
                                 }
                             } else {
                                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    discoveredPeers.forEach { peer ->
+                                    unconnectedDiscovered.forEach { peer ->
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -986,6 +1077,14 @@ fun NodeConnectPairingDialog(
                             )
 
                             ConfigSwitchRow(
+                                title = "Mute Local Device While Casting",
+                                subtitle = "Silence local speakers and output audio only on receiving device",
+                                checked = config.muteLocalOutputDuringCast,
+                                onCheckedChange = { onConfigChange?.invoke(config.copy(muteLocalOutputDuringCast = it)) },
+                                accent = accent
+                            )
+
+                            ConfigSwitchRow(
                                 title = "Library Sharing",
                                 subtitle = "Allow peers to search and browse songs (zero path exposure)",
                                 checked = config.shareLibraryEnabled,
@@ -1140,5 +1239,43 @@ private fun ConfigSwitchRow(
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(checkedThumbColor = accent)
         )
+    }
+}
+
+@Composable
+private fun QuickFeatureChip(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    accent: Color,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        modifier = modifier.height(30.dp).clip(RoundedCornerShape(8.dp)),
+        color = if (enabled) accent.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.05f),
+        border = BorderStroke(1.dp, if (enabled) accent.copy(alpha = 0.45f) else Color.White.copy(alpha = 0.1f)),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                icon,
+                contentDescription = null,
+                tint = if (enabled) accent else Color.White.copy(alpha = 0.4f),
+                modifier = Modifier.size(13.dp)
+            )
+            Spacer(modifier = Modifier.width(5.dp))
+            Text(
+                text = label,
+                fontSize = 10.sp,
+                fontWeight = if (enabled) FontWeight.Bold else FontWeight.Normal,
+                color = if (enabled) Color.White else Color.White.copy(alpha = 0.5f)
+            )
+        }
     }
 }

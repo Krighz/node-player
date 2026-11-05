@@ -27,6 +27,7 @@ import com.nodeplayer.network.discovery.DiscoveredNodePeer
 import com.nodeplayer.network.protocol.ControlStateEventMessage
 import com.nodeplayer.network.service.LocalPlayerController
 import com.nodeplayer.network.service.NodeConnectHub
+import kotlinx.coroutines.withContext
 import android.net.wifi.WifiManager
 import com.nodeplayer.common.logging.NodeLog
 import android.os.Build
@@ -153,12 +154,35 @@ class PlaybackService : MediaSessionService() {
             incomingAudioTrack?.release()
         } catch (_: Exception) {}
 
+        val castTrack = com.nodeplayer.model.Track(
+            id = -session.sequenceId.coerceAtLeast(1L),
+            title = session.trackTitle,
+            artist = session.artist,
+            album = session.album,
+            durationMs = session.durationMs,
+            path = "nodeconnect://cast/${session.streamId}",
+            sampleRate = session.sampleRate,
+            bitDepth = session.bitDepth,
+            channels = session.channels,
+            formatDescription = "Cast PCM (${session.sampleRate / 1000}kHz)",
+            isLossless = true
+        )
+
         if (session.artworkBase64.isNotBlank()) {
             try {
                 val artBytes = android.util.Base64.decode(session.artworkBase64, android.util.Base64.DEFAULT)
                 com.nodeplayer.ui.components.ArtworkCache.putBytes("nodeconnect://cast/${session.streamId}", artBytes)
+                com.nodeplayer.ui.components.ArtworkCache.putBytes(castTrack.path, artBytes)
                 com.nodeplayer.ui.components.ArtworkCache.putBytes(session.trackTitle + session.artist, artBytes)
             } catch (_: Exception) {}
+        }
+
+        serviceScope.launch(Dispatchers.Main) {
+            if (::crossfadeManager.isInitialized && crossfadeManager.activePlayer.isPlaying) {
+                crossfadeManager.activePlayer.pause()
+            }
+            isCurrentlyPlaying = true
+            onTrackTransitionCallback?.invoke(castTrack)
         }
 
         incomingCastJob = serviceScope.launch(Dispatchers.IO) {
@@ -190,6 +214,11 @@ class PlaybackService : MediaSessionService() {
             incomingAudioTrack = track
             track.play()
 
+            // Pre-buffer before initial playback to avoid DAC pop/crackling
+            while (isActive && !jitter.isReadyForPlayback) {
+                delay(15)
+            }
+
             val buf = ByteArray(4096)
             try {
                 while (isActive) {
@@ -197,7 +226,9 @@ class PlaybackService : MediaSessionService() {
                     if (read > 0) {
                         track.write(buf, 0, read)
                     } else {
-                        delay(5)
+                        while (isActive && !jitter.isReadyForPlayback) {
+                            delay(15)
+                        }
                     }
                 }
             } catch (_: Exception) {
@@ -281,13 +312,14 @@ class PlaybackService : MediaSessionService() {
             nodeConnectHub.castService.startCastAsSender(connection, track, initialPos, artBase64)
 
             crossfadeManager.dspAudioProcessorA.preDspPcmTap = { bytes, _, _, _ ->
-                serviceScope.launch(Dispatchers.IO) {
-                    nodeConnectHub.castService.sendPcmAudioChunk(bytes, 0L)
-                }
+                nodeConnectHub.castService.sendPcmAudioChunk(bytes, 0L)
             }
             crossfadeManager.dspAudioProcessorB.preDspPcmTap = { bytes, _, _, _ ->
-                serviceScope.launch(Dispatchers.IO) {
-                    nodeConnectHub.castService.sendPcmAudioChunk(bytes, 0L)
+                nodeConnectHub.castService.sendPcmAudioChunk(bytes, 0L)
+            }
+            if (nodeConnectHub.config.muteLocalOutputDuringCast) {
+                serviceScope.launch(Dispatchers.Main) {
+                    crossfadeManager.activePlayer.volume = 0.0f
                 }
             }
         }
@@ -298,6 +330,9 @@ class PlaybackService : MediaSessionService() {
             nodeConnectHub.castService.stopCastAsSender()
             crossfadeManager.dspAudioProcessorA.preDspPcmTap = null
             crossfadeManager.dspAudioProcessorB.preDspPcmTap = null
+            serviceScope.launch(Dispatchers.Main) {
+                crossfadeManager.activePlayer.volume = 1.0f
+            }
         }
     }
 
@@ -501,6 +536,32 @@ class PlaybackService : MediaSessionService() {
                 sleepTimerManager.onTrackChanged()
                 scrobbledTrackIds.remove(track.id)
                 statsTracker.onTrackStarted(track.id)
+                if (::nodeConnectHub.isInitialized && nodeConnectHub.castService.isCasting) {
+                    val conn = nodeConnectHub.activeConnections.firstOrNull()
+                    if (conn != null) {
+                        serviceScope.launch(Dispatchers.IO) {
+                            val artBase64 = getTrackThumbnailBase64(track)
+                            nodeConnectHub.castService.flushSenderStream(0L)
+                            nodeConnectHub.castService.startCastAsSender(conn, track, 0L, artBase64)
+                        }
+                    }
+                }
+                if (::nodeConnectHub.isInitialized) {
+                    serviceScope.launch(Dispatchers.IO) {
+                        nodeConnectHub.controlService.broadcastLocalState(
+                            ControlStateEventMessage(
+                                isPlaying = isCurrentlyPlaying,
+                                positionMs = crossfadeManager.activePlayer.currentPosition,
+                                durationMs = track.durationMs,
+                                volume = crossfadeManager.activePlayer.volume,
+                                trackTitle = track.title,
+                                artist = track.artist,
+                                album = track.album,
+                                artworkBase64 = getTrackThumbnailBase64(track)
+                            )
+                        )
+                    }
+                }
                 serviceScope.launch(Dispatchers.IO) {
                     val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
                     val sk = prefs.getString("lastfm_session_key", "") ?: ""
@@ -676,6 +737,25 @@ class PlaybackService : MediaSessionService() {
                 serviceScope.launch(Dispatchers.Main) {
                     val nextMode = (crossfadeManager.activePlayer.repeatMode + 1) % 3
                     crossfadeManager.activePlayer.repeatMode = nextMode
+                }
+            }
+            override fun playTrack(trackId: Long, trackTitle: String) {
+                serviceScope.launch(Dispatchers.Main) {
+                    val db = (application as? com.nodeplayer.music.NodePlayerApplication)?.database
+                    val allTracks = withContext(Dispatchers.IO) {
+                        db?.playerDao()?.getAllTracksList()?.map { it.toTrack() } ?: emptyList()
+                    }
+                    val target = allTracks.firstOrNull { it.id == trackId }
+                        ?: allTracks.firstOrNull { it.title.equals(trackTitle, ignoreCase = true) }
+                        ?: allTracks.firstOrNull { it.title.contains(trackTitle, ignoreCase = true) }
+                    if (target != null) {
+                        val idx = allTracks.indexOf(target)
+                        crossfadeManager.playQueue(allTracks, idx, 0L)
+                        val conn = nodeConnectHub.activeConnections.firstOrNull()
+                        if (conn != null && nodeConnectHub.config.audioCastEnabled) {
+                            startAudioCasting(conn, target)
+                        }
+                    }
                 }
             }
         }

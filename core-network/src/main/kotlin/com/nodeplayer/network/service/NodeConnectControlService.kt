@@ -20,6 +20,7 @@ interface LocalPlayerController {
     fun setVolume(volume: Float)
     fun toggleShuffle()
     fun cycleRepeat()
+    fun playTrack(trackId: Long, trackTitle: String = "") {}
 }
 
 /**
@@ -86,6 +87,7 @@ class NodeConnectControlService(
             ControlAction.SET_VOLUME -> ctrl.setVolume(cmd.volume)
             ControlAction.TOGGLE_SHUFFLE -> ctrl.toggleShuffle()
             ControlAction.CYCLE_REPEAT -> ctrl.cycleRepeat()
+            ControlAction.PLAY_TRACK -> ctrl.playTrack(cmd.trackId, cmd.trackTitle)
         }
     }
 
@@ -112,9 +114,11 @@ class NodeConnectControlService(
         connection: NodeConnection,
         action: ControlAction,
         seekPositionMs: Long = 0L,
-        volume: Float = 1.0f
+        volume: Float = 1.0f,
+        trackId: Long = 0L,
+        trackTitle: String = ""
     ) {
-        val cmd = ControlCommandMessage(action, seekPositionMs, volume)
+        val cmd = ControlCommandMessage(action, seekPositionMs, volume, trackId, trackTitle)
         NodeLog.i("nodeconnect/control", "Sending remote control command: ${cmd.action} to ${connection.peerDeviceId} (${connection.peerHostAddress})")
         connection.sendPayload(NodeMessageTypes.CONTROL_CMD, cmd.toBytes())
     }

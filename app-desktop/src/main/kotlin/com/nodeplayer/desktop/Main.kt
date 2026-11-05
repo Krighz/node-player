@@ -17,6 +17,7 @@ import com.nodeplayer.desktop.data.DesktopTrackRepositoryAdapter
 import com.nodeplayer.desktop.data.WindowsFileScanner
 import com.nodeplayer.model.*
 import com.nodeplayer.network.protocol.ControlAction
+
 import com.nodeplayer.network.protocol.ControlStateEventMessage
 import com.nodeplayer.network.service.ConnectState
 import com.nodeplayer.network.service.LocalPlayerController
@@ -39,17 +40,18 @@ fun main() = application {
 
     fun getDesktopTrackThumbnailBase64(track: Track): String {
         try {
+            val cachedBytes = com.nodeplayer.ui.components.ArtworkCache.getBytes(track.path)
+                ?: com.nodeplayer.ui.components.ArtworkCache.getBytes(track.id.toString())
+                ?: com.nodeplayer.ui.components.ArtworkCache.getBytes(track.title + track.artist)
+            if (cachedBytes != null && cachedBytes.isNotEmpty()) {
+                return java.util.Base64.getEncoder().encodeToString(cachedBytes)
+            }
             val file = File(track.path)
             if (file.exists() && file.canRead()) {
-                val parent = file.parentFile
-                if (parent != null && parent.exists()) {
-                    val commonNames = listOf("cover.jpg", "cover.png", "folder.jpg", "folder.png", "front.jpg", "front.png", "albumart.jpg", "album.jpg")
-                    for (name in commonNames) {
-                        val candidate = File(parent, name)
-                        if (candidate.exists() && candidate.length() in 100..2_000_000) {
-                            return java.util.Base64.getEncoder().encodeToString(candidate.readBytes())
-                        }
-                    }
+                val bytes = com.nodeplayer.ui.components.PlatformArtworkProvider.extractDesktopArtworkBytes(file)
+                if (bytes != null && bytes.isNotEmpty()) {
+                    com.nodeplayer.ui.components.ArtworkCache.putBytes(track.path, bytes)
+                    return java.util.Base64.getEncoder().encodeToString(bytes)
                 }
             }
         } catch (_: Exception) {}
@@ -76,20 +78,6 @@ fun main() = application {
     val engine = remember { WindowsPlaybackEngine() }
 
     val trackRepo = remember { DesktopTrackRepositoryAdapter(database) }
-    val localController = remember {
-        object : LocalPlayerController {
-            override fun play() { if (!engine.isPlaying.value) engine.playPause() }
-            override fun pause() { if (engine.isPlaying.value) engine.playPause() }
-            override fun playPause() { engine.playPause() }
-            override fun seekTo(positionMs: Long) { engine.seekTo(positionMs) }
-            override fun skipToNext() { engine.next() }
-            override fun skipToPrevious() { engine.previous() }
-            override fun setVolume(volume: Float) { engine.setVolume(volume) }
-            override fun toggleShuffle() { engine.toggleShuffle() }
-            override fun cycleRepeat() { engine.cycleRepeatMode() }
-        }
-    }
-
     var trackList by remember { mutableStateOf<List<Track>>(emptyList()) }
     var albums by remember { mutableStateOf<List<Album>>(emptyList()) }
     var artists by remember { mutableStateOf<List<Artist>>(emptyList()) }
@@ -103,8 +91,39 @@ fun main() = application {
     var ncConfig by remember { mutableStateOf(ncSettingsStore.config.value) }
     var remoteTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
 
+    lateinit var hubRef: NodeConnectHub
+    val localController = remember {
+        object : LocalPlayerController {
+            override fun play() { if (!engine.isPlaying.value) engine.playPause() }
+            override fun pause() { if (engine.isPlaying.value) engine.playPause() }
+            override fun playPause() { engine.playPause() }
+            override fun seekTo(positionMs: Long) { engine.seekTo(positionMs) }
+            override fun skipToNext() { engine.next() }
+            override fun skipToPrevious() { engine.previous() }
+            override fun setVolume(volume: Float) { engine.setVolume(volume) }
+            override fun toggleShuffle() { engine.toggleShuffle() }
+            override fun cycleRepeat() { engine.cycleRepeatMode() }
+            override fun playTrack(trackId: Long, trackTitle: String) {
+                val allTracks: List<Track> = if (trackList.isNotEmpty()) trackList else database.getAllTracks()
+                val target = allTracks.firstOrNull { it.id == trackId }
+                    ?: allTracks.firstOrNull { it.title.equals(trackTitle, ignoreCase = true) }
+                    ?: allTracks.firstOrNull { it.title.contains(trackTitle, ignoreCase = true) }
+                if (target != null) {
+                    engine.playTrack(target)
+                    val conn = hubRef.activeConnections.firstOrNull()
+                    if (conn != null && hubRef.config.audioCastEnabled) {
+                        coroutineScope.launch {
+                            val art = getDesktopTrackThumbnailBase64(target)
+                            hubRef.castService.startCastAsSender(conn, target, artworkBase64 = art)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     val hub = remember {
-        NodeConnectHub(
+        val h = NodeConnectHub(
             trackRepository = trackRepo,
             localController = localController,
             onIncomingCastStream = { session, jitter ->
@@ -142,18 +161,45 @@ fun main() = application {
                 true
             }
         )
+        hubRef = h
+        h
     }
 
     LaunchedEffect(hub, ncConfig) {
         hub.config = ncConfig
         engine.preDspPcmTap = { pcmBytes, ptsMs ->
-            coroutineScope.launch {
-                hub.castService.sendPcmAudioChunk(pcmBytes, ptsMs)
-            }
+            hub.castService.sendPcmAudioChunk(pcmBytes, ptsMs)
         }
         engine.onSeekFlushCallback = { ptsMs ->
             coroutineScope.launch {
                 hub.castService.flushSenderStream(ptsMs)
+            }
+        }
+        engine.onTrackStartedCallback = { track ->
+            if (hub.castService.isCasting) {
+                val conn = hub.activeConnections.firstOrNull()
+                if (conn != null) {
+                    coroutineScope.launch {
+                        val art = getDesktopTrackThumbnailBase64(track)
+                        hub.castService.flushSenderStream(0L)
+                        hub.castService.startCastAsSender(conn, track, 0L, art)
+                    }
+                }
+            }
+            coroutineScope.launch {
+                val art = getDesktopTrackThumbnailBase64(track)
+                hub.controlService.broadcastLocalState(
+                    com.nodeplayer.network.protocol.ControlStateEventMessage(
+                        isPlaying = true,
+                        positionMs = engine.currentPositionMs.value,
+                        durationMs = track.durationMs,
+                        volume = engine.volume.value,
+                        trackTitle = track.title,
+                        artist = track.artist,
+                        album = track.album,
+                        artworkBase64 = art
+                    )
+                )
             }
         }
     }
@@ -358,7 +404,12 @@ fun main() = application {
                         coroutineScope.launch {
                             val conn = hub.activeConnections.firstOrNull()
                             if (conn != null) {
-                                hub.controlService.sendRemoteCommand(conn, ControlAction.PLAY)
+                                hub.controlService.sendRemoteCommand(
+                                    connection = conn,
+                                    action = ControlAction.PLAY_TRACK,
+                                    trackId = track.id,
+                                    trackTitle = track.title
+                                )
                             }
                         }
                     } else {
@@ -618,6 +669,9 @@ fun main() = application {
                                 try {
                                     val art = getDesktopTrackThumbnailBase64(currentTrack)
                                     hub.castService.startCastAsSender(conn, currentTrack, artworkBase64 = art)
+                                    if (hub.config.muteLocalOutputDuringCast) {
+                                        engine.audioOutput.setVolume(0.0f)
+                                    }
                                 } catch (e: Exception) {
                                     // error handled
                                 }

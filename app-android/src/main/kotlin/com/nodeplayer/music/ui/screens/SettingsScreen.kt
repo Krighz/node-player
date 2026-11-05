@@ -3064,6 +3064,132 @@ fun SettingsScreen(
                             Text("Pair New Device (PIN / QR)", fontWeight = FontWeight.Bold, color = Color.Black)
                         }
 
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "NODE CONNECT FEATURE SWITCHES",
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White.copy(alpha = 0.5f),
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val ncSettingsStore = remember {
+                            val prefs = context.getSharedPreferences("node_connect_settings", android.content.Context.MODE_PRIVATE)
+                            com.nodeplayer.network.service.NodeConnectSettingsStore(com.nodeplayer.music.data.AndroidKeyValueStore(prefs))
+                        }
+                        var ncConfig by remember { mutableStateOf(ncSettingsStore.config.value) }
+
+                        // 1. Audio Cast
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Audio Cast (Direct Streaming)", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
+                                Text("Stream uncompressed live PCM audio directly to connected nodes", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
+                            }
+                            Switch(
+                                checked = ncConfig.audioCastEnabled,
+                                onCheckedChange = { isChecked ->
+                                    val updated = ncConfig.copy(audioCastEnabled = isChecked)
+                                    ncConfig = updated
+                                    ncSettingsStore.saveConfig(updated)
+                                    hub?.config = updated
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                            )
+                        }
+
+                        // Mute Local Device While Casting
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Mute Local Device While Casting", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
+                                Text("Silence local phone speakers and output sound only on receiving PC", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
+                            }
+                            Switch(
+                                checked = ncConfig.muteLocalOutputDuringCast,
+                                onCheckedChange = { isChecked ->
+                                    val updated = ncConfig.copy(muteLocalOutputDuringCast = isChecked)
+                                    ncConfig = updated
+                                    ncSettingsStore.saveConfig(updated)
+                                    hub?.config = updated
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                            )
+                        }
+
+                        // 2. Remote Control
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Remote Control", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
+                                Text("Allow play, pause, and skip commands across connected devices", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
+                            }
+                            Switch(
+                                checked = ncConfig.remoteControlEnabled,
+                                onCheckedChange = { isChecked ->
+                                    val updated = ncConfig.copy(remoteControlEnabled = isChecked)
+                                    ncConfig = updated
+                                    ncSettingsStore.saveConfig(updated)
+                                    hub?.config = updated
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                            )
+                        }
+
+                        // 3. Library Sharing
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Library Sharing & Search", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
+                                Text("Permit cross-device song searching (zero file path exposure)", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
+                            }
+                            Switch(
+                                checked = ncConfig.shareLibraryEnabled,
+                                onCheckedChange = { isChecked ->
+                                    val updated = ncConfig.copy(shareLibraryEnabled = isChecked)
+                                    ncConfig = updated
+                                    ncSettingsStore.saveConfig(updated)
+                                    hub?.config = updated
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                            )
+                        }
+
+                        // 4. Playback Handoff
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text("Playback Handoff", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
+                                Text("Seamlessly shift playback queue and position between devices", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
+                            }
+                            Switch(
+                                checked = ncConfig.handoffEnabled,
+                                onCheckedChange = { isChecked ->
+                                    val updated = ncConfig.copy(handoffEnabled = isChecked)
+                                    ncConfig = updated
+                                    ncSettingsStore.saveConfig(updated)
+                                    hub?.config = updated
+                                },
+                                colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                            )
+                        }
+
                         if (pairedList.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(

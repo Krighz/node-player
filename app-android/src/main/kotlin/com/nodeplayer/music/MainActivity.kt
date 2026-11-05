@@ -607,7 +607,13 @@ class MainActivity : ComponentActivity() {
                                     val conn = hub?.activeConnections?.firstOrNull()
                                     if (conn != null) {
                                         lifecycleScope.launch {
-                                            hub.controlService.sendRemoteCommand(conn, com.nodeplayer.network.protocol.ControlAction.PLAY)
+                                            hub.controlService.sendRemoteCommand(
+                                                connection = conn,
+                                                action = com.nodeplayer.network.protocol.ControlAction.PLAY_TRACK,
+                                                trackId = track.id,
+                                                trackTitle = track.title
+                                            )
+                                            safeToast("Playing '${track.title}' from ${conn.peerDeviceName}...", android.widget.Toast.LENGTH_SHORT)
                                         }
                                     }
                                 } else {

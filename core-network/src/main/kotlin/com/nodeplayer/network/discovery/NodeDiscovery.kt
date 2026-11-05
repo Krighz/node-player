@@ -123,6 +123,8 @@ class NodeDiscovery(
                             val existing = discoveredPeers[peer.deviceId]
                             val mergedCandidates = (existing?.candidateAddresses.orEmpty() + peer.candidateAddresses).distinct()
                             val updated = peer.copy(candidateAddresses = mergedCandidates)
+                            discoveredPeers.remove("peer_$senderIp")
+                            discoveredPeers.remove("gw_$senderIp")
                             discoveredPeers[peer.deviceId] = updated
                             NodeLog.i(
                                 "nodeconnect/discovery",
@@ -288,7 +290,17 @@ class NodeDiscovery(
 
     fun getActivePeers(): List<DiscoveredNodePeer> {
         val now = System.currentTimeMillis()
-        return discoveredPeers.values.filter { now - it.lastSeenTimestamp < 30_000L }
+        val recent = discoveredPeers.values.filter { now - it.lastSeenTimestamp < 15_000L }
+        return recent
+            .groupBy { it.hostAddress }
+            .map { (_, peers) ->
+                peers.maxWithOrNull(
+                    compareBy<DiscoveredNodePeer> { !it.deviceId.startsWith("peer_") && !it.deviceId.startsWith("gw_") }
+                        .thenBy { it.lastSeenTimestamp }
+                )!!
+            }
+            .distinctBy { it.deviceId }
+            .sortedBy { it.deviceName }
     }
 
     private fun buildAnnouncement(): ByteArray {
