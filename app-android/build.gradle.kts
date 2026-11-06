@@ -159,8 +159,8 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // Haze Blur for Glassmorphism
-    implementation("dev.chrisbanes.haze:haze:0.7.1")
-    implementation("dev.chrisbanes.haze:haze-materials:0.7.1")
+    implementation("dev.chrisbanes.haze:haze:1.7.3")
+    implementation("dev.chrisbanes.haze:haze-materials:1.7.3")
 
     // Media3 (ExoPlayer + MediaSession)
     val media3Version = "1.3.1"
