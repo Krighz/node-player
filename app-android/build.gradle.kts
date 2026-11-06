@@ -170,7 +170,7 @@ dependencies {
     implementation("androidx.media3:media3-ui:$media3Version")
 
     // Palette & Coil
-    implementation("androidx.palette:palette-ktx:1.0.0")
+    implementation("androidx.palette:palette-ktx:1.1.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
 
     // Room
