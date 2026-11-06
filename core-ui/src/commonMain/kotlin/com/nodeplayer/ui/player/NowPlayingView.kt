@@ -25,8 +25,16 @@ import androidx.compose.ui.unit.sp
 import com.nodeplayer.library.LrcParser
 import com.nodeplayer.model.Lyrics
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.component.backdrop.backdrops.emptyBackdrop
+import com.nodeplayer.ui.component.backdrop.drawBackdrop
+import com.nodeplayer.ui.component.backdrop.effects.blur
+import com.nodeplayer.ui.component.backdrop.effects.lens
+import com.nodeplayer.ui.component.backdrop.highlight.Highlight
+import com.nodeplayer.ui.component.backdrop.shadow.Shadow
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
+import com.nodeplayer.ui.components.LiquidGlassIconButton
+import com.nodeplayer.ui.components.LiquidGlassSlider
 import com.nodeplayer.ui.components.SoundWaveVisualizer
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.onScrubberWheel
@@ -250,17 +258,13 @@ fun NowPlayingView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Scrubber Slider
+        // Scrubber Slider — Liquid Glass
         Column {
-            Slider(
+            LiquidGlassSlider(
                 value = displayFraction.coerceIn(0f, 1f),
                 onValueChange = { frac ->
                     isDragging = true
                     dragFraction = frac
-                },
-                onValueChangeFinished = {
-                    onSeek((dragFraction * durationMs).toLong())
-                    isDragging = false
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -268,12 +272,7 @@ fun NowPlayingView(
                         val stepMs = 5000L
                         val newPos = if (deltaY < 0f) positionMs + stepMs else positionMs - stepMs
                         onSeek(newPos.coerceIn(0L, durationMs))
-                    },
-                colors = SliderDefaults.colors(
-                    thumbColor = accent,
-                    activeTrackColor = accent,
-                    inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-                )
+                    }
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -287,22 +286,41 @@ fun NowPlayingView(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Center Playback Control Buttons
+        // Center Playback Control Buttons — Liquid Glass
+        val density = androidx.compose.ui.platform.LocalDensity.current
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onPrevious) {
-                Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(38.dp))
-            }
+            LiquidGlassIconButton(
+                icon = Icons.Rounded.SkipPrevious,
+                onClick = onPrevious,
+                contentDescription = "Previous",
+                size = 56.dp
+            )
 
-            IconButton(
-                onClick = onPlayPause,
+            // Hero Play/Pause — large liquid glass lens bubble
+            Box(
                 modifier = Modifier
-                    .size(64.dp)
+                    .size(72.dp)
                     .clip(CircleShape)
-                    .background(accent)
+                    .drawBackdrop(
+                        shape = { CircleShape },
+                        effects = {
+                            lens(
+                                refractionHeight = with(density) { 20f.dp.toPx() },
+                                refractionAmount = with(density) { 18f.dp.toPx() },
+                                chromaticAberration = true
+                            )
+                            blur(with(density) { 14f.dp.toPx() })
+                        },
+                        highlight = { Highlight(width = 1.2.dp, alpha = 0.9f) },
+                        shadow = { Shadow(color = Color.Black.copy(alpha = 0.35f)) }
+                    )
+                    .background(accent.copy(alpha = 0.85f), CircleShape)
+                    .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onPlayPause),
+                contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
@@ -312,9 +330,12 @@ fun NowPlayingView(
                 )
             }
 
-            IconButton(onClick = onNext) {
-                Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(38.dp))
-            }
+            LiquidGlassIconButton(
+                icon = Icons.Rounded.SkipNext,
+                onClick = onNext,
+                contentDescription = "Next",
+                size = 56.dp
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))

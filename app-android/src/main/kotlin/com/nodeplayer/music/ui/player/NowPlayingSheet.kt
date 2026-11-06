@@ -44,6 +44,13 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.components.glassLensBubble
+import com.nodeplayer.ui.components.LiquidGlassIconButton
+import com.nodeplayer.ui.components.LiquidGlassSlider
+import com.nodeplayer.ui.component.backdrop.drawBackdrop
+import com.nodeplayer.ui.component.backdrop.effects.blur
+import com.nodeplayer.ui.component.backdrop.effects.lens
+import com.nodeplayer.ui.component.backdrop.highlight.Highlight
+import com.nodeplayer.ui.component.backdrop.shadow.Shadow
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
 import com.nodeplayer.music.ui.components.SoundWaveVisualizer
@@ -1129,15 +1136,9 @@ private fun PlayerSeekBar(
     onSeekFinished: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        Slider(
+        LiquidGlassSlider(
             value = progress,
             onValueChange = onSeek,
-            onValueChangeFinished = onSeekFinished,
-            colors = SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = Color.White.copy(alpha = 0.92f),
-                inactiveTrackColor = Color.White.copy(alpha = 0.18f)
-            ),
             modifier = Modifier.fillMaxWidth()
         )
         Row(
