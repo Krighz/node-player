@@ -1,8 +1,8 @@
 # Node Player - Project State
 
-Last Updated: 2026-11-05 07:55:00 +05:30
-Current Version: v1.6.0
-Current Branch: `feature/node-connect`
+Last Updated: 2026-11-06 17:50:00 +05:30
+Current Version: v1.6.0 (Stable Release)
+Current Branch: `main`
 
 > [!NOTE]
 > Unified Universal Release v1.6.0: Complete Windows UI Overhaul matching reference image (Search Capsule, Device Connect Pill, Optical Rail Lens Dock with convex spring bubble, For You mix cards with dynamic collages, Rediscover row, pinned floating waveform player deck, 2-column mobile-matching Settings hub) + Node Connect ecosystem (mTLS zero-trust EC-256 cert pinning, discovery, remote control, remote library browsing with zero path exposure, pre-DSP PCM audio casting with jitter buffer and zero-lag seek flush, mid-track handoff, sleep timer sync, conflict-free HLC sync rail with tombstones and 3-snapshot undo, third-party session display & control with zero audio capture guarantee).

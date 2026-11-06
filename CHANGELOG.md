@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.6.0-Alpha] - 2026-11-05
+## [1.6.0] - 2026-11-06
 
 ### Added
 - **Node Connect Peer-to-Peer Audio Mesh**: Decentralized, zero-configuration local Wi-Fi connectivity between Windows PC and Android devices.
@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Node Connect Pairing Hub**: In-app QR code discovery, manual IP connect, per-device feature permission controls (Cast, Control, Library, Handoff), and duplicate connection protection.
 
 ### Fixed
+- **ExoPlayer Threading Safety**: Resolved wrong-thread assertion crash in `onTrackTransition` by ensuring player state callbacks execute on the main playback looper.
 - **Artwork & Metadata Stream Sync**: Resolved issue where metadata and album art did not update on remote receiver during track transitions.
 - **Audio Packet Crackle & Jitter**: Re-tuned jitter buffer parameters (target buffer 400ms, max 2000ms) with background worker audio chunk channel to eliminate packet transition crackles.
 - **Phone UI Selector Polish**: Removed unwanted ring artifact in the middle field of the phone navigation selector pill.

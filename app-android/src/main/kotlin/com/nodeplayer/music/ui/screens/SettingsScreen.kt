@@ -328,7 +328,7 @@ fun SettingsScreen(
                 SettingsHubItem("updates", "Updates", "GitHub releases, auto-check, download manager", Icons.Rounded.SystemUpdate),
                 SettingsHubItem("backup", "Backup & Data", "Export settings, restore backup, reset data", Icons.Rounded.Save),
                 SettingsHubItem("diagnostics", "Diagnostics & Graphics", "Frame metrics, hardware info, shader logs", Icons.Rounded.BugReport),
-                SettingsHubItem("about", "Support & About", "Node Player v1.3.1, licenses, GitHub", Icons.Rounded.Info)
+                SettingsHubItem("about", "Support & About", "Node Player v${com.nodeplayer.music.BuildConfig.VERSION_NAME}, licenses, GitHub", Icons.Rounded.Info)
             )
         }
 
@@ -505,7 +505,7 @@ fun SettingsScreen(
                     SettingsHubCard("Updates", "GitHub releases, auto-check, download manager", Icons.Rounded.SystemUpdate) { activeSection = "updates" }
                     SettingsHubCard("Backup & Data", "Export settings, restore backup, reset data", Icons.Rounded.Save) { activeSection = "backup" }
                     SettingsHubCard("Diagnostics & Graphics", "Frame metrics, hardware info, shader logs", Icons.Rounded.BugReport) { activeSection = "diagnostics" }
-                    SettingsHubCard("Support & About", "Node Player v1.3.1, licenses, GitHub", Icons.Rounded.Info) { activeSection = "about" }
+                    SettingsHubCard("Support & About", "Node Player v${com.nodeplayer.music.BuildConfig.VERSION_NAME}, licenses, GitHub", Icons.Rounded.Info) { activeSection = "about" }
                 }
             }
 

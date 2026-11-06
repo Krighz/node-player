@@ -3,7 +3,7 @@
 # Node Player 🎵
 ### *The Audiophile Liquid Glass Music Experience for Windows & Android*
 
-[![Release](https://img.shields.io/badge/Release-v1.5.0-00F0FF.svg?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
+[![Release](https://img.shields.io/badge/Release-v1.6.0-00F0FF.svg?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011%20x64-0078D6.svg?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
 [![Android](https://img.shields.io/badge/Android-8.0--15%2B-3DDC84.svg?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Krighz/node-player/releases/latest)
 [![Audio Engine](https://img.shields.io/badge/Audio%20DSP-32--Bit%20Float%20%7C%20WASAPI-FF5722.svg?style=for-the-badge&logo=soundcharts&logoColor=white)]()
@@ -17,12 +17,12 @@
   <strong>Node Player</strong> is a high-fidelity local music player engineered for pure acoustic transparency, fluid liquid glass aesthetics, and studio-grade signal processing across <strong>Windows 10/11</strong> and <strong>Android</strong>. Powered by a custom <strong>32-bit floating-point DSP pipeline</strong>, bit-perfect WASAPI / AudioTrack playback, exact zero-estimation metadata parsing, expanding translucent glass sidebar, and offscreen <strong>AGSL runtime shaders</strong> with real-time synchronized lyrics.
 </p>
 
-### 📥 Instant Downloads (v1.5.0)
+### 📥 Instant Downloads (v1.6.0)
 
 | Platform | Package | Format | Architecture | Direct Download |
 | :--- | :--- | :---: | :---: | :---: |
-| 🪟 **Windows** | Official Installer | `.msi` | x64 | [Download NodePlayer-1.5.0.msi](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0.msi) |
-| 🪟 **Windows** | Standalone Portable | `.zip` | x64 | [Download NodePlayer-1.5.0-windows-x64.zip](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.5.0-windows-x64.zip) |
+| 🪟 **Windows** | Official Installer | `.msi` | x64 | [Download NodePlayer-1.6.0.msi](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.6.0.msi) |
+| 🪟 **Windows** | Standalone Portable | `.zip` | x64 | [Download NodePlayer-1.6.0-windows-x64.zip](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer-1.6.0-windows-x64.zip) |
 | 🪟 **Windows** | Portable Executable | `.exe` | x64 | [Download NodePlayer.exe](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.exe) |
 | 🤖 **Android** | Signed Release APK | `.apk` | Universal | [Download NodePlayer.apk](https://github.com/Krighz/node-player/releases/latest/download/NodePlayer.apk) |
 
@@ -75,7 +75,7 @@ Node Player Desktop brings studio-grade audio playback directly to your desktop 
 
 ## 📊 Feature Comparison: Node Player vs. Typical Players
 
-| Feature | Node Player (v1.5.0) | Generic Players | System Players |
+| Feature | Node Player (v1.6.0) | Generic Players | System Players |
 | :--- | :---: | :---: | :---: |
 | **Cross-Platform** | **Windows 10/11 & Android 8+** | Single OS | Single OS |
 | **Audio Processing Engine** | **32-Bit Float Low-Latency Pipeline** | 16-bit integer fixed | 16-bit fixed |
