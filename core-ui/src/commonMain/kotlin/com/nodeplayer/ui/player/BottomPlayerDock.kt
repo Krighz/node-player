@@ -1,6 +1,7 @@
 package com.nodeplayer.ui.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -12,19 +13,32 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.component.backdrop.drawBackdrop
+import com.nodeplayer.ui.component.backdrop.effects.blur
+import com.nodeplayer.ui.component.backdrop.effects.lens
+import com.nodeplayer.ui.component.backdrop.effects.vibrancy
+import com.nodeplayer.ui.component.backdrop.highlight.Highlight
 import com.nodeplayer.ui.components.GlassBadge
-import com.nodeplayer.ui.components.GlassCard
-import com.nodeplayer.ui.components.SoundWaveVisualizer
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.onScrubberWheel
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 
+/**
+ * Convx-style Liquid Glass Bottom Player Dock (Windows / Desktop).
+ * Features:
+ * - Continuous squircle container with Kyant0 SDF lens refraction and specular rim
+ * - Scrubber slider with glowing glass track
+ * - Track metadata, artwork thumbnail, audio-reactive animated controls
+ * - Settings (Lines 60-61: Lens, Rim toggles)
+ */
 @Composable
 fun BottomPlayerDock(
     currentTrack: Track?,
@@ -45,8 +59,13 @@ fun BottomPlayerDock(
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val themeConfig = LocalGlassThemeConfig.current
 
     if (currentTrack == null) return
+
+    // Dock glass settings (Line 60: Lens, Line 61: Rim)
+    val lensActive = themeConfig.dockGlassLensEnabled && !themeConfig.isPerformanceMode && themeConfig.glassStrength != "OFF"
+    val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
 
     val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
 
@@ -63,12 +82,43 @@ fun BottomPlayerDock(
         return "%d:%02d".format(m, s)
     }
 
-    GlassCard(
+    val dockShape = RoundedCornerShape(26.dp)
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        isDark = true,
-        onClick = null // Don't steal clicks for the whole card
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(dockShape)
+            .drawBackdrop(
+                shape = { dockShape },
+                effects = {
+                    vibrancy()
+                    blur(16f.dp.toPx())
+                    if (lensActive) {
+                        lens(
+                            refractionHeight = 20f.dp.toPx(),
+                            refractionAmount = 18f.dp.toPx() * (themeConfig.lensRefractionStrength / 0.85f),
+                            chromaticAberration = true
+                        )
+                    }
+                },
+                highlight = if (rimActive) {
+                    { Highlight.Default.copy(alpha = 0.85f * themeConfig.lensRimSpecular) }
+                } else null,
+                onDrawSurface = {
+                    drawRect(Color(0xFF0F172A).copy(alpha = (themeConfig.effectiveTintAlpha * 0.78f).coerceIn(0.12f, 0.85f)))
+                }
+            )
+            .border(
+                width = 1.2.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = if (rimActive) 0.32f else 0.12f),
+                        Color.White.copy(alpha = 0.06f)
+                    )
+                ),
+                shape = dockShape
+            )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             // Top Scrubber Progress Slider with smooth drag tracking
@@ -120,13 +170,13 @@ fun BottomPlayerDock(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Main Bar: Track Info (Clickable for full screen) + Center Playback Controls + Right Tools
+            // Main Bar: Track Info + Center Playback Controls + Right Tools
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 1. Left Track Metadata (Click to expand Now Playing)
+                // 1. Left Track Metadata
                 Row(
                     modifier = Modifier
                         .weight(1f)
@@ -187,12 +237,23 @@ fun BottomPlayerDock(
                         Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(26.dp))
                     }
 
-                    // Play/Pause Bubble
+                    // Play/Pause Liquid Bubble
                     Box(
                         modifier = Modifier
                             .size(46.dp)
                             .clip(CircleShape)
-                            .background(accent)
+                            .drawBackdrop(
+                                shape = { CircleShape },
+                                effects = {
+                                    if (lensActive) {
+                                        lens(refractionHeight = 8f.dp.toPx(), refractionAmount = 10f.dp.toPx())
+                                    }
+                                },
+                                highlight = if (rimActive) {
+                                    { Highlight.Default.copy(alpha = 0.9f) }
+                                } else null,
+                                onDrawSurface = { drawRect(accent) }
+                            )
                             .clickable { onPlayPause() },
                         contentAlignment = Alignment.Center
                     ) {

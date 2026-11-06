@@ -41,6 +41,11 @@ import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.music.ui.theme.MotionTokens
 import com.nodeplayer.music.ui.theme.glassSurface
+import com.nodeplayer.ui.component.backdrop.drawBackdrop
+import com.nodeplayer.ui.component.backdrop.effects.blur
+import com.nodeplayer.ui.component.backdrop.effects.lens
+import com.nodeplayer.ui.component.backdrop.effects.vibrancy
+import com.nodeplayer.ui.component.backdrop.highlight.Highlight
 import dev.chrisbanes.haze.HazeState
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -51,6 +56,11 @@ data class NavTabItem(
     val icon: ImageVector
 )
 
+/**
+ * Convx-style Liquid Glass Mini Player.
+ * Floating squircle capsule with edge refraction, specular rim, audio-reactive animated equalizer bars,
+ * album artwork thumbnail, track metadata, and gesture controls.
+ */
 @Composable
 fun FrostedMiniPlayer(
     currentTrack: Track?,
@@ -75,6 +85,11 @@ fun FrostedMiniPlayer(
 
     val shape = RoundedCornerShape(GlassTokens.cardCornerRadius)
     val accent = LocalAccentColor.current
+    val themeConfig = LocalGlassThemeConfig.current
+
+    // Dock glass settings (Line 80: Lens toggle, Line 81: Rim toggle)
+    val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF"
+    val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
 
     val gestureModifier = if (gesturesEnabled) {
         Modifier
@@ -100,10 +115,6 @@ fun FrostedMiniPlayer(
                             } else if (totalDragX > 40f) {
                                 onSkipPreviousClick()
                             }
-                        } else {
-                            if (totalDragY < -40f) {
-                                onClick() // Swipe up opens Now Playing
-                            }
                         }
                     },
                     onDrag = { change, dragAmount ->
@@ -113,39 +124,50 @@ fun FrostedMiniPlayer(
                     }
                 )
             }
-    } else {
-        Modifier.clickable(onClick = onClick)
-    }
+    } else Modifier
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 6.dp)
-            .glassRefraction(
-                shape = shape,
-                enabled = shaderEnabled && !isPerformanceMode,
-                refractionIndex = 0.65f,
-                chromaticFringe = chromaticFringe,
-                grainStrength = grainStrength
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .then(gestureModifier)
+            .clip(shape)
+            .drawBackdrop(
+                shape = { shape },
+                effects = {
+                    vibrancy()
+                    blur(12f.dp.toPx())
+                    if (lensActive) {
+                        lens(
+                            refractionHeight = 16f.dp.toPx(),
+                            refractionAmount = 14f.dp.toPx() * (themeConfig.lensRefractionStrength / 0.85f),
+                            chromaticAberration = true,
+                            chromaticAberrationAmount = 0.6f * chromaticFringe
+                        )
+                    }
+                },
+                highlight = if (rimActive) {
+                    { Highlight.Default.copy(alpha = 0.85f * themeConfig.lensRimSpecular) }
+                } else null,
+                onDrawSurface = {
+                    drawRect(Color(0xFF101424).copy(alpha = (themeConfig.effectiveTintAlpha * 0.75f).coerceIn(0.12f, 0.85f)))
+                }
             )
-            .glassSurface(hazeState = hazeState, shape = shape, tintAlpha = 0.65f)
             .border(
                 width = 1.dp,
                 brush = Brush.verticalGradient(
                     listOf(
-                        Color.White.copy(alpha = 0.25f),
-                        Color.White.copy(alpha = 0.08f)
+                        Color.White.copy(alpha = if (rimActive) 0.28f else 0.12f),
+                        Color.White.copy(alpha = 0.06f)
                     )
                 ),
                 shape = shape
             )
-            .then(gestureModifier)
     ) {
-        // Progress track at bottom
-        if (showWaveProgress) {
+        // Linear Progress bar on top edge of mini player
+        if (progressFraction > 0f) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
                     .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
                     .height(2.5.dp)
                     .background(accent)
@@ -158,7 +180,7 @@ fun FrostedMiniPlayer(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Artwork thumbnail with fallback
+            // Artwork thumbnail with squircle clip
             Box(
                 modifier = Modifier
                     .size(46.dp)
@@ -207,7 +229,7 @@ fun FrostedMiniPlayer(
                 )
             }
 
-            // Soundwave visualizer in mini player (real audio reactive)
+            // Real audio-reactive equalizer bars in mini player
             SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent, maxHeight = 16.dp, rmsLevel = rmsLevel)
             Spacer(modifier = Modifier.width(6.dp))
 
@@ -235,9 +257,13 @@ fun FrostedMiniPlayer(
 }
 
 /**
- * Optical Magnifying Lens Dock.
- * Features a floating glass pill with an AGSL magnifying lens bubble that springs between tabs
- * and can be dragged across tabs with a light haptic tick, plus an adjacent circular glass search button.
+ * Convx-style Liquid Glass Dock.
+ * Features:
+ * - Continuous squircle capsule container with Kyant0 SDF lens refraction & specular rim
+ * - Sliding liquid selection puck under active tab with spring motion and finger-tracking highlight
+ * - Active tab spring magnification and caustics glow
+ * - Adjacent circular glass search button
+ * - Safe fallback to plain frosted blur in performance mode or if runtime shaders are unsupported.
  */
 @Composable
 fun LensDock(
@@ -266,6 +292,12 @@ fun LensDock(
     val view = LocalView.current
     val accent = LocalAccentColor.current
     val density = LocalDensity.current
+    val themeConfig = LocalGlassThemeConfig.current
+
+    // Dock glass settings (Line 274: Lens, Line 275: Rim, Line 276: Puck)
+    val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF"
+    val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
+    val puckActive = themeConfig.dockGlassPuckEnabled
 
     val selectedIndex = items.indexOfFirst { it.route == selectedRoute }.coerceAtLeast(0)
 
@@ -288,7 +320,6 @@ fun LensDock(
         (selectedIndex + 0.5f) * tabWidthPx
     } else 0f
 
-    val themeConfig = LocalGlassThemeConfig.current
     val activeSpringSpec = remember(themeConfig, isDragging) {
         if (isDragging) {
             spring(dampingRatio = 0.95f, stiffness = 900f)
@@ -300,11 +331,11 @@ fun LensDock(
     val springCenterXPx by animateFloatAsState(
         targetValue = targetCenterXPx,
         animationSpec = activeSpringSpec,
-        label = "LensBubbleSpring"
+        label = "LiquidPuckSpring"
     )
 
     val pillShape = RoundedCornerShape(32.dp)
-    val lensShape = RoundedCornerShape(24.dp)
+    val puckShape = RoundedCornerShape(22.dp)
 
     Row(
         modifier = modifier
@@ -313,19 +344,40 @@ fun LensDock(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // 1. Floating Pill Dock with Draggable Magnifying Lens Bubble
+        // 1. Floating Squircle Pill Dock with Liquid Glass Refraction & Draggable Puck
         Box(
             modifier = Modifier
                 .weight(1f)
                 .height(64.dp)
                 .onSizeChanged { pillWidthPx = it.width }
-                .glassSurface(hazeState = hazeState, shape = pillShape, tintAlpha = (themeConfig.effectiveTintAlpha * 0.75f).coerceIn(0.08f, 0.85f))
+                .clip(pillShape)
+                .drawBackdrop(
+                    shape = { pillShape },
+                    effects = {
+                        vibrancy()
+                        blur(14f.dp.toPx())
+                        if (lensActive) {
+                            lens(
+                                refractionHeight = 20f.dp.toPx(),
+                                refractionAmount = 18f.dp.toPx() * (lensStrength / 0.85f),
+                                chromaticAberration = true,
+                                chromaticAberrationAmount = 0.5f * chromaticFringe
+                            )
+                        }
+                    },
+                    highlight = if (rimActive) {
+                        { Highlight.Default.copy(alpha = 0.85f * rimSpecular) }
+                    } else null,
+                    onDrawSurface = {
+                        drawRect(Color(0xFF0F1424).copy(alpha = (themeConfig.effectiveTintAlpha * 0.72f).coerceIn(0.12f, 0.85f)))
+                    }
+                )
                 .border(
                     width = 1.dp,
                     brush = Brush.verticalGradient(
                         listOf(
-                            Color.White.copy(alpha = 0.22f),
-                            Color.White.copy(alpha = 0.08f)
+                            Color.White.copy(alpha = if (rimActive) 0.30f else 0.12f),
+                            Color.White.copy(alpha = 0.06f)
                         )
                     ),
                     shape = pillShape
@@ -365,47 +417,60 @@ fun LensDock(
                     }
                 }
         ) {
-            // Lens Bubble Indicator
-            if (pillWidthPx > 0 && tabWidthPx > 0f) {
-                val bubbleWidthDp = with(density) { (tabWidthPx - 10f).toDp().coerceAtLeast(48.dp) }
-                val bubbleWidthPx = with(density) { bubbleWidthDp.toPx() }
-                val bubbleOffsetXPx = springCenterXPx - bubbleWidthPx * 0.5f
+            // 2. Convx-style Liquid Sliding Selection Puck (takes effect if puckActive is true)
+            if (puckActive && pillWidthPx > 0 && tabWidthPx > 0f) {
+                val puckWidthDp = with(density) { (tabWidthPx - 10f).toDp().coerceAtLeast(48.dp) }
+                val puckWidthPx = with(density) { puckWidthDp.toPx() }
+                val puckOffsetXPx = springCenterXPx - puckWidthPx * 0.5f
 
                 Box(
                     modifier = Modifier
-                        .offset { IntOffset(bubbleOffsetXPx.roundToInt(), 0) }
+                        .offset { IntOffset(puckOffsetXPx.roundToInt(), 0) }
                         .align(Alignment.CenterStart)
-                        .width(bubbleWidthDp)
+                        .width(puckWidthDp)
                         .height(50.dp)
-                        .glassSurface(
-                            hazeState = hazeState,
-                            shape = lensShape,
-                            tintAlpha = (themeConfig.effectiveTintAlpha * 0.22f).coerceIn(0.02f, 0.35f)
-                        )
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color.White.copy(alpha = 0.06f),
-                                    Color.Transparent,
-                                    Color.White.copy(alpha = 0.04f)
+                        .clip(puckShape)
+                        .drawBackdrop(
+                            shape = { puckShape },
+                            effects = {
+                                if (lensActive) {
+                                    lens(
+                                        refractionHeight = 10f.dp.toPx(),
+                                        refractionAmount = 14f.dp.toPx() * (lensStrength / 0.85f),
+                                        chromaticAberration = true,
+                                        chromaticAberrationAmount = 0.8f * chromaticFringe
+                                    )
+                                }
+                            },
+                            highlight = if (rimActive) {
+                                { Highlight.Ambient.copy(alpha = 0.80f * rimSpecular) }
+                            } else null,
+                            onDrawSurface = {
+                                drawRect(
+                                    Brush.verticalGradient(
+                                        listOf(
+                                            accent.copy(alpha = 0.18f),
+                                            Color.White.copy(alpha = 0.10f),
+                                            accent.copy(alpha = 0.05f)
+                                        )
+                                    )
                                 )
-                            ),
-                            shape = lensShape
+                            }
                         )
                         .border(
-                            width = 0.75.dp,
+                            width = 0.85.dp,
                             brush = Brush.verticalGradient(
                                 listOf(
-                                    Color.White.copy(alpha = 0.14f),
-                                    Color.White.copy(alpha = 0.04f)
+                                    Color.White.copy(alpha = if (rimActive) 0.35f else 0.15f),
+                                    accent.copy(alpha = 0.15f)
                                 )
                             ),
-                            shape = lensShape
+                            shape = puckShape
                         )
                 )
             }
 
-            // Tab Items
+            // Tab Items Row
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -417,7 +482,7 @@ fun LensDock(
                     val isSelected = selectedRoute == tab.route
                     val tabColor = if (isSelected) Color.White else Color.White.copy(alpha = 0.55f)
 
-                    val activeMag = 1.0f + 0.22f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f)
+                    val activeMag = 1.0f + 0.18f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f)
                     val scale by animateFloatAsState(
                         targetValue = if (isSelected) activeMag else 1.0f,
                         animationSpec = activeSpringSpec,
@@ -465,18 +530,37 @@ fun LensDock(
             }
         }
 
-        // 2. Separate Circular Glass Search Button
+        // 3. Separate Circular Liquid Glass Search Button
         if (searchButtonVisible) {
             Box(
                 modifier = Modifier
                     .size(54.dp)
                     .clip(CircleShape)
-                    .glassSurface(hazeState = hazeState, shape = CircleShape, tintAlpha = 0.60f)
+                    .drawBackdrop(
+                        shape = { CircleShape },
+                        effects = {
+                            vibrancy()
+                            blur(12f.dp.toPx())
+                            if (lensActive) {
+                                lens(
+                                    refractionHeight = 16f.dp.toPx(),
+                                    refractionAmount = 14f.dp.toPx() * (lensStrength / 0.85f),
+                                    chromaticAberration = true
+                                )
+                            }
+                        },
+                        highlight = if (rimActive) {
+                            { Highlight.Default.copy(alpha = 0.90f * rimSpecular) }
+                        } else null,
+                        onDrawSurface = {
+                            drawRect(Color(0xFF0F1424).copy(alpha = 0.60f))
+                        }
+                    )
                     .border(
                         width = 1.dp,
                         brush = Brush.verticalGradient(
                             listOf(
-                                Color.White.copy(alpha = 0.35f),
+                                Color.White.copy(alpha = if (rimActive) 0.38f else 0.15f),
                                 Color.White.copy(alpha = 0.10f)
                             )
                         ),
@@ -503,7 +587,7 @@ fun LensDock(
 }
 
 /**
- * Backward compatibility alias for FrostedBottomBar forwarding to LensDock.
+ * Backward compatibility alias for FrostedBottomBar forwarding to the new Liquid LensDock.
  */
 @Composable
 fun FrostedBottomBar(
@@ -532,6 +616,22 @@ fun FrostedBottomBar(
         grainStrength = grainStrength,
         searchButtonVisible = searchButtonVisible,
         rimSpecular = rimSpecular,
+        modifier = modifier
+    )
+}
+
+/** Liquid dock naming alias. */
+@Composable
+fun LiquidDock(
+    selectedRoute: String,
+    onRouteChange: (String) -> Unit,
+    onSearchClick: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    LensDock(
+        selectedRoute = selectedRoute,
+        onRouteChange = onRouteChange,
+        onSearchClick = onSearchClick,
         modifier = modifier
     )
 }

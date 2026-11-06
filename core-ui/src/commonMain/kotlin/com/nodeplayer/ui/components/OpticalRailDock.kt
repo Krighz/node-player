@@ -4,10 +4,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.GraphicEq
@@ -20,20 +18,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.ui.PlayerNavDestination
+import com.nodeplayer.ui.component.backdrop.drawBackdrop
+import com.nodeplayer.ui.component.backdrop.effects.blur
+import com.nodeplayer.ui.component.backdrop.effects.lens
+import com.nodeplayer.ui.component.backdrop.effects.vibrancy
+import com.nodeplayer.ui.component.backdrop.highlight.Highlight
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import kotlin.math.roundToInt
@@ -50,6 +49,14 @@ val OPTICAL_RAIL_TABS = listOf(
     OpticalRailTab(PlayerNavDestination.SETTINGS, "Settings", Icons.Rounded.Settings)
 )
 
+/**
+ * Convx-style Liquid Glass Optical Rail Dock (Windows / Desktop).
+ * Features:
+ * - Vertical squircle rail with Kyant0 SDF lens refraction and specular rim
+ * - Floating liquid glass puck under active tab with spring motion
+ * - Responsive mouse interaction
+ * - Settings (Lines 68-70: Lens, Rim, Puck toggles)
+ */
 @Composable
 fun OpticalRailDock(
     currentNav: PlayerNavDestination,
@@ -60,11 +67,15 @@ fun OpticalRailDock(
     val accent = LocalAccentColor.current
     val tabs = OPTICAL_RAIL_TABS
 
+    // Dock glass settings (Line 68: Lens, Line 69: Rim, Line 70: Puck)
+    val lensActive = themeConfig.dockGlassLensEnabled && !themeConfig.isPerformanceMode && themeConfig.glassStrength != "OFF"
+    val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
+    val puckActive = themeConfig.dockGlassPuckEnabled
+
     val selectedIndex = tabs.indexOfFirst { it.destination == currentNav }.coerceAtLeast(0)
     val tabHeightDp = 84.dp
     val tabSpacingDp = 8.dp
 
-    // Target Y for active index
     val targetY = selectedIndex * (tabHeightDp.value + tabSpacingDp.value)
 
     val animatedY by animateFloatAsState(
@@ -76,65 +87,96 @@ fun OpticalRailDock(
         label = "OpticalBubbleY"
     )
 
-    // Vertical outer glass pill container
+    val railShape = RoundedCornerShape(48.dp)
+    val puckShape = RoundedCornerShape(32.dp)
+
+    // Vertical outer liquid glass pill container
     Box(
         modifier = modifier
             .width(96.dp)
-            .clip(RoundedCornerShape(48.dp))
-            .background(Color(0xFF0F172A).copy(alpha = 0.22f))
+            .clip(railShape)
+            .drawBackdrop(
+                shape = { railShape },
+                effects = {
+                    vibrancy()
+                    blur(16f.dp.toPx())
+                    if (lensActive) {
+                        lens(
+                            refractionHeight = 22f.dp.toPx(),
+                            refractionAmount = 20f.dp.toPx() * (themeConfig.lensRefractionStrength / 0.85f),
+                            chromaticAberration = true
+                        )
+                    }
+                },
+                highlight = if (rimActive) {
+                    { Highlight.Default.copy(alpha = 0.85f * themeConfig.lensRimSpecular) }
+                } else null,
+                onDrawSurface = {
+                    drawRect(Color(0xFF0F172A).copy(alpha = (themeConfig.effectiveTintAlpha * 0.75f).coerceIn(0.12f, 0.85f)))
+                }
+            )
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.18f),
-                shape = RoundedCornerShape(48.dp)
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = if (rimActive) 0.32f else 0.14f),
+                        Color.White.copy(alpha = 0.08f)
+                    )
+                ),
+                shape = railShape
             )
             .padding(vertical = 12.dp, horizontal = 8.dp),
         contentAlignment = Alignment.TopCenter
     ) {
-        // The Convex Liquid Glass Optical Lens Bubble
-        Box(
-            modifier = Modifier
-                .offset { IntOffset(0, (animatedY * density).roundToInt()) }
-                .width(88.dp)
-                .height(tabHeightDp)
-                .scale(1.04f)
-                .shadow(
-                    elevation = 12.dp,
-                    shape = RoundedCornerShape(32.dp),
-                    ambientColor = accent.copy(alpha = 0.30f),
-                    spotColor = Color.White.copy(alpha = 0.40f)
-                )
-                .clip(RoundedCornerShape(32.dp))
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.28f),
-                            accent.copy(alpha = 0.35f),
-                            Color(0xFF0F172A).copy(alpha = 0.55f)
+        // The Convex Liquid Glass Optical Lens Puck
+        if (puckActive) {
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset(0, (animatedY * density).roundToInt()) }
+                    .width(88.dp)
+                    .height(tabHeightDp)
+                    .scale(1.04f)
+                    .clip(puckShape)
+                    .drawBackdrop(
+                        shape = { puckShape },
+                        effects = {
+                            if (lensActive) {
+                                lens(
+                                    refractionHeight = 12f.dp.toPx(),
+                                    refractionAmount = 16f.dp.toPx() * (themeConfig.lensRefractionStrength / 0.85f),
+                                    chromaticAberration = true
+                                )
+                            }
+                        },
+                        highlight = if (rimActive) {
+                            { Highlight.Ambient.copy(alpha = 0.85f * themeConfig.lensRimSpecular) }
+                        } else null,
+                        onDrawSurface = {
+                            drawRect(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        Color.White.copy(alpha = 0.22f),
+                                        accent.copy(alpha = 0.30f),
+                                        Color(0xFF0F172A).copy(alpha = 0.45f)
+                                    ),
+                                    radius = 160f
+                                )
+                            )
+                        }
+                    )
+                    .border(
+                        width = 1.2.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = if (rimActive) 0.70f else 0.30f),
+                                Color(0xFFBAE6FD).copy(alpha = 0.40f),
+                                Color.White.copy(alpha = 0.25f)
+                            )
                         ),
-                        center = Offset(70f, 60f),
-                        radius = 160f
+                        shape = puckShape
                     )
-                )
-                .border(
-                    width = 1.2.dp,
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.70f),
-                            Color(0xFFBAE6FD).copy(alpha = 0.40f),
-                            Color.White.copy(alpha = 0.25f)
-                        )
-                    ),
-                    shape = RoundedCornerShape(32.dp)
-                )
-                .drawBehind {
-                    // Inner specular highlight on top edge
-                    drawCircle(
-                        color = Color.White.copy(alpha = 0.25f),
-                        radius = 20.dp.toPx(),
-                        center = Offset(size.width * 0.35f, size.height * 0.25f)
-                    )
-                }
-        )
+            )
+        }
 
         // Tab Items Column
         Column(
@@ -149,7 +191,7 @@ fun OpticalRailDock(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(tabHeightDp)
-                        .clip(RoundedCornerShape(32.dp))
+                        .clip(puckShape)
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null

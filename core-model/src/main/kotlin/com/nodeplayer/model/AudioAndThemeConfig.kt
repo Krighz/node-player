@@ -233,7 +233,10 @@ data class GlassThemeConfig(
     val staggeredListAnimation: Boolean = true,
     val lyricsAnimationEnabled: Boolean = true,
     val screenTransitionStyle: String = "SLIDE",           // SLIDE, FADE, SHARED
-    val reduceMotion: Boolean = false
+    val reduceMotion: Boolean = false,
+    val dockGlassLensEnabled: Boolean = true,
+    val dockGlassRimEnabled: Boolean = true,
+    val dockGlassPuckEnabled: Boolean = true
 ) {
     companion object {
         val PRESET_OBSIDIAN_LIQUID = GlassThemeConfig(

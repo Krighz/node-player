@@ -141,7 +141,10 @@ class DesktopSettingsStore : KeyValueStore {
             isPerformanceMode = getBoolean("isPerformanceMode", false),
             animateOnlyWhilePlaying = getBoolean("animateOnlyWhilePlaying", false),
             isFullyTransparent = getBoolean("isFullyTransparent", false),
-            keepTextReadable = getBoolean("keepTextReadable", true)
+            keepTextReadable = getBoolean("keepTextReadable", true),
+            dockGlassLensEnabled = getBoolean("dockGlassLensEnabled", true),
+            dockGlassRimEnabled = getBoolean("dockGlassRimEnabled", true),
+            dockGlassPuckEnabled = getBoolean("dockGlassPuckEnabled", true)
         )
     }
 
@@ -161,6 +164,9 @@ class DesktopSettingsStore : KeyValueStore {
         putBoolean("animateOnlyWhilePlaying", cfg.animateOnlyWhilePlaying)
         putBoolean("isFullyTransparent", cfg.isFullyTransparent)
         putBoolean("keepTextReadable", cfg.keepTextReadable)
+        putBoolean("dockGlassLensEnabled", cfg.dockGlassLensEnabled)
+        putBoolean("dockGlassRimEnabled", cfg.dockGlassRimEnabled)
+        putBoolean("dockGlassPuckEnabled", cfg.dockGlassPuckEnabled)
     }
 
     fun loadEffectConfig(): com.nodeplayer.model.AudioEffectConfig {
