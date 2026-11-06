@@ -547,13 +547,15 @@ class PlaybackService : MediaSessionService() {
                     }
                 }
                 if (::nodeConnectHub.isInitialized) {
+                    val pos = try { crossfadeManager.activePlayer.currentPosition } catch (_: Exception) { 0L }
+                    val vol = try { crossfadeManager.activePlayer.volume } catch (_: Exception) { 1.0f }
                     serviceScope.launch(Dispatchers.IO) {
                         nodeConnectHub.controlService.broadcastLocalState(
                             ControlStateEventMessage(
                                 isPlaying = isCurrentlyPlaying,
-                                positionMs = crossfadeManager.activePlayer.currentPosition,
+                                positionMs = pos,
                                 durationMs = track.durationMs,
-                                volume = crossfadeManager.activePlayer.volume,
+                                volume = vol,
                                 trackTitle = track.title,
                                 artist = track.artist,
                                 album = track.album,
