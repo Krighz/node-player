@@ -56,6 +56,7 @@ fun SettingsView(
     onOpenCustomizeUi: () -> Unit = {},
     onOpenEqualizer: () -> Unit = {},
     onOpenSyncCenter: () -> Unit = {},
+    onOpenOpticalTest: () -> Unit = {},
     trackCount: Int = 0,
     nodeConnectEnabled: Boolean = true,
     onToggleNodeConnect: (Boolean) -> Unit = {},
@@ -212,11 +213,12 @@ fun SettingsView(
                         )
                     }
 
-                    if (matchesFilter("appearance", "glass", "oled", "shader", "customize", "theme", "performance")) {
+                    if (matchesFilter("appearance", "glass", "oled", "shader", "customize", "theme", "performance", "diagnostics", "optical", "test")) {
                         AppearanceAndGlassCard(
                             themeConfig = themeConfig,
                             onThemeConfigChange = onThemeConfigChange,
                             onOpenCustomizeUi = onOpenCustomizeUi,
+                            onOpenOpticalTest = onOpenOpticalTest,
                             accent = accent
                         )
                     }
@@ -248,8 +250,8 @@ fun SettingsView(
                 if (matchesFilter("library", "folder", "rescan")) {
                     MusicFoldersCard(currentMusicFolder, trackCount, onSelectMusicFolder, onRescanLibrary, accent)
                 }
-                if (matchesFilter("appearance", "glass", "oled")) {
-                    AppearanceAndGlassCard(themeConfig, onThemeConfigChange, onOpenCustomizeUi, accent)
+                if (matchesFilter("appearance", "glass", "oled", "shader", "diagnostics", "optical", "test")) {
+                    AppearanceAndGlassCard(themeConfig, onThemeConfigChange, onOpenCustomizeUi, onOpenOpticalTest, accent)
                 }
                 if (matchesFilter("last.fm", "about", "version")) {
                     AboutAndScrobblerCard(lastFmEnabled, onLastFmToggle, accent)
@@ -578,6 +580,7 @@ private fun AppearanceAndGlassCard(
     themeConfig: GlassThemeConfig,
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
     onOpenCustomizeUi: () -> Unit,
+    onOpenOpticalTest: () -> Unit,
     accent: Color
 ) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -633,6 +636,34 @@ private fun AppearanceAndGlassCard(
                     checked = themeConfig.isPerformanceMode,
                     onCheckedChange = { onThemeConfigChange(themeConfig.copy(isPerformanceMode = it)) }
                 )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Liquid Glass Optical Test", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Triple-zone optical pattern, blur, refraction and puck fringing verification",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.55f)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                LiquidButton(
+                    onClick = onOpenOpticalTest,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.Rounded.Visibility, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Open Test", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

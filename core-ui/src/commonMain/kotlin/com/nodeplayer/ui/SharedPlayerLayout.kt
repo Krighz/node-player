@@ -46,7 +46,8 @@ enum class PlayerNavDestination(val title: String, val icon: ImageVector) {
     LIBRARY("Library", Icons.Rounded.LibraryMusic),
     EQUALIZER("Equalizer", Icons.Rounded.GraphicEq),
     CUSTOMIZE("Customize UI", Icons.Rounded.Palette),
-    SETTINGS("Settings", Icons.Rounded.Settings)
+    SETTINGS("Settings", Icons.Rounded.Settings),
+    OPTICAL_TEST("Optical Test", Icons.Rounded.Visibility)
 }
 
 @Composable
@@ -414,7 +415,12 @@ fun SharedPlayerLayout(
                                     onToggleNodeConnect = onToggleNodeConnect,
                                     themeConfig = themeConfig,
                                     onThemeConfigChange = onThemeConfigChange,
+                                    onOpenOpticalTest = { currentNav = PlayerNavDestination.OPTICAL_TEST },
                                     isExpanded = true
+                                )
+                                PlayerNavDestination.OPTICAL_TEST -> OpticalDiagnosticsView(
+                                    onBack = { currentNav = PlayerNavDestination.SETTINGS },
+                                    themeConfig = themeConfig
                                 )
                             }
                         }
@@ -548,7 +554,12 @@ fun SharedPlayerLayout(
                                 onToggleNodeConnect = onToggleNodeConnect,
                                 themeConfig = themeConfig,
                                 onThemeConfigChange = onThemeConfigChange,
+                                onOpenOpticalTest = { currentNav = PlayerNavDestination.OPTICAL_TEST },
                                 isExpanded = false
+                            )
+                            PlayerNavDestination.OPTICAL_TEST -> OpticalDiagnosticsView(
+                                onBack = { currentNav = PlayerNavDestination.SETTINGS },
+                                themeConfig = themeConfig
                             )
                         }
                     }
