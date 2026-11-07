@@ -106,8 +106,7 @@ fun OpticalRailDock(
                         lens(
                             refractionHeight = (railW * 0.18f).coerceAtMost(20f.dp.toPx()),
                             refractionAmount = (railW * 0.16f) * (themeConfig.lensRefractionStrength / 0.85f),
-                            chromaticAberration = true,
-                            chromaticAberrationAmount = 0.25f
+                            chromaticAberration = true
                         )
                     }
                 },
@@ -148,8 +147,7 @@ fun OpticalRailDock(
                                 lens(
                                     refractionHeight = (puckW * 0.12f).coerceAtMost(12f.dp.toPx()),
                                     refractionAmount = (puckW * 0.14f) * (themeConfig.lensRefractionStrength / 0.85f),
-                                    chromaticAberration = true,
-                                    chromaticAberrationAmount = 0.30f
+                                    chromaticAberration = true
                                 )
                             }
                         },

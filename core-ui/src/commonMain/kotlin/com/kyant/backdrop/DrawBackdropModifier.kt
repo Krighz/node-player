@@ -38,12 +38,14 @@ import com.kyant.backdrop.shadow.InnerShadowElement
 import com.kyant.backdrop.shadow.Shadow
 import com.kyant.backdrop.shadow.ShadowElement
 
+import com.kyant.backdrop.backdrops.emptyBackdrop
+
 private val DefaultHighlight = { Highlight.Default }
 private val DefaultShadow = { Shadow.Default }
 private val DefaultOnDrawBackdrop: DrawScope.(DrawScope.() -> Unit) -> Unit = { it() }
 
 fun Modifier.drawPlainBackdrop(
-    backdrop: Backdrop,
+    backdrop: Backdrop = emptyBackdrop(),
     shape: () -> Shape,
     effects: BackdropEffectScope.() -> Unit,
     layerBlock: (GraphicsLayerScope.() -> Unit)? = null,
@@ -78,7 +80,7 @@ fun Modifier.drawPlainBackdrop(
 }
 
 fun Modifier.drawBackdrop(
-    backdrop: Backdrop,
+    backdrop: Backdrop = emptyBackdrop(),
     shape: () -> Shape,
     effects: BackdropEffectScope.() -> Unit,
     highlight: (() -> Highlight?)? = DefaultHighlight,

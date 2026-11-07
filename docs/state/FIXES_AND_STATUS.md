@@ -1,6 +1,33 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Phase 5 Completed (All 5 Phases Completed)
+## Current Status: Phase 1 Clean Slate & Full Upstream Library Import Completed (01-01 & 01-02)
+
+### Phase 1 Accomplishments
+
+1. **LIB-01 & LIB-03: Full Upstream Kyant0 Engine & Desktop RuntimeEffect**
+   - Imported canonical `com.kyant.backdrop` upstream package into `:core-ui` under Apache 2.0.
+   - Preserved full Skia SkSL `RuntimeEffect.makeForShader` multiplatform desktop engine on Windows and hardware AGSL on Android.
+   - Retained complete demo catalog: `LiquidButton`, `LiquidSlider`, `LiquidToggle`, `LiquidBottomTabs`, `DampedDragAnimation`, `InteractiveHighlight`.
+
+2. **LIB-02: Staged Clean Slate & Legacy Purge**
+   - Migrated all UI components (`ConvxLiquidDock`, `ConvxMiniPlayer`, `OpticalRailDock`, `LiquidGlassControls`, `NowPlayingView`, `BottomPlayerDock`, `NowPlayingSheet`) to `com.kyant.backdrop.*`.
+   - Purged 37 legacy cut-down files and directories in `core-ui/src/*/kotlin/com/nodeplayer/ui/component/backdrop/` and deleted temporary `CompatibilityShims.kt`.
+   - Removed obsolete reflection hacks and purged dead Haze code.
+   - Updated Proguard rules in `app-android/proguard-rules.pro` for `com.kyant.backdrop.**`.
+
+3. **LIB-04 & LIB-05: Hardware Validation & Multiplatform Build Verification**
+   - Re-pointed `GlassShaderSelfTest` in `app-android` to `com.kyant.backdrop.internal.RoundedRectRefractionShaderString` with updated uniform bindings.
+   - Preserved offscreen hardware pixel verification, safe frosted Compose fallback, and SharedPreferences persistence.
+   - Clean compilation verified across all platforms: `:core-ui:desktopTest`, `:app-desktop:compileKotlin`, and `:app-android:compileDebugKotlin`.
+
+### Platform Verification
+- Desktop tests and build: Passed (`:core-ui:desktopTest`, `:app-desktop:compileKotlin`).
+- Android build: Passed (`:app-android:compileDebugKotlin`, `:app-android:compileDebugUnitTestSources`, `:app-android:testDebugUnitTest`).
+- Visual and device checks: **Human check pending** (to be verified on physical phone and PC).
+
+---
+
+## Historical Status (v1.6.0 Milestone Iterations)
 
 ### Phase 5 Accomplishments
 
