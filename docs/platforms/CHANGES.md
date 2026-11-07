@@ -5,6 +5,18 @@
 
 ---
 
+### [2026-11-07] - Liquid Glass Revamp: Phase 2 Revamp the Glass Code
+- **Unified Glass Architecture (`core-model`, `core-ui`)**:
+  - `GlassQuality`: Introduced `FULL`, `BALANCED`, and `LIGHT` quality modes to `GlassThemeConfig` in `core-model`.
+  - `GlassDesignTokens.kt`: Added canonical design tokens in `core-ui` unifying radii, optics, blur, rim specular alpha, and vibrancy, dynamically adapting based on `GlassQuality`.
+  - `GlassTokensTest.kt`: Unit tests verifying token resolution for all three glass quality tiers.
+- **Fallbacks & Multiplatform Interface**:
+  - Single multiplatform backdrop API in `core-ui` backed by AGSL on Android and SkSL on Windows Desktop.
+  - Verified `GlassShaderSelfTest` and frosted fallback mode functionality.
+- **Status**: Completed, tests pass (`:core-ui:desktopTest`, `:app-desktop:test`, `:core-common:test`). Device checks marked "human check pending".
+
+---
+
 ### [2026-11-07] - Liquid Glass Revamp: Phase 1 Fix What Is Broken
 - **LiquidSlider Math & Layout Safety (`core-ui`)**:
   - `LiquidSlider.kt`: Clamped computed track width and placeable bounds to `>= 0`, guarding against negative dimensions and division-by-zero on drag.

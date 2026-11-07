@@ -1,6 +1,28 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Phase 1 Completed
+## Current Status: Phase 2 Completed
+
+### Phase 2 Accomplishments
+
+1. **ARCH-01 & ARCH-02: Glass Pipeline Consolidation & Clean Multiplatform Interface**
+   - Single multiplatform glass module in `core-ui` under `com.nodeplayer.ui.component.backdrop`.
+   - Shared backdrop capture pool with unified interfaces over Android AGSL and Desktop SkSL shaders.
+
+2. **ARCH-03: Self-Test & Frosted Glass Fallback Mode**
+   - Preserved `GlassShaderSelfTest` for compile-time and runtime hardware shader validation.
+   - Verified seamless fallback to frosted plain Compose styling when hardware shaders are unavailable or in Performance mode.
+
+3. **ARCH-04: Unified Glass Design Tokens**
+   - Implemented `GlassDesignTokens.kt` in `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/theme/GlassTokens.kt`.
+   - Standardized capsule, puck, and card radii, optical refraction parameters, blur radius, specular rim, and vibrancy alphas across both platforms.
+
+4. **ARCH-05: Glass Quality Mode**
+   - Added `GlassQuality` enum (`FULL`, `BALANCED`, `LIGHT`) to `GlassThemeConfig` in `core-model`.
+   - Added automated test suite `GlassTokensTest.kt` verifying parameter adaptations per tier.
+
+---
+
+## Phase 1 Completed
 
 ### Fixes Applied
 

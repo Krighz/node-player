@@ -184,7 +184,14 @@ data class CrossfadeConfig(
     val autoGapless: Boolean = true
 )
 
+enum class GlassQuality(val displayName: String) {
+    FULL("Full Quality"),
+    BALANCED("Balanced"),
+    LIGHT("Light (Plain Compose)")
+}
+
 data class GlassThemeConfig(
+    val glassQuality: GlassQuality = GlassQuality.BALANCED,
     val glassStrength: String = "BALANCED", // SUBTLE, BALANCED, DRAMATIC, OFF
     val themeMode: String = "SYSTEM",       // SYSTEM, DARK, LIGHT, OLED
     val accentSource: String = "ARTWORK",   // ARTWORK, MATERIAL_YOU, PRESET
