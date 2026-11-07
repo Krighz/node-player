@@ -27,8 +27,13 @@ import androidx.core.view.WindowCompat
 import com.nodeplayer.music.ui.PlayerViewModel
 import com.nodeplayer.music.diagnostics.DiagnosticsDumpManager
 import com.nodeplayer.music.ui.components.DiagnosticsDumpDialog
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
 import com.nodeplayer.ui.components.ConvxLiquidDock
 import com.nodeplayer.ui.components.ConvxMiniPlayer
+import com.nodeplayer.ui.components.DockScrollController
+import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.music.ui.components.GlobalSearchSheet
 import com.nodeplayer.music.diagnostics.FrameMetricsTracker
 import java.io.File
@@ -97,6 +102,15 @@ class MainActivity : ComponentActivity() {
             val themeConfig by viewModel.themeConfig.collectAsState()
             val accentColor by viewModel.accentColor.collectAsState()
             val dockHazeState = remember { HazeState() }
+            val coroutineScope = rememberCoroutineScope()
+            val dockScrollController = remember(coroutineScope, themeConfig.dockScrollSensitivity, themeConfig.dockReturnDelayMs) {
+                DockScrollController(
+                    scope = coroutineScope,
+                    sensitivity = themeConfig.dockScrollSensitivity,
+                    returnDelayMs = themeConfig.dockReturnDelayMs
+                )
+            }
+            val dockScrollFraction by dockScrollController.offsetFraction.collectAsState()
 
             val systemInDark = androidx.compose.foundation.isSystemInDarkTheme()
             val isDark = when (themeConfig.themeMode) {
@@ -243,6 +257,16 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxSize()
                             .haze(dockHazeState)
+                            .then(
+                                if (themeConfig.dockAutoHideEnabled) {
+                                    Modifier.nestedScroll(
+                                        rememberDockScrollConnection(
+                                            controller = dockScrollController,
+                                            enabled = true
+                                        )
+                                    )
+                                } else Modifier
+                            )
                     ) {
                         // 1. Dribbble-inspired Liquid Glass Organic Chrome & Obsidian Background
                         LiquidGlassBackground(
@@ -410,11 +434,20 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // 3. Floating Mini-Player & Bottom Navigation (Convx Liquid Glass Dock)
+                    // 3. Floating Mini-Player & Bottom Navigation (Convx Liquid Glass Dock with Auto-Hide)
+                    val dockAutoHide = themeConfig.dockAutoHideEnabled
+                    val miniPlayerAutoHide = themeConfig.dockAutoHideMiniPlayer
+                    val dockOffsetFraction = if (dockAutoHide) dockScrollFraction else 0f
+                    val miniPlayerOffsetFraction = if (dockAutoHide && miniPlayerAutoHide) dockScrollFraction else 0f
+
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
+                            .graphicsLayer {
+                                translationY = dockOffsetFraction * 110f.dp.toPx()
+                                alpha = 1f - (dockOffsetFraction * 0.85f).coerceIn(0f, 1f)
+                            }
                             .navigationBarsPadding()
                     ) {
                         if (currentTrack != null) {
@@ -435,7 +468,13 @@ class MainActivity : ComponentActivity() {
                                 rmsLevel = currentRms,
                                 isPerformanceMode = themeConfig.isPerformanceMode,
                                 shaderEnabled = isShaderActive,
-                                chromaticFringe = themeConfig.chromaticFringeValue()
+                                chromaticFringe = themeConfig.chromaticFringeValue(),
+                                modifier = if (dockAutoHide && !miniPlayerAutoHide) {
+                                    Modifier.graphicsLayer {
+                                        // Counter-translate to keep mini player pinned when dock slides down
+                                        translationY = -dockOffsetFraction * 72f.dp.toPx()
+                                    }
+                                } else Modifier
                             )
                         }
 

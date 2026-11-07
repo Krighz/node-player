@@ -5,6 +5,26 @@
 
 ---
 
+### [2026-11-07] - Ground-Up Liquid Glass Rebuild: Phase 3 Real Drag Controls, Animations & Dock Auto-Hide
+- **Continuous Gesture Dragging for Liquid Sliders (core-ui)**:
+  - LiquidSlider.kt: Refactored pointer handling to capture drag gestures across the full container row (detectDragGestures).
+  - Added real-time tracking with thumb velocity squish and stretch, live onValueChange dispatch, and spring release.
+  - Guaranteed minimum 48dp touch interaction target across all glass controls (LiquidGlassSlider, LiquidGlassSwitch, LiquidGlassButton, LiquidGlassIconButton, LiquidGlassChip, LiquidGlassSegmentedControl).
+- **Dock Scroll Auto-Hide Integration (pp-android)**:
+  - MainActivity.kt: Wired DockScrollController and 
+ememberDockScrollConnection to screen content with 
+`nestedScroll`.
+  - Smooth vertical slide-down and fade animation during downward list scrolling, restoring on upward scroll, top of list, or pause timeout.
+  - Respects dockAutoHideEnabled, dockAutoHideMiniPlayer, dockScrollSensitivity, and dockReturnDelayMs.
+- **Spring Physics & Motion Tokens**:
+  - Applied Convx critically damped springs (dampingRatio = 0.82f, stiffness = 380f) across dock puck, tab switches, and sheets.
+  - Respected user Motion Level settings (Off, Reduced, Full) and system 'remove animations' accessibility preference.
+- **Unit Testing**:
+  - Added LiquidControlsGestureTest.kt verifying slider normalized delta conversions, clamping bounds, and toggle snap thresholds.
+- **Status**: Completed Phase 3. Both Android assembleDebug and Desktop tests pass cleanly. Visual and device checks marked 'human check pending'.
+
+---
+
 ### [2026-11-07] - Ground-Up Liquid Glass Rebuild: Phase 2 Convx-Style Dock & Mini Player
 - **Convx-Style Liquid Glass Dock (core-ui, app-android, app-desktop)**:
   - ConvxLiquidDock.kt: Built continuous squircle capsule dock (ContinuousCapsule) matching Convx reference.
