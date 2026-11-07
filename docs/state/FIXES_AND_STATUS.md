@@ -1,6 +1,26 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Phase 3 Completed
+## Current Status: Phase 4 Completed
+
+### Phase 4 Accomplishments
+
+1. **DOCK-01 & DOCK-02: NestedScrollConnection & Dynamic Auto-Hide**
+   - Built `DockScrollController.kt` in `core-ui` managing dock visibility fraction with fluid spring physics.
+   - Smoothly slides down and fades out dock during downward list scrolling on long lists (Home, Library).
+   - Instantly restores dock on upward scroll, top of list, strong upward fling, or after scroll stillness timeout.
+
+2. **DOCK-03: View Isolation & Edge Restore**
+   - Kept dock stationary on short, non-scrolling views (Equalizer, Settings, Diagnostics).
+   - Bottom edge tap and fling restore hooks ensure user is never trapped without navigation.
+
+3. **DOCK-04 & DOCK-05: Scroll Settings & Desktop Defaults**
+   - Added `dockAutoHideEnabled`, `dockAutoHideMiniPlayer`, `dockScrollSensitivity`, and `dockReturnDelayMs` to `GlassThemeConfig` in `core-model`.
+   - Windows desktop rail dock (`OpticalRailDock`) and player deck (`BottomPlayerDeck`) stay visible and stationary by default.
+   - Unit tests added in `DockScrollControllerTest.kt` verifying all scroll phases and timers.
+
+---
+
+## Phase 3 Completed
 
 ### Phase 3 Accomplishments
 

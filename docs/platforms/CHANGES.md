@@ -5,6 +5,17 @@
 
 ---
 
+### [2026-11-07] - Liquid Glass Revamp: Phase 4 Dock Hides While Scrolling
+- **Intelligent Dock Scroll Auto-Hide (`core-ui`, `core-model`)**:
+  - `DockScrollController.kt`: State holder tracking scroll delta accumulation and spring-animating dock slide-down and fade. Includes automatic timeout timer to restore dock after user stops scrolling.
+  - `rememberDockScrollConnection`: Intercepts `onPreScroll` and `onPreFling` on long lists (Home, Library) with edge fling detection.
+  - `GlassThemeConfig`: Added preferences `dockAutoHideEnabled`, `dockAutoHideMiniPlayer`, `dockScrollSensitivity`, and `dockReturnDelayMs`.
+  - Windows Desktop: Kept stationary rail and deck visible by default, with opt-in support.
+  - `DockScrollControllerTest.kt`: Unit tests verifying scroll down hide, scroll up restore, and timeout recovery.
+- **Status**: Completed, tests pass (`:core-ui:desktopTest`, `:app-desktop:test`). Device checks marked "human check pending".
+
+---
+
 ### [2026-11-07] - Liquid Glass Revamp: Phase 3 Smooth iOS-like Animations (like Convx)
 - **Spring Physics Engine (`core-ui`, `core-model`)**:
   - `MotionTokens.kt`: Added Convx-matched spring configurations (`ConvxPuck`: `dampingRatio = 0.82f`, `stiffness = 380f`; `DragTracking`: `dampingRatio = 0.95f`, `stiffness = 900f`).
