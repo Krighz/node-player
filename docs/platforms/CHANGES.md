@@ -5,6 +5,18 @@
 
 ---
 
+### [2026-11-07] - Liquid Glass Revamp: Phase 5 More Liquid Glass Settings in Customize UI
+- **Live Preview & Granular Controls (`core-ui`, `core-model`)**:
+  - `GlassLivePreview.kt`: Interactive liquid glass sample card displaying real-time feedback as optical parameters are adjusted.
+  - Granular parameters: Added `glassRefractionHeightDp`, `glassRefractionAmountDp`, `glassChromaticFringe`, and `glassBackdropScale`.
+  - Component toggles: Added independent toggles `dockGlassLensEnabled`, `miniPlayerGlassEnabled`, `nowPlayingGlassEnabled`, `controlsGlassEnabled`, and `widgetsGlassEnabled`.
+  - Presets & Reset: Integrated GPU cost indicators and "Reset to recommended" preset action in `GlassThemeConfig`.
+- **Exhaustive Settings Reference (`docs/reference/SETTINGS.md`)**:
+  - Comprehensive documentation of all settings with types, defaults, GPU impact hints, and source file + line number traceability.
+- **Status**: Completed, tests pass (`:core-ui:desktopTest`, `:app-desktop:test`). Device checks marked "human check pending".
+
+---
+
 ### [2026-11-07] - Liquid Glass Revamp: Phase 4 Dock Hides While Scrolling
 - **Intelligent Dock Scroll Auto-Hide (`core-ui`, `core-model`)**:
   - `DockScrollController.kt`: State holder tracking scroll delta accumulation and spring-animating dock slide-down and fade. Includes automatic timeout timer to restore dock after user stops scrolling.

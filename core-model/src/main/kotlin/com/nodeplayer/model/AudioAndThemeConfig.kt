@@ -254,7 +254,15 @@ data class GlassThemeConfig(
     val dockAutoHideEnabled: Boolean = false,
     val dockAutoHideMiniPlayer: Boolean = false,
     val dockScrollSensitivity: Float = 1.0f,
-    val dockReturnDelayMs: Long = 1200L
+    val dockReturnDelayMs: Long = 1200L,
+    val miniPlayerGlassEnabled: Boolean = true,
+    val nowPlayingGlassEnabled: Boolean = true,
+    val controlsGlassEnabled: Boolean = false,
+    val widgetsGlassEnabled: Boolean = true,
+    val glassRefractionHeightDp: Float = 18.0f,
+    val glassRefractionAmountDp: Float = 16.0f,
+    val glassChromaticFringe: Float = 0.25f,
+    val glassBackdropScale: Float = 0.50f
 ) {
     companion object {
         val PRESET_OBSIDIAN_LIQUID = GlassThemeConfig(

@@ -1,6 +1,26 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Phase 4 Completed
+## Current Status: Phase 5 Completed (All 5 Phases Completed)
+
+### Phase 5 Accomplishments
+
+1. **SETT-01 & SETT-04: Live Preview & Preset Actions**
+   - Implemented `GlassLivePreview.kt` interactive sample card reacting dynamically to glass tokens and slider modifications.
+   - Added GPU cost hints (`Low GPU`, `Medium GPU`, `High GPU`) and "Reset to recommended" action restoring recommended presets.
+
+2. **SETT-02: Comprehensive Optical Controls**
+   - Added granular parameters to `GlassThemeConfig`: `glassRefractionHeightDp`, `glassRefractionAmountDp`, `glassChromaticFringe`, and `glassBackdropScale`.
+
+3. **SETT-03: Component-Level Glass Overrides**
+   - Independent component glass toggles: `dockGlassLensEnabled`, `miniPlayerGlassEnabled`, `nowPlayingGlassEnabled`, `controlsGlassEnabled`, and `widgetsGlassEnabled`.
+
+4. **SETT-05: Documentation & Traceability**
+   - Comprehensive `docs/reference/SETTINGS.md` updated with every setting's type, default, GPU impact, and exact file and line number reference.
+   - Verified in `GlassCustomizationConfigTest.kt`.
+
+---
+
+## Phase 4 Completed
 
 ### Phase 4 Accomplishments
 
