@@ -39,6 +39,7 @@ import com.kyant.backdrop.shadow.Shadow
 import com.kyant.backdrop.shadow.ShadowElement
 
 import com.kyant.backdrop.backdrops.emptyBackdrop
+import com.nodeplayer.common.logging.NodeLog
 
 private val DefaultHighlight = { Highlight.Default }
 private val DefaultShadow = { Shadow.Default }
@@ -364,9 +365,13 @@ private class DrawBackdropNode(
     private fun updateEffects() {
         if (!isRenderEffectSupported()) return
 
-        effectScope.apply(effects)
-        graphicsLayer?.renderEffect = effectScope.renderEffect
-        padding = effectScope.padding
+        try {
+            effectScope.apply(effects)
+            graphicsLayer?.renderEffect = effectScope.renderEffect
+            padding = effectScope.padding
+        } catch (t: Throwable) {
+            NodeLog.e("Backdrop", "Failed to update backdrop effects: ${t.message}", t)
+        }
     }
 
     override fun onAttach() {

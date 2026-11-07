@@ -1,6 +1,29 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Phase 5 Diagnostics Test Screen, Verification, Builds & Acceptance Completed (05-01 & 05-02) - All Milestone Phases Complete!
+## Current Status: Debug App Launch Crash Fixed & Verified on Hardware (Android 16 / realme)
+
+### Post-Port Hardware Bug Fix (2026-11-08)
+
+1. **Exact Crash Exception:**
+   `java.lang.IllegalStateException: Size is unspecified`
+   - Location: `core-ui/src/commonMain/kotlin/com/kyant/backdrop/effects/Lens.kt:91` (via `LensKt.getCornerRadii` -> `LensKt.lens`).
+   - Trigger: `DrawBackdropNode.onAttach()` calling `observeEffects()` -> `updateEffects()` during initial node attachment before the first layout/draw pass.
+2. **Root Cause:**
+   - In vendored `BackdropEffectScopeImpl`, `size` is initialized to `Size.Unspecified` (matching upstream `D:\AndroidLiquidGlass-kmp\AndroidLiquidGlass-kmp`).
+   - During `DrawBackdropNode.onAttach()`, `observeEffects()` immediately executed the `effects` lambda before any layout measurement pass occurred.
+   - When evaluating `lens(...)`, `cornerRadii` accessed `size.minDimension`, which triggers `check(this != Size.Unspecified)` in Jetpack Compose's `Size.kt:48`, throwing `IllegalStateException: Size is unspecified`.
+3. **Resolution Applied:**
+   - Added `if (!size.isSpecified || size.width <= 0f || size.height <= 0f) return` guard at entry of `BackdropEffectScope.lens(...)`.
+   - Added `if (!size.isSpecified) return null` in `cornerRadii`.
+   - Wrapped `lens(...)` shader uniform execution and `DrawBackdropModifier.kt:updateEffects()` in `try/catch` blocks, logging errors with `NodeLog.e("Backdrop", ...)` (forwarding to `android.util.Log.println(Log.ERROR, "Backdrop", ...)` on Android) so errors are never swallowed silently.
+4. **Live Verification:**
+   - Deployed to realme device (Android 16, USB debugging): `adb install -r app-android-debug.apk`.
+   - Launched `.MainActivity`; confirmed process PID (`21888`) remained active after 10+ seconds with 0 fatal exceptions in logcat.
+   - WindowManager reported state transition: `READY_TO_SHOW -> HAS_DRAWN` (`onSurfaceShowChange show = true`).
+
+---
+
+## Phase 5 Diagnostics Test Screen, Verification, Builds & Acceptance Completed (05-01 & 05-02) - All Milestone Phases Complete!
 
 ### Phase 5 Accomplishments
 
