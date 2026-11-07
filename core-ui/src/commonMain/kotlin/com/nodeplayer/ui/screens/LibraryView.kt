@@ -22,11 +22,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
 import com.nodeplayer.ui.LocalBottomBarPadding
+import com.nodeplayer.ui.components.DockScrollController
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.LiquidButton
@@ -34,7 +37,9 @@ import com.nodeplayer.ui.components.LiquidIconButton
 import com.nodeplayer.ui.components.LiquidSegmentedControl
 import com.nodeplayer.ui.components.SoundWaveVisualizer
 import com.nodeplayer.ui.components.TrackArtwork
+import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 
 @Composable
 fun LibraryView(
@@ -51,13 +56,34 @@ fun LibraryView(
     searchQuery: String = "",
     onSearchChange: (String) -> Unit = {},
     remoteTracks: List<Track> = emptyList(),
+    dockScrollController: DockScrollController? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val themeConfig = LocalGlassThemeConfig.current
     var selectedTab by remember { mutableIntStateOf(0) }
     var isGridView by remember { mutableStateOf(false) }
     var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) }
     val tabs = listOf("Songs", "Albums", "Artists", "Folders")
+
+    val dockConnection = rememberDockScrollConnection(
+        controller = dockScrollController,
+        enabled = themeConfig.dockAutoHideEnabled
+    )
+    val songsListState = rememberLazyListState()
+    val folderTracksListState = rememberLazyListState()
+
+    LaunchedEffect(songsListState.firstVisibleItemIndex, songsListState.firstVisibleItemScrollOffset) {
+        if (songsListState.firstVisibleItemIndex == 0 && songsListState.firstVisibleItemScrollOffset == 0) {
+            dockScrollController?.onListScrolledToTop(0, 0)
+        }
+    }
+
+    LaunchedEffect(folderTracksListState.firstVisibleItemIndex, folderTracksListState.firstVisibleItemScrollOffset) {
+        if (folderTracksListState.firstVisibleItemIndex == 0 && folderTracksListState.firstVisibleItemScrollOffset == 0) {
+            dockScrollController?.onListScrolledToTop(0, 0)
+        }
+    }
 
     val filteredTracks = remember(tracks, remoteTracks, searchQuery) {
         if (searchQuery.isBlank()) tracks
@@ -79,6 +105,7 @@ fun LibraryView(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .nestedScroll(dockConnection)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         // Search & Rescan Header
@@ -226,6 +253,7 @@ fun LibraryView(
                     }
                 } else {
                     LazyColumn(
+                        state = songsListState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -433,6 +461,7 @@ fun LibraryView(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         LazyColumn(
+                            state = folderTracksListState,
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)

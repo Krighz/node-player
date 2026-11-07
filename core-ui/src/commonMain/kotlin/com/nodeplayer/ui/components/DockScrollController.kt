@@ -22,14 +22,27 @@ import kotlinx.coroutines.launch
 class DockScrollController(
     private val scope: CoroutineScope,
     var sensitivity: Float = 1.0f,
-    var returnDelayMs: Long = 1200L
+    var returnDelayMs: Long = 2000L,
+    enabled: Boolean = true
 ) {
+    var enabled: Boolean = enabled
+        set(value) {
+            field = value
+            if (!value) {
+                restoreDock()
+            }
+        }
     private val _offsetFraction = MutableStateFlow(0f)
     val offsetFraction: StateFlow<Float> = _offsetFraction.asStateFlow()
 
     private var returnTimerJob: Job? = null
 
     fun onScroll(deltaY: Float) {
+        if (!enabled) {
+            if (_offsetFraction.value != 0f) restoreDock()
+            return
+        }
+
         val scaledDelta = deltaY * sensitivity
 
         if (scaledDelta < -6f) {
@@ -39,8 +52,22 @@ class DockScrollController(
         } else if (scaledDelta > 6f) {
             // Scrolling up -> restore dock (offset towards 0f)
             _offsetFraction.value = (_offsetFraction.value - scaledDelta / 180f).coerceIn(0f, 1f)
-            scheduleReturn()
+            if (_offsetFraction.value <= 0.05f) {
+                restoreDock()
+            } else {
+                scheduleReturn()
+            }
         }
+    }
+
+    fun onListScrolledToTop(firstVisibleItemIndex: Int, firstVisibleItemScrollOffset: Int) {
+        if (firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0) {
+            restoreDock()
+        }
+    }
+
+    fun onBottomEdgeTap() {
+        restoreDock()
     }
 
     fun restoreDock() {
@@ -67,20 +94,20 @@ class DockScrollController(
  */
 @Composable
 fun rememberDockScrollConnection(
-    controller: DockScrollController,
+    controller: DockScrollController?,
     enabled: Boolean = true
 ): NestedScrollConnection {
     return remember(controller, enabled) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (enabled) {
+                if (enabled && controller != null) {
                     controller.onScroll(available.y)
                 }
                 return Offset.Zero
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                if (available.y > 1000f) {
+                if (available.y > 1000f && controller != null) {
                     // Strong fling up -> immediately bring dock back
                     controller.restoreDock()
                 }

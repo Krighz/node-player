@@ -14,7 +14,7 @@ class DockScrollControllerTest {
 
     @Test
     fun testScrollDownHidesDock() = runTest {
-        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 1000L)
+        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 2000L)
         assertEquals(0f, controller.offsetFraction.value)
 
         // Scroll down (negative delta)
@@ -28,7 +28,7 @@ class DockScrollControllerTest {
 
     @Test
     fun testScrollUpRestoresDock() = runTest {
-        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 1000L)
+        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 2000L)
         controller.hideDock()
         assertEquals(1f, controller.offsetFraction.value)
 
@@ -41,19 +41,53 @@ class DockScrollControllerTest {
     }
 
     @Test
-    fun testAutoReturnTimerRestoresDock() = runTest {
-        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 1000L)
+    fun testTwoSecondTimeoutRestoresDock() = runTest {
+        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 2000L)
         controller.hideDock()
         assertEquals(1f, controller.offsetFraction.value)
 
         // Trigger scroll event which starts timer
         controller.onScroll(-20f)
-        advanceTimeBy(500L)
-        // Still hidden midway
+        advanceTimeBy(1000L)
+        // Still hidden at 1s
         assertTrue(controller.offsetFraction.value > 0f)
 
-        // After timeout passes, dock should return to 0f
-        advanceTimeBy(600L)
+        // After 2s timeout passes, dock should return to 0f
+        advanceTimeBy(1100L)
+        assertEquals(0f, controller.offsetFraction.value)
+    }
+
+    @Test
+    fun testTopOfListRestoresDock() = runTest {
+        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 2000L)
+        controller.hideDock()
+        assertEquals(1f, controller.offsetFraction.value)
+
+        // Reaching non-top item should NOT restore dock
+        controller.onListScrolledToTop(1, 10)
+        assertEquals(1f, controller.offsetFraction.value)
+
+        // Reaching exact top should immediately restore dock
+        controller.onListScrolledToTop(0, 0)
+        assertEquals(0f, controller.offsetFraction.value)
+    }
+
+    @Test
+    fun testDisabledStateMaintainsZeroOffset() = runTest {
+        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 2000L, enabled = false)
+        assertEquals(0f, controller.offsetFraction.value)
+
+        // Scrolling when disabled should not change offset
+        controller.onScroll(-300f)
+        assertEquals(0f, controller.offsetFraction.value)
+
+        // Enabling allows scrolling
+        controller.enabled = true
+        controller.onScroll(-300f)
+        assertTrue(controller.offsetFraction.value > 0f)
+
+        // Disabling immediately restores dock
+        controller.enabled = false
         assertEquals(0f, controller.offsetFraction.value)
     }
 }

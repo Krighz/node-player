@@ -31,14 +31,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.Track
 import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.components.DockScrollController
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.onHorizontalScrollWheel
+import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
@@ -61,10 +65,24 @@ fun HomeView(
     onSelectMusicFolder: () -> Unit = {},
     onNavigateToLibrary: () -> Unit = {},
     onNavigateToEqualizer: () -> Unit = {},
+    dockScrollController: DockScrollController? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
     val coroutineScope = rememberCoroutineScope()
+    val themeConfig = LocalGlassThemeConfig.current
+    val listState = rememberLazyListState()
+
+    val dockConnection = rememberDockScrollConnection(
+        controller = dockScrollController,
+        enabled = themeConfig.dockAutoHideEnabled
+    )
+
+    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
+            dockScrollController?.onListScrolledToTop(0, 0)
+        }
+    }
 
     // 1. FOR YOU: Intelligently group local tracks into genre and acoustic style mixes
     val mixes = remember(tracks) {
@@ -155,7 +173,10 @@ fun HomeView(
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
+        state = listState,
+        modifier = modifier
+            .fillMaxSize()
+            .nestedScroll(dockConnection),
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = LocalBottomBarPadding.current + 16.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {

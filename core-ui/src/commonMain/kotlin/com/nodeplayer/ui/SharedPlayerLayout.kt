@@ -1,10 +1,14 @@
 package com.nodeplayer.ui
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -15,8 +19,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -140,6 +146,31 @@ fun SharedPlayerLayout(
 
     val dynamicBottomPadding = if (currentTrack != null) 136.dp else 80.dp
     val pageBackdrop = rememberLayerBackdrop()
+
+    val coroutineScope = rememberCoroutineScope()
+    val dockScrollController = remember(coroutineScope) {
+        DockScrollController(
+            scope = coroutineScope,
+            sensitivity = themeConfig.dockScrollSensitivity,
+            returnDelayMs = themeConfig.dockReturnDelayMs,
+            enabled = themeConfig.dockAutoHideEnabled
+        )
+    }
+
+    LaunchedEffect(themeConfig.dockScrollSensitivity, themeConfig.dockReturnDelayMs, themeConfig.dockAutoHideEnabled) {
+        dockScrollController.sensitivity = themeConfig.dockScrollSensitivity
+        dockScrollController.returnDelayMs = themeConfig.dockReturnDelayMs
+        dockScrollController.enabled = themeConfig.dockAutoHideEnabled
+    }
+
+    val offsetFraction by dockScrollController.offsetFraction.collectAsState()
+    val animatedOffsetFraction by animateFloatAsState(
+        targetValue = if (themeConfig.dockAutoHideEnabled) offsetFraction else 0f,
+        animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+        label = "dockOffsetFraction"
+    )
+    val miniPlayerOffsetFraction = if (themeConfig.dockAutoHideMiniPlayer) animatedOffsetFraction else 0f
+    val dockOffsetFraction = animatedOffsetFraction
 
     CompositionLocalProvider(
         LocalAccentColor provides accent,
@@ -456,7 +487,8 @@ fun SharedPlayerLayout(
                                 onRescanClick = onRescanLibrary,
                                 onSelectMusicFolder = onSelectMusicFolder,
                                 onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
-                                onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER }
+                                onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
+                                dockScrollController = dockScrollController
                             )
                             PlayerNavDestination.LIBRARY -> LibraryView(
                                 tracks = tracks,
@@ -468,7 +500,8 @@ fun SharedPlayerLayout(
                                 onTrackClick = onPlayTrack,
                                 onRescanClick = onRescanLibrary,
                                 searchQuery = searchQuery,
-                                onSearchChange = { searchQuery = it }
+                                onSearchChange = { searchQuery = it },
+                                dockScrollController = dockScrollController
                             )
                             PlayerNavDestination.EQUALIZER -> EqualizerView(
                                 config = audioEffectConfig,
@@ -509,6 +542,7 @@ fun SharedPlayerLayout(
                     }
 
                     // Floating Chrome Sibling Overlays above page layer in z-order
+                    val density = LocalDensity.current
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -525,7 +559,12 @@ fun SharedPlayerLayout(
                                 onSkipPreviousClick = onPrevious,
                                 onClick = { showNowPlayingOverlay = true },
                                 backdrop = pageBackdrop,
-                                modifier = Modifier.padding(bottom = 6.dp)
+                                modifier = Modifier
+                                    .padding(bottom = 6.dp)
+                                    .graphicsLayer {
+                                        translationY = with(density) { (120.dp * miniPlayerOffsetFraction).toPx() }
+                                        alpha = (1f - miniPlayerOffsetFraction).coerceIn(0f, 1f)
+                                    }
                             )
                         }
 
@@ -535,7 +574,27 @@ fun SharedPlayerLayout(
                             backdrop = pageBackdrop,
                             onSearchClick = {
                                 currentNav = PlayerNavDestination.LIBRARY
+                            },
+                            modifier = Modifier.graphicsLayer {
+                                translationY = with(density) { (120.dp * dockOffsetFraction).toPx() }
+                                alpha = (1f - dockOffsetFraction).coerceIn(0f, 1f)
                             }
+                        )
+                    }
+
+                    // Bottom-edge tap target to restore dock when hidden per D-03
+                    if (dockOffsetFraction > 0.5f) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    dockScrollController.onBottomEdgeTap()
+                                }
                         )
                     }
                 }
