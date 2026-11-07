@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.AudioOutputInfo
 import com.nodeplayer.model.Track
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.components.LiquidIconButton
+import com.nodeplayer.ui.components.LiquidSlider
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.WaveformSeekbar
 import com.nodeplayer.ui.theme.LocalAccentColor
@@ -155,17 +157,14 @@ fun BottomPlayerDeck(
                 Spacer(modifier = Modifier.width(6.dp))
 
                 // Favorite Heart Toggle
-                IconButton(
+                LiquidIconButton(
+                    icon = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     onClick = onToggleFavorite,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (isFavorite) Color(0xFFEF4444) else Color.White.copy(alpha = 0.50f),
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
+                    contentDescription = "Favorite",
+                    tint = if (isFavorite) Color(0xFFEF4444) else Color.White.copy(alpha = 0.50f),
+                    size = 32.dp,
+                    lighterStyle = true
+                )
             }
 
             // 2. Center-Left: Transport Controls (Shuffle, Prev, Play/Pause Circle, Next, Repeat)
@@ -174,23 +173,23 @@ fun BottomPlayerDeck(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier.padding(end = 14.dp)
             ) {
-                IconButton(onClick = onToggleShuffle, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        Icons.Rounded.Shuffle,
-                        contentDescription = "Shuffle",
-                        tint = if (isShuffle) accent else Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
+                LiquidIconButton(
+                    icon = Icons.Rounded.Shuffle,
+                    onClick = onToggleShuffle,
+                    contentDescription = "Shuffle",
+                    tint = if (isShuffle) accent else Color.White.copy(alpha = 0.55f),
+                    size = 32.dp,
+                    lighterStyle = true
+                )
 
-                IconButton(onClick = onPrevious, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        Icons.Rounded.SkipPrevious,
-                        contentDescription = "Previous",
-                        tint = Color.White.copy(alpha = 0.85f),
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                LiquidIconButton(
+                    icon = Icons.Rounded.SkipPrevious,
+                    onClick = onPrevious,
+                    contentDescription = "Previous",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    size = 36.dp,
+                    lighterStyle = true
+                )
 
                 // Prominent Play/Pause White Circle Button
                 Box(
@@ -209,23 +208,23 @@ fun BottomPlayerDeck(
                     )
                 }
 
-                IconButton(onClick = onNext, modifier = Modifier.size(32.dp)) {
-                    Icon(
-                        Icons.Rounded.SkipNext,
-                        contentDescription = "Next",
-                        tint = Color.White.copy(alpha = 0.85f),
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
+                LiquidIconButton(
+                    icon = Icons.Rounded.SkipNext,
+                    onClick = onNext,
+                    contentDescription = "Next",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    size = 36.dp,
+                    lighterStyle = true
+                )
 
-                IconButton(onClick = onCycleRepeat, modifier = Modifier.size(28.dp)) {
-                    Icon(
-                        imageVector = if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                        contentDescription = "Repeat",
-                        tint = if (repeatMode > 0) accent else Color.White.copy(alpha = 0.55f),
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
+                LiquidIconButton(
+                    icon = if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                    onClick = onCycleRepeat,
+                    contentDescription = "Repeat",
+                    tint = if (repeatMode > 0) accent else Color.White.copy(alpha = 0.55f),
+                    size = 32.dp,
+                    lighterStyle = true
+                )
             }
 
             // 3. Center: Integrated Waveform Seekbar (Takes majority of width)
@@ -247,27 +246,19 @@ fun BottomPlayerDeck(
             ) {
                 // Volume Slider with Mute
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
+                    LiquidIconButton(
+                        icon = if (volume <= 0.01f) Icons.Rounded.VolumeMute else if (volume < 0.5f) Icons.Rounded.VolumeDown else Icons.Rounded.VolumeUp,
                         onClick = { onVolumeChange(if (volume > 0.01f) 0.0f else 1.0f) },
-                        modifier = Modifier.size(26.dp)
-                    ) {
-                        Icon(
-                            imageVector = if (volume <= 0.01f) Icons.Rounded.VolumeMute else if (volume < 0.5f) Icons.Rounded.VolumeDown else Icons.Rounded.VolumeUp,
-                            contentDescription = "Volume",
-                            tint = Color.White.copy(alpha = 0.65f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                        contentDescription = "Volume",
+                        tint = Color.White.copy(alpha = 0.65f),
+                        size = 32.dp,
+                        lighterStyle = true
+                    )
 
-                    Slider(
+                    LiquidSlider(
                         value = volume,
                         onValueChange = onVolumeChange,
-                        modifier = Modifier.width(72.dp).height(14.dp),
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = Color.White.copy(alpha = 0.8f),
-                            inactiveTrackColor = Color.White.copy(alpha = 0.18f)
-                        )
+                        modifier = Modifier.width(72.dp).height(24.dp)
                     )
                 }
 
@@ -289,45 +280,36 @@ fun BottomPlayerDeck(
                 }
 
                 // Output Device Picker Button
-                IconButton(
+                LiquidIconButton(
+                    icon = Icons.Rounded.Speaker,
                     onClick = onOpenOutputDevicePicker,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Speaker,
-                        contentDescription = "Output Device",
-                        tint = Color.White.copy(alpha = 0.70f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                    contentDescription = "Output Device",
+                    tint = Color.White.copy(alpha = 0.70f),
+                    size = 32.dp,
+                    lighterStyle = true
+                )
 
                 // Cast to... Button
-                IconButton(
+                LiquidIconButton(
+                    icon = Icons.Rounded.Cast,
                     onClick = onCastClick,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Cast,
-                        contentDescription = "Cast to...",
-                        tint = accent,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                    contentDescription = "Cast to...",
+                    tint = accent,
+                    size = 32.dp,
+                    lighterStyle = true
+                )
 
                 // Sleep Timer Button
                 Box {
                     var showSleepMenu by remember { mutableStateOf(false) }
-                    IconButton(
+                    LiquidIconButton(
+                        icon = Icons.Rounded.Bedtime,
                         onClick = { showSleepMenu = true },
-                        modifier = Modifier.size(28.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Bedtime,
-                            contentDescription = "Sleep Timer",
-                            tint = if (sleepTimerRemainingSec != null) Color(0xFFF59E0B) else Color.White.copy(alpha = 0.70f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                        contentDescription = "Sleep Timer",
+                        tint = if (sleepTimerRemainingSec != null) Color(0xFFF59E0B) else Color.White.copy(alpha = 0.70f),
+                        size = 32.dp,
+                        lighterStyle = true
+                    )
 
                     DropdownMenu(
                         expanded = showSleepMenu,

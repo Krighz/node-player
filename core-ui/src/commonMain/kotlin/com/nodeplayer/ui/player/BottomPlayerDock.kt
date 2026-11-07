@@ -26,6 +26,8 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.nodeplayer.ui.components.GlassBadge
+import com.nodeplayer.ui.components.LiquidIconButton
+import com.nodeplayer.ui.components.LiquidSlider
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.onScrubberWheel
 import com.nodeplayer.ui.theme.LocalAccentColor
@@ -133,31 +135,21 @@ fun BottomPlayerDock(
                     modifier = Modifier.width(38.dp)
                 )
 
-                Slider(
+                LiquidSlider(
                     value = displayFraction,
                     onValueChange = { frac ->
-                        isDragging = true
-                        dragFraction = frac
-                    },
-                    onValueChangeFinished = {
-                        isDragging = false
                         if (durationMs > 0) {
-                            onSeek((dragFraction * durationMs).toLong())
+                            onSeek((frac * durationMs).toLong())
                         }
                     },
                     modifier = Modifier
                         .weight(1f)
-                        .height(16.dp)
+                        .heightIn(min = 48.dp)
                         .onScrubberWheel { deltaY ->
                             val stepMs = 5000L
                             val newPos = if (deltaY < 0f) positionMs + stepMs else positionMs - stepMs
                             onSeek(newPos.coerceIn(0L, durationMs))
-                        },
-                    colors = SliderDefaults.colors(
-                        thumbColor = accent,
-                        activeTrackColor = accent,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.15f)
-                    )
+                        }
                 )
 
                 Text(
@@ -224,18 +216,22 @@ fun BottomPlayerDock(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(onClick = onToggleShuffle) {
-                        Icon(
-                            Icons.Rounded.Shuffle,
-                            contentDescription = "Shuffle",
-                            tint = if (isShuffle) accent else Color.White.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    LiquidIconButton(
+                        icon = Icons.Rounded.Shuffle,
+                        onClick = onToggleShuffle,
+                        contentDescription = "Shuffle",
+                        tint = if (isShuffle) accent else Color.White.copy(alpha = 0.6f),
+                        size = 32.dp,
+                        lighterStyle = true
+                    )
 
-                    IconButton(onClick = onPrevious) {
-                        Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(26.dp))
-                    }
+                    LiquidIconButton(
+                        icon = Icons.Rounded.SkipPrevious,
+                        onClick = onPrevious,
+                        contentDescription = "Previous",
+                        size = 36.dp,
+                        lighterStyle = true
+                    )
 
                     // Play/Pause Liquid Bubble
                     Box(
@@ -265,18 +261,22 @@ fun BottomPlayerDock(
                         )
                     }
 
-                    IconButton(onClick = onNext) {
-                        Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(26.dp))
-                    }
+                    LiquidIconButton(
+                        icon = Icons.Rounded.SkipNext,
+                        onClick = onNext,
+                        contentDescription = "Next",
+                        size = 36.dp,
+                        lighterStyle = true
+                    )
 
-                    IconButton(onClick = onCycleRepeat) {
-                        Icon(
-                            imageVector = if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                            contentDescription = "Repeat",
-                            tint = if (repeatMode > 0) accent else Color.White.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    LiquidIconButton(
+                        icon = if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                        onClick = onCycleRepeat,
+                        contentDescription = "Repeat",
+                        tint = if (repeatMode > 0) accent else Color.White.copy(alpha = 0.6f),
+                        size = 32.dp,
+                        lighterStyle = true
+                    )
                 }
 
                 // 3. Right Volume Control & Expand Fullscreen Button
@@ -292,25 +292,19 @@ fun BottomPlayerDock(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Slider(
+                    LiquidSlider(
                         value = volume,
                         onValueChange = onVolumeChange,
-                        modifier = Modifier.width(90.dp).height(16.dp),
-                        colors = SliderDefaults.colors(
-                            thumbColor = accent,
-                            activeTrackColor = accent,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.15f)
-                        )
+                        modifier = Modifier.width(90.dp).height(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(onClick = onExpandNowPlaying) {
-                        Icon(
-                            Icons.Rounded.OpenInFull,
-                            contentDescription = "Expand Fullscreen",
-                            tint = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    LiquidIconButton(
+                        icon = Icons.Rounded.OpenInFull,
+                        onClick = onExpandNowPlaying,
+                        contentDescription = "Expand Fullscreen",
+                        size = 32.dp,
+                        lighterStyle = true
+                    )
                 }
             }
         }

@@ -145,17 +145,13 @@ fun NodeConnectPairingDialog(
                         }
                     }
 
-                    IconButton(
+                    LiquidIconButton(
+                        icon = Icons.Rounded.Close,
                         onClick = onDismissRequest,
-                        modifier = Modifier.size(30.dp)
-                    ) {
-                        Icon(
-                            Icons.Rounded.Close,
-                            contentDescription = "Close",
-                            tint = Color.White.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                        contentDescription = "Close",
+                        size = 32.dp,
+                        lighterStyle = true
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -202,24 +198,21 @@ fun NodeConnectPairingDialog(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 if (onScanQrClicked != null) {
-                                    Button(
+                                    LiquidButton(
                                         onClick = onScanQrClicked,
                                         modifier = Modifier.weight(1f).height(38.dp),
-                                        colors = ButtonDefaults.buttonColors(containerColor = accent),
-                                        shape = RoundedCornerShape(10.dp),
                                         contentPadding = PaddingValues(horizontal = 8.dp)
                                     ) {
-                                        Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Black)
+                                        Icon(Icons.Rounded.QrCodeScanner, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Text("Scan QR", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                        Text("Scan QR", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                     }
                                 }
 
-                                Button(
+                                LiquidButton(
                                     onClick = { onScanNetworkClicked?.invoke() },
                                     modifier = Modifier.weight(1f).height(38.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                                    shape = RoundedCornerShape(10.dp),
+                                    lighterStyle = true,
                                     contentPadding = PaddingValues(horizontal = 8.dp)
                                 ) {
                                     Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
@@ -319,11 +312,10 @@ fun NodeConnectPairingDialog(
                                                     }
                                                 }
 
-                                                Button(
+                                                LiquidButton(
                                                     onClick = { onDisconnectPeer?.invoke(peer.deviceId) },
                                                     modifier = Modifier.height(28.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(alpha = 0.2f)),
-                                                    shape = RoundedCornerShape(6.dp),
+                                                    lighterStyle = true,
                                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                                                 ) {
                                                     Text("Disconnect", fontSize = 10.sp, color = Color(0xFFEF4444), fontWeight = FontWeight.Bold)
@@ -338,31 +330,31 @@ fun NodeConnectPairingDialog(
                                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                IconButton(
+                                                LiquidIconButton(
+                                                    icon = Icons.Rounded.SkipPrevious,
                                                     onClick = { onSendRemotePrevious?.invoke(peer.deviceId) },
-                                                    modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f))
-                                                ) {
-                                                    Icon(Icons.Rounded.SkipPrevious, contentDescription = "Prev", tint = Color.White, modifier = Modifier.size(18.dp))
-                                                }
+                                                    contentDescription = "Prev",
+                                                    size = 36.dp,
+                                                    lighterStyle = true
+                                                )
 
-                                                Button(
+                                                LiquidButton(
                                                     onClick = { onSendRemotePlayPause?.invoke(peer.deviceId) },
-                                                    modifier = Modifier.weight(1f).height(34.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = accent),
-                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.weight(1f).height(36.dp),
                                                     contentPadding = PaddingValues(0.dp)
                                                 ) {
-                                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Play/Pause", tint = Color.Black, modifier = Modifier.size(16.dp))
+                                                    Icon(Icons.Rounded.PlayArrow, contentDescription = "Play/Pause", tint = Color.White, modifier = Modifier.size(16.dp))
                                                     Spacer(modifier = Modifier.width(4.dp))
-                                                    Text("Play / Pause", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                                    Text("Play / Pause", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                                 }
 
-                                                IconButton(
+                                                LiquidIconButton(
+                                                    icon = Icons.Rounded.SkipNext,
                                                     onClick = { onSendRemoteNext?.invoke(peer.deviceId) },
-                                                    modifier = Modifier.size(34.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f))
-                                                ) {
-                                                    Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(18.dp))
-                                                }
+                                                    contentDescription = "Next",
+                                                    size = 36.dp,
+                                                    lighterStyle = true
+                                                )
                                             }
 
                                             Spacer(modifier = Modifier.height(8.dp))
@@ -372,11 +364,10 @@ fun NodeConnectPairingDialog(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
-                                                Button(
+                                                LiquidButton(
                                                     onClick = { onTriggerAudioCast?.invoke(peer.deviceId) },
-                                                    modifier = Modifier.weight(1f).height(30.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.weight(1f).height(32.dp),
+                                                    lighterStyle = true,
                                                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                                                 ) {
                                                     Icon(Icons.Rounded.Cast, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color.White)
@@ -384,11 +375,10 @@ fun NodeConnectPairingDialog(
                                                     Text("Cast Audio", fontSize = 10.sp, color = Color.White)
                                                 }
 
-                                                Button(
+                                                LiquidButton(
                                                     onClick = { onTriggerHandoff?.invoke(peer.deviceId) },
-                                                    modifier = Modifier.weight(1f).height(30.dp),
-                                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.weight(1f).height(32.dp),
+                                                    lighterStyle = true,
                                                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)
                                                 ) {
                                                     Icon(Icons.Rounded.SwapHoriz, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color.White)
@@ -571,7 +561,7 @@ fun NodeConnectPairingDialog(
                                                 }
                                             }
 
-                                            Button(
+                                            LiquidButton(
                                                 onClick = {
                                                     if (onConnectToPeerDirectly != null) {
                                                         onConnectToPeerDirectly(peer)
@@ -582,11 +572,9 @@ fun NodeConnectPairingDialog(
                                                     }
                                                 },
                                                 modifier = Modifier.height(30.dp),
-                                                colors = ButtonDefaults.buttonColors(containerColor = accent),
-                                                shape = RoundedCornerShape(8.dp),
                                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                                             ) {
-                                                Text("Connect", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                                Text("Connect", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                                             }
                                         }
                                     }
@@ -639,7 +627,7 @@ fun NodeConnectPairingDialog(
                                     )
                                 )
 
-                                Button(
+                                LiquidButton(
                                     onClick = {
                                         val p = targetPort.toIntOrNull() ?: localPort
                                         if (targetHost.isNotBlank()) {
@@ -651,11 +639,9 @@ fun NodeConnectPairingDialog(
                                         }
                                     },
                                     enabled = !isPairingInProgress && targetHost.isNotBlank(),
-                                    modifier = Modifier.height(52.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = accent),
-                                    shape = RoundedCornerShape(10.dp)
+                                    modifier = Modifier.height(52.dp)
                                 ) {
-                                    Text("Go", fontWeight = FontWeight.Bold, color = Color.Black)
+                                    Text("Go", fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
 
@@ -747,12 +733,11 @@ fun NodeConnectPairingDialog(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            Button(
+                            LiquidButton(
                                 onClick = {
                                     clipboardManager.setText(AnnotatedString(qrPayload))
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.1f)),
-                                shape = RoundedCornerShape(8.dp),
+                                lighterStyle = true,
                                 modifier = Modifier.height(32.dp)
                             ) {
                                 Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
@@ -830,7 +815,7 @@ fun NodeConnectPairingDialog(
                                     )
                                 )
 
-                                Button(
+                                LiquidButton(
                                     onClick = {
                                         val p = doctorPort.toIntOrNull() ?: localPort
                                         doctorTesting = true
@@ -844,11 +829,9 @@ fun NodeConnectPairingDialog(
                                             }
                                         }
                                     },
-                                    modifier = Modifier.height(52.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = accent),
-                                    shape = RoundedCornerShape(10.dp)
+                                    modifier = Modifier.height(52.dp)
                                 ) {
-                                    Text("Test", fontWeight = FontWeight.Bold, color = Color.Black)
+                                    Text("Test", fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
 
@@ -869,29 +852,26 @@ fun NodeConnectPairingDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Button(
+                                LiquidButton(
                                     onClick = { onProbeGatewayClicked?.invoke() },
                                     modifier = Modifier.weight(1f).height(36.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                                    shape = RoundedCornerShape(8.dp)
+                                    lighterStyle = true
                                 ) {
                                     Text("Probe Gateway", fontSize = 11.sp, color = Color.White)
                                 }
 
-                                Button(
+                                LiquidButton(
                                     onClick = { onCopyLogClicked?.invoke() },
                                     modifier = Modifier.weight(1f).height(36.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                                    shape = RoundedCornerShape(8.dp)
+                                    lighterStyle = true
                                 ) {
                                     Text("Copy Log", fontSize = 11.sp, color = Color.White)
                                 }
 
-                                Button(
+                                LiquidButton(
                                     onClick = { onExportLogClicked?.invoke() },
                                     modifier = Modifier.weight(1f).height(36.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
-                                    shape = RoundedCornerShape(8.dp)
+                                    lighterStyle = true
                                 ) {
                                     Text("Export Log", fontSize = 11.sp, color = Color.White)
                                 }
@@ -899,11 +879,10 @@ fun NodeConnectPairingDialog(
 
                             if (onStartUsbLink != null) {
                                 Spacer(modifier = Modifier.height(8.dp))
-                                Button(
+                                LiquidButton(
                                     onClick = { onStartUsbLink.invoke() },
                                     modifier = Modifier.fillMaxWidth().height(36.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.2f)),
-                                    shape = RoundedCornerShape(8.dp)
+                                    lighterStyle = true
                                 ) {
                                     Text("Setup USB Debugging Link (ADB 127.0.0.1)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = accent)
                                 }
@@ -964,15 +943,12 @@ fun NodeConnectPairingDialog(
                                         color = Color.White.copy(alpha = 0.5f)
                                     )
                                 }
-                                Button(
+                                LiquidButton(
                                     onClick = {
                                         val next = if (config.securityLevel == SecurityLevel.SIMPLE) SecurityLevel.STRICT else SecurityLevel.SIMPLE
                                         onConfigChange?.invoke(config.copy(securityLevel = next))
                                     },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (config.securityLevel == SecurityLevel.SIMPLE) accent.copy(alpha = 0.25f) else Color(0xFFEF4444).copy(alpha = 0.3f)
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
+                                    lighterStyle = true,
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                                 ) {
                                     Text(
@@ -1191,12 +1167,11 @@ fun NodeConnectPairingDialog(
                                 Text("Jitter Buffer Target", fontSize = 12.sp, color = Color.White)
                                 Text("${config.jitterBufferTargetMs} ms", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accent)
                             }
-                            Slider(
+                            LiquidSlider(
                                 value = config.jitterBufferTargetMs.toFloat(),
                                 onValueChange = { onConfigChange?.invoke(config.copy(jitterBufferTargetMs = it.toInt())) },
                                 valueRange = 50f..500f,
-                                steps = 8,
-                                colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                                steps = 8
                             )
 
                             Row(
@@ -1206,12 +1181,11 @@ fun NodeConnectPairingDialog(
                                 Text("Keepalive Ping Interval", fontSize = 12.sp, color = Color.White)
                                 Text("${config.keepaliveIntervalSec} s", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = accent)
                             }
-                            Slider(
+                            LiquidSlider(
                                 value = config.keepaliveIntervalSec.toFloat(),
                                 onValueChange = { onConfigChange?.invoke(config.copy(keepaliveIntervalSec = it.toInt())) },
                                 valueRange = 2f..30f,
-                                steps = 13,
-                                colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                                steps = 13
                             )
                         }
                     }
@@ -1240,10 +1214,9 @@ private fun ConfigSwitchRow(
             Text(title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
             Text(subtitle, fontSize = 10.sp, color = Color.White.copy(alpha = 0.5f), lineHeight = 12.sp)
         }
-        Switch(
+        LiquidToggle(
             checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(checkedThumbColor = accent)
+            onCheckedChange = onCheckedChange
         )
     }
 }

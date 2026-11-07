@@ -33,6 +33,7 @@ import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
+import com.nodeplayer.ui.components.LiquidIconButton
 import com.nodeplayer.ui.components.LiquidGlassIconButton
 import com.nodeplayer.ui.components.LiquidGlassSlider
 import com.nodeplayer.ui.components.SoundWaveVisualizer
@@ -90,9 +91,12 @@ fun NowPlayingView(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onClose) {
-                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp))
-            }
+            LiquidIconButton(
+                icon = Icons.Rounded.KeyboardArrowDown,
+                onClick = onClose,
+                contentDescription = "Close",
+                size = 48.dp
+            )
 
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -111,13 +115,13 @@ fun NowPlayingView(
                 )
             }
 
-            IconButton(onClick = { showQueue = !showQueue }) {
-                Icon(
-                    Icons.Rounded.QueueMusic,
-                    contentDescription = "Queue",
-                    tint = if (showQueue) accent else Color.White
-                )
-            }
+            LiquidIconButton(
+                icon = Icons.Rounded.QueueMusic,
+                onClick = { showQueue = !showQueue },
+                contentDescription = "Queue",
+                tint = if (showQueue) accent else Color.White,
+                size = 48.dp
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))

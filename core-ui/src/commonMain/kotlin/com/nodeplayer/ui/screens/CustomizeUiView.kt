@@ -26,6 +26,7 @@ import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.LiquidGlassSlider
 import com.nodeplayer.ui.components.LiquidGlassSwitch
+import com.nodeplayer.ui.components.LiquidRadioButton
 import com.nodeplayer.ui.theme.LocalAccentColor
 
 @Composable
@@ -149,10 +150,9 @@ fun CustomizeUiView(
                                 color = if (isSelected) accent else Color.White
                             )
                         )
-                        RadioButton(
+                        LiquidRadioButton(
                             selected = isSelected,
-                            onClick = { onThemeConfigChange(themeConfig.copy(backgroundAnimationStyle = styleKey)) },
-                            colors = RadioButtonDefaults.colors(selectedColor = accent)
+                            onClick = { onThemeConfigChange(themeConfig.copy(backgroundAnimationStyle = styleKey)) }
                         )
                     }
                 }
