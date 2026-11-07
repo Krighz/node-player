@@ -21,9 +21,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.AudioOutputInfo
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.WaveformSeekbar
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.pressScale
 
 @Composable
 fun BottomPlayerDeck(
@@ -61,13 +63,15 @@ fun BottomPlayerDeck(
         currentTrack.formatBadgeText
     }
 
+    val deckShape = remember { ContinuousRoundedRectangle(32.dp) }
+
     // Outer Floating Glass Deck Pinned Above Bottom Edge
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(76.dp)
             .padding(horizontal = 20.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(32.dp))
+            .clip(deckShape)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
@@ -84,7 +88,7 @@ fun BottomPlayerDeck(
                         Color.White.copy(alpha = 0.06f)
                     )
                 ),
-                shape = RoundedCornerShape(32.dp)
+                shape = deckShape
             )
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {

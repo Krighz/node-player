@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -17,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.GlassTokens
 import com.nodeplayer.ui.theme.glassSurface
 import com.nodeplayer.ui.theme.pressScale
@@ -24,7 +26,7 @@ import com.nodeplayer.ui.theme.pressScale
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(GlassTokens.cardCornerRadius),
+    shape: Shape = ContinuousRoundedRectangle(GlassTokens.cardCornerRadius),
     isOled: Boolean = false,
     isDark: Boolean = true,
     tintAlpha: Float? = null,
@@ -64,7 +66,7 @@ fun GlassCard(
 fun GlassButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(GlassTokens.pillCornerRadius),
+    shape: Shape = ContinuousRoundedRectangle(GlassTokens.pillCornerRadius),
     isOled: Boolean = false,
     isDark: Boolean = true,
     content: @Composable RowScope.() -> Unit
@@ -117,11 +119,12 @@ fun GlassBadge(
     color: Color = Color(0xFF6366F1),
     textColor: Color = Color.White
 ) {
+    val badgeShape = remember { ContinuousRoundedRectangle(6.dp) }
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(6.dp))
+            .clip(badgeShape)
             .glassSurface(
-                shape = RoundedCornerShape(6.dp),
+                shape = badgeShape,
                 customTint = color,
                 tintAlpha = 0.28f
             )

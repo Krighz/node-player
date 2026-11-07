@@ -1,6 +1,7 @@
 package com.nodeplayer.music.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +35,8 @@ import com.nodeplayer.music.ui.components.SoundWaveVisualizer
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
+import com.nodeplayer.music.ui.theme.pressScale
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import dev.chrisbanes.haze.HazeState
 import java.io.File
 
@@ -121,17 +125,18 @@ fun LibraryScreen(
                 .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val pillShape = remember { ContinuousRoundedRectangle(GlassTokens.pillCornerRadius) }
             tabs.forEachIndexed { index, tabTitle ->
                 val isSelected = selectedTab == index && viewingFolder == null
                 Box(
                     modifier = Modifier
                         .glassSurface(
                             hazeState = hazeState,
-                            shape = RoundedCornerShape(GlassTokens.pillCornerRadius),
+                            shape = pillShape,
                             tintAlpha = if (isSelected) 0.85f else 0.35f,
                             customTint = if (isSelected) accent.copy(alpha = 0.4f) else null
                         )
-                        .clickable {
+                        .pressScale(targetScale = 0.95f) {
                             viewingFolder = null
                             selectedTab = index
                         }
@@ -244,11 +249,19 @@ fun SongsList(
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val artShape = remember { ContinuousRoundedRectangle(12.dp) }
                     // Artwork / Placeholder
                     Box(
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(artShape)
+                            .border(
+                                1.dp,
+                                Brush.verticalGradient(
+                                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+                                ),
+                                artShape
+                            )
                             .background(Color(0xFF1E2130)),
                         contentAlignment = Alignment.Center
                     ) {

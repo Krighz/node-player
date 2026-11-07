@@ -294,6 +294,10 @@ class MainActivity : ComponentActivity() {
                                 onOpenStats = { currentRoute = "stats" },
                                 onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
                                 onOpenNodeConnect = { showPairingDialog = true },
+                                nodeConnectStatus = if (connectedPeers.isNotEmpty()) com.nodeplayer.ui.components.DeviceConnectStatus.CONNECTED
+                                    else if (discoveredPeers.isNotEmpty() || activeSession != null) com.nodeplayer.ui.components.DeviceConnectStatus.DISCOVERING
+                                    else com.nodeplayer.ui.components.DeviceConnectStatus.DISCONNECTED,
+                                connectedDeviceCount = connectedPeers.size,
                                 onInstallUpdate = {
                                     val readyApk = (downloadStatus as? DownloadStatus.ReadyToInstall)?.apkFile
                                         ?: UpdateDownloadManager.getDownloadedApk(this@MainActivity, UpdateManager.availableUpdate.value?.versionName ?: "")

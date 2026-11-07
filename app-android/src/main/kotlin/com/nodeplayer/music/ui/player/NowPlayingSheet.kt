@@ -30,7 +30,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -1056,11 +1058,20 @@ private fun HeroArtwork(
     onLongPress: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val squircleShape = remember { ContinuousRoundedRectangle(24.dp) }
     Box(
         modifier = modifier
-            .glassSurface(
-                shape = RoundedCornerShape(28.dp),
-                tintAlpha = 0.25f
+            .clip(squircleShape)
+            .background(Color(0xFF10131E).copy(alpha = 0.65f))
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.25f),
+                        Color.White.copy(alpha = 0.06f)
+                    )
+                ),
+                shape = squircleShape
             )
             .pointerInput(track.id) {
                 // Horizontal swipe to skip track + Long press for quick actions
@@ -1100,16 +1111,19 @@ private fun HeroArtwork(
             contentScale = ContentScale.Crop,
             modifier = Modifier
                 .fillMaxSize()
-                .clip(RoundedCornerShape(28.dp))
+                .clip(squircleShape)
         )
     }
 }
 
 @Composable
 private fun SignalPathBadge(audioOutputInfo: AudioOutputInfo, track: Track, accent: Color) {
+    val badgeShape = remember { ContinuousRoundedRectangle(12.dp) }
     Row(
         modifier = Modifier
-            .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+            .clip(badgeShape)
+            .background(Color.White.copy(alpha = 0.12f))
+            .border(1.dp, Color.White.copy(alpha = 0.14f), badgeShape)
             .padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -1204,69 +1218,61 @@ private fun PlayerControlButtons(
         }
 
         // Hero Play / Pause Liquid-Glass Lens Bubble
+        val density = LocalDensity.current
         Box(
             modifier = Modifier
-                .size(80.dp)
-                .border(
-                    width = 1.dp,
-                    color = Color.White.copy(alpha = 0.16f * rimSpecular),
-                    shape = CircleShape
+                .size(76.dp)
+                .pressScale(targetScale = 0.92f) {
+                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                    onPlayPause()
+                }
+                .clip(CircleShape)
+                .drawBackdrop(
+                    shape = { CircleShape },
+                    effects = {
+                        if (!isPerformanceMode && cfg.isShaderActive(true)) {
+                            lens(
+                                refractionHeight = with(density) { (20f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f)).dp.toPx() },
+                                refractionAmount = with(density) { (18f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f)).dp.toPx() },
+                                chromaticAberration = true
+                            )
+                            blur(with(density) { 14f.dp.toPx() })
+                        }
+                    },
+                    highlight = {
+                        Highlight(
+                            width = 1.2.dp,
+                            alpha = (0.90f * rimSpecular).coerceIn(0.2f, 1.0f)
+                        )
+                    },
+                    shadow = {
+                        Shadow(color = Color.Black.copy(alpha = 0.35f))
+                    }
                 )
-                .padding(4.dp),
+                .background(
+                    if (isPerformanceMode) accent.copy(alpha = 0.90f)
+                    else accent.copy(alpha = 0.78f),
+                    CircleShape
+                )
+                .border(
+                    width = 1.2.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.90f * rimSpecular),
+                            Color(0xFFBAE6FD).copy(alpha = 0.35f * rimSpecular),
+                            Color.White.copy(alpha = 0.40f * rimSpecular)
+                        )
+                    ),
+                    shape = CircleShape
+                ),
             contentAlignment = Alignment.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .pressScale(targetScale = 0.92f) {
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        onPlayPause()
-                    }
-                    .glassLensBubble(
-                        shape = CircleShape,
-                        enabled = !isPerformanceMode && cfg.isShaderActive(true),
-                        magnification = 0.25f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
-                        refractionIndex = 0.70f * (lensStrength / 0.85f).coerceIn(0.5f, 2.0f),
-                        chromaticFringe = chromaticFringe,
-                        rimStrength = rimSpecular,
-                        rimColor = Color.White.copy(alpha = 0.90f * rimSpecular),
-                        grainStrength = grainStrength
-                    )
-                    .glassSurface(
-                        hazeState = hazeState,
-                        shape = CircleShape,
-                        tintAlpha = (cfg.effectiveTintAlpha * 0.35f).coerceIn(0.08f, 0.50f)
-                    )
-                    .background(
-                        Brush.radialGradient(
-                            listOf(
-                                Color.White.copy(alpha = 0.12f * rimSpecular),
-                                Color.White.copy(alpha = 0.02f),
-                                Color.Black.copy(alpha = 0.25f)
-                            )
-                        ),
-                        shape = CircleShape
-                    )
-                    .border(
-                        width = 1.2.dp,
-                        brush = Brush.verticalGradient(
-                            listOf(
-                                Color.White.copy(alpha = 0.90f * rimSpecular),
-                                Color(0xFFBAE6FD).copy(alpha = 0.35f * rimSpecular),
-                                Color.White.copy(alpha = 0.40f * rimSpecular)
-                            )
-                        ),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = Color.White,
-                    modifier = Modifier.size(38.dp)
-                )
-            }
+            Icon(
+                imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                contentDescription = if (isPlaying) "Pause" else "Play",
+                tint = Color(0xFF131728),
+                modifier = Modifier.size(38.dp)
+            )
         }
 
         // Next

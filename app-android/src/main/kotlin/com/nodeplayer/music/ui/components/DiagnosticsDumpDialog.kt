@@ -28,6 +28,7 @@ import androidx.compose.ui.window.Dialog
 import com.nodeplayer.music.diagnostics.DiagnosticsDumpManager
 import com.nodeplayer.music.diagnostics.DumpContentSummary
 import com.nodeplayer.music.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 
 @Composable
 fun DiagnosticsDumpDialog(
@@ -56,7 +57,7 @@ fun DiagnosticsDumpDialog(
                 .fillMaxWidth()
                 .wrapContentHeight()
                 .padding(12.dp),
-            shape = RoundedCornerShape(24.dp),
+            shape = ContinuousRoundedRectangle(24.dp),
             color = Color(0xFF131722),
             tonalElevation = 8.dp
         ) {

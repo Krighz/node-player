@@ -39,6 +39,7 @@ import com.nodeplayer.ui.components.SoundWaveVisualizer
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.onScrubberWheel
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.pressScale
 
 @Composable
 fun NowPlayingView(
@@ -319,7 +320,7 @@ fun NowPlayingView(
                         shadow = { Shadow(color = Color.Black.copy(alpha = 0.35f)) }
                     )
                     .background(accent.copy(alpha = 0.85f), CircleShape)
-                    .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onPlayPause),
+                    .pressScale(targetScale = 0.92f, onClick = onPlayPause),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

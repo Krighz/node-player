@@ -122,3 +122,29 @@
 - Desktop tests and build: Passed (`:core-ui:desktopTest`, `:app-desktop:compileKotlin`, `:app-desktop:test`, `:core-dsp:test`, `:core-common:test`, `:core-network:test`).
 - Android build: Android SDK path in local.properties (`D:/AI MAKING/android-sdk`) was not present in environment; code modifications are verified against Kotlin Multiplatform compiler and multiplatform test suites.
 - Visual and device checks: **Human check pending** (to be verified on physical phone and PC).
+
+---
+
+## Phase 4 Completed: Device Connect & Comprehensive Screen Redesign
+
+### Work Completed
+1. **Device Connect (Node Connect) Rebuild**:
+   - `DeviceConnectPill.kt` rebuilt with continuous squircle geometry (`ContinuousRoundedRectangle(19.dp)`), specular highlight rim gradient, glowing connection status dot (Cyan glow, pulsing Amber, translucent White), and spring press feedback.
+   - Maintained 100% operational pairing and casting capabilities.
+   - Integrated into Android `HomeScreen.kt` header and Windows `SharedPlayerLayout.kt` header.
+
+2. **Now Playing Redesign**:
+   - `NowPlayingSheet.kt` (Android): Updated hero artwork to continuous squircle geometry (`ContinuousRoundedRectangle(24.dp)`). Replaced old RenderEffect reflection code with upstream Kyant0 `drawBackdrop` lens shader, specular rim, and ambient shadow for hero play button. Controls and secondary tools meet >= 48dp touch bounds.
+   - `NowPlayingView.kt` (Desktop/Common): Updated hero play button with `pressScale(0.92f)` and `drawBackdrop` lens refraction, continuous squircle artwork, and fluid animated transitions.
+   - `ArtworkLoader.kt`: Upgraded `TrackArtwork` to continuous squircle clipping (`ContinuousRoundedRectangle`) with specular border rim.
+
+3. **Comprehensive Screen Redesign**:
+   - `HomeScreen.kt`, `LibraryScreen.kt`, `EqualizerScreen.kt`, `GlobalSearchSheet.kt`, `SearchCapsule.kt`, and modal dialogs (`NodeConnectPairingDialog.kt`, `FirstRunOnboardingDialog.kt`, `DiagnosticsDumpDialog.kt`, `TrackDetailsSheet.kt`) updated to unified continuous squircle tokens (`ContinuousRoundedRectangle`) and Convx spring press dynamics.
+   - Desktop 16:9 layout (`OpticalRailDock.kt`, `BottomPlayerDeck.kt`) aligned with shared tokens and added Equalizer navigation tab.
+   - Android home-screen widget static glass rendering (`WidgetShaderRenderer.kt`) verified.
+
+### Verification Status
+- Desktop unit tests: Passed (`:core-ui:desktopTest`, `:app-desktop:test`).
+- Android unit tests: Passed (`:app-android:testDebugUnitTest`).
+- Android assembleDebug: Passed (`:app-android:assembleDebug`).
+- Visual and physical checks: **Human check pending**.

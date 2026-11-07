@@ -36,6 +36,7 @@ import com.nodeplayer.network.pairing.QrCodeGenerator
 import com.nodeplayer.network.service.ConnectedPeer
 import com.nodeplayer.network.service.NodeConnectConfig
 import com.nodeplayer.network.transport.SecurityLevel
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalAccentColor
 
 @Composable
@@ -88,12 +89,17 @@ fun NodeConnectPairingDialog(
     var doctorTesting by remember { mutableStateOf(false) }
 
     Dialog(onDismissRequest = onDismissRequest) {
+        val dialogShape = remember { ContinuousRoundedRectangle(24.dp) }
         Surface(
             modifier = Modifier
                 .width(460.dp)
                 .wrapContentHeight()
-                .clip(RoundedCornerShape(24.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(24.dp)),
+                .clip(dialogShape)
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.18f),
+                    shape = dialogShape
+                ),
             color = Color(0xFF141721).copy(alpha = 0.98f)
         ) {
             Column(

@@ -49,6 +49,7 @@ data class OpticalRailTab(
 val OPTICAL_RAIL_TABS = listOf(
     OpticalRailTab(PlayerNavDestination.HOME, "Home", Icons.Rounded.Home),
     OpticalRailTab(PlayerNavDestination.LIBRARY, "Library", Icons.Rounded.LibraryMusic),
+    OpticalRailTab(PlayerNavDestination.EQUALIZER, "Equalizer", Icons.Rounded.GraphicEq),
     OpticalRailTab(PlayerNavDestination.SETTINGS, "Settings", Icons.Rounded.Settings)
 )
 

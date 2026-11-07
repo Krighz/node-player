@@ -2,10 +2,12 @@ package com.nodeplayer.ui.components
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.Icon
@@ -82,9 +84,17 @@ fun TrackArtwork(
         }
     }
 
+    val squircleShape = remember(cornerRadius) { ContinuousRoundedRectangle(cornerRadius) }
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(cornerRadius))
+            .clip(squircleShape)
+            .border(
+                1.dp,
+                Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+                ),
+                squircleShape
+            )
             .background(
                 Brush.linearGradient(
                     listOf(accent.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))

@@ -313,3 +313,33 @@ ememberDockScrollConnection to screen content with
   - Updated WidgetShaderRenderer.kt with enhanced static liquid glass rendering for offscreen RemoteViews bitmaps (squircle capsule, top-left refraction sheen, chromatic specular rim highlight).
 - **Diagnostics & Safety**:
   - Verified GlassShaderSelfTest and fallback to plain frosted blur in Performance mode or on shader compilation failure.
+
+---
+
+### [2026-11-07] - Phase 4: Device Connect Rebuild & Comprehensive Screen Redesign (feature/liquid-dock)
+
+- **Device Connect (Node Connect) Rebuild (`core-ui`, `app-android`, `app-desktop`)**:
+  - `DeviceConnectPill.kt`: Rebuilt with continuous squircle geometry (`ContinuousRoundedRectangle(19.dp)`), specular border rim gradient, active status indicator dot with animated outer glow (Cyan `#00F0FF` for Connected, pulsing Amber `#F59E0B` for Discovering, translucent white for Disconnected), device count badges, and Convx spring press physics (`pressScale(0.95f)`).
+  - Multiplatform pairing triggers, peer casting callbacks, and cast permission toggles remain 100% operational.
+  - Mobile header integration: Added responsive glass pill to Android `HomeScreen.kt` top bar with real connection state from `NodeConnectHub`.
+  - Desktop header integration: Preserved inline peer management and casting dropdown in `SharedPlayerLayout.kt`.
+- **Now Playing Redesign (`core-ui`, `app-android`)**:
+  - `NowPlayingSheet.kt` (Android): Replaced legacy RenderEffect reflection hacks with upstream Kyant0 `drawBackdrop` lens shader, specular highlight, and ambient shadow for hero play/pause button. Replaced standard corners with continuous squircle hero artwork (`ContinuousRoundedRectangle(24.dp)`). Draggable seekbar and secondary tools meet >= 48dp touch bounds with tactile spring feedback.
+  - `NowPlayingView.kt` (Desktop/Common): Updated hero play button with `pressScale(0.92f)` and `drawBackdrop` lens refraction, continuous squircle artwork, and fluid animated transitions.
+  - `ArtworkLoader.kt`: Upgraded `TrackArtwork` to continuous squircle clipping (`ContinuousRoundedRectangle`) with specular border rim.
+- **Comprehensive Screen & Dialog Redesign (`core-ui`, `app-android`)**:
+  - `HomeScreen.kt`: Replaced raw icon button with responsive `DeviceConnectPill`. Redesigned `ArtworkThumbnail` and `SmartPlaylistChip` to use continuous squircle shapes with specular border rim gradients.
+  - `LibraryScreen.kt`: Modernized tab selector pills and song list artwork thumbnails to continuous squircle geometry and spring press physics.
+  - `GlobalSearchSheet.kt`: Modernized bottom sheet container and search input field with `ContinuousRoundedRectangle`.
+  - `SearchCapsule.kt`: Modernized top search capsule container with continuous squircle corners and specular border.
+  - `EqualizerScreen.kt` & `EqualizerView.kt`: Replaced standard shapes with continuous squircle styling and draggable glass sliders.
+  - `NodeConnectPairingDialog.kt`, `FirstRunOnboardingDialog.kt`, `DiagnosticsDumpDialog.kt`, `TrackDetailsSheet.kt`: Upgraded dialog modal sheets and cards to continuous squircle glass containers.
+- **Windows Desktop 16:9 Alignment (`core-ui`)**:
+  - `OpticalRailDock.kt`: Added dedicated Equalizer tab (`PlayerNavDestination.EQUALIZER`) to the left optical rail dock, matching Android navigation parity.
+  - `BottomPlayerDeck.kt`: Modernized floating bottom deck container with continuous squircle capsule shape (`ContinuousRoundedRectangle(32.dp)`).
+- **Android Home-Screen Widgets (`app-android`)**:
+  - `WidgetShaderRenderer.kt`: Verified static hardware AGSL shader bitmaps (and software Canvas fallbacks) preserve matching obsidian liquid glass aesthetic without regressions.
+- **Verification**:
+  - Automated tests pass: `:core-ui:desktopTest`, `:app-desktop:test`, `:app-android:testDebugUnitTest`.
+  - Android debug APK assembled cleanly: `:app-android:assembleDebug`.
+  - Visual and device checks marked "human check pending".

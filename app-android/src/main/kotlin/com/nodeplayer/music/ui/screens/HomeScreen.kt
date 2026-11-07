@@ -2,6 +2,7 @@ package com.nodeplayer.music.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -33,6 +35,10 @@ import coil.request.ImageRequest
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.theme.LocalAccentColor
+import com.nodeplayer.music.ui.theme.pressScale
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.components.DeviceConnectPill
+import com.nodeplayer.ui.components.DeviceConnectStatus
 import dev.chrisbanes.haze.HazeState
 import java.io.File
 
@@ -47,6 +53,8 @@ fun HomeScreen(
     onOpenStats: () -> Unit,
     onOpenDuplicateFinder: () -> Unit,
     onOpenNodeConnect: () -> Unit = {},
+    nodeConnectStatus: DeviceConnectStatus = DeviceConnectStatus.DISCONNECTED,
+    connectedDeviceCount: Int = 0,
     onStartUpdate: (AppUpdateInfo) -> Unit = {},
     onCancelUpdate: () -> Unit = {},
     onInstallUpdate: () -> Unit = {},
@@ -148,14 +156,12 @@ fun HomeScreen(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = onOpenNodeConnect,
-                        modifier = Modifier
-                            .background(Color.White.copy(alpha = 0.08f), CircleShape)
-                            .size(38.dp)
-                    ) {
-                        Icon(Icons.Rounded.CastConnected, contentDescription = "Node Connect", tint = accent, modifier = Modifier.size(20.dp))
-                    }
+                    DeviceConnectPill(
+                        status = nodeConnectStatus,
+                        connectedDeviceCount = connectedDeviceCount,
+                        compact = true,
+                        onClick = onOpenNodeConnect
+                    )
                     IconButton(
                         onClick = onOpenStats,
                         modifier = Modifier
@@ -558,10 +564,18 @@ private fun ArtworkThumbnail(
     cornerRadius: Dp,
     modifier: Modifier = Modifier
 ) {
+    val squircleShape = remember(cornerRadius) { ContinuousRoundedRectangle(cornerRadius) }
     Box(
         modifier = modifier
             .size(size)
-            .clip(RoundedCornerShape(cornerRadius))
+            .clip(squircleShape)
+            .border(
+                1.dp,
+                Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.05f))
+                ),
+                squircleShape
+            )
             .background(Color.White.copy(alpha = 0.08f)),
         contentAlignment = Alignment.Center
     ) {
@@ -667,11 +681,19 @@ private fun SmartPlaylistChip(
     accentColor: Color,
     onClick: () -> Unit
 ) {
+    val chipShape = remember { ContinuousRoundedRectangle(16.dp) }
     Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(chipShape)
             .background(Color.White.copy(alpha = 0.08f))
-            .clickable(onClick = onClick)
+            .border(
+                1.dp,
+                Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.05f))
+                ),
+                chipShape
+            )
+            .pressScale(targetScale = 0.96f, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

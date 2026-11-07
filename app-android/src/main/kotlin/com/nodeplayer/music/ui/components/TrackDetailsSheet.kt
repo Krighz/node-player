@@ -23,6 +23,7 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import dev.chrisbanes.haze.HazeState
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,6 +45,7 @@ fun TrackDetailsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        shape = ContinuousRoundedRectangle(28.dp),
         containerColor = Color(0xFF0F111A).copy(alpha = 0.96f),
         dragHandle = {
             BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.3f))
@@ -63,7 +65,7 @@ fun TrackDetailsSheet(
                 Box(
                     modifier = Modifier
                         .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(ContinuousRoundedRectangle(12.dp))
                         .background(accent.copy(alpha = 0.2f)),
                     contentAlignment = Alignment.Center
                 ) {

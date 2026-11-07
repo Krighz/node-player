@@ -3,6 +3,7 @@ package com.nodeplayer.ui.theme
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -105,7 +106,7 @@ object GlassTokens {
  */
 @Composable
 fun Modifier.glassSurface(
-    shape: Shape = RoundedCornerShape(GlassTokens.cardCornerRadius),
+    shape: Shape = ContinuousRoundedRectangle(GlassTokens.cardCornerRadius),
     isOled: Boolean = false,
     isDark: Boolean = true,
     tintAlpha: Float? = null,
