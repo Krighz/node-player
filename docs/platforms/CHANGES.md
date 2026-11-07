@@ -5,6 +5,26 @@
 
 ---
 
+### [2026-11-07] - Ground-Up Liquid Glass Rebuild: Phase 2 Layering & LiquidBottomTabs Dock + Mini Player
+- **Root Layer Stacking Inversion (D-01, DOCK-01)**:
+  - Inverted the root Compose layout hierarchy in `SharedPlayerLayout.kt`: root full-bleed `Box` records scrolling page content and background into a single `pageBackdrop` using `Modifier.layerBackdrop(pageBackdrop)`.
+  - Floating chrome (`ConvxMiniPlayer`, `LiquidDock`, `LiquidButton`) anchored as sibling overlays above the page layer in z-order, receiving `pageBackdrop`.
+  - Introduced `LocalBottomBarPadding` dynamic composition local providing 136dp (when mini player is active) and 80dp (dock-only) so scrollable lists glide edge-to-edge behind the glass.
+- **Elimination of Page Card Self-Refraction (D-02, DOCK-02)**:
+  - Stripped all `drawBackdrop` and lens refraction shaders from inner page cards and badges in `GlassComponents.kt` and screens (`HomeView.kt`, `LibraryView.kt`, `EqualizerView.kt`, `CustomizeUiView.kt`, `SettingsView.kt`).
+  - Rendered all page cards using plain squircle surfaces (`ContinuousRoundedRectangle`), eliminating rainbow edge fringes and self-sampling artifacts.
+- **Upstream LiquidBottomTabs Dock & Search Companion (D-03, D-04, DOCK-03, DOCK-04)**:
+  - Built `LiquidDock.kt` integrating upstream `LiquidBottomTabs`: 64dp capsule bar, 8dp blur, vibrancy, (24dp, 24dp) lens, ~40% alpha container, and hidden tab copy with accent color tint.
+  - Implemented 56dp sliding puck using `rememberCombinedBackdrop(pageBackdrop, tabsBackdrop)`, press-scaled lens, chromatic aberration, and `DampedDragAnimation` over 4 tabs (Home, Library, Equalizer, Settings).
+  - Built companion 56dp circular Search `LiquidButton` floating adjacent to the dock capsule, sharing `pageBackdrop`.
+- **Floating Mini Player Capsule (D-05, DOCK-04)**:
+  - Refined `ConvxMiniPlayer.kt` to a 56dp squircle capsule floating 8dp above the dock capsule.
+  - Samples `pageBackdrop` without sampling the dock, featuring squircle album artwork thumbnail, title, artist, live audio-reactive equalizer bars, and isolated transport controls.
+- **Desktop Windows Rail & Deck Integration (D-06, DOCK-05)**:
+  - Enabled `pageBackdrop` sampling across `OpticalRailDock.kt` (left vertical rail) and `BottomPlayerDeck.kt` (bottom player deck) on Windows desktop via SkSL shaders.
+- **Multiplatform Verification**:
+  - `:core-ui:desktopTest`, `:app-desktop:compileKotlin`, and `:app-android:compileDebugKotlin` all compile and pass cleanly. Visual inspections marked as "human check pending" in `02-UAT.md`.
+
 ### [2026-11-07] - Ground-Up Liquid Glass Rebuild: Phase 1 Plan 02 Staged Clean Slate & Legacy Purge
 - **Callers Migrated to `com.kyant.backdrop.*`**:
   - `ConvxLiquidDock.kt`, `ConvxMiniPlayer.kt`, `OpticalRailDock.kt`, `LiquidGlassControls.kt`, `NowPlayingView.kt`, `BottomPlayerDock.kt`, and `NowPlayingSheet.kt` switched from `com.nodeplayer.ui.component.backdrop.*` to `com.kyant.backdrop.*`.

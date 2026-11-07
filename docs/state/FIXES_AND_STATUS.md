@@ -1,6 +1,32 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Phase 1 Clean Slate & Full Upstream Library Import Completed (01-01 & 01-02)
+## Current Status: Phase 2 Correct Layering & LiquidBottomTabs Dock + Mini Player Completed (02-01 & 02-02)
+
+### Phase 2 Accomplishments
+
+1. **DOCK-01 & DOCK-02: Correct Root Layer Hierarchy & Zero Self-Refraction**
+   - Inverted root Compose layout in `SharedPlayerLayout.kt`: root full-bleed `Box` captures page background and scrolling screens into `rememberLayerBackdrop()`.
+   - Floating chrome (`ConvxMiniPlayer`, `LiquidDock`, `LiquidButton`) rendered as sibling overlays above the page layer in z-order.
+   - Introduced dynamic `LocalBottomBarPadding` (136dp with mini player, 80dp dock-only) for edge-to-edge scrolling.
+   - Stripped all backdrop sampling from page cards, rows, headers, and tiles across `HomeView`, `LibraryView`, `EqualizerView`, and `SettingsView`, replacing them with plain continuous squircles.
+
+2. **DOCK-03 & DOCK-04: Upstream LiquidBottomTabs Dock & Mini Player**
+   - Created `LiquidDock.kt` integrating upstream 64dp capsule bar with 8dp blur, vibrancy, (24dp, 24dp) lens, ~40% opacity, and hidden tab copy tinted with accent color.
+   - Sliding 56dp puck using `rememberCombinedBackdrop(pageBackdrop, tabsBackdrop)`, press-scaled lens, chromatic aberration, and `DampedDragAnimation` across 4 tabs.
+   - Companion 56dp circular Search `LiquidButton` floating adjacent to the dock capsule, sharing `pageBackdrop`.
+   - Floating 56dp squircle `ConvxMiniPlayer` capsule positioned 8dp above dock with squircle artwork, title, artist, live audio-reactive equalizer bars, and isolated transport controls.
+
+3. **DOCK-05: Desktop Windows Rail & Deck Integration**
+   - Enabled `pageBackdrop` sampling across `OpticalRailDock.kt` (left optical rail) and `BottomPlayerDeck.kt` (bottom player deck) on Windows desktop via SkSL runtime shaders.
+
+### Platform Verification
+- Desktop tests and build: Passed (`:core-ui:desktopTest`, `:app-desktop:compileKotlin`).
+- Android build: Passed (`:app-android:compileDebugKotlin`).
+- Visual checks: **Human check pending** (documented in `02-UAT.md`).
+
+---
+
+## Historical Status: Phase 1 Clean Slate & Full Upstream Library Import Completed (01-01 & 01-02)
 
 ### Phase 1 Accomplishments
 
