@@ -100,8 +100,8 @@ fun ConvxMiniPlayer(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .height(64.dp)
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .height(56.dp)
             .then(gestureModifier)
             .then(
                 if (lensActive) {
