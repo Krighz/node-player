@@ -1,7 +1,20 @@
 # Platform Implementation Changes (v1.6.0)
 
-**Branch:** `feature/node-connect`  
+**Branch:** feature/liquid-dock  
 **Base Release:** v1.5.0  
+
+---
+
+### [2026-11-07] - Ground-Up Liquid Glass Rebuild: Phase 1 Clean Slate & Full Upstream Library Integration
+- **Full Upstream Kyant0 Library & Desktop Runtime Effect Verification**:
+  - Full Kyant0 backdrop engine and complete demo catalog integrated with complete multiplatform support (DampedDragAnimation.kt, DragGestureInspector.kt, InteractiveHighlight.kt, LiquidSlider.kt, LiquidToggle.kt, LiquidButton.kt, LiquidBottomTabs.kt).
+  - Desktop Skia SkSL Engine: Verified high-fidelity RuntimeEffect.makeForShader SkSL multiplatform shader bridge (Platform.desktop.kt, RuntimeShader.desktop.kt, RenderEffect.desktop.kt) on Windows Compose Multiplatform.
+  - Multiplatform Continuous Squircle Geometry: Implemented ContinuousRoundedRectangle and ContinuousCapsule (core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/shapes/ContinuousRoundedRectangle.kt) providing continuous iOS HIG squircle curves without platform-specific dependencies.
+  - Verified compilation: :core-ui:desktopTest, :app-desktop:compileKotlin, :app-android:compileDebugKotlin, and :app-android:assembleDebug all build and pass cleanly.
+- **Purge Plan Audit & Retention**:
+  - Obsolete glass prototypes scheduled for replacement in Phase 2 & 3: FrostedNavAndPlayer.kt (Android dock), OpticalRailDock.kt, and BottomPlayerDock.kt (Windows dock & deck).
+  - Preserved critical architectures: GlassThemeConfig settings persistence, AppSettingsRepository, playback engines (PlaybackService, WindowsPlaybackEngine), NodeConnectHub Device Connect, and GlassShaderSelfTest fallback mechanisms.
+- **Status**: Completed Phase 1. Android assembleDebug and Desktop tests pass. Visual and device checks marked 'human check pending'.
 
 ---
 
