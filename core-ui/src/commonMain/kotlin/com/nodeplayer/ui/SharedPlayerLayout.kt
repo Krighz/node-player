@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.nodeplayer.model.*
 import com.nodeplayer.ui.components.*
 import com.nodeplayer.ui.player.BottomPlayerDeck
@@ -29,6 +31,8 @@ import com.nodeplayer.ui.theme.GlassTokensData
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.LocalGlassTokens
+
+val LocalBottomBarPadding = compositionLocalOf { 80.dp }
 
 enum class PlayerNavDestination(val title: String, val icon: ImageVector) {
     HOME("For You", Icons.Rounded.Home),
@@ -134,10 +138,14 @@ fun SharedPlayerLayout(
         )
     }
 
+    val dynamicBottomPadding = if (currentTrack != null) 136.dp else 80.dp
+    val pageBackdrop = rememberLayerBackdrop()
+
     CompositionLocalProvider(
         LocalAccentColor provides accent,
         LocalGlassTokens provides glassTokens,
-        LocalGlassThemeConfig provides themeConfig
+        LocalGlassThemeConfig provides themeConfig,
+        LocalBottomBarPadding provides dynamicBottomPadding
     ) {
         Box(
             modifier = modifier
@@ -218,15 +226,17 @@ fun SharedPlayerLayout(
                     }
                 }
         ) {
-            // 1. Full Dynamic Liquid Glass Background (freezes during pause/idle for maximum performance)
-            LiquidGlassBackground(
-                accentColor = accent,
-                isOled = themeConfig.isOledBlack,
-                isPlaying = isPlaying,
-                isPerformanceMode = themeConfig.isPerformanceMode,
-                animatedBackdrop = themeConfig.animatedBackdrop && isPlaying,
-                themeConfig = themeConfig
-            )
+            // 1. Full Dynamic Liquid Glass Background for expanded desktop mode
+            if (isExpanded) {
+                LiquidGlassBackground(
+                    accentColor = accent,
+                    isOled = themeConfig.isOledBlack,
+                    isPlaying = isPlaying,
+                    isPerformanceMode = themeConfig.isPerformanceMode,
+                    animatedBackdrop = themeConfig.animatedBackdrop && isPlaying,
+                    themeConfig = themeConfig
+                )
+            }
 
             // 2. Main Layout (Expanded Desktop / Landscape vs Portrait Phone)
             if (isExpanded) {
@@ -409,9 +419,25 @@ fun SharedPlayerLayout(
                     )
                 }
             } else {
-                // Portrait Layout (Phone): Android portrait stays unchanged
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                // Portrait Layout (Phone): Inverted Box hierarchy per D-01 & DOCK-01
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Page Content & Background layer recorded into pageBackdrop
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .layerBackdrop(pageBackdrop)
+                    ) {
+                        // Background gradient/blobs
+                        LiquidGlassBackground(
+                            accentColor = accent,
+                            isOled = themeConfig.isOledBlack,
+                            isPlaying = isPlaying,
+                            isPerformanceMode = themeConfig.isPerformanceMode,
+                            animatedBackdrop = themeConfig.animatedBackdrop && isPlaying,
+                            themeConfig = themeConfig
+                        )
+
+                        // Active Destination View (full-bleed, scrolling underneath floating chrome)
                         when (currentNav) {
                             PlayerNavDestination.HOME -> HomeView(
                                 tracks = tracks,
@@ -480,8 +506,9 @@ fun SharedPlayerLayout(
                         }
                     }
 
-                    // Bottom Navigation Bar
+                    // Floating Chrome Sibling Overlays above page layer in z-order
                     NavigationBar(
+                        modifier = Modifier.align(Alignment.BottomCenter),
                         containerColor = Color(0xFF0C0E18).copy(alpha = 0.85f),
                         contentColor = accent
                     ) {
@@ -499,28 +526,30 @@ fun SharedPlayerLayout(
                             )
                         }
                     }
-                }
 
-                // Persistent Bottom Mini Player / Dock for Phone Portrait
-                if (currentTrack != null) {
-                    BottomPlayerDock(
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp),
-                        currentTrack = currentTrack,
-                        isPlaying = isPlaying,
-                        positionMs = positionMs,
-                        durationMs = durationMs,
-                        volume = volume,
-                        isShuffle = isShuffle,
-                        repeatMode = repeatMode,
-                        onPlayPause = onPlayPause,
-                        onNext = onNext,
-                        onPrevious = onPrevious,
-                        onSeek = onSeek,
-                        onVolumeChange = onVolumeChange,
-                        onToggleShuffle = onToggleShuffle,
-                        onCycleRepeat = onCycleRepeat,
-                        onExpandNowPlaying = { showNowPlayingOverlay = true }
-                    )
+                    // Persistent Bottom Mini Player / Dock for Phone Portrait
+                    if (currentTrack != null) {
+                        BottomPlayerDock(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 80.dp),
+                            currentTrack = currentTrack,
+                            isPlaying = isPlaying,
+                            positionMs = positionMs,
+                            durationMs = durationMs,
+                            volume = volume,
+                            isShuffle = isShuffle,
+                            repeatMode = repeatMode,
+                            onPlayPause = onPlayPause,
+                            onNext = onNext,
+                            onPrevious = onPrevious,
+                            onSeek = onSeek,
+                            onVolumeChange = onVolumeChange,
+                            onToggleShuffle = onToggleShuffle,
+                            onCycleRepeat = onCycleRepeat,
+                            onExpandNowPlaying = { showNowPlayingOverlay = true }
+                        )
+                    }
                 }
             }
 
