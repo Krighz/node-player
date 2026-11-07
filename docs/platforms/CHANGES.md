@@ -5,6 +5,18 @@
 
 ---
 
+### [2026-11-07] - Liquid Glass Revamp: Phase 3 Smooth iOS-like Animations (like Convx)
+- **Spring Physics Engine (`core-ui`, `core-model`)**:
+  - `MotionTokens.kt`: Added Convx-matched spring configurations (`ConvxPuck`: `dampingRatio = 0.82f`, `stiffness = 380f`; `DragTracking`: `dampingRatio = 0.95f`, `stiffness = 900f`).
+  - `MotionLevel`: Added `FULL`, `REDUCED`, and `OFF` modes to `GlassThemeConfig` in `core-model`.
+  - System Accessibility: Automatically drops spring animations down to instantaneous snap transitions when `reduceMotion` or system animations are disabled.
+  - `MotionTokensTest.kt`: Unit tests verifying spring resolution across all motion tiers.
+- **Draw/Layout Phase Optimization (`core-ui`)**:
+  - Enforced GPU-accelerated layer transforms (`graphicsLayer { scaleX = ...; scaleY = ... }`) for press scales and thumb bounce, avoiding per-frame recomposition.
+- **Status**: Completed, tests pass (`:core-ui:desktopTest`, `:app-desktop:test`). Device checks marked "human check pending".
+
+---
+
 ### [2026-11-07] - Liquid Glass Revamp: Phase 2 Revamp the Glass Code
 - **Unified Glass Architecture (`core-model`, `core-ui`)**:
   - `GlassQuality`: Introduced `FULL`, `BALANCED`, and `LIGHT` quality modes to `GlassThemeConfig` in `core-model`.

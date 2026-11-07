@@ -1,6 +1,29 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Phase 2 Completed
+## Current Status: Phase 3 Completed
+
+### Phase 3 Accomplishments
+
+1. **ANIM-01 & ANIM-02: Convx-Inspired Spring Physics & Handoff**
+   - Implemented `ConvxPuck` (`dampingRatio = 0.82f`, `stiffness = 380f`) and `DragTracking` (`dampingRatio = 0.95f`, `stiffness = 900f`) in `MotionTokens.kt`.
+   - Tuned sliding selection puck in dock with touch tracking highlight.
+   - Smooth sheet expand/collapse transitions matching squircle radius interpolation.
+
+2. **ANIM-03 & ANIM-06: Draw/Layout Phase Animation & Press Bounce**
+   - Restructured press scaling to run directly in `Modifier.graphicsLayer` transforms, preventing per-frame layout recalculations and sibling recomposition.
+   - Added interactive squish and bounce on controls.
+
+3. **ANIM-04: Overscroll Physics & Tactile Ticks**
+   - Tactile haptic feedback hooks (`KEYBOARD_TAP`) upon crossing tab detents and drag thresholds.
+
+4. **ANIM-05: Motion Level & Accessibility Integration**
+   - Added `MotionLevel` (`FULL`, `REDUCED`, `OFF`) to `GlassThemeConfig` in `core-model`.
+   - Wired `MotionTokens.resolveSpringSpec` to honor system "remove animations" / `reduceMotion` preferences, snapping immediately to `Instant` with zero lag.
+   - Automated tests in `MotionTokensTest.kt` verifying all motion tiers.
+
+---
+
+## Phase 2 Completed
 
 ### Phase 2 Accomplishments
 

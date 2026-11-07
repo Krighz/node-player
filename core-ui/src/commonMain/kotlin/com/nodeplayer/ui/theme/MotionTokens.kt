@@ -15,8 +15,17 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import com.nodeplayer.model.GlassThemeConfig
+import com.nodeplayer.model.MotionLevel
 
 object MotionTokens {
+
+    /**
+     * Convx-matched critically damped spring for the selection puck.
+     */
+    val ConvxPuck: AnimationSpec<Float> = spring(
+        dampingRatio = 0.82f,
+        stiffness = 380f
+    )
 
     /**
      * Fast, tactile spring for button presses, toggles, and micro-interactions.
@@ -51,14 +60,33 @@ object MotionTokens {
     )
 
     /**
-     * Dynamically resolves the spring spec based on user Motion settings.
+     * Touch-tracking spring with minimal latency for interactive dragging.
+     */
+    val DragTracking: AnimationSpec<Float> = spring(
+        dampingRatio = 0.95f,
+        stiffness = 900f
+    )
+
+    /**
+     * Instant / snap spec when motion is disabled.
+     */
+    val Instant: AnimationSpec<Float> = spring(
+        dampingRatio = 1.0f,
+        stiffness = 50000f
+    )
+
+    /**
+     * Dynamically resolves the spring spec based on user Motion settings and accessibility.
      */
     fun resolveSpringSpec(
         config: GlassThemeConfig,
         defaultSpec: AnimationSpec<Float> = Smooth
     ): AnimationSpec<Float> {
-        if (config.reduceMotion || config.animationPreset == "OFF" || config.isPerformanceMode) {
-            return spring(dampingRatio = 1.0f, stiffness = 2500f)
+        if (config.reduceMotion || config.motionLevel == MotionLevel.OFF || config.animationPreset == "OFF" || config.isPerformanceMode) {
+            return Instant
+        }
+        if (config.motionLevel == MotionLevel.REDUCED) {
+            return Gentle
         }
         return when (config.animationPreset.uppercase()) {
             "SNAPPY" -> Snappy

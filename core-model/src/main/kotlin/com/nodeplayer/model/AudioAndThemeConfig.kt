@@ -190,8 +190,15 @@ enum class GlassQuality(val displayName: String) {
     LIGHT("Light (Plain Compose)")
 }
 
+enum class MotionLevel(val displayName: String) {
+    FULL("Full Springs & Dynamics"),
+    REDUCED("Reduced Motion (Gentle)"),
+    OFF("Off (Instant / No Animations)")
+}
+
 data class GlassThemeConfig(
     val glassQuality: GlassQuality = GlassQuality.BALANCED,
+    val motionLevel: MotionLevel = MotionLevel.FULL,
     val glassStrength: String = "BALANCED", // SUBTLE, BALANCED, DRAMATIC, OFF
     val themeMode: String = "SYSTEM",       // SYSTEM, DARK, LIGHT, OLED
     val accentSource: String = "ARTWORK",   // ARTWORK, MATERIAL_YOU, PRESET
