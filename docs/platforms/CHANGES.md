@@ -5,6 +5,34 @@
 
 ---
 
+### [2026-11-08] - Ground-Up Liquid Glass Rebuild: Phase 4 Global Settings, Per-Item Overrides & Real-Time Live Preview
+- **Master Liquid Glass Controls Card & Presets (SETTINGS-01)**:
+  - Implemented `MasterControlsCard` in `CustomizeUiView.kt` providing a global master on/off switch (`masterEnabled`), 3 tiered presets (`Full`, `Balanced`, `Light`), and 12 shared master optical and spring sliders.
+  - Added preset change safety dialog ("Keep existing overrides" vs "Reset all to preset") preventing accidental overwrite of custom adjustments.
+  - Master OFF switch turns all components into high-performance zero-sampling continuous squircles (`ResolvedGlassParams.LIGHTER_SQUIRCLE`).
+- **9 Per-Item Override Accordions & List Optimization (SETTINGS-02)**:
+  - Built 9 collapsible accordion cards in `CustomizeUiView.kt` for Buttons, Toggles, Sliders, Dock, Chips, Dialogs, Mini Player, Now Playing, and Widgets.
+  - Implemented immediate "Use Global" switch with smooth expand/collapse chevron animation and "Reset to Global" per-item restoration.
+  - Added granular "Force Lighter Style in Lists" toggle for Buttons, Toggles, and Chips, eliminating heavy shader passes in dense lists.
+- **Unified Domain Models, Versioned Serialization & Persistence (SETTINGS-03)**:
+  - Created pure Kotlin `GlassControlsConfig.kt` in `:core-model` with zero Android framework dependencies.
+  - Implemented `GlassControlsSerializer.kt` handling versioned JSON format (`NodePlayerGlassControls` v1) with 64KB bounds, numeric clamping, and corrupt payload recovery.
+  - Added 1-click clipboard export/import dialogs and factory reset engine.
+  - Integrated persistent reactive storage via `AppSettingsRepository.kt` (DataStore) on Android and `DesktopSettingsStore.kt` on Windows Desktop.
+- **Interactive Live Preview Canvas & Dynamic GPU Cost Meter (SETTINGS-04)**:
+  - Built `LivePreviewCanvas.kt` pinned/sticky at top on mobile portrait and in a 2-column split (45% preview / 55% controls) on desktop 16:9 (>840dp).
+  - Implemented dynamic animated caustics and chromatic metaballs backdrop (`DynamicPreviewCausticsBackdrop`) using stable root textures (`rememberLayerBackdrop()`).
+  - Added real-time GPU cost meter with empirical frame-time calculation (`calculateGpuCost`) and color-coded classification badge (`LOW`, `MODERATE`, `HIGH`, `INTENSE`).
+  - Rendered complete miniature interactive suite: mini player capsule with animated equalizer bars, mini button with spring press scale, draggable mini toggle, selectable mini chip, continuous mini slider with touch slop isolation, and mini dock with sliding tab puck.
+- **Dynamic Parameter Wiring & Exhaustive SETTINGS.md Audit (SETTINGS-05)**:
+  - Provided `LocalGlassControlsConfig` in `SharedPlayerLayout.kt`, dynamically consumed by `LiquidControls.kt`, `ConvxLiquidDock.kt`, and `ConvxMiniPlayer.kt`.
+  - Updated `docs/reference/SETTINGS.md` with an exhaustive audit of all 15+ settings parameters, line references, GPU cost formulas, and JSON schemas.
+- **Multiplatform Verification**:
+  - All tests passing in `:core-model:test` and `:core-ui:desktopTest`.
+  - Full project compilation clean across `:app-android:compileDebugKotlin` and `:app-desktop:compileKotlin`.
+  - Visual inspections cataloged as "human check pending" in `04-UAT.md`.
+
+
 ### [2026-11-08] - Ground-Up Liquid Glass Rebuild: Phase 3 Drag Controls Everywhere & Dock Auto-Hide
 - **Continuous Gesture Draggable `LiquidSlider` (CTRL-01)**:
   - Upgraded `LiquidSlider.kt` with continuous gesture dragging using `DampedDragAnimation`, horizontal velocity stretch (`scaleX`), vertical press-squish (`scaleY`), and spring release snapping.
