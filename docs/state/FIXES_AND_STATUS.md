@@ -1,8 +1,29 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Debug App Launch Crash Fixed & Verified on Hardware (Android 16 / realme)
+## Current Status: Liquid Glass Runtime Rendering Restored & Verified on Hardware (Android 16 / realme)
 
-### Post-Port Hardware Bug Fix (2026-11-08)
+### Post-Port Hardware Bug Fix 2: Flat Rendering Root Causes Resolved (2026-11-08)
+
+1. **Path Chosen & Why**:
+   - Platform: Android 16 (API 36, realme RMX3853).
+   - Mode: Full AGSL hardware shaders (`shaderMode=AUTO`, `selfTestPassed=true` [0 spilled pixels, avg lum 0.19], `isShaderActive=true`, `perfMode=false`, `masterEnabled=true`).
+2. **Root Causes for Flat Rendering**:
+   - **Root Cause A (`MainActivity.kt:258, 475, 495`)**: In Android `MainActivity.kt`, `pageBackdrop` was never instantiated or applied (`.haze(dockHazeState)` was still present from the legacy implementation). `ConvxMiniPlayer` and `ConvxLiquidDock` were never passed a `backdrop` parameter, so they defaulted to `emptyBackdrop()`, which has a no-op `drawBackdrop` implementation that draws 0 pixels.
+   - **Root Cause B (`ConvxLiquidDock.kt:170, 315`, `ConvxMiniPlayer.kt:135`)**: The dock container, search button, and mini player omitted `onDrawSurface`, leaving the glass container completely transparent without any tinted acrylic/glass background surface color.
+   - **Root Cause C (`ConvxLiquidDock.kt:220`)**: The sliding tab puck in `ConvxLiquidDock` only rendered a flat `Brush.verticalGradient` box without `Modifier.drawBackdrop`, resulting in no optical lens magnification or chromatic fringing over tab labels.
+3. **Fixes Applied**:
+   - In `MainActivity.kt`: Initialized `val pageBackdrop = rememberLayerBackdrop()`, bound the root screen layer via `Modifier.layerBackdrop(pageBackdrop)`, and wired `backdrop = pageBackdrop` into `ConvxMiniPlayer` and `ConvxLiquidDock`.
+   - In `ConvxLiquidDock.kt`: Added `onDrawSurface = { drawRect(Color(0xFF141923).copy(alpha = 0.65f)) }` to the capsule dock and Search button. Added `Modifier.drawBackdrop` with optical lens, rim ambient highlight, and accent surface tint to the sliding puck.
+   - In `ConvxMiniPlayer.kt`: Added `onDrawSurface = { drawRect(Color(0xFF141923).copy(alpha = 0.70f)) }`.
+   - In `core-ui`: Added `GlassDebug` throttled instrumentation tracking path selection, update/draw durations, AGSL shader compile times, layerBackdrop sizes, and offsets.
+4. **Measured Execution Times (Device Logs)**:
+   - AGSL RuntimeShader compilation (first time): `0.18ms - 1.09ms`.
+   - `updateEffects()` duration: `0.35ms - 1.51ms` (median ~0.66ms).
+   - `drawBackdropLayer()` active sampling: `Offset(48, 2130)` (dock), `Offset(60, 2142)` (puck), `Offset(870, 2139)` (search), `Offset(48, 1938)` (mini player) from 1080x2376 page backdrop and 1080x5738 optical diagnostics test pattern.
+
+---
+
+### Post-Port Hardware Bug Fix 1: Startup Crash Fixed (2026-11-08)
 
 1. **Exact Crash Exception:**
    `java.lang.IllegalStateException: Size is unspecified`

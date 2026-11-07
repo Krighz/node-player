@@ -16,6 +16,7 @@ object FrameMetricsTracker {
     private val frameDurations = CopyOnWriteArrayList<Float>()
     var currentRefreshRate: Float = 120f
         private set
+    private var lastLogTime = 0L
 
     fun start(activity: Activity) {
         if (isRegistered || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
@@ -39,6 +40,16 @@ object FrameMetricsTracker {
                 frameDurations.add(totalDurationMs)
                 if (frameDurations.size > 1000) {
                     frameDurations.removeAt(0)
+                }
+                val now = System.currentTimeMillis()
+                if (now - lastLogTime >= 2000L) {
+                    lastLogTime = now
+                    val stats = getStats()
+                    com.nodeplayer.ui.debug.GlassDebug.logThrottled(
+                        "FrameMetrics",
+                        "Samples=${stats.sampleCount}, Median=${stats.medianMs}ms, P90=${stats.p90Ms}ms, P99=${stats.p99Ms}ms, Jank=${stats.jankPercentage}%",
+                        minIntervalMs = 2000L
+                    )
                 }
             }
             listener = frameListener

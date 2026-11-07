@@ -53,6 +53,7 @@ import com.nodeplayer.ui.theme.LocalGlassControlsConfig
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.MotionTokens
+import com.nodeplayer.ui.debug.GlassDebug
 import com.nodeplayer.ui.theme.pressScale
 
 data class ConvxNavTabItem(
@@ -100,6 +101,12 @@ fun ConvxLiquidDock(
     val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF" && !resolvedDock.isPlainSquircle && controlsConfig.masterEnabled
     val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
     val puckActive = themeConfig.dockGlassPuckEnabled
+
+    GlassDebug.logThrottled(
+        "ConvxLiquidDock",
+        "lensActive=$lensActive (dockGlassLens=${themeConfig.dockGlassLensEnabled}, shaderEnabled=$shaderEnabled, !perf=${!isPerformanceMode}, strength=${themeConfig.glassStrength}, !plain=${!resolvedDock.isPlainSquircle}, master=${controlsConfig.masterEnabled}), " +
+        "rimActive=$rimActive, puckActive=$puckActive, blurDp=${resolvedDock.blurDp}, lensH=${resolvedDock.lensHeightDp}, lensAmt=${resolvedDock.lensAmountDp}, backdrop=${backdrop::class.simpleName}"
+    )
 
     val selectedIndex = items.indexOfFirst { it.route == selectedRoute }.coerceAtLeast(0)
     var pillWidthPx by remember { mutableIntStateOf(0) }
@@ -167,6 +174,9 @@ fun ConvxLiquidDock(
                             },
                             shadow = {
                                 Shadow(radius = 12.dp, color = Color.Black.copy(alpha = 0.28f * resolvedDock.shadowStrength))
+                            },
+                            onDrawSurface = {
+                                drawRect(Color(0xFF141923).copy(alpha = 0.65f))
                             }
                         )
                     } else {
@@ -215,24 +225,50 @@ fun ConvxLiquidDock(
                         .offset(x = animatedPuckOffsetDp + 4.dp, y = 4.dp)
                         .width(tabWidthDp - 8.dp)
                         .height(52.dp)
-                        .clip(puckShape)
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    accent.copy(alpha = if (isPerformanceMode) 0.22f else 0.28f),
-                                    Color.White.copy(alpha = 0.10f)
+                        .then(
+                            if (lensActive) {
+                                Modifier.drawBackdrop(
+                                    backdrop = backdrop,
+                                    shape = { puckShape },
+                                    effects = {
+                                        lens(
+                                            resolvedDock.lensHeightDp.dp.toPx() * 0.75f,
+                                            resolvedDock.lensAmountDp.dp.toPx() * 0.75f,
+                                            chromaticAberration = resolvedDock.chromaticAberration > 0.05f
+                                        )
+                                    },
+                                    highlight = {
+                                        Highlight.Ambient.copy(
+                                            width = 1.dp,
+                                            alpha = (0.7f * resolvedDock.highlightStrength).coerceIn(0.1f, 1f)
+                                        )
+                                    },
+                                    onDrawSurface = {
+                                        drawRect(accent.copy(alpha = 0.32f))
+                                    }
                                 )
-                            )
-                        )
-                        .border(
-                            width = 1.dp,
-                            brush = Brush.verticalGradient(
-                                listOf(
-                                    accent.copy(alpha = 0.60f),
-                                    Color.White.copy(alpha = 0.15f)
-                                )
-                            ),
-                            shape = puckShape
+                            } else {
+                                Modifier
+                                    .clip(puckShape)
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                accent.copy(alpha = if (isPerformanceMode) 0.22f else 0.28f),
+                                                Color.White.copy(alpha = 0.10f)
+                                            )
+                                        )
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        brush = Brush.verticalGradient(
+                                            listOf(
+                                                accent.copy(alpha = 0.60f),
+                                                Color.White.copy(alpha = 0.15f)
+                                            )
+                                        ),
+                                        shape = puckShape
+                                    )
+                            }
                         )
                 )
             }
@@ -312,6 +348,9 @@ fun ConvxLiquidDock(
                                 },
                                 shadow = {
                                     Shadow(radius = 10.dp, color = Color.Black.copy(alpha = 0.25f))
+                                },
+                                onDrawSurface = {
+                                    drawRect(Color(0xFF141923).copy(alpha = 0.65f))
                                 }
                             )
                         } else {

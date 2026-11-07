@@ -9,6 +9,7 @@ import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.platform.InspectorInfo
 import com.kyant.backdrop.internal.recordLayer
+import com.nodeplayer.ui.debug.GlassDebug
 
 fun Modifier.layerBackdrop(backdrop: LayerBackdrop): Modifier =
     this then LayerBackdropElement(backdrop)
@@ -54,6 +55,10 @@ private class LayerBackdropNode(
 
     override fun ContentDrawScope.draw() {
         drawContent()
+        GlassDebug.logThrottled(
+            "LayerBackdrop",
+            "Recording page into backdrop: size=${this.size}, layerCoordAttached=${backdrop.layerCoordinates != null}"
+        )
         recordLayer(backdrop.graphicsLayer) { backdrop.onDraw(this@draw) }
     }
 

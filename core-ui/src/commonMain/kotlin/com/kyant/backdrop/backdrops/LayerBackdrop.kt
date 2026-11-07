@@ -19,6 +19,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.unit.Density
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.internal.InverseLayerScope
+import com.nodeplayer.ui.debug.GlassDebug
 
 private val DefaultOnDraw: ContentDrawScope.() -> Unit = { drawContent() }
 
@@ -49,19 +50,26 @@ class LayerBackdrop internal constructor(
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?
     ) {
-        val coordinates = coordinates ?: return
-        val layerCoordinates = layerCoordinates ?: return
+        val coordinates = coordinates ?: run {
+            GlassDebug.logThrottled("LayerBackdrop", "drawBackdrop skipped: coordinates is null")
+            return
+        }
+        val layerCoordinates = layerCoordinates ?: run {
+            GlassDebug.logThrottled("LayerBackdrop", "drawBackdrop skipped: layerCoordinates is null")
+            return
+        }
+        val offset =
+            try {
+                layerCoordinates.localPositionOf(coordinates, Offset.Zero)
+            } catch (_: Exception) {
+                // TODO: outer transformations lead to wrong position calculation
+                coordinates.positionInWindow() - layerCoordinates.positionInWindow()
+            }
+        GlassDebug.logThrottled("LayerBackdrop", "drawBackdrop sampling at offset: ($offset), layerSize=${graphicsLayer.size}")
         withTransform({
             if (layerBlock != null) {
                 with(obtainInverseLayerScope()) { inverseTransform(density, layerBlock) }
             }
-            val offset =
-                try {
-                    layerCoordinates.localPositionOf(coordinates, Offset.Zero)
-                } catch (_: Exception) {
-                    // TODO: outer transformations lead to wrong position calculation
-                    coordinates.positionInWindow() - layerCoordinates.positionInWindow()
-                }
             translate(-offset.x, -offset.y)
         }) {
             drawLayer(graphicsLayer)

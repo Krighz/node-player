@@ -32,6 +32,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.nodeplayer.ui.components.ConvxLiquidDock
 import com.nodeplayer.ui.components.ConvxMiniPlayer
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.nodeplayer.ui.debug.GlassDebug
 import com.nodeplayer.ui.components.DockScrollController
 import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.music.ui.components.GlobalSearchSheet
@@ -129,7 +132,8 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(!prefs.getBoolean("onboarding_completed", false))
                 }
 
-                var currentRoute by remember { mutableStateOf("home") }
+                val intentRoute = intent?.getStringExtra("route")
+                var currentRoute by remember { mutableStateOf(intentRoute ?: "home") }
                 var isNowPlayingExpanded by remember { mutableStateOf(false) }
 
                 val appSettings by viewModel.appSettings.collectAsState()
@@ -249,13 +253,16 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                val pageBackdrop = rememberLayerBackdrop()
+
                 Box(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    // Blur Source Container: Encloses both background AND scrolling screen content
+                    // Blur Source Container: Encloses both background AND scrolling screen content recorded into pageBackdrop
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .layerBackdrop(pageBackdrop)
                             .haze(dockHazeState)
                             .then(
                                 if (themeConfig.dockAutoHideEnabled) {
@@ -479,6 +486,7 @@ class MainActivity : ComponentActivity() {
                                     isPerformanceMode = themeConfig.isPerformanceMode,
                                     shaderEnabled = isShaderActive,
                                     chromaticFringe = themeConfig.chromaticFringeValue(),
+                                    backdrop = pageBackdrop,
                                     modifier = if (dockAutoHide && !miniPlayerAutoHide) {
                                         Modifier.graphicsLayer {
                                             // Counter-translate to keep mini player pinned when dock slides down
@@ -490,6 +498,12 @@ class MainActivity : ComponentActivity() {
 
                             val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
 
+                            GlassDebug.logThrottled(
+                                "GlassPath",
+                                "API=${android.os.Build.VERSION.SDK_INT}, shaderMode=${themeConfig.shaderMode}, selfTestPassed=${selfTestResult.passed}, " +
+                                "isShaderActive=$isShaderActive, perfMode=${themeConfig.isPerformanceMode}, dockLens=${themeConfig.dockGlassLensEnabled}"
+                            )
+
                             ConvxLiquidDock(
                                 selectedRoute = currentRoute,
                                 onRouteChange = { currentRoute = it },
@@ -499,7 +513,8 @@ class MainActivity : ComponentActivity() {
                                 chromaticFringe = themeConfig.chromaticFringeValue(),
                                 searchButtonVisible = themeConfig.showDockSearchButton,
                                 lensStrength = themeConfig.lensRefractionStrength,
-                                rimSpecular = themeConfig.lensRimSpecular
+                                rimSpecular = themeConfig.lensRimSpecular,
+                                backdrop = pageBackdrop
                             )
                         }
                     }

@@ -13,6 +13,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nodeplayer.ui.debug.GlassDebug
+import kotlin.math.roundToInt
 
 /**
  * Lightweight real-time frame time overlay for performance profiling.
@@ -47,6 +49,7 @@ fun FrameTimeOverlay(
                     fps = frameCount
                     frameCount = 0
                     lastFpsTimestamp = frameTimeNanos
+                    GlassDebug.logThrottled("FrameTime", "Overlay FPS=$fps, frameTimeMs=${(frameTimeMs * 10).roundToInt() / 10f}ms", 2000L)
                 }
             }
         }

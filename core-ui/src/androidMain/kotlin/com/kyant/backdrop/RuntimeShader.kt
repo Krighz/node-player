@@ -5,12 +5,21 @@ import androidx.annotation.RequiresApi
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.toArgb
+import com.nodeplayer.ui.debug.GlassDebug
 import org.intellij.lang.annotations.Language
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 actual fun RuntimeShader(@Language("AGSL") shaderString: String): RuntimeShader {
-    val shader = android.graphics.RuntimeShader(shaderString)
-    return AndroidRuntimeShader(shader)
+    val start = System.nanoTime()
+    try {
+        val shader = android.graphics.RuntimeShader(shaderString)
+        val elapsedMs = (System.nanoTime() - start) / 1_000_000f
+        GlassDebug.log("ShaderCompile", "Compiled AGSL RuntimeShader in ${elapsedMs}ms (length=${shaderString.length})")
+        return AndroidRuntimeShader(shader)
+    } catch (t: Throwable) {
+        GlassDebug.logError("ShaderCompile", "Failed to compile AGSL shader: ${t.message}", t)
+        throw t
+    }
 }
 
 actual fun RuntimeShader.asComposeShader(): Shader {

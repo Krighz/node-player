@@ -40,6 +40,7 @@ import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.pressScale
+import com.nodeplayer.ui.debug.GlassDebug
 
 /**
  * Convx-style Floating Liquid Glass Mini Player.
@@ -78,6 +79,11 @@ fun ConvxMiniPlayer(
 
     val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF" && !resolvedMiniPlayer.isPlainSquircle && controlsConfig.masterEnabled
     val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
+
+    GlassDebug.logThrottled(
+        "ConvxMiniPlayer",
+        "lensActive=$lensActive, blurDp=${resolvedMiniPlayer.blurDp}, lensH=${resolvedMiniPlayer.lensHeightDp}, lensAmt=${resolvedMiniPlayer.lensAmountDp}, backdrop=${backdrop::class.simpleName}"
+    )
 
     val containerShape = remember(resolvedMiniPlayer.cornerShapeDp) { ContinuousRoundedRectangle(resolvedMiniPlayer.cornerShapeDp.dp) }
     val artworkShape = remember { ContinuousRoundedRectangle(10.dp) }
@@ -131,6 +137,9 @@ fun ConvxMiniPlayer(
                         },
                         shadow = {
                             Shadow(radius = 10.dp, color = Color.Black.copy(alpha = 0.22f * resolvedMiniPlayer.shadowStrength))
+                        },
+                        onDrawSurface = {
+                            drawRect(Color(0xFF141923).copy(alpha = 0.70f))
                         }
                     )
                 } else {
