@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.nodeplayer.model.GlassControlsConfig
+import com.nodeplayer.model.GlassControlsSerializer
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "node_player_settings")
 
@@ -25,8 +27,10 @@ object AppSettingsRepository {
     val KEY_SPECTROGRAM_ENABLED = booleanPreferencesKey("spectrogram_enabled")
     val KEY_SOUND_LAB_ENABLED = booleanPreferencesKey("sound_lab_enabled")
     val KEY_MINI_PLAYER_GESTURES_ENABLED = booleanPreferencesKey("mini_player_gestures_enabled")
+    val KEY_CONTROLS_GLASS_ENABLED = booleanPreferencesKey("controls_glass_enabled")
 
     // Settings
+    val KEY_GLASS_CONTROLS_CONFIG = stringPreferencesKey("glass_controls_config_json")
     val KEY_LOUDNESS_TARGET_LUFS = floatPreferencesKey("loudness_target_lufs")
     val KEY_LOUDNESS_CLIP_GUARD = booleanPreferencesKey("loudness_clip_guard")
     val KEY_AUDIO_ANALYSIS_ENABLED = booleanPreferencesKey("audio_analysis_enabled")
@@ -61,11 +65,16 @@ object AppSettingsRepository {
         val sleepTimerFinishTrack: Boolean = true,
         val sleepTimerShakeExtend: Boolean = true,
         val lastFmSessionKey: String = "",
-        val lastFmUsername: String = ""
+        val lastFmUsername: String = "",
+        val glassControlsConfig: GlassControlsConfig = GlassControlsConfig.PRESET_BALANCED
     )
 
     fun getSettingsFlow(context: Context): Flow<AppSettings> {
         return context.dataStore.data.map { prefs ->
+            val glassControlsConfig = prefs[KEY_GLASS_CONTROLS_CONFIG]?.let {
+                GlassControlsSerializer.fromJson(it)
+            } ?: GlassControlsConfig.PRESET_BALANCED
+
             AppSettings(
                 fakeHiResEnabled = prefs[KEY_FAKE_HIRES_ENABLED] ?: true,
                 loudnessScanEnabled = prefs[KEY_LOUDNESS_SCAN_ENABLED] ?: true,
@@ -89,8 +98,17 @@ object AppSettingsRepository {
                 sleepTimerFinishTrack = prefs[KEY_SLEEP_TIMER_FINISH_TRACK] ?: true,
                 sleepTimerShakeExtend = prefs[KEY_SLEEP_TIMER_SHAKE_EXTEND] ?: true,
                 lastFmSessionKey = prefs[KEY_LASTFM_SESSION_KEY] ?: "",
-                lastFmUsername = prefs[KEY_LASTFM_USERNAME] ?: ""
+                lastFmUsername = prefs[KEY_LASTFM_USERNAME] ?: "",
+                glassControlsConfig = glassControlsConfig
             )
+        }
+    }
+
+    suspend fun updateGlassControlsConfig(context: Context, config: GlassControlsConfig) {
+        val json = GlassControlsSerializer.toJson(config)
+        context.dataStore.edit { prefs ->
+            prefs[KEY_GLASS_CONTROLS_CONFIG] = json
+            prefs[KEY_CONTROLS_GLASS_ENABLED] = config.masterEnabled
         }
     }
 

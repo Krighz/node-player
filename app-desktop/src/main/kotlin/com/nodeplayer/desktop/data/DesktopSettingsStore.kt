@@ -1,16 +1,20 @@
 package com.nodeplayer.desktop.data
 
 import com.nodeplayer.common.platform.KeyValueStore
+import com.nodeplayer.model.GlassControlsConfig
+import com.nodeplayer.model.GlassControlsSerializer
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Settings and theme storage for Windows desktop.
  * Persists key-value properties to %APPDATA%\NodePlayer\settings.properties
+ * and liquid glass controls configuration to %APPDATA%\NodePlayer\settings_glass_controls.json
  */
 class DesktopSettingsStore : KeyValueStore {
 
     private val settingsFile: File
+    private val glassControlsFile: File
     private val memoryMap = ConcurrentHashMap<String, String>()
 
     init {
@@ -20,6 +24,7 @@ class DesktopSettingsStore : KeyValueStore {
             dir.mkdirs()
         }
         settingsFile = File(dir, "settings.properties")
+        glassControlsFile = File(dir, "settings_glass_controls.json")
         loadFromFile()
     }
 
@@ -125,7 +130,49 @@ class DesktopSettingsStore : KeyValueStore {
         putString("last_music_folder", path)
     }
 
+    fun loadGlassControlsConfig(): GlassControlsConfig {
+        if (!glassControlsFile.exists()) {
+            val storedJson = getString("glass_controls_config_json", "")
+            if (storedJson.isNotBlank()) {
+                return GlassControlsSerializer.fromJson(storedJson)
+            }
+            return GlassControlsConfig.PRESET_BALANCED
+        }
+        return try {
+            val json = glassControlsFile.readText()
+            GlassControlsSerializer.fromJson(json)
+        } catch (e: Exception) {
+            GlassControlsConfig.PRESET_BALANCED
+        }
+    }
+
+    fun saveGlassControlsConfig(config: GlassControlsConfig) {
+        val json = GlassControlsSerializer.toJson(config)
+        synchronized(this) {
+            try {
+                val parent = glassControlsFile.parentFile
+                if (parent != null && !parent.exists()) {
+                    parent.mkdirs()
+                }
+                val tempFile = File(parent, "settings_glass_controls.json.tmp")
+                tempFile.writeText(json)
+                if (glassControlsFile.exists()) {
+                    glassControlsFile.delete()
+                }
+                tempFile.renameTo(glassControlsFile)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                try {
+                    glassControlsFile.writeText(json)
+                } catch (ignored: Exception) {}
+            }
+        }
+        putString("glass_controls_config_json", json)
+        putBoolean("controls_glass_enabled", config.masterEnabled)
+    }
+
     fun loadThemeConfig(): com.nodeplayer.model.GlassThemeConfig {
+        val controlsConfig = loadGlassControlsConfig()
         return com.nodeplayer.model.GlassThemeConfig(
             fixedAccentColorArgb = getLong("fixedAccentColorArgb", 0xFFE8D5B7L),
             backgroundAnimationStyle = getString("backgroundAnimationStyle", "AURORA"),
@@ -144,7 +191,9 @@ class DesktopSettingsStore : KeyValueStore {
             keepTextReadable = getBoolean("keepTextReadable", true),
             dockGlassLensEnabled = getBoolean("dockGlassLensEnabled", true),
             dockGlassRimEnabled = getBoolean("dockGlassRimEnabled", true),
-            dockGlassPuckEnabled = getBoolean("dockGlassPuckEnabled", true)
+            dockGlassPuckEnabled = getBoolean("dockGlassPuckEnabled", true),
+            controlsGlassEnabled = getBoolean("controls_glass_enabled", controlsConfig.masterEnabled),
+            controlsConfig = controlsConfig
         )
     }
 
@@ -167,6 +216,8 @@ class DesktopSettingsStore : KeyValueStore {
         putBoolean("dockGlassLensEnabled", cfg.dockGlassLensEnabled)
         putBoolean("dockGlassRimEnabled", cfg.dockGlassRimEnabled)
         putBoolean("dockGlassPuckEnabled", cfg.dockGlassPuckEnabled)
+        putBoolean("controls_glass_enabled", cfg.controlsGlassEnabled)
+        saveGlassControlsConfig(cfg.controlsConfig)
     }
 
     fun loadEffectConfig(): com.nodeplayer.model.AudioEffectConfig {
