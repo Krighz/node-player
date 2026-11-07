@@ -48,7 +48,7 @@ float2 gradSdRoundedRect(float2 coord, float2 halfSize, float radius) {
 }"""
 
 @Language("AGSL")
-internal const val RoundedRectRefractionShaderString = """
+const val RoundedRectRefractionShaderString = """
 uniform shader content;
 
 uniform float2 size;

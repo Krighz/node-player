@@ -16,7 +16,7 @@ import android.os.HandlerThread
 import android.util.Log
 import androidx.annotation.RequiresApi
 import com.nodeplayer.music.BuildConfig
-import com.nodeplayer.music.ui.components.AGSL_REFRACTION_SRC
+import com.kyant.backdrop.internal.RoundedRectRefractionShaderString
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -155,22 +155,24 @@ object GlassShaderSelfTest {
             testCanvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
             // 2. Initialize AGSL shader with dock dimensions (360 x 80)
-            val runtimeShader = android.graphics.RuntimeShader(AGSL_REFRACTION_SRC)
-            runtimeShader.setInputShader("contents", BitmapShader(testPattern, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP))
+            val runtimeShader = android.graphics.RuntimeShader(RoundedRectRefractionShaderString)
+            runtimeShader.setInputShader("content", BitmapShader(testPattern, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP))
             runtimeShader.setFloatUniform("size", DOCK_WIDTH.toFloat(), DOCK_HEIGHT.toFloat())
-            runtimeShader.setFloatUniform("refractionIndex", 0.85f)
-            runtimeShader.setFloatUniform("chromaticFringe", 1.0f)
-            runtimeShader.setFloatUniform("grainStrength", 0.0f)
-            runtimeShader.setFloatUniform("time", 0.0f)
+            runtimeShader.setFloatUniform("offset", 0f, 0f)
+            val cornerRadius = 26f
+            runtimeShader.setFloatUniform("cornerRadii", cornerRadius, cornerRadius, cornerRadius, cornerRadius)
+            runtimeShader.setFloatUniform("refractionHeight", 26f)
+            runtimeShader.setFloatUniform("refractionAmount", 16f)
+            runtimeShader.setFloatUniform("depthEffect", 0f)
 
             val paint = Paint().apply {
                 shader = runtimeShader
                 isAntiAlias = true
             }
 
-            // Draw full bitmap (424 x 144) with dock shader configured to (360 x 80)
+            // Draw dock bounds (360 x 80) with rounded rect on canvas (424 x 144)
             val canvas = renderNode.beginRecording(width, height)
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+            canvas.drawRoundRect(0f, 0f, DOCK_WIDTH.toFloat(), DOCK_HEIGHT.toFloat(), cornerRadius, cornerRadius, paint)
             renderNode.endRecording()
 
             hardwareRenderer.createRenderRequest().syncAndDraw()
