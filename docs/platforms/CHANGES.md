@@ -5,6 +5,55 @@
 
 ---
 
+### [2026-11-07] - Ground-Up Liquid Glass Rebuild: Phase 1 Plan 02 Staged Clean Slate & Legacy Purge
+- **Callers Migrated to `com.kyant.backdrop.*`**:
+  - `ConvxLiquidDock.kt`, `ConvxMiniPlayer.kt`, `OpticalRailDock.kt`, `LiquidGlassControls.kt`, `NowPlayingView.kt`, `BottomPlayerDock.kt`, and `NowPlayingSheet.kt` switched from `com.nodeplayer.ui.component.backdrop.*` to `com.kyant.backdrop.*`.
+  - `GlassShaderSelfTest.kt` in `app-android`: Re-pointed AGSL shader diagnostic self-test to `com.kyant.backdrop.internal.RoundedRectRefractionShaderString` with updated uniform bindings (`size`, `offset`, `cornerRadii`, `refractionHeight`, `refractionAmount`, `depthEffect`), preserving offscreen pixel validation and safe fallback.
+  - `app-android/proguard-rules.pro`: Replaced legacy package keep rules with `com.kyant.backdrop.**`.
+- **Legacy Code Purged (37 files deleted)**:
+  - Deleted old cut-down vendored package directory and platform counterparts:
+    - `core-ui/src/androidMain/kotlin/com/nodeplayer/ui/component/backdrop/Platform.android.kt`
+    - `core-ui/src/androidMain/kotlin/com/nodeplayer/ui/component/backdrop/RuntimeShader.android.kt`
+    - `core-ui/src/androidMain/kotlin/com/nodeplayer/ui/component/backdrop/internal/RenderEffect.android.kt`
+    - `core-ui/src/desktopMain/kotlin/com/nodeplayer/ui/component/backdrop/Platform.desktop.kt`
+    - `core-ui/src/desktopMain/kotlin/com/nodeplayer/ui/component/backdrop/RuntimeShader.desktop.kt`
+    - `core-ui/src/desktopMain/kotlin/com/nodeplayer/ui/component/backdrop/internal/RenderEffect.desktop.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/Backdrop.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/BackdropEffectScope.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/CompatibilityShims.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/DrawBackdropModifier.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/Platform.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/RuntimeShader.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/RuntimeShaderCache.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/backdrops/Backdrop.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/backdrops/CanvasBackdrop.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/backdrops/EmptyBackdrop.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/backdrops/LayerBackdrop.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/catalog/components/LiquidBottomTab.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/catalog/components/LiquidBottomTabs.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/catalog/components/LiquidButton.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/catalog/components/LiquidSlider.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/catalog/components/LiquidToggle.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/catalog/utils/DampedDragAnimation.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/catalog/utils/DragGestureInspector.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/catalog/utils/InteractiveHighlight.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/effects/Blur.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/effects/ColorFilter.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/effects/Lens.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/effects/RenderEffect.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/highlight/Highlight.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/highlight/HighlightStyle.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/internal/Outline.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/internal/RenderEffect.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/internal/Shaders.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/internal/ShapeProvider.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/shadow/InnerShadow.kt`
+    - `core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/shadow/Shadow.kt`
+  - Removed temporary `CompatibilityShims.kt`.
+  - Zero references to `com.nodeplayer.ui.component.backdrop` remain across all production code.
+
+---
+
 ### [2026-11-07] - Ground-Up Liquid Glass Rebuild: Phase 3 Real Drag Controls, Animations & Dock Auto-Hide
 - **Continuous Gesture Dragging for Liquid Sliders (core-ui)**:
   - LiquidSlider.kt: Refactored pointer handling to capture drag gestures across the full container row (detectDragGestures).

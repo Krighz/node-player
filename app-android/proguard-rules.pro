@@ -28,9 +28,9 @@
 -keep class coil.** { *; }
 -keep class * implements coil.fetch.Fetcher$Factory { *; }
 
-# Liquid Glass Shaders & Reflection helpers
--keep class com.nodeplayer.ui.component.backdrop.** { *; }
--keepclassmembers class com.nodeplayer.ui.component.backdrop.** { *; }
+# Liquid Glass Shaders
+-keep class com.kyant.backdrop.** { *; }
+-keepclassmembers class com.kyant.backdrop.** { *; }
 -keep class android.graphics.RuntimeShader { *; }
 -keepclassmembers class android.graphics.RuntimeShader { *; }
 -keep class android.graphics.RenderEffect { *; }

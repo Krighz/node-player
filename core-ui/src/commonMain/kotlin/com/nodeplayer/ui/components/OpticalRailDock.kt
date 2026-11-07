@@ -28,11 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.ui.PlayerNavDestination
-import com.nodeplayer.ui.component.backdrop.drawBackdrop
-import com.nodeplayer.ui.component.backdrop.effects.blur
-import com.nodeplayer.ui.component.backdrop.effects.lens
-import com.nodeplayer.ui.component.backdrop.effects.vibrancy
-import com.nodeplayer.ui.component.backdrop.highlight.Highlight
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalAccentColor

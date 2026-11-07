@@ -31,16 +31,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.nodeplayer.ui.component.backdrop.Backdrop
-import com.nodeplayer.ui.component.backdrop.backdrops.emptyBackdrop
-import com.nodeplayer.ui.component.backdrop.catalog.components.LiquidButton
-import com.nodeplayer.ui.component.backdrop.catalog.components.LiquidSlider
-import com.nodeplayer.ui.component.backdrop.catalog.components.LiquidToggle
-import com.nodeplayer.ui.component.backdrop.drawBackdrop
-import com.nodeplayer.ui.component.backdrop.effects.blur
-import com.nodeplayer.ui.component.backdrop.effects.lens
-import com.nodeplayer.ui.component.backdrop.highlight.Highlight
-import com.nodeplayer.ui.component.backdrop.shadow.Shadow
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
+import com.kyant.backdrop.catalog.components.LiquidButton
+import com.kyant.backdrop.catalog.components.LiquidSlider
+import com.kyant.backdrop.catalog.components.LiquidToggle
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
 
 /**
  * Liquid Glass Switch with minimum 48dp touch target and full accessibility semantics.

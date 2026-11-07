@@ -48,11 +48,11 @@ import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.components.glassLensBubble
 import com.nodeplayer.ui.components.LiquidGlassIconButton
 import com.nodeplayer.ui.components.LiquidGlassSlider
-import com.nodeplayer.ui.component.backdrop.drawBackdrop
-import com.nodeplayer.ui.component.backdrop.effects.blur
-import com.nodeplayer.ui.component.backdrop.effects.lens
-import com.nodeplayer.ui.component.backdrop.highlight.Highlight
-import com.nodeplayer.ui.component.backdrop.shadow.Shadow
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.haze
 import com.nodeplayer.music.ui.components.SoundWaveVisualizer
