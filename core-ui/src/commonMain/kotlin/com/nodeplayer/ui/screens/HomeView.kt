@@ -34,6 +34,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.LocalBottomBarPadding
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.onHorizontalScrollWheel
 import com.nodeplayer.ui.theme.LocalAccentColor
@@ -154,7 +156,7 @@ fun HomeView(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 96.dp),
+        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = LocalBottomBarPadding.current + 16.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
         // ---------------------------------------------------------------------
@@ -307,6 +309,7 @@ private fun MixCard(
         targetValue = if (isHovered) 1.03f else 1.0f,
         animationSpec = tween(180)
     )
+    val cardShape = remember { ContinuousRoundedRectangle(20.dp) }
 
     Box(
         modifier = Modifier
@@ -315,15 +318,15 @@ private fun MixCard(
             .scale(scale)
             .shadow(
                 elevation = if (isHovered) 14.dp else 6.dp,
-                shape = RoundedCornerShape(20.dp),
+                shape = cardShape,
                 ambientColor = mix.gradientColors.first().copy(alpha = 0.35f)
             )
-            .clip(RoundedCornerShape(20.dp))
+            .clip(cardShape)
             .background(Brush.linearGradient(mix.gradientColors))
             .border(
                 width = 1.dp,
                 color = Color.White.copy(alpha = if (isHovered) 0.35f else 0.15f),
-                shape = RoundedCornerShape(20.dp)
+                shape = cardShape
             )
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .padding(16.dp),
@@ -398,6 +401,9 @@ private fun RediscoverTrackCard(
         }
     }
 
+    val cardShape = remember { ContinuousRoundedRectangle(14.dp) }
+    val badgeShape = remember { ContinuousRoundedRectangle(6.dp) }
+
     Column(
         modifier = Modifier
             .width(132.dp)
@@ -407,8 +413,8 @@ private fun RediscoverTrackCard(
         Box(
             modifier = Modifier
                 .size(132.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .border(1.dp, Color.White.copy(alpha = if (isHovered) 0.35f else 0.10f), RoundedCornerShape(14.dp))
+                .clip(cardShape)
+                .border(1.dp, Color.White.copy(alpha = if (isHovered) 0.35f else 0.10f), cardShape)
         ) {
             TrackArtwork(
                 track = track,
@@ -421,9 +427,9 @@ private fun RediscoverTrackCard(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(6.dp)
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(badgeShape)
                     .background(Color.Black.copy(alpha = 0.72f))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), badgeShape)
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
@@ -466,6 +472,7 @@ private fun StandardTrackCard(
         targetValue = if (isHovered) 1.04f else 1.0f,
         animationSpec = tween(180)
     )
+    val cardShape = remember { ContinuousRoundedRectangle(14.dp) }
 
     Column(
         modifier = Modifier
@@ -476,8 +483,8 @@ private fun StandardTrackCard(
         Box(
             modifier = Modifier
                 .size(132.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .border(1.dp, Color.White.copy(alpha = if (isHovered) 0.35f else 0.10f), RoundedCornerShape(14.dp))
+                .clip(cardShape)
+                .border(1.dp, Color.White.copy(alpha = if (isHovered) 0.35f else 0.10f), cardShape)
         ) {
             TrackArtwork(
                 track = track,

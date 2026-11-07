@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.AudioOutputInfo
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.model.ReplayGainMode
+import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.theme.LocalAccentColor
@@ -252,7 +253,7 @@ fun SettingsView(
             }
         }
 
-        Spacer(modifier = Modifier.height(100.dp))
+        Spacer(modifier = Modifier.height(LocalBottomBarPadding.current + 24.dp))
     }
 
     // Hotkeys Dialog

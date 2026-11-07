@@ -23,6 +23,9 @@ import com.nodeplayer.ui.theme.GlassTokens
 import com.nodeplayer.ui.theme.glassSurface
 import com.nodeplayer.ui.theme.pressScale
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
@@ -31,6 +34,44 @@ fun GlassCard(
     isDark: Boolean = true,
     tintAlpha: Float? = null,
     customTint: Color? = null,
+    borderWidth: Dp = 1.dp,
+    borderColor: Color? = null,
+    onClick: (() -> Unit)? = null,
+    content: @Composable BoxScope.() -> Unit
+) {
+    val clickModifier = if (onClick != null) {
+        Modifier.pressScale(targetScale = 0.97f, onClick = onClick)
+    } else Modifier
+
+    val baseColor = when {
+        isOled -> Color.Black
+        customTint != null -> customTint
+        else -> Color(0xFF161B2E)
+    }
+    val alpha = tintAlpha ?: if (isOled) 0.92f else 0.55f
+    val surfaceColor = baseColor.copy(alpha = alpha)
+    val effectiveBorderColor = borderColor ?: Color.White.copy(alpha = if (isOled) 0.15f else 0.08f)
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(surfaceColor, shape)
+            .border(borderWidth, effectiveBorderColor, shape)
+            .then(clickModifier)
+    ) {
+        CompositionLocalProvider(LocalContentColor provides Color.White) {
+            content()
+        }
+    }
+}
+
+@Composable
+fun SquircleCard(
+    modifier: Modifier = Modifier,
+    shape: Shape = ContinuousRoundedRectangle(16.dp),
+    backgroundColor: Color = Color(0xFF161B2E).copy(alpha = 0.55f),
+    borderWidth: Dp = 1.dp,
+    borderColor: Color = Color.White.copy(alpha = 0.08f),
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
@@ -41,21 +82,10 @@ fun GlassCard(
     Box(
         modifier = modifier
             .clip(shape)
+            .background(backgroundColor, shape)
+            .border(borderWidth, borderColor, shape)
             .then(clickModifier)
     ) {
-        // 1. Frosted Glass Background Layer
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .glassSurface(
-                    shape = shape,
-                    isOled = isOled,
-                    isDark = isDark,
-                    tintAlpha = tintAlpha,
-                    customTint = customTint
-                )
-        )
-        // 2. High-contrast Crisp Foreground Content
         CompositionLocalProvider(LocalContentColor provides Color.White) {
             content()
         }
@@ -123,11 +153,8 @@ fun GlassBadge(
     Box(
         modifier = modifier
             .clip(badgeShape)
-            .glassSurface(
-                shape = badgeShape,
-                customTint = color,
-                tintAlpha = 0.28f
-            )
+            .background(color.copy(alpha = 0.28f), badgeShape)
+            .border(0.5.dp, Color.White.copy(alpha = 0.15f), badgeShape)
             .padding(horizontal = 7.dp, vertical = 2.5.dp)
     ) {
         Text(

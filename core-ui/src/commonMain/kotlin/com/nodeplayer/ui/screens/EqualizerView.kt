@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.*
+import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.LiquidGlassSlider
 import com.nodeplayer.ui.components.LiquidGlassSwitch
@@ -510,7 +511,7 @@ fun EqualizerView(
             }
         }
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(LocalBottomBarPadding.current + 24.dp))
     }
 
     // AutoEQ Import Dialog

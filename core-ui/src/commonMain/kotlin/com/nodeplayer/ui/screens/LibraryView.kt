@@ -26,6 +26,7 @@ import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.SoundWaveVisualizer
@@ -178,7 +179,7 @@ fun LibraryView(
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 160.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 120.dp),
+                        contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -231,7 +232,7 @@ fun LibraryView(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 120.dp),
+                        contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(filteredTracks, key = { it.id }) { track ->
@@ -310,7 +311,7 @@ fun LibraryView(
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 160.dp),
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 120.dp),
+                    contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -345,7 +346,7 @@ fun LibraryView(
                 // Artists Tab
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 120.dp),
+                    contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(artists, key = { it.id }) { artist ->
@@ -440,7 +441,7 @@ fun LibraryView(
 
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(bottom = 120.dp),
+                            contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             items(folderTracks, key = { it.id }) { track ->
@@ -501,7 +502,7 @@ fun LibraryView(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 120.dp),
+                        contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(folders, key = { it.path }) { folder ->
