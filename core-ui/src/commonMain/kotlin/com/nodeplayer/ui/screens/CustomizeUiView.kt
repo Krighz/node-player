@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.ui.components.GlassCard
+import com.nodeplayer.ui.components.LiquidGlassSlider
+import com.nodeplayer.ui.components.LiquidGlassSwitch
 import com.nodeplayer.ui.theme.LocalAccentColor
 
 @Composable
@@ -174,11 +176,10 @@ fun CustomizeUiView(
                     Text("Animation Speed", fontSize = 13.sp)
                     Text("%.1fx".format(themeConfig.backgroundAnimationSpeed), fontSize = 13.sp, color = accent)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = themeConfig.backgroundAnimationSpeed,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(backgroundAnimationSpeed = it)) },
-                    valueRange = 0.2f..3.0f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0.2f..3.0f
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -190,11 +191,10 @@ fun CustomizeUiView(
                     Text("Animation Intensity", fontSize = 13.sp)
                     Text("${(themeConfig.backgroundAnimationIntensity * 100).toInt()}%", fontSize = 13.sp, color = accent)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = themeConfig.backgroundAnimationIntensity,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(backgroundAnimationIntensity = it)) },
-                    valueRange = 0.1f..1.0f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0.1f..1.0f
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -208,10 +208,9 @@ fun CustomizeUiView(
                         Text("Animate Only While Playing", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Text("Freezes backdrop animations when audio is paused to save energy", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                     }
-                    Switch(
+                    LiquidGlassSwitch(
                         checked = themeConfig.animateOnlyWhilePlaying,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(animateOnlyWhilePlaying = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(animateOnlyWhilePlaying = it)) }
                     )
                 }
             }
@@ -235,11 +234,10 @@ fun CustomizeUiView(
                     Text("Glass Opacity (Translucency)", fontSize = 13.sp)
                     Text("${(themeConfig.glassOpacity * 100).toInt()}%", fontSize = 13.sp, color = accent)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = themeConfig.glassOpacity,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(glassOpacity = it)) },
-                    valueRange = 0.0f..1.0f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0.0f..1.0f
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -251,11 +249,10 @@ fun CustomizeUiView(
                     Text("Rim Specular Highlight", fontSize = 13.sp)
                     Text("${(themeConfig.edgeHighlightStrength * 100).toInt()}%", fontSize = 13.sp, color = accent)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = themeConfig.edgeHighlightStrength,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(edgeHighlightStrength = it)) },
-                    valueRange = 0.0f..1.0f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0.0f..1.0f
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -267,11 +264,10 @@ fun CustomizeUiView(
                     Text("Refraction Lens Strength", fontSize = 13.sp)
                     Text("%.2f".format(themeConfig.lensRefractionStrength), fontSize = 13.sp, color = accent)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = themeConfig.lensRefractionStrength,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(lensRefractionStrength = it)) },
-                    valueRange = 0.2f..1.5f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0.2f..1.5f
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -283,11 +279,10 @@ fun CustomizeUiView(
                     Text("Glass Optical Texture / Grain", fontSize = 13.sp)
                     Text("${(themeConfig.glassTexture * 100).toInt()}%", fontSize = 13.sp, color = accent)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = themeConfig.glassTexture,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(glassTexture = it)) },
-                    valueRange = 0.0f..1.0f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0.0f..1.0f
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -301,10 +296,9 @@ fun CustomizeUiView(
                         Text("Full Transparency", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Text("Makes glass backgrounds completely clear, keeping only crystal rim outlines", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                     }
-                    Switch(
+                    LiquidGlassSwitch(
                         checked = themeConfig.isFullyTransparent,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isFullyTransparent = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isFullyTransparent = it)) }
                     )
                 }
             }
@@ -330,10 +324,9 @@ fun CustomizeUiView(
                         Text("OLED Pure Black", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Text("Sets background pixels to #000000 for infinite contrast", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                     }
-                    Switch(
+                    LiquidGlassSwitch(
                         checked = themeConfig.isOledBlack,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isOledBlack = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isOledBlack = it)) }
                     )
                 }
 
@@ -348,10 +341,80 @@ fun CustomizeUiView(
                         Text("Performance Mode", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                         Text("Freezes continuous GPU animations for minimum battery/CPU usage", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                     }
-                    Switch(
+                    LiquidGlassSwitch(
                         checked = themeConfig.isPerformanceMode,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isPerformanceMode = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isPerformanceMode = it)) }
+                    )
+                }
+            }
+        }
+
+
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 6. Dock Glass Controls
+        // Settings read by: FrostedNavAndPlayer.kt (LensDock lens L351, rim L359, puck L386)
+        //                   OpticalRailDock.kt (lens L103, rim L111, puck L132)
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Dock Glass",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+                Text(
+                    text = "Controls liquid glass lens, rim and puck on the bottom dock",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Lens Refraction", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("SDF edge lens on dock/mini player (FrostedNavAndPlayer.kt line 351)", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                    }
+                    LiquidGlassSwitch(
+                        checked = themeConfig.dockGlassLensEnabled,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(dockGlassLensEnabled = it)) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Specular Rim", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Highlight rim stroke on dock capsule (FrostedNavAndPlayer.kt line 359)", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                    }
+                    LiquidGlassSwitch(
+                        checked = themeConfig.dockGlassRimEnabled,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(dockGlassRimEnabled = it)) }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Sliding Puck", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Animated glass puck under active tab (FrostedNavAndPlayer.kt line 386)", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                    }
+                    LiquidGlassSwitch(
+                        checked = themeConfig.dockGlassPuckEnabled,
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(dockGlassPuckEnabled = it)) }
                     )
                 }
             }

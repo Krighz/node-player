@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.*
 import com.nodeplayer.ui.components.GlassCard
+import com.nodeplayer.ui.components.LiquidGlassSlider
+import com.nodeplayer.ui.components.LiquidGlassSwitch
 import com.nodeplayer.ui.components.ParametricEqCurveGraph
 import com.nodeplayer.ui.theme.LocalAccentColor
 
@@ -69,13 +71,9 @@ fun EqualizerView(
                 )
             }
 
-            Switch(
+            LiquidGlassSwitch(
                 checked = config.eqEnabled,
-                onCheckedChange = { onConfigChange(config.copy(eqEnabled = it)) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = accent,
-                    checkedTrackColor = accent.copy(alpha = 0.5f)
-                )
+                onCheckedChange = { onConfigChange(config.copy(eqEnabled = it)) }
             )
         }
 
@@ -222,11 +220,10 @@ fun EqualizerView(
                         style = MaterialTheme.typography.bodyMedium.copy(color = accent, fontWeight = FontWeight.Bold)
                     )
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = config.preampGainDb,
                     onValueChange = { onConfigChange(config.copy(preampGainDb = it)) },
-                    valueRange = -12f..12f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = -12f..12f
                 )
             }
         }
@@ -311,11 +308,10 @@ fun EqualizerView(
                     Text("Bass Shelf (100 Hz)", fontSize = 12.sp)
                     Text("%+.1f dB".format(config.toneControls.bassGainDb), fontSize = 12.sp, color = accent)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = config.toneControls.bassGainDb,
                     onValueChange = { onConfigChange(config.copy(toneControls = config.toneControls.copy(bassGainDb = it))) },
-                    valueRange = -12f..12f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = -12f..12f
                 )
 
                 Row(
@@ -325,11 +321,10 @@ fun EqualizerView(
                     Text("Treble Shelf (10 kHz)", fontSize = 12.sp)
                     Text("%+.1f dB".format(config.toneControls.trebleGainDb), fontSize = 12.sp, color = accent)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = config.toneControls.trebleGainDb,
                     onValueChange = { onConfigChange(config.copy(toneControls = config.toneControls.copy(trebleGainDb = it))) },
-                    valueRange = -12f..12f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = -12f..12f
                 )
             }
         }
@@ -355,19 +350,17 @@ fun EqualizerView(
                             color = Color.White.copy(alpha = 0.6f)
                         )
                     }
-                    Switch(
+                    LiquidGlassSwitch(
                         checked = config.loudnessConfig.enabled,
-                        onCheckedChange = { onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(enabled = it))) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        onCheckedChange = { onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(enabled = it))) }
                     )
                 }
                 if (config.loudnessConfig.enabled) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Slider(
+                    LiquidGlassSlider(
                         value = config.loudnessConfig.strength,
                         onValueChange = { onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(strength = it))) },
-                        valueRange = 0f..1f,
-                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                        valueRange = 0f..1f
                     )
                 }
             }
@@ -394,10 +387,9 @@ fun EqualizerView(
                             color = Color.White.copy(alpha = 0.6f)
                         )
                     }
-                    Switch(
+                    LiquidGlassSwitch(
                         checked = config.harmonicBassConfig.enabled,
-                        onCheckedChange = { onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(enabled = it))) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        onCheckedChange = { onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(enabled = it))) }
                     )
                 }
                 if (config.harmonicBassConfig.enabled) {
@@ -409,11 +401,10 @@ fun EqualizerView(
                         Text("Harmonic Blend", fontSize = 12.sp)
                         Text("${(config.harmonicBassConfig.harmonicGain * 100).toInt()}%", fontSize = 12.sp, color = accent)
                     }
-                    Slider(
+                    LiquidGlassSlider(
                         value = config.harmonicBassConfig.harmonicGain,
                         onValueChange = { onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(harmonicGain = it))) },
-                        valueRange = 0f..1f,
-                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                        valueRange = 0f..1f
                     )
                 }
             }
@@ -440,11 +431,10 @@ fun EqualizerView(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = config.stereoWidth,
                     onValueChange = { onConfigChange(config.copy(stereoWidth = it)) },
-                    valueRange = 0f..2f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0f..2f
                 )
             }
         }
@@ -470,10 +460,9 @@ fun EqualizerView(
                             color = Color.White.copy(alpha = 0.6f)
                         )
                     }
-                    Switch(
+                    LiquidGlassSwitch(
                         checked = config.reverbConfig.enabled,
-                        onCheckedChange = { onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(enabled = it))) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        onCheckedChange = { onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(enabled = it))) }
                     )
                 }
                 if (config.reverbConfig.enabled) {
@@ -485,11 +474,10 @@ fun EqualizerView(
                         Text("Room Size", fontSize = 12.sp)
                         Text("${(config.reverbConfig.roomSize * 100).toInt()}%", fontSize = 12.sp, color = accent)
                     }
-                    Slider(
+                    LiquidGlassSlider(
                         value = config.reverbConfig.roomSize,
                         onValueChange = { onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(roomSize = it))) },
-                        valueRange = 0f..1f,
-                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                        valueRange = 0f..1f
                     )
                 }
             }
@@ -515,10 +503,9 @@ fun EqualizerView(
                         color = Color.White.copy(alpha = 0.6f)
                     )
                 }
-                Switch(
+                LiquidGlassSwitch(
                     checked = config.limiterEnabled,
-                    onCheckedChange = { onConfigChange(config.copy(limiterEnabled = it)) },
-                    colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    onCheckedChange = { onConfigChange(config.copy(limiterEnabled = it)) }
                 )
             }
         }

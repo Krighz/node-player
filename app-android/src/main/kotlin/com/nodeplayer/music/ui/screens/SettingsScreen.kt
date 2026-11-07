@@ -45,6 +45,8 @@ import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.components.glassRefraction
+import com.nodeplayer.ui.components.LiquidGlassSlider
+import com.nodeplayer.ui.components.LiquidGlassSwitch
 import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.widget.FloatingOverlayService
@@ -1571,15 +1573,14 @@ fun SettingsScreen(
                     Text("Widget Glass Opacity", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("${(widgetSettings.glassOpacity * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = widgetSettings.glassOpacity,
                     onValueChange = {
                         widgetSettings = widgetSettings.copy(glassOpacity = it)
                         WidgetPreferences.saveSettings(context, widgetSettings)
                         WidgetUpdateManager.updateAllWidgets(context)
                     },
-                    valueRange = 0.40f..0.95f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0.40f..0.95f
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
