@@ -33,8 +33,11 @@ import com.nodeplayer.ui.component.backdrop.effects.blur
 import com.nodeplayer.ui.component.backdrop.effects.lens
 import com.nodeplayer.ui.component.backdrop.effects.vibrancy
 import com.nodeplayer.ui.component.backdrop.highlight.Highlight
+import com.nodeplayer.ui.component.shapes.ContinuousCapsule
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
+import com.nodeplayer.ui.theme.MotionTokens
 import kotlin.math.roundToInt
 
 data class OpticalRailTab(
@@ -80,15 +83,12 @@ fun OpticalRailDock(
 
     val animatedY by animateFloatAsState(
         targetValue = targetY,
-        animationSpec = spring(
-            dampingRatio = 0.72f,
-            stiffness = 380f
-        ),
+        animationSpec = MotionTokens.ConvxPuck,
         label = "OpticalBubbleY"
     )
 
-    val railShape = RoundedCornerShape(48.dp)
-    val puckShape = RoundedCornerShape(32.dp)
+    val railShape = remember { ContinuousRoundedRectangle(48.dp) }
+    val puckShape = remember { ContinuousRoundedRectangle(24.dp) }
 
     // Vertical outer liquid glass pill container
     Box(

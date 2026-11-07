@@ -27,11 +27,11 @@ import androidx.core.view.WindowCompat
 import com.nodeplayer.music.ui.PlayerViewModel
 import com.nodeplayer.music.diagnostics.DiagnosticsDumpManager
 import com.nodeplayer.music.ui.components.DiagnosticsDumpDialog
-import com.nodeplayer.music.ui.components.FrostedBottomBar
+import com.nodeplayer.ui.components.ConvxLiquidDock
+import com.nodeplayer.ui.components.ConvxMiniPlayer
 import com.nodeplayer.music.ui.components.GlobalSearchSheet
 import com.nodeplayer.music.diagnostics.FrameMetricsTracker
 import java.io.File
-import com.nodeplayer.music.ui.components.FrostedMiniPlayer
 import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.player.NowPlayingSheet
 import com.nodeplayer.music.ui.screens.EqualizerScreen
@@ -410,7 +410,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // 3. Floating Mini-Player & Bottom Navigation (Frosted glass dock sampling dockHazeState)
+                    // 3. Floating Mini-Player & Bottom Navigation (Convx Liquid Glass Dock)
                     Column(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -423,7 +423,7 @@ class MainActivity : ComponentActivity() {
 
                             val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
 
-                            FrostedMiniPlayer(
+                            ConvxMiniPlayer(
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
                                 progressFraction = progress,
@@ -431,29 +431,23 @@ class MainActivity : ComponentActivity() {
                                 onSkipNextClick = { viewModel.skipNext() },
                                 onSkipPreviousClick = { viewModel.skipPrevious() },
                                 onClick = { isNowPlayingExpanded = true },
-                                onLongPress = { isNowPlayingExpanded = true },
                                 gesturesEnabled = appSettings.miniPlayerGesturesEnabled,
-                                hazeState = dockHazeState,
                                 rmsLevel = currentRms,
                                 isPerformanceMode = themeConfig.isPerformanceMode,
                                 shaderEnabled = isShaderActive,
-                                chromaticFringe = themeConfig.chromaticFringeValue(),
-                                grainStrength = themeConfig.grainStrengthValue(),
-                                showWaveProgress = themeConfig.showMiniPlayerWave
+                                chromaticFringe = themeConfig.chromaticFringeValue()
                             )
                         }
 
                         val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
 
-                        FrostedBottomBar(
+                        ConvxLiquidDock(
                             selectedRoute = currentRoute,
                             onRouteChange = { currentRoute = it },
                             onSearchClick = { showSearchSheet = true },
-                            hazeState = dockHazeState,
                             isPerformanceMode = themeConfig.isPerformanceMode,
                             shaderEnabled = isShaderActive,
                             chromaticFringe = themeConfig.chromaticFringeValue(),
-                            grainStrength = themeConfig.grainStrengthValue(),
                             searchButtonVisible = themeConfig.showDockSearchButton,
                             lensStrength = themeConfig.lensRefractionStrength,
                             rimSpecular = themeConfig.lensRimSpecular

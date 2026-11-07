@@ -354,7 +354,7 @@ fun CustomizeUiView(
         Spacer(modifier = Modifier.height(14.dp))
 
         // 6. Dock Glass Controls
-        // Settings read by: FrostedNavAndPlayer.kt (LensDock lens L351, rim L359, puck L386)
+        // Settings read by: ConvxLiquidDock.kt (lens L130, rim L140, puck L185)
         //                   OpticalRailDock.kt (lens L103, rim L111, puck L132)
         GlassCard(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -376,7 +376,7 @@ fun CustomizeUiView(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Lens Refraction", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("SDF edge lens on dock/mini player (FrostedNavAndPlayer.kt line 351)", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                        Text("SDF edge lens on dock/mini player (ConvxLiquidDock.kt line 130)", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                     }
                     LiquidGlassSwitch(
                         checked = themeConfig.dockGlassLensEnabled,
@@ -393,7 +393,7 @@ fun CustomizeUiView(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Specular Rim", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Highlight rim stroke on dock capsule (FrostedNavAndPlayer.kt line 359)", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                        Text("Highlight rim stroke on dock capsule (ConvxLiquidDock.kt line 140)", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                     }
                     LiquidGlassSwitch(
                         checked = themeConfig.dockGlassRimEnabled,
@@ -410,7 +410,7 @@ fun CustomizeUiView(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text("Sliding Puck", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Animated glass puck under active tab (FrostedNavAndPlayer.kt line 386)", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+                        Text("Animated glass puck under active tab (ConvxLiquidDock.kt line 185)", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                     }
                     LiquidGlassSwitch(
                         checked = themeConfig.dockGlassPuckEnabled,

@@ -5,6 +5,24 @@
 
 ---
 
+### [2026-11-07] - Ground-Up Liquid Glass Rebuild: Phase 2 Convx-Style Dock & Mini Player
+- **Convx-Style Liquid Glass Dock (core-ui, app-android, app-desktop)**:
+  - ConvxLiquidDock.kt: Built continuous squircle capsule dock (ContinuousCapsule) matching Convx reference.
+  - Interactive sliding lens puck with DampedDragAnimation and Convx critically damped spring physics (dampingRatio = 0.82f, stiffness = 380f).
+  - Active tab accent tinting and circular glass Search button.
+- **Convx-Style Floating Mini Player (core-ui, app-android, app-desktop)**:
+  - ConvxMiniPlayer.kt: Floating continuous squircle capsule (ContinuousRoundedRectangle(20.dp)) hovering directly above the dock.
+  - Squircle artwork thumbnail, title/artist metadata, audio-reactive animated RMS equalizer bars, play/pause, and skip controls.
+- **Clean Layer Separation (Zero Torn Text)**:
+  - Text, icons, artwork, and buttons rendered strictly in a clean pass above the glass substrate, eliminating torn text or self-refraction artifacts.
+- **Desktop Windows Rail & Player Alignment**:
+  - OpticalRailDock.kt: Updated with continuous squircle geometry (ContinuousRoundedRectangle(48.dp)) and Convx spring puck.
+- **Obsolete Code Purge**:
+  - Deleted FrostedNavAndPlayer.kt. Updated CustomizeUiView.kt and SETTINGS.md tracing to point to ConvxLiquidDock.kt and ConvxMiniPlayer.kt.
+- **Status**: Completed Phase 2. Android assembleDebug, desktopTest, and app-desktop test all pass cleanly. Visual and physical checks marked 'human check pending'.
+
+---
+
 ### [2026-11-07] - Ground-Up Liquid Glass Rebuild: Phase 1 Clean Slate & Full Upstream Library Integration
 - **Full Upstream Kyant0 Library & Desktop Runtime Effect Verification**:
   - Full Kyant0 backdrop engine and complete demo catalog integrated with complete multiplatform support (DampedDragAnimation.kt, DragGestureInspector.kt, InteractiveHighlight.kt, LiquidSlider.kt, LiquidToggle.kt, LiquidButton.kt, LiquidBottomTabs.kt).

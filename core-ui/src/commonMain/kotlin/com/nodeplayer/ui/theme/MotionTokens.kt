@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.Dp
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.model.MotionLevel
 
@@ -23,6 +24,11 @@ object MotionTokens {
      * Convx-matched critically damped spring for the selection puck.
      */
     val ConvxPuck: AnimationSpec<Float> = spring(
+        dampingRatio = 0.82f,
+        stiffness = 380f
+    )
+
+    val ConvxPuckDp: AnimationSpec<Dp> = spring(
         dampingRatio = 0.82f,
         stiffness = 380f
     )
