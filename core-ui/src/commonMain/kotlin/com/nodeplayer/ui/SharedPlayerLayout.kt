@@ -302,6 +302,7 @@ fun SharedPlayerLayout(
                                 onNavSelect = { destination ->
                                     currentNav = destination
                                 },
+                                backdrop = pageBackdrop,
                                 themeConfig = themeConfig
                             )
                         }
@@ -413,6 +414,7 @@ fun SharedPlayerLayout(
                         onExpandNowPlaying = { showNowPlayingOverlay = true },
                         sleepTimerRemainingSec = sleepTimerRemainingSec,
                         onSetSleepTimer = onSetSleepTimer,
+                        backdrop = pageBackdrop,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 12.dp)
@@ -507,47 +509,33 @@ fun SharedPlayerLayout(
                     }
 
                     // Floating Chrome Sibling Overlays above page layer in z-order
-                    NavigationBar(
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                        containerColor = Color(0xFF0C0E18).copy(alpha = 0.85f),
-                        contentColor = accent
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        PlayerNavDestination.values().forEach { destination ->
-                            NavigationBarItem(
-                                selected = currentNav == destination,
-                                onClick = { currentNav = destination },
-                                icon = { Icon(destination.icon, contentDescription = destination.title) },
-                                label = { Text(destination.title, fontSize = 11.sp) },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = accent,
-                                    selectedTextColor = accent,
-                                    indicatorColor = accent.copy(alpha = 0.2f)
-                                )
+                        if (currentTrack != null) {
+                            ConvxMiniPlayer(
+                                currentTrack = currentTrack,
+                                isPlaying = isPlaying,
+                                progressFraction = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f,
+                                onPlayPauseClick = onPlayPause,
+                                onSkipNextClick = onNext,
+                                onSkipPreviousClick = onPrevious,
+                                onClick = { showNowPlayingOverlay = true },
+                                backdrop = pageBackdrop,
+                                modifier = Modifier.padding(bottom = 6.dp)
                             )
                         }
-                    }
 
-                    // Persistent Bottom Mini Player / Dock for Phone Portrait
-                    if (currentTrack != null) {
-                        BottomPlayerDock(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(bottom = 80.dp),
-                            currentTrack = currentTrack,
-                            isPlaying = isPlaying,
-                            positionMs = positionMs,
-                            durationMs = durationMs,
-                            volume = volume,
-                            isShuffle = isShuffle,
-                            repeatMode = repeatMode,
-                            onPlayPause = onPlayPause,
-                            onNext = onNext,
-                            onPrevious = onPrevious,
-                            onSeek = onSeek,
-                            onVolumeChange = onVolumeChange,
-                            onToggleShuffle = onToggleShuffle,
-                            onCycleRepeat = onCycleRepeat,
-                            onExpandNowPlaying = { showNowPlayingOverlay = true }
+                        LiquidDock(
+                            currentNav = currentNav,
+                            onNavSelect = { currentNav = it },
+                            backdrop = pageBackdrop,
+                            onSearchClick = {
+                                currentNav = PlayerNavDestination.LIBRARY
+                            }
                         )
                     }
                 }

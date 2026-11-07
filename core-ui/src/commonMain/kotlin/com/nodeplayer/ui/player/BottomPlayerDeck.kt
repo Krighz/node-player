@@ -26,6 +26,13 @@ import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.WaveformSeekbar
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.pressScale
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
 
 @Composable
 fun BottomPlayerDeck(
@@ -53,6 +60,7 @@ fun BottomPlayerDeck(
     onExpandNowPlaying: () -> Unit = {},
     sleepTimerRemainingSec: Long? = null,
     onSetSleepTimer: (Int?) -> Unit = {},
+    backdrop: Backdrop = remember { emptyBackdrop() },
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -72,11 +80,21 @@ fun BottomPlayerDeck(
             .height(76.dp)
             .padding(horizontal = 20.dp, vertical = 6.dp)
             .clip(deckShape)
+            .drawBackdrop(
+                backdrop = backdrop,
+                shape = { deckShape },
+                effects = {
+                    vibrancy()
+                    blur(16f.dp.toPx())
+                    lens(14f.dp.toPx(), 12f.dp.toPx())
+                },
+                highlight = { Highlight.Ambient.copy(alpha = 0.5f) }
+            )
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
-                        Color(0xFF161924).copy(alpha = 0.90f),
-                        Color(0xFF0F111A).copy(alpha = 0.95f)
+                        Color(0xFF161924).copy(alpha = 0.85f),
+                        Color(0xFF0F111A).copy(alpha = 0.90f)
                     )
                 )
             )

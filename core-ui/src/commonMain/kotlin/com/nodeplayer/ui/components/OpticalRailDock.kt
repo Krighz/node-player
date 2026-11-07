@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.ui.PlayerNavDestination
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
@@ -66,6 +68,7 @@ fun OpticalRailDock(
     currentNav: PlayerNavDestination,
     onNavSelect: (PlayerNavDestination) -> Unit,
     modifier: Modifier = Modifier,
+    backdrop: Backdrop = remember { emptyBackdrop() },
     themeConfig: GlassThemeConfig = LocalGlassThemeConfig.current
 ) {
     val accent = LocalAccentColor.current
@@ -97,6 +100,7 @@ fun OpticalRailDock(
             .width(96.dp)
             .clip(railShape)
             .drawBackdrop(
+                backdrop = backdrop,
                 shape = { railShape },
                 effects = {
                     vibrancy()
