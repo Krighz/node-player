@@ -9,6 +9,7 @@ kotlin {
         compilations.all {
             kotlinOptions {
                 jvmTarget = "17"
+                freeCompilerArgs += listOf("-Xcontext-receivers")
             }
         }
     }
@@ -16,6 +17,7 @@ kotlin {
         compilations.all {
             kotlinOptions {
                 jvmTarget = "17"
+                freeCompilerArgs += listOf("-Xcontext-receivers")
             }
         }
     }
@@ -33,6 +35,7 @@ kotlin {
                 implementation(compose.material3)
                 implementation(compose.materialIconsExtended)
                 implementation(compose.ui)
+                implementation("androidx.annotation:annotation:1.8.0")
             }
         }
         val androidMain by getting {
@@ -43,6 +46,7 @@ kotlin {
         val desktopMain by getting {
             dependencies {
                 implementation(compose.desktop.currentOs)
+                implementation("androidx.annotation:annotation:1.8.0")
             }
         }
         val commonTest by getting {
