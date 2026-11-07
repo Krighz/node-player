@@ -47,6 +47,9 @@ import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import androidx.compose.animation.core.spring
+import com.nodeplayer.model.GlassComponentType
+import com.nodeplayer.ui.theme.LocalGlassControlsConfig
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.MotionTokens
@@ -90,9 +93,11 @@ fun ConvxLiquidDock(
 ) {
     val accent = LocalAccentColor.current
     val themeConfig = LocalGlassThemeConfig.current
+    val controlsConfig = LocalGlassControlsConfig.current
+    val resolvedDock = controlsConfig.resolve(GlassComponentType.DOCK)
     val density = LocalDensity.current
 
-    val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF"
+    val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF" && !resolvedDock.isPlainSquircle && controlsConfig.masterEnabled
     val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
     val puckActive = themeConfig.dockGlassPuckEnabled
 
@@ -110,7 +115,7 @@ fun ConvxLiquidDock(
     }
 
     val dockShape = remember { ContinuousCapsule() }
-    val puckShape = remember { ContinuousRoundedRectangle(20.dp) }
+    val puckShape = remember { ContinuousRoundedRectangle(resolvedDock.cornerShapeDp.dp) }
     val searchShape = CircleShape
 
     val tabWidthDp = if (tabWidthPx > 0f) with(density) { tabWidthPx.toDp() } else 64.dp
@@ -118,7 +123,10 @@ fun ConvxLiquidDock(
 
     val animatedPuckOffsetDp by animateDpAsState(
         targetValue = targetPuckOffsetDp,
-        animationSpec = MotionTokens.ConvxPuckDp,
+        animationSpec = spring(
+            stiffness = resolvedDock.springStiffness,
+            dampingRatio = resolvedDock.springDamping
+        ),
         label = "ConvxPuckOffset"
     )
 
@@ -141,11 +149,11 @@ fun ConvxLiquidDock(
                             backdrop = backdrop,
                             shape = { dockShape },
                             effects = {
-                                blur(16.dp.toPx())
+                                blur(resolvedDock.blurDp.dp.toPx())
                                 lens(
-                                    (18f * lensStrength).dp.toPx(),
-                                    (16f * lensStrength).dp.toPx(),
-                                    chromaticAberration = chromaticFringe > 0.05f
+                                    resolvedDock.lensHeightDp.dp.toPx(),
+                                    resolvedDock.lensAmountDp.dp.toPx(),
+                                    chromaticAberration = resolvedDock.chromaticAberration > 0.05f
                                 )
                                 vibrancy()
                             },
@@ -153,12 +161,12 @@ fun ConvxLiquidDock(
                                 if (rimActive) {
                                     Highlight.Ambient.copy(
                                         width = 1.2f.dp,
-                                        alpha = (0.75f * rimSpecular).coerceIn(0.1f, 1f)
+                                        alpha = (0.75f * resolvedDock.highlightStrength).coerceIn(0.1f, 1f)
                                     )
                                 } else Highlight.Ambient.copy(alpha = 0f)
                             },
                             shadow = {
-                                Shadow(radius = 12.dp, color = Color.Black.copy(alpha = 0.28f))
+                                Shadow(radius = 12.dp, color = Color.Black.copy(alpha = 0.28f * resolvedDock.shadowStrength))
                             }
                         )
                     } else {

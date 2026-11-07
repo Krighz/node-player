@@ -25,7 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nodeplayer.model.GlassComponentType
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.theme.LocalGlassControlsConfig
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.drawBackdrop
@@ -71,11 +73,13 @@ fun ConvxMiniPlayer(
 
     val accent = LocalAccentColor.current
     val themeConfig = LocalGlassThemeConfig.current
+    val controlsConfig = LocalGlassControlsConfig.current
+    val resolvedMiniPlayer = controlsConfig.resolve(GlassComponentType.MINI_PLAYER)
 
-    val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF"
+    val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF" && !resolvedMiniPlayer.isPlainSquircle && controlsConfig.masterEnabled
     val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
 
-    val containerShape = remember { ContinuousRoundedRectangle(20.dp) }
+    val containerShape = remember(resolvedMiniPlayer.cornerShapeDp) { ContinuousRoundedRectangle(resolvedMiniPlayer.cornerShapeDp.dp) }
     val artworkShape = remember { ContinuousRoundedRectangle(10.dp) }
 
     var dragAccumulator by remember { mutableFloatStateOf(0f) }
@@ -109,11 +113,11 @@ fun ConvxMiniPlayer(
                         backdrop = backdrop,
                         shape = { containerShape },
                         effects = {
-                            blur(14.dp.toPx())
+                            blur(resolvedMiniPlayer.blurDp.dp.toPx())
                             lens(
-                                14.dp.toPx(),
-                                12.dp.toPx(),
-                                chromaticAberration = chromaticFringe > 0.05f
+                                resolvedMiniPlayer.lensHeightDp.dp.toPx(),
+                                resolvedMiniPlayer.lensAmountDp.dp.toPx(),
+                                chromaticAberration = resolvedMiniPlayer.chromaticAberration > 0.05f
                             )
                             vibrancy()
                         },
@@ -121,12 +125,12 @@ fun ConvxMiniPlayer(
                             if (rimActive) {
                                 Highlight.Ambient.copy(
                                     width = 1.dp,
-                                    alpha = (0.75f * themeConfig.lensRimSpecular).coerceIn(0.1f, 1f)
+                                    alpha = (0.75f * resolvedMiniPlayer.highlightStrength).coerceIn(0.1f, 1f)
                                 )
                             } else Highlight.Ambient.copy(alpha = 0f)
                         },
                         shadow = {
-                            Shadow(radius = 10.dp, color = Color.Black.copy(alpha = 0.22f))
+                            Shadow(radius = 10.dp, color = Color.Black.copy(alpha = 0.22f * resolvedMiniPlayer.shadowStrength))
                         }
                     )
                 } else {

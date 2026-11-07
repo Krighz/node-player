@@ -84,4 +84,76 @@ class GlassCustomizationConfigTest {
         val lighterCost = calculateGpuCost(lighterConfig)
         assertEquals(baseCost.estimatedMs, lighterCost.estimatedMs, 0.001f)
     }
+
+    @Test
+    fun testPresetLoadingAndMasterSwitch() {
+        val full = GlassControlsConfig.PRESET_FULL
+        assertTrue(full.masterEnabled)
+        assertEquals(GlassControlsPreset.FULL, full.preset)
+        assertEquals(8f, full.global.blurDp)
+        assertEquals(24f, full.global.lensHeightDp)
+
+        val light = GlassControlsConfig.PRESET_LIGHT
+        assertFalse(light.masterEnabled)
+        assertEquals(GlassControlsPreset.LIGHT, light.preset)
+        val resolved = light.resolve(GlassComponentType.BUTTONS)
+        assertTrue(resolved.isPlainSquircle)
+    }
+
+    @Test
+    fun testOverrideCascadingAndInheritance() {
+        val config = GlassControlsConfig.PRESET_BALANCED
+        val defaultButtons = config.resolve(GlassComponentType.BUTTONS)
+        assertEquals(config.global.blurDp, defaultButtons.blurDp)
+        assertEquals(config.global.cornerShapeDp, defaultButtons.cornerShapeDp)
+
+        // Customize with override
+        val customConfig = config.copy(
+            buttons = ComponentGlassConfig(
+                useGlobal = false,
+                blurDp = 18f,
+                cornerShapeDp = 24f,
+                pressScale = 0.90f
+            )
+        )
+        val overriddenButtons = customConfig.resolve(GlassComponentType.BUTTONS)
+        assertEquals(18f, overriddenButtons.blurDp)
+        assertEquals(24f, overriddenButtons.cornerShapeDp)
+        assertEquals(0.90f, overriddenButtons.pressScale)
+
+        // Other components still inherit global
+        val dockResolved = customConfig.resolve(GlassComponentType.DOCK)
+        assertEquals(config.global.blurDp, dockResolved.blurDp)
+    }
+
+    @Test
+    fun testListPerformanceOverride() {
+        val config = GlassControlsConfig.PRESET_FULL.copy(
+            buttons = ComponentGlassConfig(useGlobal = false, forceLighterInLists = true)
+        )
+        val normalResolved = config.resolve(GlassComponentType.BUTTONS, inList = false)
+        assertFalse(normalResolved.isPlainSquircle)
+
+        val listResolved = config.resolve(GlassComponentType.BUTTONS, inList = true)
+        assertTrue(listResolved.isPlainSquircle)
+    }
+
+    @Test
+    fun testResetToGlobalRestoration() {
+        var config = GlassControlsConfig.PRESET_BALANCED
+        config = config.updateComponent(
+            GlassComponentType.TOGGLES,
+            ComponentGlassConfig(useGlobal = false, blurDp = 20f, springStiffness = 800f)
+        )
+        assertFalse(config.getComponent(GlassComponentType.TOGGLES).useGlobal)
+        assertEquals(20f, config.resolve(GlassComponentType.TOGGLES).blurDp)
+
+        // Reset to global
+        config = config.updateComponent(
+            GlassComponentType.TOGGLES,
+            ComponentGlassConfig(useGlobal = true)
+        )
+        assertTrue(config.getComponent(GlassComponentType.TOGGLES).useGlobal)
+        assertEquals(config.global.blurDp, config.resolve(GlassComponentType.TOGGLES).blurDp)
+    }
 }

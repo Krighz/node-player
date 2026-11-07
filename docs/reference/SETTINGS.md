@@ -1,61 +1,99 @@
 # Node Player Settings Reference
 
-This document provides an exhaustive reference for all user-configurable settings in Node Player across Android and Windows, including their type, default values, GPU cost impacts, and the exact source file and line numbers where they take effect in the rendering pipeline.
+This document provides an exhaustive reference for all user-configurable settings in Node Player across Android and Windows, including their type, default values, GPU cost impacts, and the exact source file and line numbers where they take effect in the rendering and physics pipeline.
 
 ---
 
-## 1. Liquid Glass Subsystem & Optics
+## 1. Master Liquid Glass Controls (`GlassControlsConfig`)
 
-Accessible via **Settings > Customize UI (UI Tab)**:
+Accessible via **Settings > Customize UI (Master Liquid Glass Controls Card)**:
 
-| Setting | Type | Default | GPU Cost | Description | Effect Location |
+| Setting Key | Data Type | Range / Options | Default Value | GPU Cost Impact | Description | Consuming Source File & Line Number(s) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`masterEnabled`** | Boolean | `true`, `false` | `true` | Critical (-2.5ms to -9.0ms when off) | Master on/off switch for all liquid glass effects. When disabled, all controls drop to plain continuous squircles with zero backdrop sampling. | • `CustomizeUiView.kt` (L431)<br>• `SharedPlayerLayout.kt` (L180)<br>• `LiquidControls.kt` (L63, L126, L288, L393)<br>• `ConvxLiquidDock.kt` (L100)<br>• `ConvxMiniPlayer.kt` (L79)<br>• `GlassControlsConfig.kt` (L109, L147) |
+| **`preset`** | `GlassControlsPreset` | `FULL`, `BALANCED`, `LIGHT` | `BALANCED` | High (`FULL`) / Moderate (`BALANCED`) / Low (`LIGHT`) | Quality and motion preset profile. Prompted with safety confirmation before overwriting custom overrides. | • `CustomizeUiView.kt` (L444)<br>• `GlassControlsConfig.kt` (L110, L152-208)<br>• `LivePreviewCanvas.kt` (L97) |
+| **`global.blurDp`** | Float | 0.0 .. 32.0 dp | `4.0 dp` | High (+0.08ms per dp) | Radius of Gaussian / dual-pass kawase blur applied to underlying content. | • `ConvxLiquidDock.kt` (L152)<br>• `ConvxMiniPlayer.kt` (L116)<br>• `LivePreviewCanvas.kt` (L98, L486, L841)<br>• `MasterGlassConfig.kt` (L10) |
+| **`global.lensHeightDp`** | Float | 0.0 .. 32.0 dp | `14.0 dp` | Medium (+0.04ms per dp) | Convex curvature height of optical SDF refraction lens. | • `ConvxLiquidDock.kt` (L154)<br>• `ConvxMiniPlayer.kt` (L118)<br>• `LivePreviewCanvas.kt` (L99, L487, L842)<br>• `MasterGlassConfig.kt` (L11) |
+| **`global.lensAmountDp`** | Float | 0.0 .. 30.0 dp | `12.0 dp` | Medium (+0.035ms per dp) | Maximum pixel refraction displacement across refractive surface boundaries. | • `ConvxLiquidDock.kt` (L155)<br>• `ConvxMiniPlayer.kt` (L119)<br>• `LivePreviewCanvas.kt` (L99, L488, L843)<br>• `MasterGlassConfig.kt` (L12) |
+| **`global.vibrancy`** | Float | 0.0 .. 1.0 | `0.85` | Low | Color saturation boost applied to refracted background content. | • `ConvxLiquidDock.kt` (L158)<br>• `ConvxMiniPlayer.kt` (L122)<br>• `LivePreviewCanvas.kt` (L489, L844)<br>• `MasterGlassConfig.kt` (L13) |
+| **`global.tintOpacity`** | Float | 0.0 .. 1.0 | `0.35` | Low | Translucent color fill opacity for glass containers and buttons. | • `LiquidControls.kt` (L305, L411, L503, L600)<br>• `LivePreviewCanvas.kt` (L490)<br>• `MasterGlassConfig.kt` (L14) |
+| **`global.highlightStrength`**| Float | 0.0 .. 1.0 | `0.75` | Low | Specular Fresnel rim light highlight gradient and edge reflection strength. | • `LiquidControls.kt` (L311, L417, L499, L604, L731)<br>• `ConvxLiquidDock.kt` (L164)<br>• `ConvxMiniPlayer.kt` (L128)<br>• `LivePreviewCanvas.kt` (L492, L848)<br>• `MasterGlassConfig.kt` (L15) |
+| **`global.shadowStrength`** | Float | 0.0 .. 1.0 | `0.25` | Low | Ambient occlusion shadow drop underneath elevated glass elements. | • `ConvxLiquidDock.kt` (L169)<br>• `ConvxMiniPlayer.kt` (L133)<br>• `LivePreviewCanvas.kt` (L495, L852)<br>• `MasterGlassConfig.kt` (L16) |
+| **`global.chromaticAberration`**| Float | 0.0 .. 1.0 | `0.15` | High (+1.4ms when active) | Optical RGB dispersion along curved lens refractive boundaries. | • `ConvxLiquidDock.kt` (L156)<br>• `ConvxMiniPlayer.kt` (L120)<br>• `LivePreviewCanvas.kt` (L100, L493, L843)<br>• `MasterGlassConfig.kt` (L17) |
+| **`global.cornerShapeDp`** | Float | 0.0 .. 32.0 dp | `16.0 dp` | Zero | Continuous squircle curvature radius applied to component containers. | • `LiquidControls.kt` (L287, L402, L496, L595, L721)<br>• `ConvxLiquidDock.kt` (L118)<br>• `ConvxMiniPlayer.kt` (L82)<br>• `MasterGlassConfig.kt` (L18) |
+| **`global.pressScale`** | Float | 0.85 .. 1.00 | `0.96` | Zero | Scale factor during finger touch / pointer down state. | • `LiquidControls.kt` (L296, L399)<br>• `LivePreviewCanvas.kt` (L542, L749)<br>• `MasterGlassConfig.kt` (L19) |
+| **`global.springStiffness`**| Float | 100.0 .. 1000.0 | `450.0` | Zero | Spring physics tension governing micro-interactions and puck movement. | • `LiquidControls.kt` (L297, L400, L617)<br>• `ConvxLiquidDock.kt` (L127)<br>• `LivePreviewCanvas.kt` (L545, L639, L889)<br>• `MasterGlassConfig.kt` (L20) |
+| **`global.springDamping`** | Float | 0.40 .. 1.00 | `0.80` | Zero | Damping ratio (0.80 = smooth minimal overshoot, 0.65 = bouncy). | • `LiquidControls.kt` (L297, L400, L617)<br>• `ConvxLiquidDock.kt` (L128)<br>• `LivePreviewCanvas.kt` (L546, L640, L890)<br>• `MasterGlassConfig.kt` (L21) |
+
+---
+
+## 2. Per-Item Overrides (`ComponentGlassConfig`)
+
+Accessible via **Settings > Customize UI (9 Collapsible Accordions)**:
+
+| Category | Component Target | Setting Keys | Default (`useGlobal`) | List Override (`forceLighterInLists`) | Consuming Implementation |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`glassQuality`** | `GlassQuality` (`FULL`, `BALANCED`, `LIGHT`) | `BALANCED` | High / Med / Low | Global quality profile controlling backdrop capture scale, refraction passes, and dispersion. | • Shared: `GlassTokens.kt` (L40)<br>• Common: `GlassThemeConfig.kt` (L194) |
-| **`motionLevel`** | `MotionLevel` (`FULL`, `REDUCED`, `OFF`) | `FULL` | Low | Master motion throttle: applies fluid spring physics (`FULL`), smooth non-bouncy fades (`REDUCED`), or instant snaps (`OFF`). | • Shared: `MotionTokens.kt` (L86)<br>• Common: `GlassThemeConfig.kt` (L195) |
-| **`dockGlassLensEnabled`** | Boolean | `true` | Medium | Enables edge lens refraction SDF shader on dock and mini player capsule. When disabled, falls back to plain frosted blur. | • Android: `ConvxLiquidDock.kt / ConvxMiniPlayer.kt` (L351)<br>• Windows: `OpticalRailDock.kt` (L103) |
-| **`dockGlassRimEnabled`** | Boolean | `true` | Low | Enables outer specular rim highlight stroke and chromatic dispersion along dock edge. | • Android: `ConvxLiquidDock.kt / ConvxMiniPlayer.kt` (L359)<br>• Windows: `OpticalRailDock.kt` (L111) |
-| **`dockGlassPuckEnabled`** | Boolean | `true` | Low | Enables animated liquid glass selection puck sliding under the active navigation tab. | • Android: `ConvxLiquidDock.kt / ConvxMiniPlayer.kt` (L386)<br>• Windows: `OpticalRailDock.kt` (L132) |
-| **`miniPlayerGlassEnabled`** | Boolean | `true` | Medium | Enables liquid glass shader on floating mini player capsule. | • Android: `ConvxLiquidDock.kt / ConvxMiniPlayer.kt` (L140)<br>• Windows: `BottomPlayerDeck.kt` (L90) |
-| **`nowPlayingGlassEnabled`** | Boolean | `true` | High | Enables real-time glass backdrop and lens effect on Now Playing screen hero controls. | • Android: `NowPlayingSheet.kt` (L210)<br>• Desktop: `Main.kt` (L680) |
-| **`controlsGlassEnabled`** | Boolean | `false` | Low (Plain) | Toggles between plain-Compose glass styling and expensive lens backdrops on small controls (sliders, chips, switches). | • Shared: `LiquidGlassControls.kt` (L48-350) |
-| **`widgetsGlassEnabled`** | Boolean | `true` | Low | Enables liquid glass backdrop rendering on Android home-screen widgets. | • Android: `NodePlayerWidget.kt` (L64) |
-| **`glassRefractionHeightDp`**| Float (0.0 .. 32.0) | `18.0f` | Medium | Physical curvature depth of optical lens refraction. | • Shared: `GlassDesignTokens.kt` (L18)<br>• Android: `ConvxLiquidDock.kt / ConvxMiniPlayer.kt` (L361) |
-| **`glassRefractionAmountDp`**| Float (0.0 .. 30.0) | `16.0f` | Medium | Maximum pixel displacement caused by liquid glass lens. | • Shared: `GlassDesignTokens.kt` (L19)<br>• Android: `ConvxLiquidDock.kt / ConvxMiniPlayer.kt` (L362) |
-| **`glassChromaticFringe`** | Float (0.0 .. 1.0) | `0.25f` | High | Optical RGB dispersion intensity along refractive edges. | • Shared: `GlassDesignTokens.kt` (L22)<br>• Android: `ConvxLiquidDock.kt / ConvxMiniPlayer.kt` (L364) |
-| **`glassBackdropScale`** | Float (0.25 .. 1.0) | `0.50f` | High | Resolution scale factor for offscreen backdrop texture capture. Lower values dramatically boost framerates. | • Shared: `SharedGlassPool.kt` (L45)<br>• Android: `LiquidGlassBackground.kt` (L88) |
+| **1. Buttons** | `LiquidButton`, `LiquidIconButton` | `useGlobal`, `blurDp`, `lensHeightDp`, `lensAmountDp`, `highlightStrength`, `pressScale`, `springStiffness`, `springDamping`, `forceLighterInLists` | `true` | Supported | `LiquidControls.kt` (L285, L390) |
+| **2. Toggles & Switches** | `LiquidToggle`, `LiquidSwitch` | `useGlobal`, `springStiffness`, `springDamping`, `highlightStrength`, `forceLighterInLists` | `true` | Supported | `LiquidControls.kt` (L125) |
+| **3. Sliders** | `LiquidSlider`, `LiquidGlassSlider` | `useGlobal`, `blurDp`, `lensHeightDp`, `lensAmountDp`, `highlightStrength`, `pressScale` | `true` | N/A | `LiquidControls.kt` (L62) |
+| **4. Dock & Tabs** | `ConvxLiquidDock`, `LiquidSegmentedControl` | `useGlobal`, `blurDp`, `lensHeightDp`, `lensAmountDp`, `cornerShapeDp`, `springStiffness`, `springDamping` | `true` | N/A | `ConvxLiquidDock.kt` (L97)<br>`LiquidControls.kt` (L594) |
+| **5. Chips** | `LiquidChip`, `LiquidGlassChip` | `useGlobal`, `cornerShapeDp`, `highlightStrength`, `tintOpacity`, `forceLighterInLists` | `true` | Supported | `LiquidControls.kt` (L495) |
+| **6. Dialogs & Sheets** | `LiquidDialog`, modal sheets | `useGlobal`, `cornerShapeDp`, `highlightStrength`, `shadowStrength` | `true` | N/A | `LiquidControls.kt` (L720) |
+| **7. Mini Player** | `ConvxMiniPlayer` | `useGlobal`, `blurDp`, `lensHeightDp`, `lensAmountDp`, `highlightStrength`, `shadowStrength`, `cornerShapeDp` | `true` | N/A | `ConvxMiniPlayer.kt` (L77) |
+| **8. Now Playing** | `NowPlayingView`, deck | `useGlobal`, `blurDp`, `lensHeightDp`, `lensAmountDp`, `highlightStrength` | `true` | N/A | `NowPlayingView.kt` (L120) |
+| **9. Widgets** | Android widgets & overlays | `useGlobal`, `blurDp`, `tintOpacity`, `highlightStrength` | `true` | N/A | `NodePlayerWidget.kt` (L64) |
 
 ---
 
-## 2. Dock Scroll Auto-Hiding
+## 3. Real-Time GPU Cost Classification & Live Preview
+
+Integrated within `LivePreviewCanvas.kt` and `CustomizeUiView.kt`:
+
+| Category Level | Frame-Time Threshold | Indicator Pill Color | Target Framerate | Pipeline Cost Factors |
+| :--- | :--- | :--- | :--- | :--- |
+| **LOW** | `< 3.0 ms` | Green (`#10B981`) | `~120fps (Zero overhead)` | Master off baseline (0.8ms) or plain squircle mode with zero backdrop capture. |
+| **MODERATE** | `3.0 ms .. 6.5 ms` | Teal (`#06B6D4`) | `~120fps (Smooth)` | Standard 4dp blur, subtle 14dp lens, chromatic fringe disabled. |
+| **HIGH** | `6.5 ms .. 10.5 ms` | Amber (`#F59E0B`) | `~90-120fps (Balanced)` | Heavy 8dp blur, 24dp lens refraction, active chromatic dispersion (> 0.05). |
+| **INTENSE** | `> 10.5 ms` | Rose (`#F43F5E`) | `~60fps (Heavy shader load)`| Maximum blur (16-32dp), large refractive displacement, multiple full-pass overrides. |
+
+**Formula:**
+$$T_{\text{frame}} = T_{\text{base}} + T_{\text{blur}} + T_{\text{lens}} + T_{\text{chromatic}} + \sum T_{\text{overrides}}$$
+- Implemented in: `LivePreviewCanvas.kt` (L90-134)
+- Verified by: `GlassCustomizationConfigTest.kt` (L44-86)
+
+---
+
+## 4. Dock Scroll Auto-Hiding
 
 Accessible via **Settings > Customize UI (Navigation Section)**:
 
-| Setting | Type | Default | Description | Effect Location |
+| Setting Key | Data Type | Default | Description | Consuming Source File & Line Number(s) |
 | :--- | :--- | :--- | :--- | :--- |
-| **`dockAutoHideEnabled`** | Boolean | `false` | Automatically slides down and fades dock during downward scrolling on long lists (Home, Library). | • Shared: `DockScrollController.kt` (L29)<br>• Android: `ConvxLiquidDock.kt / ConvxMiniPlayer.kt` (L340) |
-| **`dockAutoHideMiniPlayer`**| Boolean | `false` | When true, hides mini player capsule together with the dock; when false, keeps mini player visible. | • Android: `ConvxLiquidDock.kt / ConvxMiniPlayer.kt` (L130) |
-| **`dockScrollSensitivity`** | Float (0.5 .. 2.0) | `1.0f` | Multiplier for scroll distance required to trigger dock auto-hide. | • Shared: `DockScrollController.kt` (L24) |
-| **`dockReturnDelayMs`** | Long (500 .. 3000) | `1200L` | Milliseconds of scroll stillness before the dock automatically returns. | • Shared: `DockScrollController.kt` (L51) |
+| **`dockAutoHideEnabled`** | Boolean | `false` | Automatically slides down and fades dock during downward scrolling on long lists (Home, Library). | • `DockScrollController.kt` (L29)<br>• `SharedPlayerLayout.kt` (L156, L163, L168) |
+| **`dockAutoHideMiniPlayer`**| Boolean | `false` | When true, hides mini player capsule together with the dock; when false, keeps mini player visible. | • `SharedPlayerLayout.kt` (L172)<br>• `ConvxMiniPlayer.kt` (L105) |
+| **`dockScrollSensitivity`** | Float (0.5 .. 2.0) | `1.0f` | Multiplier for scroll distance required to trigger dock auto-hide. | • `DockScrollController.kt` (L24)<br>• `SharedPlayerLayout.kt` (L154, L161) |
+| **`dockReturnDelayMs`** | Long (500 .. 3000) | `1200L` | Milliseconds of scroll stillness before the dock automatically returns. | • `DockScrollController.kt` (L51)<br>• `SharedPlayerLayout.kt` (L155, L162) |
 
 ---
 
-## 3. General Appearance & Theme
+## 5. Atmosphere, Palette & Display Architecture
 
-| Setting | Type | Default | Description | Effect Location |
+Accessible via **Settings > Customize UI**:
+
+| Setting Key | Data Type | Default | Description | Consuming Source File & Line Number(s) |
 | :--- | :--- | :--- | :--- | :--- |
-| **`glassOpacity`** | Float (0.0 .. 1.0) | `0.55f` | Base translucency fill opacity of cards and containers. | • Shared: `GlassTheme.kt` (L45) |
-| **`edgeHighlightStrength`**| Float (0.0 .. 1.0) | `0.70f` | Specular rim gradient and highlight intensity. | • Shared: `GlassTheme.kt` (L50) |
-| **`isPerformanceMode`** | Boolean | `false` | Master performance switch: freezes animated backdrops, disables shaders, and drops to flat frosted Compose styling. | • Android: `MainActivity.kt` (L120)<br>• Windows: `Main.kt` (L210) |
-| **`isOledBlack`** | Boolean | `false` | Forces pure black (`#000000`) backgrounds for OLED display energy conservation. | • Shared: `GlassTheme.kt` (L140) |
+| **`fixedAccentColorArgb`** | Long | `0xFF6366F1L` (Amethyst) | Base accent tint color applied to highlights, active tabs, and sliders. | • `CustomizeUiView.kt` (L635)<br>• `SharedPlayerLayout.kt` (L117) |
+| **`backgroundAnimationStyle`**| String | `"LIQUID_BLOBS"` | Background atmosphere shader (`LIQUID_BLOBS`, `AURORA`, `MESH_GRADIENT`, `ALBUM_ART_BLUR`, `SLOW_CAUSTICS`, `STATIC`). | • `CustomizeUiView.kt` (L678)<br>• `LiquidGlassBackground.kt` (L52) |
+| **`isOledBlack`** | Boolean | `false` | Forces pure black (`#000000`) backgrounds for OLED display energy conservation. | • `GlassTheme.kt` (L134)<br>• `CustomizeUiView.kt` (L329) |
+| **`isPerformanceMode`** | Boolean | `false` | Master performance switch: freezes animated backdrops, disables shaders, and drops to flat frosted Compose styling. | • `GlassTheme.kt` (L150)<br>• `ConvxLiquidDock.kt` (L100)<br>• `ConvxMiniPlayer.kt` (L79) |
 
 ---
 
-## 4. Audio & DSP Architecture
+## 6. Versioned Serialization & Reset Engine
 
-Accessible via **Settings > Equalizer & DSP**:
+Export and restore format specifications:
 
-| Setting | Type | Default | Description | Effect Location |
+| Component | Format Identifier | Version | Schema Rules | Consuming Source File & Line Number(s) |
 | :--- | :--- | :--- | :--- | :--- |
-| **`eqEnabled`** | Boolean | `false` | Master toggle for 10-band IIR biquad equalizer. | • DSP: `DspChain.kt` (L45) |
-| **`bassBoost`** | Float (0 .. 100) | `0` | Harmonic bass booster gain. | • DSP: `DspProcessors.kt` (L88) |
-| **`virtualizer`** | Float (0 .. 100) | `0` | Spatial soundstage widening filter. | • DSP: `DspProcessors.kt` (L120) |
+| **JSON Serializer** | `NodePlayerGlassControls` | `1` | Strict field validation, 64KB length cap, clamped slider parameters | `GlassControlsSerializer.kt` (L12-65) |
+| **Two-Tier Reset** | Runtime Action | N/A | Tier 1: Reset to Global per accordion.<br>Tier 2: Reset All to Factory Defaults. | `CustomizeUiView.kt` (L124, L558)<br>`GlassControlsSerializer.kt` (L180-230) |
