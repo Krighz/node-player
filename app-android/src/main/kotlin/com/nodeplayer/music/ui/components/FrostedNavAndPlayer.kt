@@ -138,11 +138,12 @@ fun FrostedMiniPlayer(
                     vibrancy()
                     blur(12f.dp.toPx())
                     if (lensActive) {
+                        val miniH = 68f.dp.toPx()
                         lens(
-                            refractionHeight = 16f.dp.toPx(),
-                            refractionAmount = 14f.dp.toPx() * (themeConfig.lensRefractionStrength / 0.85f),
+                            refractionHeight = (miniH * 0.22f).coerceAtMost(16f.dp.toPx()),
+                            refractionAmount = (miniH * 0.18f) * (themeConfig.lensRefractionStrength / 0.85f),
                             chromaticAberration = true,
-                            chromaticAberrationAmount = 0.6f * chromaticFringe
+                            chromaticAberrationAmount = 0.25f * chromaticFringe
                         )
                     }
                 },
@@ -357,11 +358,12 @@ fun LensDock(
                         vibrancy()
                         blur(14f.dp.toPx())
                         if (lensActive) {
+                            val dockH = 64f.dp.toPx()
                             lens(
-                                refractionHeight = 20f.dp.toPx(),
-                                refractionAmount = 18f.dp.toPx() * (lensStrength / 0.85f),
+                                refractionHeight = (dockH * 0.28f).coerceAtMost(20f.dp.toPx()),
+                                refractionAmount = (dockH * 0.22f) * (lensStrength / 0.85f),
                                 chromaticAberration = true,
-                                chromaticAberrationAmount = 0.5f * chromaticFringe
+                                chromaticAberrationAmount = 0.25f * chromaticFringe
                             )
                         }
                     },
@@ -434,11 +436,12 @@ fun LensDock(
                             shape = { puckShape },
                             effects = {
                                 if (lensActive) {
+                                    val puckH = 50f.dp.toPx()
                                     lens(
-                                        refractionHeight = 10f.dp.toPx(),
-                                        refractionAmount = 14f.dp.toPx() * (lensStrength / 0.85f),
+                                        refractionHeight = (puckH * 0.20f).coerceAtMost(12f.dp.toPx()),
+                                        refractionAmount = (puckH * 0.22f) * (lensStrength / 0.85f),
                                         chromaticAberration = true,
-                                        chromaticAberrationAmount = 0.8f * chromaticFringe
+                                        chromaticAberrationAmount = 0.35f * chromaticFringe
                                     )
                                 }
                             },

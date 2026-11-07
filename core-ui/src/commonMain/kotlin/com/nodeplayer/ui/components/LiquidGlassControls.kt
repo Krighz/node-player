@@ -17,6 +17,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
@@ -156,26 +158,22 @@ fun LiquidGlassIconButton(
     contentDescription: String? = null,
     backdrop: Backdrop = remember { emptyBackdrop() }
 ) {
-    val density = LocalDensity.current
     val shape = CircleShape
     Box(
         modifier = modifier
             .size(size.coerceAtLeast(48.dp))
             .clip(shape)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { shape },
-                effects = {
-                    lens(
-                        refractionHeight = with(density) { 16f.dp.toPx() },
-                        refractionAmount = with(density) { 14f.dp.toPx() }
-                    )
-                    blur(with(density) { 12f.dp.toPx() })
-                },
-                highlight = { Highlight.Default },
-                shadow = { Shadow() }
-            )
             .background(Color.White.copy(alpha = 0.08f))
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.28f),
+                        Color.White.copy(alpha = 0.08f)
+                    )
+                ),
+                shape = shape
+            )
             .clickable(
                 enabled = enabled,
                 role = Role.Button,
@@ -205,27 +203,23 @@ fun <T> LiquidGlassSegmentedControl(
     backdrop: Backdrop = remember { emptyBackdrop() },
     itemLabel: (T) -> String
 ) {
-    val density = LocalDensity.current
     val shape = RoundedCornerShape(percent = 50)
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
             .clip(shape)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { shape },
-                effects = {
-                    lens(
-                        refractionHeight = with(density) { 16f.dp.toPx() },
-                        refractionAmount = with(density) { 12f.dp.toPx() }
-                    )
-                    blur(with(density) { 12f.dp.toPx() })
-                },
-                highlight = { Highlight(width = 0.8.dp, alpha = 0.45f) },
-                shadow = { Shadow() }
-            )
             .background(Color.White.copy(alpha = 0.06f))
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.22f),
+                        Color.White.copy(alpha = 0.06f)
+                    )
+                ),
+                shape = shape
+            )
             .padding(4.dp)
     ) {
         val count = items.size.coerceAtLeast(1)
@@ -237,7 +231,7 @@ fun <T> LiquidGlassSegmentedControl(
             label = "liquidPuckOffset"
         )
 
-        // Sliding selection puck
+        // Sliding selection puck (plain-Compose glass)
         val puckShape = RoundedCornerShape(percent = 50)
         Box(
             modifier = Modifier
@@ -245,20 +239,17 @@ fun <T> LiquidGlassSegmentedControl(
                 .width(tabWidth)
                 .fillMaxHeight()
                 .clip(puckShape)
-                .drawBackdrop(
-                    backdrop = backdrop,
-                    shape = { puckShape },
-                    effects = {
-                        lens(
-                            refractionHeight = with(density) { 12f.dp.toPx() },
-                            refractionAmount = with(density) { 14f.dp.toPx() }
+                .background(Color.White.copy(alpha = 0.16f))
+                .border(
+                    width = 0.8.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.35f),
+                            Color.White.copy(alpha = 0.10f)
                         )
-                        blur(with(density) { 8f.dp.toPx() })
-                    },
-                    highlight = { Highlight(width = 1.dp, alpha = 0.8f) },
-                    shadow = { Shadow(color = Color.Black.copy(alpha = 0.25f)) }
+                    ),
+                    shape = puckShape
                 )
-                .background(Color.White.copy(alpha = 0.18f))
         )
 
         // Segments
@@ -307,7 +298,6 @@ fun LiquidGlassChip(
     enabled: Boolean = true,
     backdrop: Backdrop = remember { emptyBackdrop() }
 ) {
-    val density = LocalDensity.current
     val shape = RoundedCornerShape(percent = 50)
     val highlightAlpha by animateFloatAsState(
         targetValue = if (selected) 0.85f else 0.35f,
@@ -322,22 +312,19 @@ fun LiquidGlassChip(
         modifier = modifier
             .heightIn(min = 48.dp)
             .clip(shape)
-            .drawBackdrop(
-                backdrop = backdrop,
-                shape = { shape },
-                effects = {
-                    lens(
-                        refractionHeight = with(density) { 14f.dp.toPx() },
-                        refractionAmount = with(density) { 10f.dp.toPx() }
-                    )
-                    blur(with(density) { 10f.dp.toPx() })
-                },
-                highlight = { Highlight(width = 0.8.dp, alpha = highlightAlpha) },
-                shadow = { Shadow() }
-            )
             .background(
                 if (selected) MaterialTheme.colorScheme.primary.copy(alpha = bgAlpha)
                 else Color.White.copy(alpha = bgAlpha)
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = highlightAlpha * 0.4f),
+                        Color.White.copy(alpha = 0.08f)
+                    )
+                ),
+                shape = shape
             )
             .clickable(
                 enabled = enabled,

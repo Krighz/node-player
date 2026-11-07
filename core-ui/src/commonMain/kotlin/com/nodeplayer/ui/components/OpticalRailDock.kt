@@ -101,10 +101,12 @@ fun OpticalRailDock(
                     vibrancy()
                     blur(16f.dp.toPx())
                     if (lensActive) {
+                        val railW = 96f.dp.toPx()
                         lens(
-                            refractionHeight = 22f.dp.toPx(),
-                            refractionAmount = 20f.dp.toPx() * (themeConfig.lensRefractionStrength / 0.85f),
-                            chromaticAberration = true
+                            refractionHeight = (railW * 0.18f).coerceAtMost(20f.dp.toPx()),
+                            refractionAmount = (railW * 0.16f) * (themeConfig.lensRefractionStrength / 0.85f),
+                            chromaticAberration = true,
+                            chromaticAberrationAmount = 0.25f
                         )
                     }
                 },
@@ -141,10 +143,12 @@ fun OpticalRailDock(
                         shape = { puckShape },
                         effects = {
                             if (lensActive) {
+                                val puckW = 88f.dp.toPx()
                                 lens(
-                                    refractionHeight = 12f.dp.toPx(),
-                                    refractionAmount = 16f.dp.toPx() * (themeConfig.lensRefractionStrength / 0.85f),
-                                    chromaticAberration = true
+                                    refractionHeight = (puckW * 0.12f).coerceAtMost(12f.dp.toPx()),
+                                    refractionAmount = (puckW * 0.14f) * (themeConfig.lensRefractionStrength / 0.85f),
+                                    chromaticAberration = true,
+                                    chromaticAberrationAmount = 0.30f
                                 )
                             }
                         },

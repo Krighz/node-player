@@ -81,7 +81,7 @@ fun LiquidSlider(
         modifier.fillMaxWidth(),
         contentAlignment = Alignment.CenterStart
     ) {
-        val trackWidth = constraints.maxWidth
+        val trackWidth = constraints.maxWidth.coerceAtLeast(0)
 
         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
         val animationScope = rememberCoroutineScope()
@@ -104,7 +104,8 @@ fun LiquidSlider(
                     if (!didDrag) {
                         didDrag = dragAmount.x != 0f
                     }
-                    val delta = (valueRange.endInclusive - valueRange.start) * (dragAmount.x / trackWidth)
+                    val effectiveTrackWidth = trackWidth.coerceAtLeast(1)
+                    val delta = (valueRange.endInclusive - valueRange.start) * (dragAmount.x / effectiveTrackWidth)
                     onValueChange(
                         if (isLtr) (targetValue + delta).coerceIn(valueRange)
                         else (targetValue - delta).coerceIn(valueRange)
@@ -128,7 +129,8 @@ fun LiquidSlider(
                     .background(trackColor)
                     .pointerInput(animationScope) {
                         detectTapGestures { position ->
-                            val delta = (valueRange.endInclusive - valueRange.start) * (position.x / trackWidth)
+                            val effectiveTrackWidth = trackWidth.coerceAtLeast(1)
+                            val delta = (valueRange.endInclusive - valueRange.start) * (position.x / effectiveTrackWidth)
                             val targetValue =
                                 (if (isLtr) valueRange.start + delta
                                 else valueRange.endInclusive - delta)
@@ -148,8 +150,11 @@ fun LiquidSlider(
                     .height(6f.dp)
                     .layout { measurable, constraints ->
                         val placeable = measurable.measure(constraints)
-                        val width = (constraints.maxWidth * dampedDragAnimation.progress).roundToInt()
-                        layout(width, placeable.height) {
+                        val maxW = if (constraints.hasBoundedWidth && constraints.maxWidth > 0) constraints.maxWidth else placeable.width.coerceAtLeast(0)
+                        val safeProgress = dampedDragAnimation.progress.coerceIn(0f, 1f)
+                        val width = (maxW * safeProgress).roundToInt().coerceIn(0, maxW)
+                        val height = placeable.height.coerceAtLeast(0)
+                        layout(width, height) {
                             placeable.place(0, 0)
                         }
                     }
@@ -159,9 +164,13 @@ fun LiquidSlider(
         Box(
             Modifier
                 .graphicsLayer {
+                    val thumbW = size.width.coerceAtLeast(0f)
+                    val safeProgress = dampedDragAnimation.progress.coerceIn(0f, 1f)
+                    val minTrans = if (thumbW > 0f) -thumbW / 4f else 0f
+                    val maxTrans = (trackWidth - thumbW * 3f / 4f).coerceAtLeast(minTrans)
                     translationX =
-                        (-size.width / 2f + trackWidth * dampedDragAnimation.progress)
-                            .coerceIn(-size.width / 4f, trackWidth - size.width * 3f / 4f) * if (isLtr) 1f else -1f
+                        (-thumbW / 2f + trackWidth * safeProgress)
+                            .coerceIn(minTrans, maxTrans) * if (isLtr) 1f else -1f
                 }
                 .then(dampedDragAnimation.modifier)
                 .drawBackdrop(

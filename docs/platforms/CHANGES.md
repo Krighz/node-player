@@ -5,6 +5,21 @@
 
 ---
 
+### [2026-11-07] - Liquid Glass Revamp: Phase 1 Fix What Is Broken
+- **LiquidSlider Math & Layout Safety (`core-ui`)**:
+  - `LiquidSlider.kt`: Clamped computed track width and placeable bounds to `>= 0`, guarding against negative dimensions and division-by-zero on drag.
+  - `LiquidSliderMathTest.kt`: Added unit test covering boundary cases, zero widths, and narrow constraints.
+- **Dock Refraction & Aberration Tuning (`core-ui`, `app-android`)**:
+  - `FrostedNavAndPlayer.kt` & `OpticalRailDock.kt`: Scaled refraction lens parameters proportionally to container heights; tuned default chromatic fringe from 0.8f down to 0.25f–0.35f to eliminate color fringing and edge glitches.
+- **Controls Optimization & Plain-Compose Glass Fallback (`core-ui`)**:
+  - `LiquidGlassControls.kt`: Switched `LiquidGlassIconButton`, `LiquidGlassSegmentedControl`, and `LiquidGlassChip` to lightweight plain-Compose styling (translucent fills, specular border gradient, highlight, shadow) without costly backdrop passes. Reserved lens shaders for hero components.
+- **Build & Diagnostics (`core-ui`, `app-android`)**:
+  - `proguard-rules.pro`: Added keep rules for liquid glass backdrop runtime shaders and render effects for R8 release builds.
+  - `FrameTimeOverlay.kt`: Created on-screen real-time FPS and frame-time profiling overlay.
+- **Status**: Completed, tests pass (`:core-ui:desktopTest`, `:app-desktop:test`, `:core-dsp:test`, `:core-common:test`, `:core-network:test`). Device checks marked "human check pending".
+
+---
+
 ## Change Log
 
 ### [2026-11-04] - Step 1: Documentation Honesty & Dynamic Verification Pass
