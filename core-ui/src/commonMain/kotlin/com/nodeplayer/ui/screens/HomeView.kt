@@ -37,6 +37,9 @@ import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.Track
 import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.components.DeviceConnectPill
+import com.nodeplayer.ui.components.DeviceConnectStatus
+import com.nodeplayer.ui.components.DiscoveredPeerInfo
 import com.nodeplayer.ui.components.DockScrollController
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.onHorizontalScrollWheel
@@ -66,6 +69,13 @@ fun HomeView(
     onNavigateToLibrary: () -> Unit = {},
     onNavigateToEqualizer: () -> Unit = {},
     dockScrollController: DockScrollController? = null,
+    showDevicePill: Boolean = false,
+    nodeConnectEnabled: Boolean = true,
+    connectedDeviceCount: Int = 0,
+    onOpenSyncCenter: () -> Unit = {},
+    onPairNewDevice: () -> Unit = {},
+    onCastToPeer: (DiscoveredPeerInfo) -> Unit = {},
+    onToggleNodeConnect: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -180,6 +190,48 @@ fun HomeView(
         contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = LocalBottomBarPadding.current + 16.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
+        // ---------------------------------------------------------------------
+        // Header: Greeting & DeviceConnectPill (Mobile portrait per D-04)
+        // ---------------------------------------------------------------------
+        if (showDevicePill) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Listen Now",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                        )
+                        Text(
+                            text = "Curated listening flow & shortcuts",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color.White.copy(alpha = 0.65f)
+                            )
+                        )
+                    }
+
+                    DeviceConnectPill(
+                        status = if (nodeConnectEnabled && connectedDeviceCount > 0) DeviceConnectStatus.CONNECTED
+                        else if (nodeConnectEnabled) DeviceConnectStatus.DISCOVERING
+                        else DeviceConnectStatus.DISCONNECTED,
+                        connectedDeviceCount = connectedDeviceCount,
+                        compact = true,
+                        allowCastingToThisDevice = nodeConnectEnabled,
+                        onToggleAllowCasting = onToggleNodeConnect,
+                        onPairNewDevice = onPairNewDevice,
+                        onCastToDevice = onCastToPeer,
+                        onOpenSyncCenter = onOpenSyncCenter
+                    )
+                }
+            }
+        }
+
         // ---------------------------------------------------------------------
         // Section 1: FOR YOU (Mix Cards)
         // ---------------------------------------------------------------------

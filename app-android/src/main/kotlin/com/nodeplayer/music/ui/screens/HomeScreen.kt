@@ -39,6 +39,7 @@ import com.nodeplayer.music.ui.theme.pressScale
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.DeviceConnectPill
 import com.nodeplayer.ui.components.DeviceConnectStatus
+import com.nodeplayer.ui.components.LiquidIconButton
 import dev.chrisbanes.haze.HazeState
 import java.io.File
 
@@ -162,22 +163,20 @@ fun HomeScreen(
                         compact = true,
                         onClick = onOpenNodeConnect
                     )
-                    IconButton(
+                    LiquidIconButton(
+                        icon = Icons.Rounded.BarChart,
                         onClick = onOpenStats,
-                        modifier = Modifier
-                            .background(Color.White.copy(alpha = 0.08f), CircleShape)
-                            .size(38.dp)
-                    ) {
-                        Icon(Icons.Rounded.BarChart, contentDescription = "Stats", tint = Color.White, modifier = Modifier.size(20.dp))
-                    }
-                    IconButton(
+                        contentDescription = "Stats",
+                        size = 38.dp,
+                        lighterStyle = true
+                    )
+                    LiquidIconButton(
+                        icon = Icons.Rounded.ContentCopy,
                         onClick = onOpenDuplicateFinder,
-                        modifier = Modifier
-                            .background(Color.White.copy(alpha = 0.08f), CircleShape)
-                            .size(38.dp)
-                    ) {
-                        Icon(Icons.Rounded.ContentCopy, contentDescription = "Duplicate Finder", tint = Color.White, modifier = Modifier.size(20.dp))
-                    }
+                        contentDescription = "Duplicate Finder",
+                        size = 38.dp,
+                        lighterStyle = true
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))

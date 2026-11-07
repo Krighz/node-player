@@ -488,7 +488,17 @@ fun SharedPlayerLayout(
                                 onSelectMusicFolder = onSelectMusicFolder,
                                 onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
                                 onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
-                                dockScrollController = dockScrollController
+                                dockScrollController = dockScrollController,
+                                showDevicePill = true,
+                                nodeConnectEnabled = nodeConnectEnabled,
+                                connectedDeviceCount = connectedDeviceCount,
+                                onOpenSyncCenter = {
+                                    currentNav = PlayerNavDestination.SETTINGS
+                                    onOpenSyncCenter()
+                                },
+                                onPairNewDevice = onPairNewDevice,
+                                onCastToPeer = onCastToPeer,
+                                onToggleNodeConnect = onToggleNodeConnect
                             )
                             PlayerNavDestination.LIBRARY -> LibraryView(
                                 tracks = tracks,
