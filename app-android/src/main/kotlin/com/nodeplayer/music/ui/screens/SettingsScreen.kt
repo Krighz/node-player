@@ -100,6 +100,7 @@ fun SettingsScreen(
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
     onApplySafeGraphicsMode: () -> Unit = {},
     onReportProblem: () -> Unit = {},
+    onNavigateToOpticalDiagnostics: () -> Unit = {},
     onPairNewDevice: () -> Unit = {},
     onRescanLibrary: () -> Unit,
     hazeState: HazeState? = null,
@@ -2470,6 +2471,51 @@ fun SettingsScreen(
                 }
 
         if (shouldShow("diagnostics")) {
+        // Liquid Glass Optical Diagnostics Card
+        Text(
+            text = "LIQUID GLASS OPTICAL TEST",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(
+            modifier = Modifier.fillMaxWidth(),
+            hazeState = hazeState
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Liquid Glass Optical Test",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                        )
+                        Text(
+                            text = "Triple-zone optical pattern, blur, refraction and puck fringing verification",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    FilledTonalButton(
+                        onClick = onNavigateToOpticalDiagnostics,
+                        colors = ButtonDefaults.filledTonalButtonColors(containerColor = accent.copy(alpha = 0.25f), contentColor = Color.White)
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Open Test", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // Diagnostics & Local Crash Logger Card
         Text(
             text = "DIAGNOSTICS & LOCAL CRASH LOGS",

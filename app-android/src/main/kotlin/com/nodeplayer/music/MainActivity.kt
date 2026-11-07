@@ -425,6 +425,7 @@ class MainActivity : ComponentActivity() {
                                 onThemeConfigChange = { viewModel.updateThemeConfig(it) },
                                 onApplySafeGraphicsMode = { viewModel.applySafeGraphicsMode() },
                                 onReportProblem = { showDiagnosticsDialog = true },
+                                onNavigateToOpticalDiagnostics = { currentRoute = "optical_diagnostics" },
                                 onPairNewDevice = { showPairingDialog = true },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
                                 hazeState = null
@@ -435,6 +436,10 @@ class MainActivity : ComponentActivity() {
                                 onBack = { currentRoute = "settings" },
                                 hazeState = null
                             )
+                            "optical_diagnostics" -> com.nodeplayer.ui.screens.OpticalDiagnosticsView(
+                                onBack = { currentRoute = "settings" },
+                                themeConfig = themeConfig
+                            )
                         }
                     }
 
@@ -444,57 +449,59 @@ class MainActivity : ComponentActivity() {
                     val dockOffsetFraction = if (dockAutoHide) dockScrollFraction else 0f
                     val miniPlayerOffsetFraction = if (dockAutoHide && miniPlayerAutoHide) dockScrollFraction else 0f
 
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .graphicsLayer {
-                                translationY = dockOffsetFraction * 110f.dp.toPx()
-                                alpha = 1f - (dockOffsetFraction * 0.85f).coerceIn(0f, 1f)
+                    if (currentRoute !in listOf("widget_settings", "widgets", "optical_diagnostics")) {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    translationY = dockOffsetFraction * 110f.dp.toPx()
+                                    alpha = 1f - (dockOffsetFraction * 0.85f).coerceIn(0f, 1f)
+                                }
+                                .navigationBarsPadding()
+                        ) {
+                            if (currentTrack != null) {
+                                val duration = currentTrack!!.durationMs.coerceAtLeast(1L)
+                                val progress = (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+
+                                val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
+
+                                ConvxMiniPlayer(
+                                    currentTrack = currentTrack,
+                                    isPlaying = isPlaying,
+                                    progressFraction = progress,
+                                    onPlayPauseClick = { viewModel.togglePlayPause() },
+                                    onSkipNextClick = { viewModel.skipNext() },
+                                    onSkipPreviousClick = { viewModel.skipPrevious() },
+                                    onClick = { isNowPlayingExpanded = true },
+                                    gesturesEnabled = appSettings.miniPlayerGesturesEnabled,
+                                    rmsLevel = currentRms,
+                                    isPerformanceMode = themeConfig.isPerformanceMode,
+                                    shaderEnabled = isShaderActive,
+                                    chromaticFringe = themeConfig.chromaticFringeValue(),
+                                    modifier = if (dockAutoHide && !miniPlayerAutoHide) {
+                                        Modifier.graphicsLayer {
+                                            // Counter-translate to keep mini player pinned when dock slides down
+                                            translationY = -dockOffsetFraction * 72f.dp.toPx()
+                                        }
+                                    } else Modifier
+                                )
                             }
-                            .navigationBarsPadding()
-                    ) {
-                        if (currentTrack != null) {
-                            val duration = currentTrack!!.durationMs.coerceAtLeast(1L)
-                            val progress = (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
 
                             val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
 
-                            ConvxMiniPlayer(
-                                currentTrack = currentTrack,
-                                isPlaying = isPlaying,
-                                progressFraction = progress,
-                                onPlayPauseClick = { viewModel.togglePlayPause() },
-                                onSkipNextClick = { viewModel.skipNext() },
-                                onSkipPreviousClick = { viewModel.skipPrevious() },
-                                onClick = { isNowPlayingExpanded = true },
-                                gesturesEnabled = appSettings.miniPlayerGesturesEnabled,
-                                rmsLevel = currentRms,
+                            ConvxLiquidDock(
+                                selectedRoute = currentRoute,
+                                onRouteChange = { currentRoute = it },
+                                onSearchClick = { showSearchSheet = true },
                                 isPerformanceMode = themeConfig.isPerformanceMode,
                                 shaderEnabled = isShaderActive,
                                 chromaticFringe = themeConfig.chromaticFringeValue(),
-                                modifier = if (dockAutoHide && !miniPlayerAutoHide) {
-                                    Modifier.graphicsLayer {
-                                        // Counter-translate to keep mini player pinned when dock slides down
-                                        translationY = -dockOffsetFraction * 72f.dp.toPx()
-                                    }
-                                } else Modifier
+                                searchButtonVisible = themeConfig.showDockSearchButton,
+                                lensStrength = themeConfig.lensRefractionStrength,
+                                rimSpecular = themeConfig.lensRimSpecular
                             )
                         }
-
-                        val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
-
-                        ConvxLiquidDock(
-                            selectedRoute = currentRoute,
-                            onRouteChange = { currentRoute = it },
-                            onSearchClick = { showSearchSheet = true },
-                            isPerformanceMode = themeConfig.isPerformanceMode,
-                            shaderEnabled = isShaderActive,
-                            chromaticFringe = themeConfig.chromaticFringeValue(),
-                            searchButtonVisible = themeConfig.showDockSearchButton,
-                            lensStrength = themeConfig.lensRefractionStrength,
-                            rimSpecular = themeConfig.lensRimSpecular
-                        )
                     }
 
                     // 4. Full Now Playing Sheet (Smooth slide animation)
