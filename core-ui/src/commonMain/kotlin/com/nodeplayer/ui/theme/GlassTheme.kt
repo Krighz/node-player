@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nodeplayer.model.GlassThemeConfig
+import com.nodeplayer.model.GlassControlsConfig
 
 data class GlassTokensData(
     val opacity: Float = 0.55f,
@@ -74,6 +75,7 @@ data class GlassTokensData(
 val LocalGlassTokens = staticCompositionLocalOf { GlassTokensData() }
 val LocalAccentColor = staticCompositionLocalOf { Color(0xFF6366F1) }
 val LocalGlassThemeConfig = staticCompositionLocalOf { GlassThemeConfig() }
+val LocalGlassControlsConfig = staticCompositionLocalOf { GlassControlsConfig() }
 
 object GlassTokens {
     val defaultCornerRadius: Dp = 26.dp
