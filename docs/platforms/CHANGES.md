@@ -173,3 +173,30 @@
 - **Audio Streaming & Jitter Buffer**:
   - `JitterBuffer.kt` & `NodeConnectCastService.kt`: Increased buffer settings (`targetBufferMs = 700`, `minBufferMs = 450`, `maxBufferMs = 2500`) to eliminate audio jitter and micro-underruns over Wi-Fi.
   - `WindowsPlaybackEngine.kt`: Improved underrun handling by cleanly pre-buffering to `isReadyForPlayback` before resuming stream consumption. Protected WASAPI line writes against race conditions.
+
+---
+
+### [2026-11-07] - Step 5: Convx-Style Liquid Glass Engine & Controls (feature/liquid-dock)
+
+- **Library & Vendoring**:
+  - Vendored io.github.kyant0:backdrop (Apache 2.0) source into core-ui/src/commonMain/kotlin/com/nodeplayer/ui/component/backdrop/ with license intact to guarantee multiplatform binary compatibility with Kotlin 1.9 / Compose Multiplatform 1.6.11.
+  - **Android Platform**: Hardware-accelerated AGSL runtime shader (RuntimeShader.android.kt) + RenderEffect chaining via reflection (RenderEffect.android.kt).
+  - **Windows / Desktop Platform**: Hardware-accelerated SkSL runtime shader via Skia RuntimeEffect (RuntimeShader.desktop.kt) and Skia ImageFilter composition (RenderEffect.desktop.kt).
+- **Bottom Dock & Floating Mini Player**:
+  - Android (FrostedNavAndPlayer.kt): Replaced dock and mini player with Convx-style LensDock continuous squircle capsule, edge lens refraction (L351), specular rim (L359), and sliding spring puck (L386).
+  - Windows (OpticalRailDock.kt & BottomPlayerDock.kt): Convex optical lens rail dock (lens L103, rim L111, puck L132) and floating player deck using SkSL liquid glass backdrop.
+- **Shared Glass Controls (LiquidGlassControls.kt)**:
+  - LiquidGlassSwitch: Liquid toggle with convex knob and smooth spring sliding physics.
+  - LiquidGlassSlider: Liquid slider with continuous backdrop refraction track and tactile thumb.
+  - LiquidGlassButton / LiquidGlassIconButton: Capsule glass buttons with dynamic lens refraction.
+  - LiquidGlassSegmentedControl & LiquidGlassChip: Filter chips and tab controls with sliding glass selection puck.
+  - All controls strictly maintain touch targets >= 48 dp and full accessibility semantics (Role.Switch, Role.Button, ProgressBarRangeInfo).
+- **Now Playing Screen**:
+  - Multiplatform NowPlayingView.kt and Android NowPlayingSheet.kt: Updated seekbar to LiquidGlassSlider, playback controls and transport action buttons to liquid glass styling.
+- **Menus & Settings**:
+  - CustomizeUiView.kt and EqualizerView.kt: Replaced standard Switches and Sliders with liquid glass counterparts.
+  - Added 'Dock glass' configuration group (dockGlassLensEnabled, dockGlassRimEnabled, dockGlassPuckEnabled) wired directly to drawing code.
+- **Android Home-screen Widgets**:
+  - Updated WidgetShaderRenderer.kt with enhanced static liquid glass rendering for offscreen RemoteViews bitmaps (squircle capsule, top-left refraction sheen, chromatic specular rim highlight).
+- **Diagnostics & Safety**:
+  - Verified GlassShaderSelfTest and fallback to plain frosted blur in Performance mode or on shader compilation failure.
