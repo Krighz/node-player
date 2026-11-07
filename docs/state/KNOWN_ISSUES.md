@@ -18,3 +18,7 @@
 6. **ExoPlayer Application Thread Restriction for Audio Cast (Resolved)**:
    - *Issue*: Accessing `activePlayer.currentPosition` from background dispatcher (`Dispatchers.IO`) threw `IllegalStateException: Player is accessed on the wrong thread`.
    - *Status*: Resolved by capturing position on main application thread before handing off PCM tap streaming to IO scope.
+7. **Android Emulator GPU SkSL Shader Precision Variances vs Physical ART Hardware (D-07)**:
+   - *Issue*: Software/Host GPU emulation in Android Emulator (QEMU / Goldfish / SwiftShader / host GPU passthrough) can exhibit slight subpixel coordinate quantization, precision rounding variances, or missing hardware blending stages for runtime SkSL/AGSL shaders (`RenderEffect.createRuntimeShaderEffect`).
+   - *Status*: Expected emulator virtualization behavior. Pixel-perfect AGSL refraction, Fresnel rim lighting, chromatic dispersion, and blur falloff must be validated on physical Android ART hardware (API 26+) or via the in-app hardware diagnostic self-test (`GlassShaderSelfTest`).
+

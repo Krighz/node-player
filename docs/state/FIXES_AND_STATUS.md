@@ -1,43 +1,68 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Phase 4 Global Settings, Per-Item Overrides & Real-Time Live Preview Completed (04-01 & 04-02)
+## Current Status: Phase 5 Diagnostics Test Screen, Verification, Builds & Acceptance Completed (05-01 & 05-02) - All Milestone Phases Complete!
 
-### Phase 4 Accomplishments
+### Phase 5 Accomplishments
 
-1. **SETTINGS-01: Master Liquid Glass Controls Card & Presets**
-   - Implemented `MasterControlsCard` in `CustomizeUiView.kt` with master on/off switch (`masterEnabled`), 3 presets (`Full`, `Balanced`, `Light`), and 12 shared master optical/spring sliders.
-   - Added preset change safety dialog ("Keep existing overrides" vs "Reset all to preset") preventing accidental overwrite of custom adjustments.
-   - Master OFF switch turns all components into high-performance zero-sampling continuous squircles (`ResolvedGlassParams.LIGHTER_SQUIRCLE`).
+1. **VERIFY-01: Dedicated Optical Diagnostics Screen & Triple-Zone Test Pattern**
+   - Implemented `OpticalDiagnosticsView.kt` in `:core-ui` featuring a high-contrast, vertically scrollable triple-zone backdrop:
+     1. Alternating monochrome high-contrast vertical and diagonal stripes.
+     2. Dense multi-size typography blocks (display, headline, body, caption, code, and small print).
+     3. High-frequency pixel alignment grid (sub-pixel grid lines and concentric circles) to expose distortion and curvature.
+   - Layered the entire active liquid glass chrome over the test pattern via `Modifier.layerBackdrop(pageBackdrop)`:
+     - 64dp capsule dock (`ConvxLiquidDock` / `LiquidDock`) with sliding tab puck.
+     - 56dp squircle mini player capsule (`ConvxMiniPlayer`) floating 8dp above the dock.
+     - 56dp circular Search button (`LiquidButton`).
+     - Interactive live test `LiquidSlider` directly embedded over the test pattern.
+   - Integrated navigation routes into shared `SettingsView.kt` and Android `SettingsScreen.kt`.
 
-2. **SETTINGS-02: 9 Per-Item Override Accordions & List Optimization**
-   - Built 9 collapsible accordion cards in `CustomizeUiView.kt` for Buttons, Toggles, Sliders, Dock, Chips, Dialogs, Mini Player, Now Playing, and Widgets.
-   - Implemented immediate "Use Global" switch with smooth expand/collapse chevron animation and "Reset to Global" per-item restoration.
-   - Added granular "Force Lighter Style in Lists" toggle for Buttons, Toggles, and Chips, routing to lighter squircle drawing parameters.
+2. **VERIFY-02: 5-Item Visual Acceptance Checklist (05-UAT.md)**
+   - Generated `.planning/phases/05-diagnostics-test-screen-verification-builds-acceptance/05-UAT.md` with 5 rubrics marked `[ ] HUMAN CHECK PENDING (phone photo review)`:
+     1. *Body blur & refraction:* Text and stripes passing behind the 64dp dock capsule are blurred and refracted; nothing from the page is sharp inside the dock body.
+     2. *Zero sharp text inside dock:* Sharp edges are completely eliminated within the dock container.
+     3. *Puck chromatic fringing:* The 56dp sliding puck visibly magnifies the icon/label under it with subtle chromatic aberration color fringing at its perimeter.
+     4. *Continuous slider drag:* `LiquidSlider` responds continuously to touch/mouse dragging with velocity stretch and press squish without freezing.
+     5. *Zero card self-refraction:* Page cards, badges, and tiles render as plain squircle surfaces without lens outlines, edge fringes, or self-sampling.
 
-3. **SETTINGS-03: Unified Domain Models, Versioned Serialization & Persistence**
-   - Centralized `GlassControlsConfig.kt` in `:core-model` with zero Android framework dependencies.
-   - Implemented `GlassControlsSerializer.kt` handling versioned JSON format (`NodePlayerGlassControls` v1) with 64KB bounds, numeric clamping, and corrupt payload recovery.
-   - Added 1-click clipboard export/import dialogs and factory reset engine.
-   - Integrated persistent reactive storage via `AppSettingsRepository.kt` (DataStore) on Android and `DesktopSettingsStore.kt` on Windows Desktop.
+3. **VERIFY-03: Multi-Module Regression Testing & Multiplatform Packaging**
+   - Executed full multi-module regression suite with 0 failures and 0 errors:
+     - `:core-model:test` (domain invariants, serialization, bounds clamping)
+     - `:core-common:test` (architectural purity, logging primitives)
+     - `:core-ui:desktopTest` (continuous gestures, velocity stretch, dock auto-hide, tap/drag)
+     - `:app-android:testDebugUnitTest` (Android test suite and shader self-test logic)
+   - Built multiplatform binary artifacts:
+     - Android debug APK: `app-android/build/outputs/apk/debug/app-android-debug.apk` (27,524,414 bytes, verified ready for `adb install -r`).
+     - Windows Desktop target: `app-desktop/build/classes/kotlin/main` (verified clean compilation).
 
-4. **SETTINGS-04: Interactive Live Preview Canvas & Dynamic GPU Cost Meter**
-   - Built `LivePreviewCanvas.kt` pinned/sticky at top on mobile portrait and in a 2-column split (45% preview / 55% controls) on desktop 16:9 (>840dp).
-   - Implemented dynamic animated caustics and chromatic metaballs backdrop (`DynamicPreviewCausticsBackdrop`) using stable root textures (`rememberLayerBackdrop()`).
-   - Added real-time GPU cost meter with empirical frame-time calculation (`calculateGpuCost`) and color-coded classification badge (`LOW`, `MODERATE`, `HIGH`, `INTENSE`).
-   - Rendered complete miniature interactive suite: mini player capsule with animated equalizer bars, mini button with spring press scale, draggable mini toggle, selectable mini chip, continuous mini slider with touch slop isolation, and mini dock with sliding tab puck.
+4. **VERIFY-04: Android R8 / ProGuard Keep Rules Enforcement**
+   - Audited `app-android/proguard-rules.pro` to ensure explicit keep rules for:
+     - `com.kyant.backdrop.**` (runtime shaders, AGSL strings, uniforms, and render effects).
+     - `com.nodeplayer.model.GlassControlsConfig` and data models.
+     - Native WASAPI JNA bindings and Room DAOs.
 
-5. **SETTINGS-05: Dynamic Parameter Wiring & Exhaustive SETTINGS.md Audit**
-   - Provided `LocalGlassControlsConfig` in `SharedPlayerLayout.kt`, dynamically consumed by `LiquidControls.kt`, `ConvxLiquidDock.kt`, and `ConvxMiniPlayer.kt`.
-   - Updated `docs/reference/SETTINGS.md` with an exhaustive audit of all 15+ settings parameters, line references, GPU cost formulas, and JSON schemas.
+5. **VERIFY-05: Documentation Synchronization & Open-Source Attribution**
+   - Logged emulator GPU SkSL precision variances in `docs/state/KNOWN_ISSUES.md`.
+   - Updated `docs/platforms/CHANGES.md`, `docs/state/FIXES_AND_STATUS.md`, and `docs/reference/SETTINGS.md`.
+   - Confirmed Kyant0 `AndroidLiquidGlass` Apache-2.0 attribution in `THIRD_PARTY_LICENSES.md`.
+   - Strictly maintained local-only git policy on `feature/liquid-dock`.
 
-### Platform Verification
-- Desktop tests and build: Passed (`:core-model:test`, `:core-ui:desktopTest`, `:app-desktop:compileKotlin`).
-- Android build: Passed (`:app-android:compileDebugKotlin`).
-- Visual checks: **Human check pending** (documented in `04-UAT.md`).
+### Operational Status by Platform
+
+| Target Platform | Runtime / Toolchain | Status | Shaders & Fallback |
+| :--- | :--- | :--- | :--- |
+| **Android Phone / Tablet** | ART (API 26+ / API 34 Target) | Fully Operational | Android 13+ AGSL (`RenderEffect.createRuntimeShaderEffect`); API 26-32 graceful fallback to Haze dual-pass blur with rim highlight. |
+| **Windows Desktop** | JVM 17 / Compose Desktop 1.6.11 | Fully Operational | SkSL runtime shaders (`org.jetbrains.skia.RuntimeEffect`) with WASAPI native audio and SMTC transport controls. |
+
+### Built Artifacts
+
+| Platform | Target Output | Exact Disk Location | Size / Status |
+| :--- | :--- | :--- | :--- |
+| **Android** | Debug Sideload APK | `app-android/build/outputs/apk/debug/app-android-debug.apk` | 27,524,414 bytes (~27.52 MB) |
+| **Windows Desktop** | JVM Kotlin Classes | `app-desktop/build/classes/kotlin/main` | Compiled & verified |
 
 ---
 
-## Historical Status: Phase 3 Drag Controls Everywhere & Dock Auto-Hide Completed (03-01 & 03-02)
+## Historical Status: Phase 4 Global Settings, Per-Item Overrides & Real-Time Live Preview Completed (04-01 & 04-02)
 
 ### Phase 3 Accomplishments
 

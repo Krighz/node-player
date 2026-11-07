@@ -5,6 +5,41 @@
 
 ---
 
+### [2026-11-08] - Ground-Up Liquid Glass Rebuild: Phase 5 Diagnostics Test Screen, Verification, Builds & Acceptance
+- **Dedicated Optical Diagnostics Test Screen & Triple-Zone Pattern (VERIFY-01)**:
+  - Created `OpticalDiagnosticsView.kt` in `:core-ui` featuring a high-contrast, vertically scrollable triple-zone backdrop:
+    1. Alternating monochrome high-contrast vertical and diagonal stripes.
+    2. Dense multi-size typography blocks (display headline, body, caption, code, and small print).
+    3. High-frequency pixel alignment grid (sub-pixel grid lines and concentric circles) to expose distortion and curvature.
+  - Layered the entire active liquid glass chrome over the test pattern via `Modifier.layerBackdrop(pageBackdrop)`:
+    - 64dp capsule dock (`ConvxLiquidDock` / `LiquidDock`) with sliding tab puck.
+    - 56dp squircle mini player capsule (`ConvxMiniPlayer`) floating 8dp above the dock.
+    - 56dp circular Search button (`LiquidButton`).
+    - Interactive live test `LiquidSlider` directly embedded over the test pattern.
+  - Wired navigation routes in `SettingsView.kt` ("Liquid Glass Optical Test") and Android `SettingsScreen.kt` ("Settings > Diagnostics & Graphics > Liquid Glass Optical Test").
+- **R8 / ProGuard Keep Rules Enforcement (VERIFY-04)**:
+  - Audited `app-android/proguard-rules.pro` to guarantee full preservation of runtime shaders, models, and serialization:
+    - `com.kyant.backdrop.**` (runtime shaders, AGSL strings, uniforms, and render effects).
+    - `com.nodeplayer.model.GlassControlsConfig` and data models.
+    - Native WASAPI JNA bindings and Room DAOs.
+- **Multi-Module Regression Test Suite Execution (VERIFY-03)**:
+  - Verified 100% clean test execution across all modules: `:core-model:test`, `:core-common:test`, `:core-ui:desktopTest`, and `:app-android:testDebugUnitTest` (0 failures, 0 errors).
+- **Multiplatform Production & Debug Binaries Assembly (VERIFY-03)**:
+  - Built Android debug APK via `:app-android:assembleDebug` (`app-android/build/outputs/apk/debug/app-android-debug.apk`, 27,524,414 bytes) ready for physical device sideloading via `adb install -r`.
+  - Compiled Windows Desktop JVM target via `:app-desktop:compileKotlin` with classes verified on disk.
+- **Visual Acceptance Checklist & Human Review Protocol (VERIFY-02)**:
+  - Generated `.planning/phases/05-diagnostics-test-screen-verification-builds-acceptance/05-UAT.md` cataloging the 5 prompt rubrics marked `[ ] HUMAN CHECK PENDING (phone photo review)`:
+    1. Body blur & refraction.
+    2. Zero sharp text inside dock.
+    3. Puck chromatic fringing.
+    4. Continuous slider drag.
+    5. Zero card self-refraction.
+- **Documentation Synchronization & Open-Source Attribution (VERIFY-05)**:
+  - Logged emulator GPU SkSL precision variances in `docs/state/KNOWN_ISSUES.md`.
+  - Updated `docs/platforms/CHANGES.md`, `docs/state/FIXES_AND_STATUS.md`, and `docs/reference/SETTINGS.md`.
+  - Confirmed Kyant0 `AndroidLiquidGlass` Apache-2.0 attribution in `THIRD_PARTY_LICENSES.md`.
+  - Observed strict local-only git policy on `feature/liquid-dock`.
+
 ### [2026-11-08] - Ground-Up Liquid Glass Rebuild: Phase 4 Global Settings, Per-Item Overrides & Real-Time Live Preview
 - **Master Liquid Glass Controls Card & Presets (SETTINGS-01)**:
   - Implemented `MasterControlsCard` in `CustomizeUiView.kt` providing a global master on/off switch (`masterEnabled`), 3 tiered presets (`Full`, `Balanced`, `Light`), and 12 shared master optical and spring sliders.

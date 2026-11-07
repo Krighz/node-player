@@ -97,3 +97,19 @@ Export and restore format specifications:
 | :--- | :--- | :--- | :--- | :--- |
 | **JSON Serializer** | `NodePlayerGlassControls` | `1` | Strict field validation, 64KB length cap, clamped slider parameters | `GlassControlsSerializer.kt` (L12-65) |
 | **Two-Tier Reset** | Runtime Action | N/A | Tier 1: Reset to Global per accordion.<br>Tier 2: Reset All to Factory Defaults. | `CustomizeUiView.kt` (L124, L558)<br>`GlassControlsSerializer.kt` (L180-230) |
+
+---
+
+## 7. Diagnostics & Optical Test Screen
+
+Accessible via **Settings > Diagnostics & Graphics > Liquid Glass Optical Test** (Android) and **Settings > Liquid Glass Optical Test** (Shared Compose):
+
+| Feature / Pattern | Description | Consuming Source File & Line Number(s) |
+| :--- | :--- | :--- |
+| **Monochrome Stripe Zone** | Alternating high-contrast black/white vertical & diagonal bands to test edge refraction and blur diffusion. | `OpticalDiagnosticsView.kt` (L130-187) |
+| **Dense Typography Zone** | Multi-size, multi-weight typography blocks (Display, Headline, Body, Caption, Code) to verify zero sharp text inside dock. | `OpticalDiagnosticsView.kt` (L234-291) |
+| **Pixel Alignment Grid Zone**| High-frequency grid lines and concentric circles to make SDF lens curvature and barrel distortion visible. | `OpticalDiagnosticsView.kt` (L296-360) |
+| **Active Chrome Overlay** | Renders 64dp capsule dock, 56dp sliding puck with chromatic dispersion, 56dp mini player, search button, and live interactive `LiquidSlider`. | `OpticalDiagnosticsView.kt` (L222-228, L384-428) |
+| **Settings Route Wiring** | Navigation entries in shared and Android settings screens. | • `SettingsView.kt` (L110)<br>• `SettingsScreen.kt` (L85)<br>• `MainActivity.kt` (L146) |
+
+
