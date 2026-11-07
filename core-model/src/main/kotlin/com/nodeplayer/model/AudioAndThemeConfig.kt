@@ -262,7 +262,8 @@ data class GlassThemeConfig(
     val glassRefractionHeightDp: Float = 18.0f,
     val glassRefractionAmountDp: Float = 16.0f,
     val glassChromaticFringe: Float = 0.25f,
-    val glassBackdropScale: Float = 0.50f
+    val glassBackdropScale: Float = 0.50f,
+    val controlsConfig: GlassControlsConfig = GlassControlsConfig(masterEnabled = controlsGlassEnabled)
 ) {
     companion object {
         val PRESET_OBSIDIAN_LIQUID = GlassThemeConfig(
