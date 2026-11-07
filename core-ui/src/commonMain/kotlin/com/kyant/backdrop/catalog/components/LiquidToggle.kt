@@ -1,8 +1,10 @@
 package com.kyant.backdrop.catalog.components
 
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
@@ -61,7 +64,7 @@ fun LiquidToggle(
 
     val density = LocalDensity.current
     val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
-    val dragWidth = with(density) { 20f.dp.toPx() }
+    val dragWidth = with(density) { 20f.dp.toPx() }.coerceAtLeast(1f)
     val animationScope = rememberCoroutineScope()
     var didDrag by remember { mutableStateOf(false) }
     var fraction by remember { mutableFloatStateOf(if (selected()) 1f else 0f) }
@@ -76,22 +79,29 @@ fun LiquidToggle(
             onDragStarted = {},
             onDragStopped = {
                 if (didDrag) {
-                    fraction = if (targetValue >= 0.5f) 1f else 0f
-                    onSelect(fraction == 1f)
+                    val target = if (fraction >= 0.5f || targetValue >= 0.5f) 1f else 0f
+                    fraction = target
+                    animateToValue(target)
+                    onSelect(target == 1f)
                     didDrag = false
                 } else {
-                    fraction = if (selected()) 0f else 1f
-                    onSelect(fraction == 1f)
+                    val target = if (selected()) 0f else 1f
+                    fraction = target
+                    animateToValue(target)
+                    onSelect(target == 1f)
                 }
             },
             onDrag = { _, dragAmount ->
                 if (!didDrag) {
                     didDrag = dragAmount.x != 0f
                 }
-                val delta = dragAmount.x / dragWidth
-                fraction =
+                val rawDelta = dragAmount.x / dragWidth
+                val delta = if (rawDelta.isFinite()) rawDelta else 0f
+                val newFraction =
                     if (isLtr) (fraction + delta).fastCoerceIn(0f, 1f)
                     else (fraction - delta).fastCoerceIn(0f, 1f)
+                fraction = newFraction
+                updateValue(newFraction)
             }
         )
     }
@@ -115,7 +125,7 @@ fun LiquidToggle(
     val trackBackdrop = rememberLayerBackdrop()
 
     Box(
-        modifier,
+        modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
         contentAlignment = Alignment.CenterStart
     ) {
         Box(
@@ -123,8 +133,16 @@ fun LiquidToggle(
                 .layerBackdrop(trackBackdrop)
                 .clip(Capsule())
                 .drawBehind {
-                    val fraction = dampedDragAnimation.value
-                    drawRect(lerp(trackColor, accentColor, fraction))
+                    val animFraction = dampedDragAnimation.value
+                    drawRect(lerp(trackColor, accentColor, animFraction))
+                }
+                .pointerInput(animationScope) {
+                    detectTapGestures {
+                        val target = if (selected()) 0f else 1f
+                        fraction = target
+                        dampedDragAnimation.animateToValue(target)
+                        onSelect(target == 1f)
+                    }
                 }
                 .size(64f.dp, 28f.dp)
         )
@@ -132,72 +150,81 @@ fun LiquidToggle(
         Box(
             Modifier
                 .graphicsLayer {
-                    val fraction = dampedDragAnimation.value
+                    val animFraction = dampedDragAnimation.value
                     val padding = 2f.dp.toPx()
                     translationX =
-                        if (isLtr) lerp(padding, padding + dragWidth, fraction)
-                        else lerp(-padding, -(padding + dragWidth), fraction)
+                        if (isLtr) lerp(padding, padding + dragWidth, animFraction)
+                        else lerp(-padding, -(padding + dragWidth), animFraction)
                 }
                 .semantics {
                     role = Role.Switch
                 }
-                .then(dampedDragAnimation.modifier)
-                .drawBackdrop(
-                    backdrop = rememberCombinedBackdrop(
-                        backdrop,
-                        rememberBackdrop(trackBackdrop) { drawBackdrop ->
-                            val progress = dampedDragAnimation.pressProgress
-                            val scaleX = lerp(2f / 3f, 0.75f, progress)
-                            val scaleY = lerp(0f, 0.75f, progress)
-                            scale(scaleX, scaleY) {
-                                drawBackdrop()
+                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                .then(dampedDragAnimation.modifier),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                Modifier
+                    .drawBackdrop(
+                        backdrop = rememberCombinedBackdrop(
+                            backdrop,
+                            rememberBackdrop(trackBackdrop) { drawBackdrop ->
+                                val progress = dampedDragAnimation.pressProgress
+                                val scaleX = lerp(2f / 3f, 0.75f, progress)
+                                val scaleY = lerp(0f, 0.75f, progress)
+                                scale(scaleX, scaleY) {
+                                    drawBackdrop()
+                                }
                             }
+                        ),
+                        shape = { Capsule() },
+                        effects = {
+                            val progress = dampedDragAnimation.pressProgress
+                            blur(8f.dp.toPx() * (1f - progress))
+                            lens(
+                                5f.dp.toPx() * progress,
+                                10f.dp.toPx() * progress,
+                                chromaticAberration = true
+                            )
+                        },
+                        highlight = {
+                            val progress = dampedDragAnimation.pressProgress
+                            Highlight.Ambient.copy(
+                                width = Highlight.Ambient.width / 1.5f,
+                                blurRadius = Highlight.Ambient.blurRadius / 1.5f,
+                                alpha = progress
+                            )
+                        },
+                        shadow = {
+                            Shadow(
+                                radius = 4f.dp,
+                                color = Color.Black.copy(alpha = 0.05f)
+                            )
+                        },
+                        innerShadow = {
+                            val progress = dampedDragAnimation.pressProgress
+                            InnerShadow(
+                                radius = 4f.dp * progress,
+                                alpha = progress
+                            )
+                        },
+                        layerBlock = {
+                            scaleX = dampedDragAnimation.scaleX
+                            scaleY = dampedDragAnimation.scaleY
+                            val rawVelocity = dampedDragAnimation.velocity
+                            val velocity = if (rawVelocity.isFinite()) rawVelocity / 50f else 0f
+                            val stretchX = (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
+                            val squishY = (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
+                            scaleX /= (1f - stretchX)
+                            scaleY *= (1f - squishY)
+                        },
+                        onDrawSurface = {
+                            val progress = dampedDragAnimation.pressProgress
+                            drawRect(Color.White.copy(alpha = 1f - progress))
                         }
-                    ),
-                    shape = { Capsule() },
-                    effects = {
-                        val progress = dampedDragAnimation.pressProgress
-                        blur(8f.dp.toPx() * (1f - progress))
-                        lens(
-                            5f.dp.toPx() * progress,
-                            10f.dp.toPx() * progress,
-                            chromaticAberration = true
-                        )
-                    },
-                    highlight = {
-                        val progress = dampedDragAnimation.pressProgress
-                        Highlight.Ambient.copy(
-                            width = Highlight.Ambient.width / 1.5f,
-                            blurRadius = Highlight.Ambient.blurRadius / 1.5f,
-                            alpha = progress
-                        )
-                    },
-                    shadow = {
-                        Shadow(
-                            radius = 4f.dp,
-                            color = Color.Black.copy(alpha = 0.05f)
-                        )
-                    },
-                    innerShadow = {
-                        val progress = dampedDragAnimation.pressProgress
-                        InnerShadow(
-                            radius = 4f.dp * progress,
-                            alpha = progress
-                        )
-                    },
-                    layerBlock = {
-                        scaleX = dampedDragAnimation.scaleX
-                        scaleY = dampedDragAnimation.scaleY
-                        val velocity = dampedDragAnimation.velocity / 50f
-                        scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
-                        scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
-                    },
-                    onDrawSurface = {
-                        val progress = dampedDragAnimation.pressProgress
-                        drawRect(Color.White.copy(alpha = 1f - progress))
-                    }
-                )
-                .size(40f.dp, 24f.dp)
-        )
+                    )
+                    .size(40f.dp, 24f.dp)
+            )
+        }
     }
 }
