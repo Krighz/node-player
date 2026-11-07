@@ -5,6 +5,30 @@
 
 ---
 
+### [2026-11-08] - Ground-Up Liquid Glass Rebuild: Phase 3 Drag Controls Everywhere & Dock Auto-Hide
+- **Continuous Gesture Draggable `LiquidSlider` (CTRL-01)**:
+  - Upgraded `LiquidSlider.kt` with continuous gesture dragging using `DampedDragAnimation`, horizontal velocity stretch (`scaleX`), vertical press-squish (`scaleY`), and spring release snapping.
+  - Enforced $\ge$48dp touch hitboxes on both thumb and container (`Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)`), tap-to-seek, division-by-zero protection, and safe clamped bounds.
+- **Unified `LiquidControls.kt` Suite & Tap/Drag `LiquidToggle` (CTRL-02)**:
+  - Enhanced `LiquidToggle.kt` supporting both instantaneous tap toggling and fluid continuous drag tracking with spring snap at the 0.5f threshold.
+  - Built comprehensive `LiquidControls.kt` suite in `core-ui`: `LiquidButton`, `LiquidIconButton`, `LiquidChip`, `LiquidSegmentedControl`, `LiquidDialog`, `LiquidCheckbox`, and `LiquidRadioButton`.
+  - Added lighter glass styling mode (`lighterStyle = true`) utilizing plain continuous squircle geometry (`ContinuousRoundedRectangle`) without heavy backdrop sampling for high frame rate (60/120 fps) list items.
+  - Converted legacy `LiquidGlassControls.kt` into a backwards-compatible delegate façade.
+- **Systematic Plain Material Controls Replacement (CTRL-03)**:
+  - Replaced all direct uses of plain Material controls (`Button`, `IconButton`, `Switch`, `Slider`, `FilterChip`, `TabRow`, `SegmentedButton`, `AlertDialog`, `RadioButton`, `Checkbox`) across all app screens: `EqualizerView`, `SettingsView`, `CustomizeUiView`, `LibraryView`, `NowPlayingView`, `BottomPlayerDeck`, `BottomPlayerDock`, and `NodeConnectPairingDialog`.
+- **Intelligent Dock Nested Scroll Auto-Hide & Return Triggers (CTRL-04)**:
+  - Implemented `DockScrollController.kt` managing `offsetFraction` and 4 return triggers: 1) scrolling up, 2) list top reached, 3) 2-second scroll pause timeout, 4) bottom edge tap (~40dp invisible touch target active when hidden).
+  - Wired `SharedPlayerLayout.kt` to translate floating dock and mini player by `120.dp * offsetFraction` with spring physics (`dampingRatio = 0.82f, stiffness = 380f`) and alpha fade (`1f - offsetFraction`).
+  - Respected user settings: `dockAutoHideEnabled`, `dockAutoHideMiniPlayer`, `dockScrollSensitivity`, and `dockReturnDelayMs`.
+- **Node Connect Header Integration & List Smoothness (CTRL-05)**:
+  - Preserved `DeviceConnectPill` in `HomeView.kt` mobile portrait header, `HomeScreen.kt`, desktop top bar, and Windows rail.
+  - Maintained 100% operational peer discovery, pairing, and audio casting with lighter styling across list rows.
+- **Multiplatform Verification**:
+  - All tests passing in `:core-ui:desktopTest` (including `LiquidControlsGestureTest`, `LiquidSliderMathTest`, and `DockScrollControllerTest`).
+  - Full project compilation verified across `:app-android:compileDebugKotlin` and `:app-desktop:compileKotlin`.
+  - Visual inspections marked as "human check pending" in `03-UAT.md`.
+
+
 ### [2026-11-07] - Ground-Up Liquid Glass Rebuild: Phase 2 Layering & LiquidBottomTabs Dock + Mini Player
 - **Root Layer Stacking Inversion (D-01, DOCK-01)**:
   - Inverted the root Compose layout hierarchy in `SharedPlayerLayout.kt`: root full-bleed `Box` records scrolling page content and background into a single `pageBackdrop` using `Modifier.layerBackdrop(pageBackdrop)`.

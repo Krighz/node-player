@@ -1,6 +1,45 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Phase 2 Correct Layering & LiquidBottomTabs Dock + Mini Player Completed (02-01 & 02-02)
+## Current Status: Phase 3 Drag Controls Everywhere & Dock Auto-Hide Completed (03-01 & 03-02)
+
+### Phase 3 Accomplishments
+
+1. **CTRL-01: Draggable LiquidSlider with Velocity Stretch & Squish**
+   - Upgraded `LiquidSlider.kt` with continuous gesture dragging using `DampedDragAnimation`.
+   - Directional velocity stretch along horizontal movement axis (`scaleX`) and press-squish feedback (`scaleY`).
+   - Enforced $\ge$48dp touch hitboxes on thumb and track container with tap-to-seek and division-by-zero protection.
+
+2. **CTRL-02: Tap/Drag LiquidToggle & Unified LiquidControls.kt Suite**
+   - Implemented dual tap and drag toggling in `LiquidToggle.kt` with spring release snapping at the 0.5f threshold.
+   - Created unified `LiquidControls.kt` providing `LiquidButton`, `LiquidIconButton`, `LiquidChip`, `LiquidSegmentedControl`, `LiquidDialog`, `LiquidCheckbox`, and `LiquidRadioButton`.
+   - Enforced 48dp minimum touch targets, accessibility semantics (`Role.Button`, `Role.Switch`, `Role.Checkbox`, `Role.RadioButton`, `Role.Tab`), and lighter squircle styling (`lighterStyle = true`) for dense list performance.
+
+3. **CTRL-03: Complete Replacement of Plain Material Controls**
+   - Replaced all direct uses of plain Material controls (`Button`, `IconButton`, `Switch`, `Slider`, `FilterChip`, `TabRow`, `SegmentedButton`, `AlertDialog`, `RadioButton`, `Checkbox`) with `LiquidControls` across `EqualizerView`, `SettingsView`, `CustomizeUiView`, `LibraryView`, `NowPlayingView`, `BottomPlayerDeck`, `BottomPlayerDock`, and `NodeConnectPairingDialog`.
+   - Verified zero direct usages of plain Material controls remaining in screens via automated grep.
+
+4. **CTRL-04: Intelligent Dock Scroll Auto-Hide with 4 Return Triggers**
+   - Built `DockScrollController.kt` managing nested scroll tracking and 4 return triggers:
+     1. Scroll up (`scaledDelta > 6f`).
+     2. Reached list top (`firstVisibleItemIndex == 0 && firstVisibleItemScrollOffset == 0`).
+     3. Scroll pause timeout (default 2000ms / 2 seconds).
+     4. Bottom edge tap (~40dp invisible touch target enabled when dock is hidden).
+   - Animated translation Y (`120.dp * offsetFraction`) and alpha fade (`1f - offsetFraction`) via spring physics in `SharedPlayerLayout.kt`.
+   - Respected user settings: `dockAutoHideEnabled`, `dockAutoHideMiniPlayer`, `dockScrollSensitivity`, `dockReturnDelayMs`.
+
+5. **CTRL-05: Node Connect Header Button & List Smoothness**
+   - Preserved `DeviceConnectPill` in mobile Home header, `HomeScreen.kt`, desktop header, and Windows rail.
+   - Kept device sheets, pairing, and audio casting 100% operational.
+   - Enforced lighter styling in list rows to protect 60/120 fps frame rates.
+
+### Platform Verification
+- Desktop tests and build: Passed (`:core-ui:desktopTest`, `:app-desktop:compileKotlin`).
+- Android build: Passed (`:app-android:compileDebugKotlin`).
+- Visual checks: **Human check pending** (documented in `03-UAT.md`).
+
+---
+
+## Historical Status: Phase 2 Correct Layering & LiquidBottomTabs Dock + Mini Player Completed (02-01 & 02-02)
 
 ### Phase 2 Accomplishments
 
