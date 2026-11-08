@@ -31,6 +31,7 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
+import com.nodeplayer.ui.components.AudioFormatBadge
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.LiquidIconButton
@@ -251,14 +252,10 @@ fun NowPlayingView(
                 )
             }
 
-            if (currentTrack.isHiRes || currentTrack.sampleRate >= 88200 || currentTrack.bitDepth > 16) {
-                GlassBadge(
-                    text = if (currentTrack.bitDepth > 16) "${currentTrack.bitDepth}b/${currentTrack.sampleRate / 1000}k" else "HI-RES",
-                    color = Color(0xFFF59E0B)
-                )
-            } else if (currentTrack.isLossless) {
-                GlassBadge(text = "LOSSLESS", color = accent)
-            }
+            AudioFormatBadge(
+                track = currentTrack,
+                modifier = Modifier.padding(start = 8.dp)
+            )
         }
 
         Spacer(modifier = Modifier.height(16.dp))

@@ -41,6 +41,32 @@ data class DiscoveredPeerInfo(
     val canReceiveCast: Boolean
 )
 
+fun cleanAudioDeviceName(rawName: String): String {
+    if (rawName.isBlank()) return "Default Audio Output"
+    var name = rawName
+    val prefixesToStrip = listOf(
+        "Windows Audio - ",
+        "WASAPI - ",
+        "WASAPI Exclusive - ",
+        "WASAPI Shared - ",
+        "WASAPI Exclusive Output",
+        "WASAPI Shared Output",
+        "[DirectSound] ",
+        "DirectSound - ",
+        "32-bit Float - ",
+        "16-bit PCM - ",
+        "24-bit PCM - ",
+        "Primary Sound Driver - "
+    )
+    for (prefix in prefixesToStrip) {
+        if (name.startsWith(prefix, ignoreCase = true)) {
+            name = name.substring(prefix.length).trim()
+        }
+    }
+    // Also remove generic trailing tags or driver identifiers if empty
+    return name.ifBlank { "System Audio Output" }
+}
+
 @Composable
 fun DeviceConnectPill(
     status: DeviceConnectStatus = DeviceConnectStatus.DISCONNECTED,
@@ -48,6 +74,7 @@ fun DeviceConnectPill(
     pairedDevices: List<DiscoveredPeerInfo> = emptyList(),
     allowCastingToThisDevice: Boolean = true,
     compact: Boolean = false,
+    outputDeviceName: String = "",
     onClick: (() -> Unit)? = null,
     onToggleAllowCasting: (Boolean) -> Unit = {},
     onPairNewDevice: () -> Unit = {},
@@ -56,6 +83,9 @@ fun DeviceConnectPill(
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val cleanedDeviceName = remember(outputDeviceName) {
+        if (outputDeviceName.isNotBlank()) cleanAudioDeviceName(outputDeviceName) else ""
+    }
     var isMenuOpen by remember { mutableStateOf(false) }
 
     // Pulsing animation for discovering state
@@ -122,10 +152,11 @@ fun DeviceConnectPill(
             if (!compact) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Device Connect",
+                    text = if (cleanedDeviceName.isNotBlank()) cleanedDeviceName else "Device Connect",
                     fontSize = 12.5.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White.copy(alpha = 0.92f)
+                    color = Color.White.copy(alpha = 0.92f),
+                    maxLines = 1
                 )
             }
 
@@ -251,13 +282,13 @@ fun DeviceConnectPill(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "This Device (Local Host)",
+                                text = if (cleanedDeviceName.isNotBlank()) cleanedDeviceName else "This Device (Local Host)",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color.White
                             )
                             Text(
-                                text = "Listening on port 47200 (mTLS)",
+                                text = if (cleanedDeviceName.isNotBlank()) "Hardware Output • Port 47200" else "Listening on port 47200 (mTLS)",
                                 fontSize = 10.sp,
                                 color = Color.White.copy(alpha = 0.5f)
                             )
