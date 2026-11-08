@@ -898,6 +898,16 @@ data class YouTubeSection(
     val items: List<Track>,
 )
 
+enum class SearchFilter(val paramValue: String?) {
+    ALL(null),
+    SONGS("EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"),
+    VIDEOS("EgWKAQIQAWoKEAkQChAFEAMQBA%3D%3D"),
+    ALBUMS("EgWKAQIYAWoKEAkQChAFEAMQBA%3D%3D"),
+    ARTISTS("EgWKAQIgAWoKEAkQChAFEAMQBA%3D%3D"),
+    FEATURED_PLAYLISTS("EgeKAQQoADgBagwQDhAKEAMQBRAJEAQ%3D"),
+    COMMUNITY_PLAYLISTS("EgeKAQQoAEABagoQAxAEEAoQCRAF");
+}
+
 data class YouTubeSearchResult(
     val songs: List<Track> = emptyList(),
     val albums: List<Track> = emptyList(),
