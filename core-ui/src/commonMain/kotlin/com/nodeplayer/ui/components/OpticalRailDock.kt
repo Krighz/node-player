@@ -8,6 +8,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -26,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nodeplayer.common.AppModeState
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.ui.PlayerNavDestination
 import com.kyant.backdrop.Backdrop
@@ -83,7 +86,7 @@ fun OpticalRailDock(
     val tabHeightDp = 84.dp
     val tabSpacingDp = 8.dp
 
-    val targetY = selectedIndex * (tabHeightDp.value + tabSpacingDp.value)
+    val targetY = 62.dp.value + selectedIndex * (tabHeightDp.value + tabSpacingDp.value)
 
     val animatedY by animateFloatAsState(
         targetValue = targetY,
@@ -188,8 +191,14 @@ fun OpticalRailDock(
         // Tab Items Column
         Column(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(tabSpacingDp)
+            verticalArrangement = Arrangement.spacedBy(tabSpacingDp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Desktop Mode Switcher at top of rail
+            DesktopModeRailSwitcher(
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+
             tabs.forEachIndexed { index, tab ->
                 val isSelected = currentNav == tab.destination
                 val interactionSource = remember { MutableInteractionSource() }
@@ -229,6 +238,115 @@ fun OpticalRailDock(
                             color = if (isSelected) Color.White else Color.White.copy(alpha = 0.60f)
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Vertical Mode Switcher for Desktop Optical Rail (Cloud / Online vs. Disk / Offline).
+ */
+@Composable
+fun DesktopModeRailSwitcher(
+    modifier: Modifier = Modifier
+) {
+    val isOnline by AppModeState.isOnlineMode.collectAsState()
+    val capsuleShape = remember { ContinuousRoundedRectangle(16.dp) }
+    val puckShape = remember { ContinuousRoundedRectangle(12.dp) }
+
+    val puckOffsetY by animateDpAsState(
+        targetValue = if (isOnline) 0.dp else 24.dp,
+        animationSpec = spring(
+            dampingRatio = 0.75f,
+            stiffness = 400f
+        ),
+        label = "DesktopRailPuckY"
+    )
+
+    Column(
+        modifier = modifier
+            .width(68.dp)
+            .height(54.dp)
+            .clip(capsuleShape)
+            .background(if (isOnline) Color(0xFF0F232A).copy(alpha = 0.75f) else Color(0xFF14171A).copy(alpha = 0.70f))
+            .border(
+                width = 1.dp,
+                color = if (isOnline) Color(0xFF00E5FF).copy(alpha = 0.40f) else Color.White.copy(alpha = 0.12f),
+                shape = capsuleShape
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                AppModeState.toggleMode()
+            }
+            .padding(2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            // Sliding puck
+            Box(
+                modifier = Modifier
+                    .offset(y = puckOffsetY)
+                    .fillMaxWidth()
+                    .height(24.dp)
+                    .clip(puckShape)
+                    .background(
+                        if (isOnline) {
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color(0xFF00E5FF).copy(alpha = 0.90f),
+                                    Color(0xFF0097A7).copy(alpha = 0.85f)
+                                )
+                            )
+                        } else {
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color(0xFF37474F).copy(alpha = 0.85f),
+                                    Color(0xFF263238).copy(alpha = 0.90f)
+                                )
+                            )
+                        }
+                    )
+                    .border(
+                        width = 0.8.dp,
+                        color = if (isOnline) Color.White.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.2f),
+                        shape = puckShape
+                    )
+            )
+
+            // Vertical icons Column
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.SpaceAround,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Cloud,
+                        contentDescription = "Online Mode",
+                        tint = if (isOnline) Color(0xFF004D40) else Color.White.copy(alpha = 0.45f),
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier.weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.CloudOff,
+                        contentDescription = "Offline Mode",
+                        tint = if (!isOnline) Color(0xFF81C784) else Color.White.copy(alpha = 0.45f),
+                        modifier = Modifier.size(15.dp)
+                    )
                 }
             }
         }

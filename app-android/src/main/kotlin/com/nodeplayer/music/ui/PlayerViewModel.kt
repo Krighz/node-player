@@ -190,6 +190,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         registerAudioDeviceCallback()
         detectAudioOutput()
         restoreLastPlaybackSession()
+
+        // Sync and observe AppModeState with persistent settings
+        viewModelScope.launch {
+            appSettings.collect { settings ->
+                com.nodeplayer.common.AppModeState.setOnlineMode(settings.isOnlineMode)
+            }
+        }
     }
 
     private fun runGraphicsSelfTest() {

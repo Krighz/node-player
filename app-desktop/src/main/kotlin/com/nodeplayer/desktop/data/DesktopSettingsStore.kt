@@ -197,6 +197,14 @@ class DesktopSettingsStore : KeyValueStore {
         )
     }
 
+    fun isOnlineMode(): Boolean {
+        return getBoolean("is_online_mode", false)
+    }
+
+    fun setOnlineMode(enabled: Boolean) {
+        putBoolean("is_online_mode", enabled)
+    }
+
     fun saveThemeConfig(cfg: com.nodeplayer.model.GlassThemeConfig) {
         putLong("fixedAccentColorArgb", cfg.fixedAccentColorArgb)
         putString("backgroundAnimationStyle", cfg.backgroundAnimationStyle)

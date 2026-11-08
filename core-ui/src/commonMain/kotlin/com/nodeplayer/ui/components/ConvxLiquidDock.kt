@@ -16,6 +16,8 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -29,6 +31,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -36,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nodeplayer.common.AppModeState
 import com.nodeplayer.model.GlassThemeConfig
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
@@ -141,10 +146,15 @@ fun ConvxLiquidDock(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Online / Offline Mode Switcher Capsule
+        ModeToggleCapsule(
+            modifier = Modifier.padding(end = 8.dp)
+        )
+
         // Main tabs capsule container
         Box(
             modifier = Modifier
@@ -385,6 +395,109 @@ fun ConvxLiquidDock(
                     contentDescription = "Search",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Tactical Mode Switcher Capsule (Online vs. Offline) with smooth sliding puck and haptic feedback.
+ */
+@Composable
+fun ModeToggleCapsule(
+    modifier: Modifier = Modifier
+) {
+    val isOnline by AppModeState.isOnlineMode.collectAsState()
+    val haptic = LocalHapticFeedback.current
+    val capsuleShape = remember { ContinuousCapsule() }
+    val puckShape = remember { ContinuousCapsule() }
+
+    val puckOffset by animateDpAsState(
+        targetValue = if (isOnline) 34.dp else 2.dp,
+        animationSpec = spring(
+            dampingRatio = 0.75f,
+            stiffness = 400f
+        ),
+        label = "ModePuckOffset"
+    )
+
+    Box(
+        modifier = modifier
+            .width(72.dp)
+            .height(34.dp)
+            .clip(capsuleShape)
+            .background(if (isOnline) Color(0xFF0F232A).copy(alpha = 0.78f) else Color(0xFF14171A).copy(alpha = 0.72f))
+            .border(
+                width = 1.dp,
+                color = if (isOnline) Color(0xFF00E5FF).copy(alpha = 0.35f) else Color.White.copy(alpha = 0.12f),
+                shape = capsuleShape
+            )
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            ) {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                AppModeState.toggleMode()
+            }
+            .padding(2.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        // Sliding dual-state puck
+        Box(
+            modifier = Modifier
+                .offset(x = puckOffset)
+                .size(width = 34.dp, height = 30.dp)
+                .clip(puckShape)
+                .background(
+                    if (isOnline) {
+                        Brush.verticalGradient(
+                            listOf(
+                                Color(0xFF00E5FF).copy(alpha = 0.90f),
+                                Color(0xFF0097A7).copy(alpha = 0.85f)
+                            )
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            listOf(
+                                Color(0xFF37474F).copy(alpha = 0.85f),
+                                Color(0xFF263238).copy(alpha = 0.90f)
+                            )
+                        )
+                    }
+                )
+                .border(
+                    width = 0.8.dp,
+                    color = if (isOnline) Color.White.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.2f),
+                    shape = puckShape
+                )
+        )
+
+        // Dual icons row
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.CloudOff,
+                    contentDescription = "Offline Mode",
+                    tint = if (!isOnline) Color(0xFF81C784) else Color.White.copy(alpha = 0.35f),
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Cloud,
+                    contentDescription = "Online Mode",
+                    tint = if (isOnline) Color(0xFF004D40) else Color.White.copy(alpha = 0.35f),
+                    modifier = Modifier.size(15.dp)
                 )
             }
         }
