@@ -44,6 +44,7 @@ import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.player.NowPlayingSheet
 import com.nodeplayer.music.ui.screens.EqualizerScreen
 import com.nodeplayer.ui.theme.LocalControlBackdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.nodeplayer.music.ui.screens.LibraryScreen
 import com.nodeplayer.music.ui.screens.SettingsScreen
 import com.nodeplayer.music.ui.theme.NodePlayerTheme
@@ -279,6 +280,9 @@ class MainActivity : ComponentActivity() {
                                 } else Modifier
                             )
                     ) {
+                        CompositionLocalProvider(
+                            LocalControlBackdrop provides remember { emptyBackdrop() }
+                        ) {
                         // 1. Dribbble-inspired Liquid Glass Organic Chrome & Obsidian Background
                         LiquidGlassBackground(
                             accentColor = accentColor,
@@ -441,6 +445,7 @@ class MainActivity : ComponentActivity() {
                                 themeConfig = themeConfig
                             )
                         }
+                    }
                     }
 
                     // 3. Floating Mini-Player & Bottom Navigation (Convx Liquid Glass Dock with Auto-Hide)

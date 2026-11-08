@@ -25,6 +25,7 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.nodeplayer.model.*
@@ -470,6 +471,9 @@ fun SharedPlayerLayout(
                             .fillMaxSize()
                             .layerBackdrop(pageBackdrop)
                     ) {
+                        CompositionLocalProvider(
+                            LocalControlBackdrop provides remember { emptyBackdrop() }
+                        ) {
                         // Background gradient/blobs
                         LiquidGlassBackground(
                             accentColor = accent,
@@ -564,6 +568,7 @@ fun SharedPlayerLayout(
                                 themeConfig = themeConfig
                             )
                         }
+                    }
                     }
 
                     // Floating Chrome Sibling Overlays above page layer in z-order

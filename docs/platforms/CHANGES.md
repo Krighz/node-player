@@ -5,6 +5,22 @@
 
 ---
 
+### [2026-11-08] - Post-Port Hardware Fix 4: Equalizer & Settings Stack Overflow (SIGSEGV libhwui) Root Cause Fix & Stability Test
+- **Root Cause Discovered via adb logcat on Physical Device (Android 16 / realme RMX3853)**:
+  - Opening Equalizer or Settings crashed with `Fatal signal 11 (SIGSEGV), code 2 (SEGV_ACCERR) ... Cause: stack pointer is not in a rw map; likely due to stack overflow. 512 total frames in libhwui.so (prepareTreeImpl -> prepareListAndChildren)`.
+  - In `MainActivity.kt`, page content was wrapped in `Modifier.layerBackdrop(pageBackdrop)` while `LocalControlBackdrop` was provided as `pageBackdrop`. In-page controls (`LiquidSlider`, `LiquidToggle`) sampled `LocalControlBackdrop.current` (`pageBackdrop`), attempting to record `pageBackdrop`'s RenderNode into its own children's display lists, creating a recursive cyclic scene graph that triggered infinite recursion during Skia's `prepareTreeImpl`.
+- **Architectural Fix**:
+  - `LayerBackdrop.kt`: Added `val isRecording: Boolean` guard. `DrawScope.drawBackdrop()` immediately aborts if `isRecording == true` to prevent self-sampling RenderNode cycles.
+  - `LayerBackdropModifier.kt`: Wrapped `recordLayer()` with `backdrop._isRecording = true` in `try { ... } finally { backdrop._isRecording = false }`.
+  - `MainActivity.kt` & `SharedPlayerLayout.kt`: Isolated the in-page screen container inside `CompositionLocalProvider(LocalControlBackdrop provides remember { emptyBackdrop() })`. In-page controls never sample parent page layer, while floating chrome siblings (`ConvxLiquidDock`, `ConvxMiniPlayer`) above page layer sample `pageBackdrop` safely.
+  - `LiquidControls.kt`: `LiquidToggle` detects `effectiveSuppliedBackdrop is EmptyBackdrop` and safely falls back to lightweight plain squircle mode.
+- **Verification & Test Automation**:
+  - Created automated instrumented test `ScreenStabilityTest.kt` covering `EqualizerScreen`, `SettingsScreen`, `CustomizeUiScreen`, `WidgetSettingsScreen`, slider/toggle interactions, and negative recursion guard test (`RMX3853 Tests 6/6 completed, 0 failed, BUILD SUCCESSFUL`).
+  - Re-ran `GlassPixelProofTest.kt` on physical device (`1/1 completed, 0 failed, BUILD SUCCESSFUL`).
+  - Live adb cold start into Equalizer and Settings verified running with 0 crashes (`pidof com.nodeplayer.music` verified alive).
+  - Dumped `dumpsys gfxinfo`: 206 frames rendered, 50th percentile 15ms, 90th percentile 20ms, GPU 50th percentile 7ms.
+
+
 ### [2026-11-08] - Post-Port Hardware Fix 3: Compose 1.7 Upgrade & Native GraphicsLayer RenderEffect with Pixel Proof
 - **Build Toolchain Upgrade (Option A)**:
   - Upgraded Kotlin to `2.0.21`, AGP to `8.5.2`, Compose Multiplatform to `1.7.3`, KSP to `2.0.21-1.0.28`, and Compose BOM to `2024.10.01`.

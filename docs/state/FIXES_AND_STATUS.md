@@ -1,6 +1,47 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Liquid Glass Native Rendering & Compose 1.7 Upgrade Verified on Hardware (Android 16 / realme)
+## Current Status: Liquid Glass Native Rendering & Screen Stability Locked (Android 16 / realme)
+
+### Post-Port Hardware Bug Fix 4: Equalizer & Settings Stack Overflow (SIGSEGV libhwui) Root Cause Fix & Stability Test (2026-11-08)
+
+1. **Root Cause Discovered via adb logcat on Physical Device (realme RMX3853 / Android 16)**:
+   - When navigating to Equalizer or Settings, the app crashed immediately with:
+     ```
+     libc: Fatal signal 11 (SIGSEGV), code 2 (SEGV_ACCERR), fault addr 0x74ab8c2f38 in tid 22261 (RenderThread), pid 22189 (com.nodeplayer.music)
+     Cause: stack pointer is not in a rw map; likely due to stack overflow.
+     512 total frames in libhwui.so (prepareTreeImpl -> prepareListAndChildren recursion)
+     ```
+   - In `MainActivity.kt`, page content was wrapped in `Modifier.layerBackdrop(pageBackdrop)`, while `LocalControlBackdrop` was provided with `pageBackdrop`. In-page controls (`LiquidSlider`, `LiquidToggle`) sampled `LocalControlBackdrop.current` (`pageBackdrop`), attempting to record `pageBackdrop`'s RenderNode into its own children's display lists. This cyclic self-sampling caused Skia/libhwui's display list traversal to recurse infinitely until the 512-frame thread stack overflowed.
+
+2. **Architectural Fix**:
+   - **`LayerBackdrop.kt`**: Added `val isRecording: Boolean get() = _isRecording` property. In `DrawScope.drawBackdrop()`, added early guard:
+     ```kotlin
+     if (isRecording) {
+         GlassDebug.logThrottled("LayerBackdrop", "Self-sampling cycle prevented: LayerBackdrop is currently recording")
+         return
+     }
+     ```
+   - **`LayerBackdropModifier.kt`**: Wrapped `recordLayer()` with `backdrop._isRecording = true` in a `try / finally` block.
+   - **`MainActivity.kt` & `SharedPlayerLayout.kt`**: Isolated the in-page screen content container by scoping `CompositionLocalProvider(LocalControlBackdrop provides remember { emptyBackdrop() })`. In-page controls never sample parent page layer, while floating chrome siblings (`ConvxLiquidDock`, `ConvxMiniPlayer`) above page layer sample `pageBackdrop` safely.
+   - **`LiquidControls.kt`**: `LiquidToggle` detects `effectiveSuppliedBackdrop is EmptyBackdrop` and safely falls back to lightweight plain squircle mode without creating layer allocations.
+
+3. **Automated Stability & Negative Check Test (`ScreenStabilityTest.kt`)**:
+   - Device: realme RMX3853 (Android 16, API 36).
+   - Test suite: `com.nodeplayer.music.glass.ScreenStabilityTest` (6 tests):
+     - `testEqualizerScreen_rendersWithoutCrash_andInteracts`: **PASSED**
+     - `testSettingsScreen_rendersWithoutCrash_andInteracts`: **PASSED**
+     - `testCustomizeUiScreen_rendersWithoutCrash_andInteracts`: **PASSED**
+     - `testWidgetSettingsScreen_rendersWithoutCrash_andInteracts`: **PASSED**
+     - `testNegativeCheck_selfSamplingRecursionGuardInterceptsCycle`: **PASSED** (verifies recursion guard intercepts cyclic self-sampling during layer recording)
+     - `testLocalControlBackdrop_insidePageContainer_resolvesToEmptyBackdrop`: **PASSED**
+   - Result: **6/6 Tests completed (0 failed)**.
+   - Re-ran `GlassPixelProofTest.kt`: **1/1 Tests completed (0 failed)**.
+
+4. **Live Device Verification & Frame Times**:
+   - Live cold start into Equalizer (`adb shell am start ... --es route equalizer`) and Settings (`--es route settings`): process verified alive (PID `32350` and `17734`) with zero crashes in logcat crash buffer.
+   - Profiled via `dumpsys gfxinfo`: 206 frames rendered, 50th percentile 15ms, 90th percentile 20ms, GPU 50th percentile 7ms.
+
+---
 
 ### Post-Port Hardware Bug Fix 3: Compose 1.7 Upgrade & Native GraphicsLayer RenderEffect Verified with Pixel Proof (2026-11-08)
 

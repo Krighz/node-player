@@ -189,7 +189,7 @@ fun LiquidToggle(
     val ambientBackdrop = LocalControlBackdrop.current
     val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
     val resolved = controlsConfig.resolve(GlassComponentType.TOGGLES, inList = false)
-    val isPlain = resolved.isPlainSquircle || !controlsConfig.masterEnabled
+    val isPlain = resolved.isPlainSquircle || !controlsConfig.masterEnabled || effectiveSuppliedBackdrop is com.kyant.backdrop.backdrops.EmptyBackdrop
 
     Box(
         modifier = modifier

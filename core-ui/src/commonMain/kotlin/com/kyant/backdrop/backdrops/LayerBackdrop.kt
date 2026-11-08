@@ -43,6 +43,9 @@ class LayerBackdrop internal constructor(
 
     internal var layerCoordinates: LayoutCoordinates? by mutableStateOf(null)
 
+    internal var _isRecording: Boolean = false
+    val isRecording: Boolean get() = _isRecording
+
     private var inverseLayerScope: InverseLayerScope? = null
 
     override fun DrawScope.drawBackdrop(
@@ -50,6 +53,10 @@ class LayerBackdrop internal constructor(
         coordinates: LayoutCoordinates?,
         layerBlock: (GraphicsLayerScope.() -> Unit)?
     ) {
+        if (isRecording) {
+            GlassDebug.logThrottled("LayerBackdrop", "Self-sampling cycle prevented: LayerBackdrop is currently recording")
+            return
+        }
         val coordinates = coordinates ?: run {
             GlassDebug.logThrottled("LayerBackdrop", "drawBackdrop skipped: coordinates is null")
             return

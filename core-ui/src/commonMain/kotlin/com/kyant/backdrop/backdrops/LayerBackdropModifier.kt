@@ -59,7 +59,12 @@ private class LayerBackdropNode(
             "LayerBackdrop",
             "Recording page into backdrop: size=${this.size}, layerCoordAttached=${backdrop.layerCoordinates != null}"
         )
-        recordLayer(backdrop.graphicsLayer) { backdrop.onDraw(this@draw) }
+        backdrop._isRecording = true
+        try {
+            recordLayer(backdrop.graphicsLayer) { backdrop.onDraw(this@draw) }
+        } finally {
+            backdrop._isRecording = false
+        }
     }
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
