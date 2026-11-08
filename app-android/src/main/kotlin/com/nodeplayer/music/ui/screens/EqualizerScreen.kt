@@ -28,7 +28,9 @@ import com.nodeplayer.model.*
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.components.ParametricEqCurveGraph
 import com.nodeplayer.music.ui.theme.LocalAccentColor
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.ui.components.LiquidChip
+import com.nodeplayer.ui.components.LiquidSlider
+import com.nodeplayer.ui.components.LiquidToggle
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -52,7 +54,6 @@ fun EqualizerScreen(
     onLoadConvolverPreset: (String) -> Unit = {},
     rmsLevel: Float = 0.0f,
     isPerformanceMode: Boolean = false,
-    hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -102,7 +103,7 @@ fun EqualizerScreen(
             }
 
             // Master EQ toggle
-            Switch(
+            LiquidToggle(
                 checked = config.eqEnabled,
                 onCheckedChange = { onConfigChange(config.copy(eqEnabled = it)) },
                 colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -118,7 +119,7 @@ fun EqualizerScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // A/B Compare Toggle
-            FilterChip(
+            LiquidChip(
                 selected = config.isAbComparing,
                 onClick = onToggleAbCompare,
                 label = {
@@ -143,7 +144,7 @@ fun EqualizerScreen(
             )
 
             // Import AutoEQ
-            AssistChip(
+            LiquidChip(
                 onClick = { showAutoEqDialog = true },
                 label = { Text("AutoEQ Import", fontSize = 11.sp) },
                 leadingIcon = { Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(16.dp)) }
@@ -151,7 +152,7 @@ fun EqualizerScreen(
 
             // Save Track Preset
             if (currentTrack != null) {
-                AssistChip(
+                LiquidChip(
                     onClick = {
                         onSaveTrackPreset()
                         Toast.makeText(context, "Saved preset for \"${currentTrack.title}\"", Toast.LENGTH_SHORT).show()
@@ -159,7 +160,7 @@ fun EqualizerScreen(
                     label = { Text("Track Preset", fontSize = 11.sp) },
                     leadingIcon = { Icon(Icons.Rounded.BookmarkAdd, contentDescription = null, modifier = Modifier.size(16.dp)) }
                 )
-                AssistChip(
+                LiquidChip(
                     onClick = {
                         onSaveAlbumPreset()
                         Toast.makeText(context, "Saved preset for \"${currentTrack.album}\"", Toast.LENGTH_SHORT).show()
@@ -170,7 +171,7 @@ fun EqualizerScreen(
             }
 
             // Export / Import
-            AssistChip(
+            LiquidChip(
                 onClick = {
                     val json = onExportProfile()
                     clipboardManager.setText(AnnotatedString(json))
@@ -180,7 +181,7 @@ fun EqualizerScreen(
                 leadingIcon = { Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(16.dp)) }
             )
 
-            AssistChip(
+            LiquidChip(
                 onClick = { showImportJsonDialog = true },
                 label = { Text("Import", fontSize = 11.sp) },
                 leadingIcon = { Icon(Icons.Rounded.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp)) }
@@ -217,7 +218,7 @@ fun EqualizerScreen(
             Spacer(modifier = Modifier.height(8.dp))
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState
+                
             ) {
                 Row(
                     modifier = Modifier.padding(14.dp),
@@ -255,14 +256,16 @@ fun EqualizerScreen(
         ) {
             AudioEffectConfig.PRESETS.keys.forEach { preset ->
                 val isSelected = config.presetName == preset
-                FilterChip(
+                LiquidChip(
                     selected = isSelected,
                     onClick = {
-                        val gains = AudioEffectConfig.PRESETS[preset] ?: return@FilterChip
-                        val updatedBands = config.bands.mapIndexed { idx, band ->
-                            band.copy(gainDb = gains.getOrElse(idx) { 0f })
+                        val gains = AudioEffectConfig.PRESETS[preset]
+                        if (gains != null) {
+                            val updatedBands = config.bands.mapIndexed { idx, band ->
+                                band.copy(gainDb = gains.getOrElse(idx) { 0f })
+                            }
+                            onConfigChange(config.copy(presetName = preset, bands = updatedBands, eqEnabled = true))
                         }
-                        onConfigChange(config.copy(presetName = preset, bands = updatedBands, eqEnabled = true))
                     },
                     label = { Text(preset, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
                     colors = FilterChipDefaults.filterChipColors(
@@ -284,7 +287,7 @@ fun EqualizerScreen(
         // Preamp Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -300,7 +303,7 @@ fun EqualizerScreen(
                         style = MaterialTheme.typography.bodyMedium.copy(color = accent, fontWeight = FontWeight.Bold)
                     )
                 }
-                Slider(
+                LiquidSlider(
                     value = config.preampGainDb,
                     onValueChange = { onConfigChange(config.copy(preampGainDb = it)) },
                     valueRange = -12f..12f,
@@ -314,7 +317,7 @@ fun EqualizerScreen(
         // 10-Band EQ Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -360,7 +363,7 @@ fun EqualizerScreen(
                             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
                             modifier = Modifier.width(55.dp)
                         )
-                        Slider(
+                        LiquidSlider(
                             value = band.gainDb,
                             onValueChange = { newGain ->
                                 val updatedBands = config.bands.toMutableList()
@@ -387,7 +390,7 @@ fun EqualizerScreen(
         // 2-Band Tone Controls Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -404,7 +407,7 @@ fun EqualizerScreen(
                     Text("Bass Shelf (100 Hz)", style = MaterialTheme.typography.bodyMedium)
                     Text("%+.1f dB".format(config.toneControls.bassGainDb), color = accent, fontWeight = FontWeight.Bold)
                 }
-                Slider(
+                LiquidSlider(
                     value = config.toneControls.bassGainDb,
                     onValueChange = {
                         onConfigChange(config.copy(toneControls = config.toneControls.copy(bassGainDb = it)))
@@ -421,7 +424,7 @@ fun EqualizerScreen(
                     Text("Treble Shelf (8 kHz)", style = MaterialTheme.typography.bodyMedium)
                     Text("%+.1f dB".format(config.toneControls.trebleGainDb), color = accent, fontWeight = FontWeight.Bold)
                 }
-                Slider(
+                LiquidSlider(
                     value = config.toneControls.trebleGainDb,
                     onValueChange = {
                         onConfigChange(config.copy(toneControls = config.toneControls.copy(trebleGainDb = it)))
@@ -437,7 +440,7 @@ fun EqualizerScreen(
         // Dynamic Loudness Compensation Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -452,7 +455,7 @@ fun EqualizerScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = config.loudnessConfig.enabled,
                         onCheckedChange = {
                             onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(enabled = it)))
@@ -470,7 +473,7 @@ fun EqualizerScreen(
                         Text("Strength", style = MaterialTheme.typography.bodyMedium)
                         Text("${(config.loudnessConfig.strength * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
                     }
-                    Slider(
+                    LiquidSlider(
                         value = config.loudnessConfig.strength,
                         onValueChange = {
                             onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(strength = it)))
@@ -487,7 +490,7 @@ fun EqualizerScreen(
         // Harmonic Bass Enhancement Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -502,7 +505,7 @@ fun EqualizerScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = config.harmonicBassConfig.enabled,
                         onCheckedChange = {
                             onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(enabled = it)))
@@ -520,7 +523,7 @@ fun EqualizerScreen(
                         Text("Fundamental Cutoff", style = MaterialTheme.typography.bodyMedium)
                         Text("${config.harmonicBassConfig.frequencyHz.toInt()} Hz", color = accent, fontWeight = FontWeight.Bold)
                     }
-                    Slider(
+                    LiquidSlider(
                         value = config.harmonicBassConfig.frequencyHz,
                         onValueChange = {
                             onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(frequencyHz = it)))
@@ -536,7 +539,7 @@ fun EqualizerScreen(
                         Text("Harmonics Blend", style = MaterialTheme.typography.bodyMedium)
                         Text("${(config.harmonicBassConfig.harmonicGain * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
                     }
-                    Slider(
+                    LiquidSlider(
                         value = config.harmonicBassConfig.harmonicGain,
                         onValueChange = {
                             onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(harmonicGain = it)))
@@ -557,7 +560,7 @@ fun EqualizerScreen(
                                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                             )
                         }
-                        Switch(
+                        LiquidToggle(
                             checked = config.harmonicBassConfig.highPassOriginal,
                             onCheckedChange = {
                                 onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(highPassOriginal = it)))
@@ -574,7 +577,7 @@ fun EqualizerScreen(
         // Direct Volume & TPDF Dither Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -589,7 +592,7 @@ fun EqualizerScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = config.directVolumeConfig.enabled,
                         onCheckedChange = {
                             onConfigChange(config.copy(directVolumeConfig = config.directVolumeConfig.copy(enabled = it)))
@@ -607,7 +610,7 @@ fun EqualizerScreen(
                         Text("Level", style = MaterialTheme.typography.bodyMedium)
                         Text("${(config.directVolumeConfig.volume * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
                     }
-                    Slider(
+                    LiquidSlider(
                         value = config.directVolumeConfig.volume,
                         onValueChange = {
                             onConfigChange(config.copy(directVolumeConfig = config.directVolumeConfig.copy(volume = it)))
@@ -628,7 +631,7 @@ fun EqualizerScreen(
                                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                             )
                         }
-                        Switch(
+                        LiquidToggle(
                             checked = config.directVolumeConfig.ditherEnabled,
                             onCheckedChange = {
                                 onConfigChange(config.copy(directVolumeConfig = config.directVolumeConfig.copy(ditherEnabled = it)))
@@ -645,7 +648,7 @@ fun EqualizerScreen(
         // Partitioned Convolver Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -660,7 +663,7 @@ fun EqualizerScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = config.convolverConfig.enabled,
                         onCheckedChange = {
                             onConfigChange(config.copy(convolverConfig = config.convolverConfig.copy(enabled = it)))
@@ -681,7 +684,7 @@ fun EqualizerScreen(
                     ) {
                         irPresets.forEach { irName ->
                             val isSel = config.convolverConfig.irName == irName
-                            FilterChip(
+                            LiquidChip(
                                 selected = isSel,
                                 onClick = {
                                     onLoadConvolverPreset(irName)
@@ -700,7 +703,7 @@ fun EqualizerScreen(
                         Text("Wet / Dry Blend", style = MaterialTheme.typography.bodyMedium)
                         Text("${(config.convolverConfig.blend * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
                     }
-                    Slider(
+                    LiquidSlider(
                         value = config.convolverConfig.blend,
                         onValueChange = {
                             onConfigChange(config.copy(convolverConfig = config.convolverConfig.copy(blend = it)))
@@ -733,7 +736,7 @@ fun EqualizerScreen(
         // Reverb & Ambience Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -751,7 +754,7 @@ fun EqualizerScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = config.reverbConfig.enabled,
                         onCheckedChange = {
                             onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(enabled = it)))
@@ -777,7 +780,7 @@ fun EqualizerScreen(
                             Triple("Cathedral", 0.95f, 0.2f)
                         ).forEach { (name, room, damp) ->
                             val isSel = config.reverbConfig.preset == name
-                            FilterChip(
+                            LiquidChip(
                                 selected = isSel,
                                 onClick = {
                                     onConfigChange(
@@ -816,7 +819,7 @@ fun EqualizerScreen(
                         }
                         Text(roomLabel, color = accent, fontWeight = FontWeight.Bold)
                     }
-                    Slider(
+                    LiquidSlider(
                         value = config.reverbConfig.roomSize,
                         onValueChange = {
                             onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(roomSize = it, preset = "Custom")))
@@ -836,7 +839,7 @@ fun EqualizerScreen(
                         val dampLabel = if (config.reverbConfig.damping > 0.6f) "Warm / Dark" else if (config.reverbConfig.damping > 0.3f) "Natural" else "Bright"
                         Text("$dampLabel (${(config.reverbConfig.damping * 100).toInt()}%)", color = accent, fontWeight = FontWeight.Bold)
                     }
-                    Slider(
+                    LiquidSlider(
                         value = config.reverbConfig.damping,
                         onValueChange = {
                             onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(damping = it, preset = "Custom")))
@@ -855,7 +858,7 @@ fun EqualizerScreen(
                         Text("Wet / Dry Mix", style = MaterialTheme.typography.bodyMedium)
                         Text("${(config.reverbConfig.wetLevel * 100).toInt()}% Wet", color = accent, fontWeight = FontWeight.Bold)
                     }
-                    Slider(
+                    LiquidSlider(
                         value = config.reverbConfig.wetLevel,
                         onValueChange = {
                             onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(wetLevel = it, preset = "Custom")))
@@ -872,7 +875,7 @@ fun EqualizerScreen(
         // ReplayGain & Spatial Effects Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -916,7 +919,7 @@ fun EqualizerScreen(
                     Text("Stereo Width", style = MaterialTheme.typography.bodyMedium)
                     Text("${(config.stereoWidth * 100).toInt()}%", color = accent, fontWeight = FontWeight.Bold)
                 }
-                Slider(
+                LiquidSlider(
                     value = config.stereoWidth,
                     onValueChange = { onConfigChange(config.copy(stereoWidth = it)) },
                     valueRange = 0.0f..2.0f,
@@ -938,7 +941,7 @@ fun EqualizerScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = config.crossfeedEnabled,
                         onCheckedChange = { onConfigChange(config.copy(crossfeedEnabled = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -960,7 +963,7 @@ fun EqualizerScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = config.limiterEnabled,
                         onCheckedChange = { onConfigChange(config.copy(limiterEnabled = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))

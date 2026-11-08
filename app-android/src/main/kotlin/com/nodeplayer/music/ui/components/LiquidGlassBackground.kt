@@ -16,8 +16,6 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.unit.dp
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.music.diagnostics.FrameMetricsTracker
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -36,7 +34,6 @@ import kotlin.random.Random
  */
 @Composable
 fun LiquidGlassBackground(
-    hazeState: HazeState? = null,
     accentColor: Color = Color(0xFF6366F1),
     isOled: Boolean = false,
     isLight: Boolean = false,
@@ -100,12 +97,10 @@ fun LiquidGlassBackground(
         if (!cfg.antiBandingDithering) null else createDitherPaint()
     }
 
-    val hazeModifier = if (hazeState != null) Modifier.haze(hazeState) else Modifier
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .then(hazeModifier)
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val width = size.width

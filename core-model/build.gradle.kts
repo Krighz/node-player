@@ -9,4 +9,5 @@ java {
 
 dependencies {
     // Pure Kotlin models, zero Android dependencies
+    testImplementation("org.jetbrains.kotlin:kotlin-test")
 }

@@ -19,8 +19,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeChild
 
 data class GlassTokensData(
     val opacity: Float = 0.65f,
@@ -132,7 +130,6 @@ object GlassNoiseCache {
 
 @Composable
 fun Modifier.glassSurface(
-    hazeState: HazeState? = null,
     shape: Shape = RoundedCornerShape(GlassTokens.cardCornerRadius),
     isOled: Boolean = false,
     isDark: Boolean = true,
@@ -157,7 +154,7 @@ fun Modifier.glassSurface(
 
     val borderBrush = if (isOled) tokens.oledBorderBrush() else tokens.liquidBorderBrush(isOled)
     val blurRadius = tokens.effectiveBlurRadius
-    val canBlur = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && hazeState != null && blurRadius > 0.dp && !tokens.isFullyTransparent
+    val canBlur = false
 
     val scrimModifier = if (tokens.keepTextReadable && effectiveAlpha < 0.25f && !tokens.isFullyTransparent) {
         Modifier.background(Color.Black.copy(alpha = 0.12f), shape)
@@ -181,14 +178,7 @@ fun Modifier.glassSurface(
         .clip(shape)
         .then(scrimModifier)
         .then(
-            if (canBlur && hazeState != null) {
-                Modifier.hazeChild(
-                    state = hazeState,
-                    shape = shape,
-                    tint = baseTint,
-                    blurRadius = blurRadius
-                )
-            } else if (!tokens.isFullyTransparent && effectiveAlpha > 0.001f) {
+            if (!tokens.isFullyTransparent && effectiveAlpha > 0.001f) {
                 Modifier.background(
                     Brush.verticalGradient(
                         colors = listOf(

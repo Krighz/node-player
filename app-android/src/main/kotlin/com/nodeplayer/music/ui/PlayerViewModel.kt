@@ -301,7 +301,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             staggeredListAnimation = prefs.getBoolean("staggered_list_animation", true),
             lyricsAnimationEnabled = prefs.getBoolean("lyrics_animation_enabled", true),
             screenTransitionStyle = prefs.getString("screen_transition_style", "SLIDE") ?: "SLIDE",
-            reduceMotion = prefs.getBoolean("reduce_motion", false)
+            reduceMotion = prefs.getBoolean("reduce_motion", false),
+            dockGlassLensEnabled = prefs.getBoolean("dock_glass_lens_enabled", true),
+            dockGlassRimEnabled = prefs.getBoolean("dock_glass_rim_enabled", true),
+            dockGlassPuckEnabled = prefs.getBoolean("dock_glass_puck_enabled", true)
         )
     }
 
@@ -1239,6 +1242,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .putBoolean("lyrics_animation_enabled", newConfig.lyricsAnimationEnabled)
             .putString("screen_transition_style", newConfig.screenTransitionStyle)
             .putBoolean("reduce_motion", newConfig.reduceMotion)
+            .putBoolean("dock_glass_lens_enabled", newConfig.dockGlassLensEnabled)
+            .putBoolean("dock_glass_rim_enabled", newConfig.dockGlassRimEnabled)
+            .putBoolean("dock_glass_puck_enabled", newConfig.dockGlassPuckEnabled)
             .apply()
 
         // Sync widgets with current glass settings and re-render

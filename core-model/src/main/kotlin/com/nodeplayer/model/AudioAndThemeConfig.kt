@@ -184,7 +184,21 @@ data class CrossfadeConfig(
     val autoGapless: Boolean = true
 )
 
+enum class GlassQuality(val displayName: String) {
+    FULL("Full Quality"),
+    BALANCED("Balanced"),
+    LIGHT("Light (Plain Compose)")
+}
+
+enum class MotionLevel(val displayName: String) {
+    FULL("Full Springs & Dynamics"),
+    REDUCED("Reduced Motion (Gentle)"),
+    OFF("Off (Instant / No Animations)")
+}
+
 data class GlassThemeConfig(
+    val glassQuality: GlassQuality = GlassQuality.BALANCED,
+    val motionLevel: MotionLevel = MotionLevel.FULL,
     val glassStrength: String = "BALANCED", // SUBTLE, BALANCED, DRAMATIC, OFF
     val themeMode: String = "SYSTEM",       // SYSTEM, DARK, LIGHT, OLED
     val accentSource: String = "ARTWORK",   // ARTWORK, MATERIAL_YOU, PRESET
@@ -233,7 +247,23 @@ data class GlassThemeConfig(
     val staggeredListAnimation: Boolean = true,
     val lyricsAnimationEnabled: Boolean = true,
     val screenTransitionStyle: String = "SLIDE",           // SLIDE, FADE, SHARED
-    val reduceMotion: Boolean = false
+    val reduceMotion: Boolean = false,
+    val dockGlassLensEnabled: Boolean = true,
+    val dockGlassRimEnabled: Boolean = true,
+    val dockGlassPuckEnabled: Boolean = true,
+    val dockAutoHideEnabled: Boolean = false,
+    val dockAutoHideMiniPlayer: Boolean = false,
+    val dockScrollSensitivity: Float = 1.0f,
+    val dockReturnDelayMs: Long = 1200L,
+    val miniPlayerGlassEnabled: Boolean = true,
+    val nowPlayingGlassEnabled: Boolean = true,
+    val controlsGlassEnabled: Boolean = false,
+    val widgetsGlassEnabled: Boolean = true,
+    val glassRefractionHeightDp: Float = 18.0f,
+    val glassRefractionAmountDp: Float = 16.0f,
+    val glassChromaticFringe: Float = 0.25f,
+    val glassBackdropScale: Float = 0.50f,
+    val controlsConfig: GlassControlsConfig = GlassControlsConfig(masterEnabled = controlsGlassEnabled)
 ) {
     companion object {
         val PRESET_OBSIDIAN_LIQUID = GlassThemeConfig(

@@ -17,6 +17,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +29,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalAccentColor
 
 @Composable
@@ -41,16 +43,18 @@ fun SearchCapsule(
 ) {
     val accent = LocalAccentColor.current
 
+    val capsuleShape = remember { ContinuousRoundedRectangle(21.dp) }
+
     Row(
         modifier = modifier
             .widthIn(min = 340.dp, max = 560.dp)
             .height(42.dp)
-            .clip(RoundedCornerShape(21.dp))
+            .clip(capsuleShape)
             .background(Color(0xFF161922).copy(alpha = 0.72f))
             .border(
                 width = 1.dp,
-                color = Color.White.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(21.dp)
+                color = Color.White.copy(alpha = 0.16f),
+                shape = capsuleShape
             )
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically

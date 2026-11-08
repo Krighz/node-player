@@ -33,3 +33,6 @@ captures/
 *.hprof
 
 dist/
+
+# GSD planning (local-only preference)
+.planning/

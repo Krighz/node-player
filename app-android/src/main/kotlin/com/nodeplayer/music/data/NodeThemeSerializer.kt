@@ -67,6 +67,9 @@ object NodeThemeSerializer {
         theme.put("lyricsAnimationEnabled", config.lyricsAnimationEnabled)
         theme.put("screenTransitionStyle", config.screenTransitionStyle)
         theme.put("reduceMotion", config.reduceMotion)
+        theme.put("dockGlassLensEnabled", config.dockGlassLensEnabled)
+        theme.put("dockGlassRimEnabled", config.dockGlassRimEnabled)
+        theme.put("dockGlassPuckEnabled", config.dockGlassPuckEnabled)
 
         root.put("themeConfig", theme)
         return root.toString(2)
@@ -127,7 +130,10 @@ object NodeThemeSerializer {
                 staggeredListAnimation = theme.optBoolean("staggeredListAnimation", def.staggeredListAnimation),
                 lyricsAnimationEnabled = theme.optBoolean("lyricsAnimationEnabled", def.lyricsAnimationEnabled),
                 screenTransitionStyle = theme.optString("screenTransitionStyle", def.screenTransitionStyle),
-                reduceMotion = theme.optBoolean("reduceMotion", def.reduceMotion)
+                reduceMotion = theme.optBoolean("reduceMotion", def.reduceMotion),
+                dockGlassLensEnabled = theme.optBoolean("dockGlassLensEnabled", def.dockGlassLensEnabled),
+                dockGlassRimEnabled = theme.optBoolean("dockGlassRimEnabled", def.dockGlassRimEnabled),
+                dockGlassPuckEnabled = theme.optBoolean("dockGlassPuckEnabled", def.dockGlassPuckEnabled)
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse theme JSON", e)

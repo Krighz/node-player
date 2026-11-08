@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 
 @Composable
 fun FirstRunOnboardingDialog(
@@ -41,7 +42,7 @@ fun FirstRunOnboardingDialog(
             modifier = Modifier
                 .fillMaxWidth(0.92f)
                 .wrapContentHeight(),
-            shape = RoundedCornerShape(28.dp),
+            shape = ContinuousRoundedRectangle(28.dp),
             color = Color(0xFF14161F).copy(alpha = 0.95f),
             tonalElevation = 8.dp,
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))

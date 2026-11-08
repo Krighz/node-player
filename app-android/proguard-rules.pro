@@ -3,8 +3,7 @@
 # Media3 & ExoPlayer
 -keep class androidx.media3.** { *; }
 
-# Haze Glassmorphism
--keep class dev.chrisbanes.haze.** { *; }
+
 
 # Models & Data entities
 -keep class com.nodeplayer.music.model.** { *; }
@@ -12,7 +11,12 @@
 -keep class com.nodeplayer.music.library.** { *; }
 -keep class com.nodeplayer.music.dsp.** { *; }
 
-# Room
+# Pure Kotlin Domain Models & Glass Controls Configuration
+-keep class com.nodeplayer.model.** { *; }
+-keepclassmembers class com.nodeplayer.model.** { *; }
+-keep class kotlinx.serialization.** { *; }
+
+# Room SQLite Database & DAOs
 -keep class androidx.room.** { *; }
 -keep class * extends androidx.room.RoomDatabase { *; }
 
@@ -27,3 +31,14 @@
 # Coil
 -keep class coil.** { *; }
 -keep class * implements coil.fetch.Fetcher$Factory { *; }
+
+# Liquid Glass Shaders & Runtime Graphics APIs (AGSL / RenderEffect)
+-keep class com.kyant.backdrop.** { *; }
+-keepclassmembers class com.kyant.backdrop.** { *; }
+-keep class android.graphics.RuntimeShader { *; }
+-keepclassmembers class android.graphics.RuntimeShader { *; }
+-keep class android.graphics.RenderEffect { *; }
+-keepclassmembers class android.graphics.RenderEffect { *; }
+
+# JNA Native Bindings
+-keep class com.sun.jna.** { *; }

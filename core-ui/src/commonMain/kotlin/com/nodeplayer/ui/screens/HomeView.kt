@@ -31,12 +31,21 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.LocalBottomBarPadding
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.components.DeviceConnectPill
+import com.nodeplayer.ui.components.DeviceConnectStatus
+import com.nodeplayer.ui.components.DiscoveredPeerInfo
+import com.nodeplayer.ui.components.DockScrollController
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.onHorizontalScrollWheel
+import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
@@ -59,10 +68,31 @@ fun HomeView(
     onSelectMusicFolder: () -> Unit = {},
     onNavigateToLibrary: () -> Unit = {},
     onNavigateToEqualizer: () -> Unit = {},
+    dockScrollController: DockScrollController? = null,
+    showDevicePill: Boolean = false,
+    nodeConnectEnabled: Boolean = true,
+    connectedDeviceCount: Int = 0,
+    onOpenSyncCenter: () -> Unit = {},
+    onPairNewDevice: () -> Unit = {},
+    onCastToPeer: (DiscoveredPeerInfo) -> Unit = {},
+    onToggleNodeConnect: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
     val coroutineScope = rememberCoroutineScope()
+    val themeConfig = LocalGlassThemeConfig.current
+    val listState = rememberLazyListState()
+
+    val dockConnection = rememberDockScrollConnection(
+        controller = dockScrollController,
+        enabled = themeConfig.dockAutoHideEnabled
+    )
+
+    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
+        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
+            dockScrollController?.onListScrolledToTop(0, 0)
+        }
+    }
 
     // 1. FOR YOU: Intelligently group local tracks into genre and acoustic style mixes
     val mixes = remember(tracks) {
@@ -153,10 +183,55 @@ fun HomeView(
     }
 
     LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 96.dp),
+        state = listState,
+        modifier = modifier
+            .fillMaxSize()
+            .nestedScroll(dockConnection),
+        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = LocalBottomBarPadding.current + 16.dp),
         verticalArrangement = Arrangement.spacedBy(28.dp)
     ) {
+        // ---------------------------------------------------------------------
+        // Header: Greeting & DeviceConnectPill (Mobile portrait per D-04)
+        // ---------------------------------------------------------------------
+        if (showDevicePill) {
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = "Listen Now",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                        )
+                        Text(
+                            text = "Curated listening flow & shortcuts",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color.White.copy(alpha = 0.65f)
+                            )
+                        )
+                    }
+
+                    DeviceConnectPill(
+                        status = if (nodeConnectEnabled && connectedDeviceCount > 0) DeviceConnectStatus.CONNECTED
+                        else if (nodeConnectEnabled) DeviceConnectStatus.DISCOVERING
+                        else DeviceConnectStatus.DISCONNECTED,
+                        connectedDeviceCount = connectedDeviceCount,
+                        compact = true,
+                        allowCastingToThisDevice = nodeConnectEnabled,
+                        onToggleAllowCasting = onToggleNodeConnect,
+                        onPairNewDevice = onPairNewDevice,
+                        onCastToDevice = onCastToPeer,
+                        onOpenSyncCenter = onOpenSyncCenter
+                    )
+                }
+            }
+        }
+
         // ---------------------------------------------------------------------
         // Section 1: FOR YOU (Mix Cards)
         // ---------------------------------------------------------------------
@@ -307,6 +382,7 @@ private fun MixCard(
         targetValue = if (isHovered) 1.03f else 1.0f,
         animationSpec = tween(180)
     )
+    val cardShape = remember { ContinuousRoundedRectangle(20.dp) }
 
     Box(
         modifier = Modifier
@@ -315,15 +391,15 @@ private fun MixCard(
             .scale(scale)
             .shadow(
                 elevation = if (isHovered) 14.dp else 6.dp,
-                shape = RoundedCornerShape(20.dp),
+                shape = cardShape,
                 ambientColor = mix.gradientColors.first().copy(alpha = 0.35f)
             )
-            .clip(RoundedCornerShape(20.dp))
+            .clip(cardShape)
             .background(Brush.linearGradient(mix.gradientColors))
             .border(
                 width = 1.dp,
                 color = Color.White.copy(alpha = if (isHovered) 0.35f else 0.15f),
-                shape = RoundedCornerShape(20.dp)
+                shape = cardShape
             )
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
             .padding(16.dp),
@@ -398,6 +474,9 @@ private fun RediscoverTrackCard(
         }
     }
 
+    val cardShape = remember { ContinuousRoundedRectangle(14.dp) }
+    val badgeShape = remember { ContinuousRoundedRectangle(6.dp) }
+
     Column(
         modifier = Modifier
             .width(132.dp)
@@ -407,8 +486,8 @@ private fun RediscoverTrackCard(
         Box(
             modifier = Modifier
                 .size(132.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .border(1.dp, Color.White.copy(alpha = if (isHovered) 0.35f else 0.10f), RoundedCornerShape(14.dp))
+                .clip(cardShape)
+                .border(1.dp, Color.White.copy(alpha = if (isHovered) 0.35f else 0.10f), cardShape)
         ) {
             TrackArtwork(
                 track = track,
@@ -421,9 +500,9 @@ private fun RediscoverTrackCard(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(6.dp)
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(badgeShape)
                     .background(Color.Black.copy(alpha = 0.72f))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                    .border(0.5.dp, Color.White.copy(alpha = 0.2f), badgeShape)
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
@@ -466,6 +545,7 @@ private fun StandardTrackCard(
         targetValue = if (isHovered) 1.04f else 1.0f,
         animationSpec = tween(180)
     )
+    val cardShape = remember { ContinuousRoundedRectangle(14.dp) }
 
     Column(
         modifier = Modifier
@@ -476,8 +556,8 @@ private fun StandardTrackCard(
         Box(
             modifier = Modifier
                 .size(132.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .border(1.dp, Color.White.copy(alpha = if (isHovered) 0.35f else 0.10f), RoundedCornerShape(14.dp))
+                .clip(cardShape)
+                .border(1.dp, Color.White.copy(alpha = if (isHovered) 0.35f else 0.10f), cardShape)
         ) {
             TrackArtwork(
                 track = track,

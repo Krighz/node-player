@@ -27,8 +27,13 @@ import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.AudioOutputInfo
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.model.ReplayGainMode
+import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
+import com.nodeplayer.ui.components.LiquidButton
+import com.nodeplayer.ui.components.LiquidDialog
+import com.nodeplayer.ui.components.LiquidSlider
+import com.nodeplayer.ui.components.LiquidToggle
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 
@@ -51,6 +56,7 @@ fun SettingsView(
     onOpenCustomizeUi: () -> Unit = {},
     onOpenEqualizer: () -> Unit = {},
     onOpenSyncCenter: () -> Unit = {},
+    onOpenOpticalTest: () -> Unit = {},
     trackCount: Int = 0,
     nodeConnectEnabled: Boolean = true,
     onToggleNodeConnect: (Boolean) -> Unit = {},
@@ -207,11 +213,12 @@ fun SettingsView(
                         )
                     }
 
-                    if (matchesFilter("appearance", "glass", "oled", "shader", "customize", "theme", "performance")) {
+                    if (matchesFilter("appearance", "glass", "oled", "shader", "customize", "theme", "performance", "diagnostics", "optical", "test")) {
                         AppearanceAndGlassCard(
                             themeConfig = themeConfig,
                             onThemeConfigChange = onThemeConfigChange,
                             onOpenCustomizeUi = onOpenCustomizeUi,
+                            onOpenOpticalTest = onOpenOpticalTest,
                             accent = accent
                         )
                     }
@@ -243,8 +250,8 @@ fun SettingsView(
                 if (matchesFilter("library", "folder", "rescan")) {
                     MusicFoldersCard(currentMusicFolder, trackCount, onSelectMusicFolder, onRescanLibrary, accent)
                 }
-                if (matchesFilter("appearance", "glass", "oled")) {
-                    AppearanceAndGlassCard(themeConfig, onThemeConfigChange, onOpenCustomizeUi, accent)
+                if (matchesFilter("appearance", "glass", "oled", "shader", "diagnostics", "optical", "test")) {
+                    AppearanceAndGlassCard(themeConfig, onThemeConfigChange, onOpenCustomizeUi, onOpenOpticalTest, accent)
                 }
                 if (matchesFilter("last.fm", "about", "version")) {
                     AboutAndScrobblerCard(lastFmEnabled, onLastFmToggle, accent)
@@ -252,23 +259,23 @@ fun SettingsView(
             }
         }
 
-        Spacer(modifier = Modifier.height(100.dp))
+        Spacer(modifier = Modifier.height(LocalBottomBarPadding.current + 24.dp))
     }
 
     // Hotkeys Dialog
     if (showHotkeysDialog) {
-        AlertDialog(
+        LiquidDialog(
             onDismissRequest = { showHotkeysDialog = false },
             confirmButton = {
-                TextButton(onClick = { showHotkeysDialog = false }) {
-                    Text("Close", color = accent, fontWeight = FontWeight.Bold)
+                LiquidButton(onClick = { showHotkeysDialog = false }) {
+                    Text("Close", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Keyboard, contentDescription = null, tint = accent)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Keyboard & Mouse Shortcuts", fontWeight = FontWeight.Bold)
+                    Text("Keyboard & Mouse Shortcuts", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             },
             text = {
@@ -282,11 +289,7 @@ fun SettingsView(
                     HotkeyRow("M", "Mute / Unmute audio")
                     HotkeyRow("Mouse Wheel on Bar", "Scrub playback position smoothly")
                 }
-            },
-            containerColor = Color(0xFF141722),
-            titleContentColor = Color.White,
-            textContentColor = Color.White.copy(alpha = 0.85f),
-            shape = RoundedCornerShape(20.dp)
+            }
         )
     }
 }
@@ -352,10 +355,9 @@ private fun AudioRoutingCard(
                     Text("WASAPI Exclusive Mode (Bit-Perfect)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text("Bypasses Windows mixer for bit-exact audiophile output", fontSize = 11.sp, color = Color.White.copy(alpha = 0.55f))
                 }
-                Switch(
+                LiquidToggle(
                     checked = isExclusiveMode,
-                    onCheckedChange = onToggleExclusiveMode,
-                    colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    onCheckedChange = onToggleExclusiveMode
                 )
             }
         }
@@ -387,10 +389,8 @@ private fun DspAndTransitionsCard(
                     Text("DSP & Equalizer", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                 }
 
-                Button(
+                LiquidButton(
                     onClick = onOpenEqualizer,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.2f), contentColor = accent),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text("Open EQ", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
@@ -408,11 +408,10 @@ private fun DspAndTransitionsCard(
                 Text("%.1fs".format(crossfadeSeconds), color = accent, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
 
-            Slider(
+            LiquidSlider(
                 value = crossfadeSeconds,
                 onValueChange = onCrossfadeChange,
-                valueRange = 0f..12f,
-                colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                valueRange = 0f..12f
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -426,10 +425,9 @@ private fun DspAndTransitionsCard(
                     Text("Gapless Playback", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text("Zero silence between continuous tracks", fontSize = 11.sp, color = Color.White.copy(alpha = 0.55f))
                 }
-                Switch(
+                LiquidToggle(
                     checked = gaplessEnabled,
-                    onCheckedChange = onGaplessToggle,
-                    colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    onCheckedChange = onGaplessToggle
                 )
             }
 
@@ -446,7 +444,7 @@ private fun DspAndTransitionsCard(
                 }
                 var expanded by remember { mutableStateOf(false) }
                 Box {
-                    TextButton(onClick = { expanded = true }) {
+                    LiquidButton(onClick = { expanded = true }, lighterStyle = true) {
                         Text(replayGainMode.name, color = accent, fontWeight = FontWeight.Bold)
                     }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
@@ -505,10 +503,8 @@ private fun MusicFoldersCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Button(
+                LiquidButton(
                     onClick = onSelectMusicFolder,
-                    colors = ButtonDefaults.buttonColors(containerColor = accent),
-                    shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Rounded.FolderOpen, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -516,10 +512,9 @@ private fun MusicFoldersCard(
                     Text("Select Folder", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
 
-                OutlinedButton(
+                LiquidButton(
                     onClick = onRescanLibrary,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    lighterStyle = true,
                     modifier = Modifier.weight(1f)
                 ) {
                     Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -551,10 +546,9 @@ private fun NodeConnectCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Node Connect", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                 }
-                Switch(
+                LiquidToggle(
                     checked = nodeConnectEnabled,
-                    onCheckedChange = onToggleNodeConnect,
-                    colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    onCheckedChange = onToggleNodeConnect
                 )
             }
 
@@ -568,10 +562,8 @@ private fun NodeConnectCard(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Button(
+            LiquidButton(
                 onClick = onOpenSyncCenter,
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E2333)),
-                shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Rounded.Sync, contentDescription = null, tint = accent, modifier = Modifier.size(16.dp))
@@ -588,6 +580,7 @@ private fun AppearanceAndGlassCard(
     themeConfig: GlassThemeConfig,
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
     onOpenCustomizeUi: () -> Unit,
+    onOpenOpticalTest: () -> Unit,
     accent: Color
 ) {
     GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -603,10 +596,8 @@ private fun AppearanceAndGlassCard(
                     Text("Appearance & Glass", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                 }
 
-                Button(
+                LiquidButton(
                     onClick = onOpenCustomizeUi,
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.2f), contentColor = accent),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
                     Text("Customizer", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
@@ -624,10 +615,9 @@ private fun AppearanceAndGlassCard(
                     Text("OLED Pure Black", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text("Zero luminance backdrop for OLED screens", fontSize = 11.sp, color = Color.White.copy(alpha = 0.55f))
                 }
-                Switch(
+                LiquidToggle(
                     checked = themeConfig.isOledBlack,
-                    onCheckedChange = { onThemeConfigChange(themeConfig.copy(isOledBlack = it)) },
-                    colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    onCheckedChange = { onThemeConfigChange(themeConfig.copy(isOledBlack = it)) }
                 )
             }
 
@@ -642,11 +632,38 @@ private fun AppearanceAndGlassCard(
                     Text("Performance / Low-Power Mode", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     Text("Disables dynamic glass shaders to save battery", fontSize = 11.sp, color = Color.White.copy(alpha = 0.55f))
                 }
-                Switch(
+                LiquidToggle(
                     checked = themeConfig.isPerformanceMode,
-                    onCheckedChange = { onThemeConfigChange(themeConfig.copy(isPerformanceMode = it)) },
-                    colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    onCheckedChange = { onThemeConfigChange(themeConfig.copy(isPerformanceMode = it)) }
                 )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Liquid Glass Optical Test", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Triple-zone optical pattern, blur, refraction and puck fringing verification",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.55f)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                LiquidButton(
+                    onClick = onOpenOpticalTest,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Icon(Icons.Rounded.Visibility, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Open Test", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -670,10 +687,9 @@ private fun AboutAndScrobblerCard(
                     Text("Last.fm Scrobbler", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     Text("Scrobble listened tracks (opt-in)", fontSize = 11.sp, color = Color.White.copy(alpha = 0.55f))
                 }
-                Switch(
+                LiquidToggle(
                     checked = lastFmEnabled,
-                    onCheckedChange = onLastFmToggle,
-                    colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    onCheckedChange = onLastFmToggle
                 )
             }
 
@@ -681,7 +697,7 @@ private fun AboutAndScrobblerCard(
             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
             Spacer(modifier = Modifier.height(14.dp))
 
-            Text("Node Player v1.6.0", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
+            Text("Node Player v1.7.0", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
             Spacer(modifier = Modifier.height(4.dp))
             Text("No network use unless you opt in. Local peer-to-peer audio streaming & sync.", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
             Text("Windows MSI/EXE is Authenticode-unsigned (SmartScreen prompt on first run). Android APK signed with release key.", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.45f))

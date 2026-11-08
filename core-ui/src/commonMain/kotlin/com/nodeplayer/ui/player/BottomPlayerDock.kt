@@ -1,6 +1,7 @@
 package com.nodeplayer.ui.player
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -12,19 +13,34 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.Track
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
 import com.nodeplayer.ui.components.GlassBadge
-import com.nodeplayer.ui.components.GlassCard
-import com.nodeplayer.ui.components.SoundWaveVisualizer
+import com.nodeplayer.ui.components.LiquidIconButton
+import com.nodeplayer.ui.components.LiquidSlider
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.onScrubberWheel
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 
+/**
+ * Convx-style Liquid Glass Bottom Player Dock (Windows / Desktop).
+ * Features:
+ * - Continuous squircle container with Kyant0 SDF lens refraction and specular rim
+ * - Scrubber slider with glowing glass track
+ * - Track metadata, artwork thumbnail, audio-reactive animated controls
+ * - Settings (Lines 60-61: Lens, Rim toggles)
+ */
 @Composable
 fun BottomPlayerDock(
     currentTrack: Track?,
@@ -45,8 +61,13 @@ fun BottomPlayerDock(
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val themeConfig = LocalGlassThemeConfig.current
 
     if (currentTrack == null) return
+
+    // Dock glass settings (Line 60: Lens, Line 61: Rim)
+    val lensActive = themeConfig.dockGlassLensEnabled && !themeConfig.isPerformanceMode && themeConfig.glassStrength != "OFF"
+    val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
 
     val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
 
@@ -63,12 +84,43 @@ fun BottomPlayerDock(
         return "%d:%02d".format(m, s)
     }
 
-    GlassCard(
+    val dockShape = RoundedCornerShape(26.dp)
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        isDark = true,
-        onClick = null // Don't steal clicks for the whole card
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clip(dockShape)
+            .drawBackdrop(
+                shape = { dockShape },
+                effects = {
+                    vibrancy()
+                    blur(16f.dp.toPx())
+                    if (lensActive) {
+                        lens(
+                            refractionHeight = 20f.dp.toPx(),
+                            refractionAmount = 18f.dp.toPx() * (themeConfig.lensRefractionStrength / 0.85f),
+                            chromaticAberration = true
+                        )
+                    }
+                },
+                highlight = if (rimActive) {
+                    { Highlight.Default.copy(alpha = 0.85f * themeConfig.lensRimSpecular) }
+                } else null,
+                onDrawSurface = {
+                    drawRect(Color(0xFF0F172A).copy(alpha = (themeConfig.effectiveTintAlpha * 0.78f).coerceIn(0.12f, 0.85f)))
+                }
+            )
+            .border(
+                width = 1.2.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = if (rimActive) 0.32f else 0.12f),
+                        Color.White.copy(alpha = 0.06f)
+                    )
+                ),
+                shape = dockShape
+            )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             // Top Scrubber Progress Slider with smooth drag tracking
@@ -83,31 +135,21 @@ fun BottomPlayerDock(
                     modifier = Modifier.width(38.dp)
                 )
 
-                Slider(
+                LiquidSlider(
                     value = displayFraction,
                     onValueChange = { frac ->
-                        isDragging = true
-                        dragFraction = frac
-                    },
-                    onValueChangeFinished = {
-                        isDragging = false
                         if (durationMs > 0) {
-                            onSeek((dragFraction * durationMs).toLong())
+                            onSeek((frac * durationMs).toLong())
                         }
                     },
                     modifier = Modifier
                         .weight(1f)
-                        .height(16.dp)
+                        .heightIn(min = 48.dp)
                         .onScrubberWheel { deltaY ->
                             val stepMs = 5000L
                             val newPos = if (deltaY < 0f) positionMs + stepMs else positionMs - stepMs
                             onSeek(newPos.coerceIn(0L, durationMs))
-                        },
-                    colors = SliderDefaults.colors(
-                        thumbColor = accent,
-                        activeTrackColor = accent,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.15f)
-                    )
+                        }
                 )
 
                 Text(
@@ -120,13 +162,13 @@ fun BottomPlayerDock(
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Main Bar: Track Info (Clickable for full screen) + Center Playback Controls + Right Tools
+            // Main Bar: Track Info + Center Playback Controls + Right Tools
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 1. Left Track Metadata (Click to expand Now Playing)
+                // 1. Left Track Metadata
                 Row(
                     modifier = Modifier
                         .weight(1f)
@@ -174,25 +216,40 @@ fun BottomPlayerDock(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    IconButton(onClick = onToggleShuffle) {
-                        Icon(
-                            Icons.Rounded.Shuffle,
-                            contentDescription = "Shuffle",
-                            tint = if (isShuffle) accent else Color.White.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    LiquidIconButton(
+                        icon = Icons.Rounded.Shuffle,
+                        onClick = onToggleShuffle,
+                        contentDescription = "Shuffle",
+                        tint = if (isShuffle) accent else Color.White.copy(alpha = 0.6f),
+                        size = 32.dp,
+                        lighterStyle = true
+                    )
 
-                    IconButton(onClick = onPrevious) {
-                        Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(26.dp))
-                    }
+                    LiquidIconButton(
+                        icon = Icons.Rounded.SkipPrevious,
+                        onClick = onPrevious,
+                        contentDescription = "Previous",
+                        size = 36.dp,
+                        lighterStyle = true
+                    )
 
-                    // Play/Pause Bubble
+                    // Play/Pause Liquid Bubble
                     Box(
                         modifier = Modifier
                             .size(46.dp)
                             .clip(CircleShape)
-                            .background(accent)
+                            .drawBackdrop(
+                                shape = { CircleShape },
+                                effects = {
+                                    if (lensActive) {
+                                        lens(refractionHeight = 8f.dp.toPx(), refractionAmount = 10f.dp.toPx())
+                                    }
+                                },
+                                highlight = if (rimActive) {
+                                    { Highlight.Default.copy(alpha = 0.9f) }
+                                } else null,
+                                onDrawSurface = { drawRect(accent) }
+                            )
                             .clickable { onPlayPause() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -204,18 +261,22 @@ fun BottomPlayerDock(
                         )
                     }
 
-                    IconButton(onClick = onNext) {
-                        Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(26.dp))
-                    }
+                    LiquidIconButton(
+                        icon = Icons.Rounded.SkipNext,
+                        onClick = onNext,
+                        contentDescription = "Next",
+                        size = 36.dp,
+                        lighterStyle = true
+                    )
 
-                    IconButton(onClick = onCycleRepeat) {
-                        Icon(
-                            imageVector = if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                            contentDescription = "Repeat",
-                            tint = if (repeatMode > 0) accent else Color.White.copy(alpha = 0.6f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    LiquidIconButton(
+                        icon = if (repeatMode == 2) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                        onClick = onCycleRepeat,
+                        contentDescription = "Repeat",
+                        tint = if (repeatMode > 0) accent else Color.White.copy(alpha = 0.6f),
+                        size = 32.dp,
+                        lighterStyle = true
+                    )
                 }
 
                 // 3. Right Volume Control & Expand Fullscreen Button
@@ -231,25 +292,19 @@ fun BottomPlayerDock(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Slider(
+                    LiquidSlider(
                         value = volume,
                         onValueChange = onVolumeChange,
-                        modifier = Modifier.width(90.dp).height(16.dp),
-                        colors = SliderDefaults.colors(
-                            thumbColor = accent,
-                            activeTrackColor = accent,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.15f)
-                        )
+                        modifier = Modifier.width(90.dp).height(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(onClick = onExpandNowPlaying) {
-                        Icon(
-                            Icons.Rounded.OpenInFull,
-                            contentDescription = "Expand Fullscreen",
-                            tint = Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                    LiquidIconButton(
+                        icon = Icons.Rounded.OpenInFull,
+                        onClick = onExpandNowPlaying,
+                        contentDescription = "Expand Fullscreen",
+                        size = 32.dp,
+                        lighterStyle = true
+                    )
                 }
             }
         }

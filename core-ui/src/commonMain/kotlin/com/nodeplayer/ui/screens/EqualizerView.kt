@@ -18,7 +18,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.*
+import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.components.GlassCard
+import com.nodeplayer.ui.components.LiquidButton
+import com.nodeplayer.ui.components.LiquidChip
+import com.nodeplayer.ui.components.LiquidDialog
+import com.nodeplayer.ui.components.LiquidGlassSlider
+import com.nodeplayer.ui.components.LiquidGlassSwitch
+import com.nodeplayer.ui.components.LiquidSlider
 import com.nodeplayer.ui.components.ParametricEqCurveGraph
 import com.nodeplayer.ui.theme.LocalAccentColor
 
@@ -69,13 +76,9 @@ fun EqualizerView(
                 )
             }
 
-            Switch(
+            LiquidGlassSwitch(
                 checked = config.eqEnabled,
-                onCheckedChange = { onConfigChange(config.copy(eqEnabled = it)) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = accent,
-                    checkedTrackColor = accent.copy(alpha = 0.5f)
-                )
+                onCheckedChange = { onConfigChange(config.copy(eqEnabled = it)) }
             )
         }
 
@@ -87,46 +90,32 @@ fun EqualizerView(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            FilterChip(
+            LiquidChip(
                 selected = config.isAbComparing,
                 onClick = onToggleAbCompare,
-                label = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            if (config.isAbComparing) Icons.Rounded.CompareArrows else Icons.Rounded.SwapHoriz,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = if (config.isAbComparing) "A/B Match: %+.1f dB".format(config.abLoudnessOffsetDb) else "A/B Compare",
-                            fontSize = 11.sp,
-                            fontWeight = if (config.isAbComparing) FontWeight.Bold else FontWeight.Normal
-                        )
-                    }
-                },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = accent.copy(alpha = 0.3f),
-                    selectedLabelColor = accent
-                )
+                label = if (config.isAbComparing) "A/B Match: %+.1f dB".format(config.abLoudnessOffsetDb) else "A/B Compare",
+                icon = if (config.isAbComparing) Icons.Rounded.CompareArrows else Icons.Rounded.SwapHoriz
             )
 
-            AssistChip(
+            LiquidChip(
+                selected = false,
                 onClick = { showAutoEqDialog = true },
-                label = { Text("AutoEQ Import", fontSize = 11.sp) },
-                leadingIcon = { Icon(Icons.Rounded.Tune, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                label = "AutoEQ Import",
+                icon = Icons.Rounded.Tune
             )
 
             if (currentTrack != null) {
-                AssistChip(
+                LiquidChip(
+                    selected = false,
                     onClick = onSaveTrackPreset,
-                    label = { Text("Save Track Preset", fontSize = 11.sp) },
-                    leadingIcon = { Icon(Icons.Rounded.BookmarkAdd, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    label = "Save Track Preset",
+                    icon = Icons.Rounded.BookmarkAdd
                 )
-                AssistChip(
+                LiquidChip(
+                    selected = false,
                     onClick = onSaveAlbumPreset,
-                    label = { Text("Save Album Preset", fontSize = 11.sp) },
-                    leadingIcon = { Icon(Icons.Rounded.Album, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                    label = "Save Album Preset",
+                    icon = Icons.Rounded.Album
                 )
             }
         }
@@ -145,11 +134,12 @@ fun EqualizerView(
                     text = activePresetLabel,
                     style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.SemiBold)
                 )
-                TextButton(
+                LiquidButton(
                     onClick = onClearPreset,
-                    contentPadding = PaddingValues(0.dp)
+                    lighterStyle = true,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                 ) {
-                    Text("Clear", color = MaterialTheme.colorScheme.error, fontSize = 11.sp)
+                    Text("Clear", color = MaterialTheme.colorScheme.error, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -180,26 +170,16 @@ fun EqualizerView(
         ) {
             AudioEffectConfig.PRESETS.keys.forEach { preset ->
                 val isSelected = config.presetName == preset
-                FilterChip(
+                LiquidChip(
                     selected = isSelected,
                     onClick = {
-                        val gains = AudioEffectConfig.PRESETS[preset] ?: return@FilterChip
+                        val gains = AudioEffectConfig.PRESETS[preset] ?: return@LiquidChip
                         val updatedBands = config.bands.mapIndexed { idx, band ->
                             band.copy(gainDb = gains.getOrElse(idx) { 0f })
                         }
                         onConfigChange(config.copy(presetName = preset, bands = updatedBands, eqEnabled = true))
                     },
-                    label = { Text(preset, fontSize = 12.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = accent.copy(alpha = 0.25f),
-                        selectedLabelColor = accent
-                    ),
-                    border = FilterChipDefaults.filterChipBorder(
-                        enabled = true,
-                        selected = isSelected,
-                        borderColor = if (isSelected) accent else Color.White.copy(alpha = 0.2f),
-                        selectedBorderColor = accent
-                    )
+                    label = preset
                 )
             }
         }
@@ -222,11 +202,10 @@ fun EqualizerView(
                         style = MaterialTheme.typography.bodyMedium.copy(color = accent, fontWeight = FontWeight.Bold)
                     )
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = config.preampGainDb,
                     onValueChange = { onConfigChange(config.copy(preampGainDb = it)) },
-                    valueRange = -12f..12f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = -12f..12f
                 )
             }
         }
@@ -258,8 +237,7 @@ fun EqualizerView(
                                 color = if (band.gainDb != 0f) accent else Color.White.copy(alpha = 0.5f)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            // Vertical Slider
-                            Slider(
+                            LiquidSlider(
                                 value = band.gainDb,
                                 onValueChange = { newGain ->
                                     val updated = config.bands.toMutableList()
@@ -267,8 +245,7 @@ fun EqualizerView(
                                     onConfigChange(config.copy(bands = updated, eqEnabled = true))
                                 },
                                 valueRange = -12f..12f,
-                                modifier = Modifier.height(130.dp),
-                                colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             val freqLabel = when {
@@ -311,11 +288,10 @@ fun EqualizerView(
                     Text("Bass Shelf (100 Hz)", fontSize = 12.sp)
                     Text("%+.1f dB".format(config.toneControls.bassGainDb), fontSize = 12.sp, color = accent)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = config.toneControls.bassGainDb,
                     onValueChange = { onConfigChange(config.copy(toneControls = config.toneControls.copy(bassGainDb = it))) },
-                    valueRange = -12f..12f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = -12f..12f
                 )
 
                 Row(
@@ -325,11 +301,10 @@ fun EqualizerView(
                     Text("Treble Shelf (10 kHz)", fontSize = 12.sp)
                     Text("%+.1f dB".format(config.toneControls.trebleGainDb), fontSize = 12.sp, color = accent)
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = config.toneControls.trebleGainDb,
                     onValueChange = { onConfigChange(config.copy(toneControls = config.toneControls.copy(trebleGainDb = it))) },
-                    valueRange = -12f..12f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = -12f..12f
                 )
             }
         }
@@ -355,19 +330,17 @@ fun EqualizerView(
                             color = Color.White.copy(alpha = 0.6f)
                         )
                     }
-                    Switch(
+                    LiquidGlassSwitch(
                         checked = config.loudnessConfig.enabled,
-                        onCheckedChange = { onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(enabled = it))) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        onCheckedChange = { onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(enabled = it))) }
                     )
                 }
                 if (config.loudnessConfig.enabled) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    Slider(
+                    LiquidGlassSlider(
                         value = config.loudnessConfig.strength,
                         onValueChange = { onConfigChange(config.copy(loudnessConfig = config.loudnessConfig.copy(strength = it))) },
-                        valueRange = 0f..1f,
-                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                        valueRange = 0f..1f
                     )
                 }
             }
@@ -394,10 +367,9 @@ fun EqualizerView(
                             color = Color.White.copy(alpha = 0.6f)
                         )
                     }
-                    Switch(
+                    LiquidGlassSwitch(
                         checked = config.harmonicBassConfig.enabled,
-                        onCheckedChange = { onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(enabled = it))) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        onCheckedChange = { onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(enabled = it))) }
                     )
                 }
                 if (config.harmonicBassConfig.enabled) {
@@ -409,11 +381,10 @@ fun EqualizerView(
                         Text("Harmonic Blend", fontSize = 12.sp)
                         Text("${(config.harmonicBassConfig.harmonicGain * 100).toInt()}%", fontSize = 12.sp, color = accent)
                     }
-                    Slider(
+                    LiquidGlassSlider(
                         value = config.harmonicBassConfig.harmonicGain,
                         onValueChange = { onConfigChange(config.copy(harmonicBassConfig = config.harmonicBassConfig.copy(harmonicGain = it))) },
-                        valueRange = 0f..1f,
-                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                        valueRange = 0f..1f
                     )
                 }
             }
@@ -440,11 +411,10 @@ fun EqualizerView(
                         fontWeight = FontWeight.Bold
                     )
                 }
-                Slider(
+                LiquidGlassSlider(
                     value = config.stereoWidth,
                     onValueChange = { onConfigChange(config.copy(stereoWidth = it)) },
-                    valueRange = 0f..2f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0f..2f
                 )
             }
         }
@@ -470,10 +440,9 @@ fun EqualizerView(
                             color = Color.White.copy(alpha = 0.6f)
                         )
                     }
-                    Switch(
+                    LiquidGlassSwitch(
                         checked = config.reverbConfig.enabled,
-                        onCheckedChange = { onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(enabled = it))) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                        onCheckedChange = { onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(enabled = it))) }
                     )
                 }
                 if (config.reverbConfig.enabled) {
@@ -485,11 +454,10 @@ fun EqualizerView(
                         Text("Room Size", fontSize = 12.sp)
                         Text("${(config.reverbConfig.roomSize * 100).toInt()}%", fontSize = 12.sp, color = accent)
                     }
-                    Slider(
+                    LiquidGlassSlider(
                         value = config.reverbConfig.roomSize,
                         onValueChange = { onConfigChange(config.copy(reverbConfig = config.reverbConfig.copy(roomSize = it))) },
-                        valueRange = 0f..1f,
-                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                        valueRange = 0f..1f
                     )
                 }
             }
@@ -515,25 +483,24 @@ fun EqualizerView(
                         color = Color.White.copy(alpha = 0.6f)
                     )
                 }
-                Switch(
+                LiquidGlassSwitch(
                     checked = config.limiterEnabled,
-                    onCheckedChange = { onConfigChange(config.copy(limiterEnabled = it)) },
-                    colors = SwitchDefaults.colors(checkedThumbColor = accent)
+                    onCheckedChange = { onConfigChange(config.copy(limiterEnabled = it)) }
                 )
             }
         }
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(LocalBottomBarPadding.current + 24.dp))
     }
 
     // AutoEQ Import Dialog
     if (showAutoEqDialog) {
-        AlertDialog(
+        LiquidDialog(
             onDismissRequest = { showAutoEqDialog = false },
-            title = { Text("Import AutoEQ Profile") },
+            title = { Text("Import AutoEQ Profile", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = Color.White)) },
             text = {
                 Column {
-                    Text("Paste parametric EQ filter settings exported from AutoEQ or Peace GUI:", fontSize = 12.sp)
+                    Text("Paste parametric EQ filter settings exported from AutoEQ or Peace GUI:", fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
                     Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = autoEqName,
@@ -552,18 +519,21 @@ fun EqualizerView(
                 }
             },
             confirmButton = {
-                TextButton(
+                LiquidButton(
                     onClick = {
                         onImportAutoEq(autoEqName, autoEqText)
                         showAutoEqDialog = false
                     }
                 ) {
-                    Text("Import")
+                    Text("Import", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showAutoEqDialog = false }) {
-                    Text("Cancel")
+                LiquidButton(
+                    onClick = { showAutoEqDialog = false },
+                    lighterStyle = true
+                ) {
+                    Text("Cancel", color = Color.White.copy(alpha = 0.7f))
                 }
             }
         )

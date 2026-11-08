@@ -23,7 +23,7 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -44,6 +44,7 @@ fun TrackDetailsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        shape = ContinuousRoundedRectangle(28.dp),
         containerColor = Color(0xFF0F111A).copy(alpha = 0.96f),
         dragHandle = {
             BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.3f))
@@ -63,7 +64,7 @@ fun TrackDetailsSheet(
                 Box(
                     modifier = Modifier
                         .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(ContinuousRoundedRectangle(12.dp))
                         .background(accent.copy(alpha = 0.2f)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -129,7 +130,7 @@ fun TrackDetailsSheet(
 
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState,
+                
                 tintAlpha = 0.45f
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -206,7 +207,7 @@ fun TrackDetailsSheet(
 
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState,
+                
                 tintAlpha = 0.45f
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -364,7 +365,7 @@ fun TrackDetailsSheet(
 
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState,
+                
                 tintAlpha = 0.35f
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {

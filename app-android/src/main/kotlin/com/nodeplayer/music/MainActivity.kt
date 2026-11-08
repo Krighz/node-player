@@ -27,19 +27,27 @@ import androidx.core.view.WindowCompat
 import com.nodeplayer.music.ui.PlayerViewModel
 import com.nodeplayer.music.diagnostics.DiagnosticsDumpManager
 import com.nodeplayer.music.ui.components.DiagnosticsDumpDialog
-import com.nodeplayer.music.ui.components.FrostedBottomBar
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.dp
+import com.nodeplayer.ui.components.ConvxLiquidDock
+import com.nodeplayer.ui.components.ConvxMiniPlayer
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.nodeplayer.ui.debug.GlassDebug
+import com.nodeplayer.ui.components.DockScrollController
+import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.music.ui.components.GlobalSearchSheet
 import com.nodeplayer.music.diagnostics.FrameMetricsTracker
 import java.io.File
-import com.nodeplayer.music.ui.components.FrostedMiniPlayer
 import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.player.NowPlayingSheet
 import com.nodeplayer.music.ui.screens.EqualizerScreen
-import dev.chrisbanes.haze.haze
+import com.nodeplayer.ui.theme.LocalControlBackdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.nodeplayer.music.ui.screens.LibraryScreen
 import com.nodeplayer.music.ui.screens.SettingsScreen
 import com.nodeplayer.music.ui.theme.NodePlayerTheme
-import dev.chrisbanes.haze.HazeState
 import com.nodeplayer.music.update.UpdateManager
 import com.nodeplayer.music.update.UpdateOptInDialog
 import com.nodeplayer.music.update.UpdateChecker
@@ -96,7 +104,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeConfig by viewModel.themeConfig.collectAsState()
             val accentColor by viewModel.accentColor.collectAsState()
-            val dockHazeState = remember { HazeState() }
+            val coroutineScope = rememberCoroutineScope()
+            val dockScrollController = remember(coroutineScope, themeConfig.dockScrollSensitivity, themeConfig.dockReturnDelayMs) {
+                DockScrollController(
+                    scope = coroutineScope,
+                    sensitivity = themeConfig.dockScrollSensitivity,
+                    returnDelayMs = themeConfig.dockReturnDelayMs
+                )
+            }
+            val dockScrollFraction by dockScrollController.offsetFraction.collectAsState()
 
             val systemInDark = androidx.compose.foundation.isSystemInDarkTheme()
             val isDark = when (themeConfig.themeMode) {
@@ -106,8 +122,13 @@ class MainActivity : ComponentActivity() {
             }
             val isOled = themeConfig.isOledBlack || themeConfig.themeMode == "OLED"
 
+            val appSettings by viewModel.appSettings.collectAsState()
+            val effectiveThemeConfig = remember(themeConfig, appSettings.glassControlsConfig) {
+                themeConfig.copy(controlsConfig = appSettings.glassControlsConfig)
+            }
+
             NodePlayerTheme(
-                themeConfig = themeConfig,
+                themeConfig = effectiveThemeConfig,
                 artworkAccentColor = accentColor
             ) {
                 val prefs = remember { getSharedPreferences("node_player_prefs", android.content.Context.MODE_PRIVATE) }
@@ -115,10 +136,10 @@ class MainActivity : ComponentActivity() {
                     mutableStateOf(!prefs.getBoolean("onboarding_completed", false))
                 }
 
-                var currentRoute by remember { mutableStateOf("home") }
+                val intentRoute = intent?.getStringExtra("route")
+                var currentRoute by remember { mutableStateOf(intentRoute ?: "home") }
                 var isNowPlayingExpanded by remember { mutableStateOf(false) }
 
-                val appSettings by viewModel.appSettings.collectAsState()
                 val dailyStats by viewModel.dailyListeningStats.collectAsState()
                 val sessionSec by viewModel.sessionListeningSeconds.collectAsState()
 
@@ -235,15 +256,33 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Box(
-                    modifier = Modifier.fillMaxSize()
+                val pageBackdrop = rememberLayerBackdrop()
+
+                CompositionLocalProvider(
+                    LocalControlBackdrop provides pageBackdrop
                 ) {
-                    // Blur Source Container: Encloses both background AND scrolling screen content
+                    Box(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                    // Blur Source Container: Encloses both background AND scrolling screen content recorded into pageBackdrop
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .haze(dockHazeState)
+                            .layerBackdrop(pageBackdrop)
+                            .then(
+                                if (themeConfig.dockAutoHideEnabled) {
+                                    Modifier.nestedScroll(
+                                        rememberDockScrollConnection(
+                                            controller = dockScrollController,
+                                            enabled = true
+                                        )
+                                    )
+                                } else Modifier
+                            )
                     ) {
+                        CompositionLocalProvider(
+                            LocalControlBackdrop provides remember { emptyBackdrop() }
+                        ) {
                         // 1. Dribbble-inspired Liquid Glass Organic Chrome & Obsidian Background
                         LiquidGlassBackground(
                             accentColor = accentColor,
@@ -270,6 +309,10 @@ class MainActivity : ComponentActivity() {
                                 onOpenStats = { currentRoute = "stats" },
                                 onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
                                 onOpenNodeConnect = { showPairingDialog = true },
+                                nodeConnectStatus = if (connectedPeers.isNotEmpty()) com.nodeplayer.ui.components.DeviceConnectStatus.CONNECTED
+                                    else if (discoveredPeers.isNotEmpty() || activeSession != null) com.nodeplayer.ui.components.DeviceConnectStatus.DISCOVERING
+                                    else com.nodeplayer.ui.components.DeviceConnectStatus.DISCONNECTED,
+                                connectedDeviceCount = connectedPeers.size,
                                 onInstallUpdate = {
                                     val readyApk = (downloadStatus as? DownloadStatus.ReadyToInstall)?.apkFile
                                         ?: UpdateDownloadManager.getDownloadedApk(this@MainActivity, UpdateManager.availableUpdate.value?.versionName ?: "")
@@ -279,7 +322,6 @@ class MainActivity : ComponentActivity() {
                                         safeToast("Download not ready yet", Toast.LENGTH_SHORT)
                                     }
                                 },
-                                hazeState = null
                             )
                             "library" -> LibraryScreen(
                                 tracks = allTracks,
@@ -298,7 +340,6 @@ class MainActivity : ComponentActivity() {
                                 onPlayNext = { viewModel.playNext(it) },
                                 onAddToQueue = { viewModel.addToQueue(it) },
                                 qualityBadgeMode = appSettings.qualityBadgesMode,
-                                hazeState = null,
                                 audioOutputInfo = audioOutputInfo,
                                 onAnalyzeTrack = { viewModel.analyzeTrack(it) },
                                 analyzingTrackId = analyzingTrackId
@@ -322,7 +363,6 @@ class MainActivity : ComponentActivity() {
                                 onLoadConvolverPreset = { viewModel.setConvolverPreset(it) },
                                 rmsLevel = currentRms,
                                 isPerformanceMode = themeConfig.isPerformanceMode,
-                                hazeState = null
                             )
                             "more" -> com.nodeplayer.music.ui.screens.MoreScreen(
                                 dailyStats = dailyStats,
@@ -332,7 +372,6 @@ class MainActivity : ComponentActivity() {
                                 onOpenSmartPlaylists = { currentRoute = "smart_playlists" },
                                 onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
                                 onOpenDiagnostics = { currentRoute = "graphics_diagnostics" },
-                                hazeState = null
                             )
                             "graphics_diagnostics" -> com.nodeplayer.music.ui.screens.GraphicsDiagnosticsScreen(
                                 themeConfig = themeConfig,
@@ -340,20 +379,17 @@ class MainActivity : ComponentActivity() {
                                 onToggleForceFail = { viewModel.toggleForceSelfTestFail(it) },
                                 onReportProblemClick = { showDiagnosticsDialog = true },
                                 onBack = { currentRoute = "more" },
-                                hazeState = null
                             )
                             "stats" -> com.nodeplayer.music.ui.screens.StatsScreen(
                                 dailyStats = dailyStats,
                                 allTracks = allTracks,
                                 onBack = { currentRoute = "more" },
                                 onOpenRecap = { currentRoute = "recap" },
-                                hazeState = null
                             )
                             "recap" -> com.nodeplayer.music.ui.screens.YearlyRecapScreen(
                                 dailyStats = dailyStats,
                                 allTracks = allTracks,
                                 onBack = { currentRoute = "more" },
-                                hazeState = null
                             )
                             "smart_playlists" -> com.nodeplayer.music.ui.screens.SmartPlaylistsScreen(
                                 allTracks = allTracks,
@@ -363,13 +399,11 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onBack = { currentRoute = "more" },
-                                hazeState = null
                             )
                             "duplicate_finder" -> com.nodeplayer.music.ui.screens.DuplicateFinderScreen(
                                 allTracks = allTracks,
                                 onBack = { currentRoute = "more" },
                                 onTrackDeleted = { viewModel.refreshLibrary() },
-                                hazeState = null
                             )
                             "settings" -> SettingsScreen(
                                 outputInfo = audioOutputInfo,
@@ -397,67 +431,90 @@ class MainActivity : ComponentActivity() {
                                 onThemeConfigChange = { viewModel.updateThemeConfig(it) },
                                 onApplySafeGraphicsMode = { viewModel.applySafeGraphicsMode() },
                                 onReportProblem = { showDiagnosticsDialog = true },
+                                onNavigateToOpticalDiagnostics = { currentRoute = "optical_diagnostics" },
                                 onPairNewDevice = { showPairingDialog = true },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
-                                hazeState = null
                             )
                             "widgets", "widget_settings" -> com.nodeplayer.music.ui.screens.WidgetSettingsScreen(
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
                                 onBack = { currentRoute = "settings" },
-                                hazeState = null
+                            )
+                            "optical_diagnostics" -> com.nodeplayer.ui.screens.OpticalDiagnosticsView(
+                                onBack = { currentRoute = "settings" },
+                                themeConfig = themeConfig
                             )
                         }
                     }
+                    }
 
-                    // 3. Floating Mini-Player & Bottom Navigation (Frosted glass dock sampling dockHazeState)
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                    ) {
-                        if (currentTrack != null) {
-                            val duration = currentTrack!!.durationMs.coerceAtLeast(1L)
-                            val progress = (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                    // 3. Floating Mini-Player & Bottom Navigation (Convx Liquid Glass Dock with Auto-Hide)
+                    val dockAutoHide = themeConfig.dockAutoHideEnabled
+                    val miniPlayerAutoHide = themeConfig.dockAutoHideMiniPlayer
+                    val dockOffsetFraction = if (dockAutoHide) dockScrollFraction else 0f
+                    val miniPlayerOffsetFraction = if (dockAutoHide && miniPlayerAutoHide) dockScrollFraction else 0f
+
+                    if (currentRoute !in listOf("widget_settings", "widgets", "optical_diagnostics")) {
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .graphicsLayer {
+                                    translationY = dockOffsetFraction * 110f.dp.toPx()
+                                    alpha = 1f - (dockOffsetFraction * 0.85f).coerceIn(0f, 1f)
+                                }
+                                .navigationBarsPadding()
+                        ) {
+                            if (currentTrack != null) {
+                                val duration = currentTrack!!.durationMs.coerceAtLeast(1L)
+                                val progress = (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+
+                                val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
+
+                                ConvxMiniPlayer(
+                                    currentTrack = currentTrack,
+                                    isPlaying = isPlaying,
+                                    progressFraction = progress,
+                                    onPlayPauseClick = { viewModel.togglePlayPause() },
+                                    onSkipNextClick = { viewModel.skipNext() },
+                                    onSkipPreviousClick = { viewModel.skipPrevious() },
+                                    onClick = { isNowPlayingExpanded = true },
+                                    gesturesEnabled = appSettings.miniPlayerGesturesEnabled,
+                                    rmsLevel = currentRms,
+                                    isPerformanceMode = themeConfig.isPerformanceMode,
+                                    shaderEnabled = isShaderActive,
+                                    chromaticFringe = themeConfig.chromaticFringeValue(),
+                                    backdrop = pageBackdrop,
+                                    modifier = if (dockAutoHide && !miniPlayerAutoHide) {
+                                        Modifier.graphicsLayer {
+                                            // Counter-translate to keep mini player pinned when dock slides down
+                                            translationY = -dockOffsetFraction * 72f.dp.toPx()
+                                        }
+                                    } else Modifier
+                                )
+                            }
 
                             val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
 
-                            FrostedMiniPlayer(
-                                currentTrack = currentTrack,
-                                isPlaying = isPlaying,
-                                progressFraction = progress,
-                                onPlayPauseClick = { viewModel.togglePlayPause() },
-                                onSkipNextClick = { viewModel.skipNext() },
-                                onSkipPreviousClick = { viewModel.skipPrevious() },
-                                onClick = { isNowPlayingExpanded = true },
-                                onLongPress = { isNowPlayingExpanded = true },
-                                gesturesEnabled = appSettings.miniPlayerGesturesEnabled,
-                                hazeState = dockHazeState,
-                                rmsLevel = currentRms,
+                            GlassDebug.logThrottled(
+                                "GlassPath",
+                                "API=${android.os.Build.VERSION.SDK_INT}, shaderMode=${themeConfig.shaderMode}, selfTestPassed=${selfTestResult.passed}, " +
+                                "isShaderActive=$isShaderActive, perfMode=${themeConfig.isPerformanceMode}, dockLens=${themeConfig.dockGlassLensEnabled}"
+                            )
+
+                            ConvxLiquidDock(
+                                selectedRoute = currentRoute,
+                                onRouteChange = { currentRoute = it },
+                                onSearchClick = { showSearchSheet = true },
                                 isPerformanceMode = themeConfig.isPerformanceMode,
                                 shaderEnabled = isShaderActive,
                                 chromaticFringe = themeConfig.chromaticFringeValue(),
-                                grainStrength = themeConfig.grainStrengthValue(),
-                                showWaveProgress = themeConfig.showMiniPlayerWave
+                                searchButtonVisible = themeConfig.showDockSearchButton,
+                                lensStrength = themeConfig.lensRefractionStrength,
+                                rimSpecular = themeConfig.lensRimSpecular,
+                                backdrop = pageBackdrop
                             )
                         }
-
-                        val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
-
-                        FrostedBottomBar(
-                            selectedRoute = currentRoute,
-                            onRouteChange = { currentRoute = it },
-                            onSearchClick = { showSearchSheet = true },
-                            hazeState = dockHazeState,
-                            isPerformanceMode = themeConfig.isPerformanceMode,
-                            shaderEnabled = isShaderActive,
-                            chromaticFringe = themeConfig.chromaticFringeValue(),
-                            grainStrength = themeConfig.grainStrengthValue(),
-                            searchButtonVisible = themeConfig.showDockSearchButton,
-                            lensStrength = themeConfig.lensRefractionStrength,
-                            rimSpecular = themeConfig.lensRimSpecular
-                        )
                     }
 
                     // 4. Full Now Playing Sheet (Smooth slide animation)
@@ -495,7 +552,6 @@ class MainActivity : ComponentActivity() {
                                     // Open signal path dialog / inspector
                                 },
                                 themeConfig = themeConfig,
-                                hazeState = dockHazeState
                             )
                         }
                     }
@@ -906,6 +962,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                }
                 }
             }
         }

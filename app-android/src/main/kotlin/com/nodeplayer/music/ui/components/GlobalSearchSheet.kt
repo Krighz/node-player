@@ -25,7 +25,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.theme.LocalAccentColor
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,7 +98,7 @@ fun GlobalSearchSheet(
                     .background(Color.White.copy(alpha = 0.25f))
             )
         },
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+        shape = ContinuousRoundedRectangle(28.dp)
     ) {
         Column(
             modifier = Modifier
@@ -142,7 +142,7 @@ fun GlobalSearchSheet(
                     }
                 },
                 singleLine = true,
-                shape = RoundedCornerShape(16.dp),
+                shape = ContinuousRoundedRectangle(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = accent,
                     unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
@@ -191,7 +191,7 @@ fun GlobalSearchSheet(
                                     onTrackClick(track)
                                     onDismiss()
                                 },
-                            hazeState = hazeState,
+                            
                             tintAlpha = 0.35f
                         ) {
                             Row(

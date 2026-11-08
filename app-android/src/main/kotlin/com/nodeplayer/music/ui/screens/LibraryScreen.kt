@@ -1,6 +1,7 @@
 package com.nodeplayer.music.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -26,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
+import com.nodeplayer.music.ui.components.HazeState
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
@@ -33,7 +36,8 @@ import com.nodeplayer.music.ui.components.SoundWaveVisualizer
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.music.ui.theme.pressScale
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import java.io.File
 
 @Composable
@@ -121,17 +125,18 @@ fun LibraryScreen(
                 .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val pillShape = remember { ContinuousRoundedRectangle(GlassTokens.pillCornerRadius) }
             tabs.forEachIndexed { index, tabTitle ->
                 val isSelected = selectedTab == index && viewingFolder == null
                 Box(
                     modifier = Modifier
                         .glassSurface(
-                            hazeState = hazeState,
-                            shape = RoundedCornerShape(GlassTokens.pillCornerRadius),
+                            
+                            shape = pillShape,
                             tintAlpha = if (isSelected) 0.85f else 0.35f,
                             customTint = if (isSelected) accent.copy(alpha = 0.4f) else null
                         )
-                        .clickable {
+                        .pressScale(targetScale = 0.95f) {
                             viewingFolder = null
                             selectedTab = index
                         }
@@ -163,7 +168,7 @@ fun LibraryScreen(
                 onTrackClick = onTrackClick,
                 onPlayNext = onPlayNext,
                 onAddToQueue = onAddToQueue,
-                hazeState = hazeState
+                
             )
         } else if (tracks.isEmpty()) {
             EmptyLibraryView(onRescanClick)
@@ -178,14 +183,14 @@ fun LibraryScreen(
                     onAddToQueue = onAddToQueue,
                     qualityBadgeMode = qualityBadgeMode,
                     onInspectTrack = { inspectingTrack = it },
-                    hazeState = hazeState
+                    
                 )
-                1 -> AlbumsGrid(albums = albums, isGridView = isGridView, onAlbumClick = {}, hazeState = hazeState)
-                2 -> ArtistsList(artists = artists, isGridView = isGridView, onArtistClick = {}, hazeState = hazeState)
+                1 -> AlbumsGrid(albums = albums, isGridView = isGridView, onAlbumClick = {}, )
+                2 -> ArtistsList(artists = artists, isGridView = isGridView, onArtistClick = {}, )
                 3 -> FoldersList(
                     folders = folders,
                     onFolderClick = { viewingFolder = it },
-                    hazeState = hazeState
+                    
                 )
             }
         }
@@ -197,7 +202,7 @@ fun LibraryScreen(
             track = targetTrack,
             audioOutputInfo = audioOutputInfo,
             onDismiss = { inspectingTrack = null },
-            hazeState = hazeState,
+            
             onAnalyzeSong = onAnalyzeTrack,
             isAnalyzing = analyzingTrackId == targetTrack.id
         )
@@ -214,7 +219,7 @@ fun SongsList(
     onAddToQueue: (Track) -> Unit = {},
     qualityBadgeMode: String = "DETAILED",
     onInspectTrack: (Track) -> Unit = {},
-    hazeState: HazeState?
+    hazeState: HazeState? = null
 ) {
     val accent = LocalAccentColor.current
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -234,7 +239,7 @@ fun SongsList(
 
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState,
+                
                 onClick = { onTrackClick(track, tracks) },
                 tintAlpha = if (isCurrent) 0.70f else 0.40f
             ) {
@@ -244,11 +249,19 @@ fun SongsList(
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val artShape = remember { ContinuousRoundedRectangle(12.dp) }
                     // Artwork / Placeholder
                     Box(
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(artShape)
+                            .border(
+                                1.dp,
+                                Brush.verticalGradient(
+                                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+                                ),
+                                artShape
+                            )
                             .background(Color(0xFF1E2130)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -411,7 +424,7 @@ fun SongsList(
 fun FoldersList(
     folders: List<MusicFolder>,
     onFolderClick: (MusicFolder) -> Unit,
-    hazeState: HazeState?
+    hazeState: HazeState? = null
 ) {
     val accent = LocalAccentColor.current
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -429,7 +442,7 @@ fun FoldersList(
         items(folders, key = { it.path }) { folder ->
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState,
+                
                 onClick = { onFolderClick(folder) }
             ) {
                 Row(
@@ -497,7 +510,7 @@ fun FolderDetailView(
     onTrackClick: (Track, List<Track>) -> Unit,
     onPlayNext: (Track) -> Unit = {},
     onAddToQueue: (Track) -> Unit = {},
-    hazeState: HazeState?
+    hazeState: HazeState? = null
 ) {
     val accent = LocalAccentColor.current
 
@@ -555,7 +568,7 @@ fun FolderDetailView(
             onTrackClick = onTrackClick,
             onPlayNext = onPlayNext,
             onAddToQueue = onAddToQueue,
-            hazeState = hazeState
+            
         )
     }
 }
@@ -597,7 +610,7 @@ fun AlbumsGrid(
             items(albums, key = { it.id }) { album ->
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    hazeState = hazeState,
+                    
                     onClick = { onAlbumClick(album) }
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
@@ -653,7 +666,7 @@ fun AlbumsGrid(
             items(albums, key = { it.id }) { album ->
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    hazeState = hazeState,
+                    
                     onClick = { onAlbumClick(album) }
                 ) {
                     Row(
@@ -734,7 +747,7 @@ fun ArtistsList(
             items(artists, key = { it.id }) { artist ->
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    hazeState = hazeState,
+                    
                     onClick = { onArtistClick(artist) }
                 ) {
                     Column(
@@ -789,7 +802,7 @@ fun ArtistsList(
             items(artists, key = { it.id }) { artist ->
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    hazeState = hazeState,
+                    
                     onClick = { onArtistClick(artist) }
                 ) {
                     Row(

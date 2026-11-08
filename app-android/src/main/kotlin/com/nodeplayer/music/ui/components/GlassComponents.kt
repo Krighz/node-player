@@ -18,7 +18,8 @@ import androidx.compose.ui.unit.dp
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.music.ui.theme.pressScale
-import dev.chrisbanes.haze.HazeState
+
+typealias HazeState = Any
 
 @Composable
 fun GlassCard(
@@ -45,7 +46,7 @@ fun GlassCard(
             modifier = Modifier
                 .matchParentSize()
                 .glassSurface(
-                    hazeState = hazeState,
+                    
                     shape = shape,
                     isOled = isOled,
                     isDark = isDark,
@@ -81,7 +82,7 @@ fun GlassIconButton(
             modifier = Modifier
                 .matchParentSize()
                 .glassSurface(
-                    hazeState = hazeState,
+                    
                     shape = shape,
                     tintAlpha = 0.5f
                 )

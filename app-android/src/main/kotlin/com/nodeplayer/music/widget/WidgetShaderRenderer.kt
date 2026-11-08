@@ -394,9 +394,10 @@ object WidgetShaderRenderer {
         val canvas = Canvas(bitmap)
         val rect = RectF(0f, 0f, config.widthPx.toFloat(), config.heightPx.toFloat())
 
+        // 1. Base translucent liquid glass layer
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(
-                (config.glassOpacity * 240).roundToInt().coerceIn(0, 255),
+                (config.glassOpacity * 230).roundToInt().coerceIn(0, 255),
                 (config.baseColor[0] * 255).roundToInt(),
                 (config.baseColor[1] * 255).roundToInt(),
                 (config.baseColor[2] * 255).roundToInt()
@@ -405,18 +406,37 @@ object WidgetShaderRenderer {
         }
         canvas.drawRoundRect(rect, config.cornerRadiusPx, config.cornerRadiusPx, bgPaint)
 
-        // Subtle gradient rim
+        // 2. Liquid glass inner glow / refraction sheen (top-left highlight gradient)
+        val sheenPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = android.graphics.LinearGradient(
+                0f, 0f, 0f, config.heightPx * 0.65f,
+                Color.argb(55, 255, 255, 255),
+                Color.argb(0, 255, 255, 255),
+                android.graphics.Shader.TileMode.CLAMP
+            )
+            style = Paint.Style.FILL
+        }
+        canvas.drawRoundRect(rect, config.cornerRadiusPx, config.cornerRadiusPx, sheenPaint)
+
+        // 3. Specular rim highlight with chromatic edge refraction
         val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            val alphaRim = (config.edgeHighlightStrength * 160).roundToInt().coerceIn(0, 255)
             shader = android.graphics.LinearGradient(
                 0f, 0f, config.widthPx.toFloat(), config.heightPx.toFloat(),
-                Color.argb(80, (config.warmColor[0] * 255).roundToInt(), (config.warmColor[1] * 255).roundToInt(), (config.warmColor[2] * 255).roundToInt()),
-                Color.argb(80, (config.coolColor[0] * 255).roundToInt(), (config.coolColor[1] * 255).roundToInt(), (config.coolColor[2] * 255).roundToInt()),
+                intArrayOf(
+                    Color.argb(alphaRim, 255, 255, 255),
+                    Color.argb((alphaRim * 0.6f).roundToInt(), (config.coolColor[0] * 255).roundToInt(), (config.coolColor[1] * 255).roundToInt(), (config.coolColor[2] * 255).roundToInt()),
+                    Color.argb((alphaRim * 0.4f).roundToInt(), (config.warmColor[0] * 255).roundToInt(), (config.warmColor[1] * 255).roundToInt(), (config.warmColor[2] * 255).roundToInt())
+                ),
+                floatArrayOf(0f, 0.45f, 1f),
                 android.graphics.Shader.TileMode.CLAMP
             )
             style = Paint.Style.STROKE
-            strokeWidth = 2.5f
+            strokeWidth = 2.0f
         }
-        canvas.drawRoundRect(rect, config.cornerRadiusPx, config.cornerRadiusPx, borderPaint)
+        val strokeInset = 1.0f
+        val strokeRect = RectF(strokeInset, strokeInset, config.widthPx - strokeInset, config.heightPx - strokeInset)
+        canvas.drawRoundRect(strokeRect, (config.cornerRadiusPx - strokeInset).coerceAtLeast(0f), (config.cornerRadiusPx - strokeInset).coerceAtLeast(0f), borderPaint)
 
         return bitmap
     }

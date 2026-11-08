@@ -1,6 +1,7 @@
 package com.nodeplayer.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -10,7 +11,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -18,11 +18,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.pressScale
 
 enum class DeviceConnectStatus {
     DISCONNECTED,
@@ -44,6 +47,8 @@ fun DeviceConnectPill(
     connectedDeviceCount: Int = 0,
     pairedDevices: List<DiscoveredPeerInfo> = emptyList(),
     allowCastingToThisDevice: Boolean = true,
+    compact: Boolean = false,
+    onClick: (() -> Unit)? = null,
     onToggleAllowCasting: (Boolean) -> Unit = {},
     onPairNewDevice: () -> Unit = {},
     onCastToDevice: (DiscoveredPeerInfo) -> Unit = {},
@@ -53,64 +58,142 @@ fun DeviceConnectPill(
     val accent = LocalAccentColor.current
     var isMenuOpen by remember { mutableStateOf(false) }
 
+    // Pulsing animation for discovering state
+    val infiniteTransition = rememberInfiniteTransition(label = "StatusPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "PulseAlpha"
+    )
+
     val dotColor = when (status) {
         DeviceConnectStatus.CONNECTED -> Color(0xFF00F0FF) // Cyan glow
-        DeviceConnectStatus.DISCOVERING -> Color(0xFFF59E0B) // Amber pulse
-        DeviceConnectStatus.DISCONNECTED -> Color.White.copy(alpha = 0.3f)
+        DeviceConnectStatus.DISCOVERING -> Color(0xFFF59E0B).copy(alpha = pulseAlpha) // Amber pulse
+        DeviceConnectStatus.DISCONNECTED -> Color.White.copy(alpha = 0.35f)
     }
 
+    val glowColor = when (status) {
+        DeviceConnectStatus.CONNECTED -> Color(0xFF00F0FF).copy(alpha = 0.35f)
+        DeviceConnectStatus.DISCOVERING -> Color(0xFFF59E0B).copy(alpha = 0.25f * pulseAlpha)
+        DeviceConnectStatus.DISCONNECTED -> Color.Transparent
+    }
+
+    val pillShape = remember { ContinuousRoundedRectangle(19.dp) }
+    val dropdownShape = remember { ContinuousRoundedRectangle(18.dp) }
+
     Box(modifier = modifier) {
-        // Top Bar Pill Button
+        // Top Bar Pill Button with Convx-style liquid glass finish & spring press scale
         Row(
             modifier = Modifier
                 .height(38.dp)
-                .clip(RoundedCornerShape(19.dp))
-                .background(Color(0xFF161922).copy(alpha = 0.75f))
+                .clip(pillShape)
+                .background(Color(0xFF131722).copy(alpha = 0.78f))
                 .border(
                     width = 1.dp,
-                    color = Color.White.copy(alpha = 0.14f),
-                    shape = RoundedCornerShape(19.dp)
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.28f),
+                            Color.White.copy(alpha = 0.08f)
+                        )
+                    ),
+                    shape = pillShape
                 )
-                .clickable { isMenuOpen = !isMenuOpen }
-                .padding(horizontal = 14.dp),
+                .pressScale(targetScale = 0.95f) {
+                    if (onClick != null) {
+                        onClick()
+                    } else {
+                        isMenuOpen = !isMenuOpen
+                    }
+                }
+                .padding(horizontal = if (compact) 10.dp else 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Rounded.Cast,
+                imageVector = if (status == DeviceConnectStatus.CONNECTED) Icons.Rounded.CastConnected else Icons.Rounded.Cast,
                 contentDescription = "Device Connect",
-                tint = Color.White.copy(alpha = 0.8f),
+                tint = if (status == DeviceConnectStatus.CONNECTED) accent else Color.White.copy(alpha = 0.85f),
                 modifier = Modifier.size(17.dp)
             )
 
-            Spacer(modifier = Modifier.width(8.dp))
+            if (!compact) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Device Connect",
+                    fontSize = 12.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White.copy(alpha = 0.92f)
+                )
+            }
 
-            Text(
-                text = "Device Connect",
-                fontSize = 12.5.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = 0.9f)
-            )
+            Spacer(modifier = Modifier.width(7.dp))
 
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // Glowing status indicator dot
+            // Glowing status indicator dot with outer glow halo
             Box(
                 modifier = Modifier
-                    .size(7.dp)
-                    .clip(CircleShape)
-                    .background(dotColor)
-            )
+                    .size(12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Outer glow
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(glowColor)
+                )
+                // Center crisp dot
+                Box(
+                    modifier = Modifier
+                        .size(6.5.dp)
+                        .clip(CircleShape)
+                        .background(dotColor)
+                )
+            }
+
+            // Optional connected count badge
+            if (connectedDeviceCount > 0 && !compact) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(ContinuousRoundedRectangle(6.dp))
+                        .background(accent.copy(alpha = 0.22f))
+                        .padding(horizontal = 5.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        text = "$connectedDeviceCount",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accent
+                    )
+                }
+            }
         }
 
-        // Dropdown Panel
-        if (isMenuOpen) {
+        // Dropdown Panel (Desktop inline management)
+        AnimatedVisibility(
+            visible = isMenuOpen,
+            enter = fadeIn(tween(180)) + scaleIn(tween(180), initialScale = 0.94f),
+            exit = fadeOut(tween(140)) + scaleOut(tween(140), targetScale = 0.94f)
+        ) {
             Box(
                 modifier = Modifier
                     .padding(top = 46.dp)
                     .width(320.dp)
-                    .clip(RoundedCornerShape(18.dp))
+                    .clip(dropdownShape)
                     .background(Color(0xFF13161F).copy(alpha = 0.96f))
-                    .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(18.dp))
+                    .border(
+                        1.dp,
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.22f),
+                                Color.White.copy(alpha = 0.08f)
+                            )
+                        ),
+                        dropdownShape
+                    )
                     .padding(16.dp)
             ) {
                 Column {
@@ -154,7 +237,7 @@ fun DeviceConnectPill(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(ContinuousRoundedRectangle(10.dp))
                             .background(Color.White.copy(alpha = 0.05f))
                             .padding(10.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -201,7 +284,7 @@ fun DeviceConnectPill(
                         )
                     }
 
-                    Divider(
+                    HorizontalDivider(
                         color = Color.White.copy(alpha = 0.1f),
                         modifier = Modifier.padding(vertical = 10.dp)
                     )
@@ -219,7 +302,7 @@ fun DeviceConnectPill(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .clip(ContinuousRoundedRectangle(8.dp))
                                     .clickable { onCastToDevice(peer) }
                                     .padding(vertical = 6.dp, horizontal = 4.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -264,6 +347,7 @@ fun DeviceConnectPill(
                                 onPairNewDevice()
                             },
                             modifier = Modifier.weight(1f).height(34.dp),
+                            shape = ContinuousRoundedRectangle(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f)),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {
@@ -278,6 +362,7 @@ fun DeviceConnectPill(
                                 onOpenSyncCenter()
                             },
                             modifier = Modifier.weight(1f).height(34.dp),
+                            shape = ContinuousRoundedRectangle(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = accent.copy(alpha = 0.25f)),
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {

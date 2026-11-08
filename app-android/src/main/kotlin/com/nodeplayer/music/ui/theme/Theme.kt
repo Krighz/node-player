@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.nodeplayer.model.GlassThemeConfig
+import com.nodeplayer.ui.theme.LocalGlassControlsConfig
 import com.nodeplayer.music.R
 
 val InterFontFamily = FontFamily(Font(R.font.inter))
@@ -151,6 +152,8 @@ fun NodePlayerTheme(
     CompositionLocalProvider(
         LocalAccentColor provides animatedAccent,
         LocalGlassThemeConfig provides themeConfig,
+        com.nodeplayer.ui.theme.LocalGlassThemeConfig provides themeConfig,
+        LocalGlassControlsConfig provides themeConfig.controlsConfig,
         LocalDensityPadding provides densityPadding,
         LocalCornerRadius provides cornerRadius,
         LocalGlassTokens provides glassTokens

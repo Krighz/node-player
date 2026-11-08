@@ -22,15 +22,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.LocalBottomBarPadding
+import com.nodeplayer.ui.components.DockScrollController
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
+import com.nodeplayer.ui.components.LiquidButton
+import com.nodeplayer.ui.components.LiquidIconButton
+import com.nodeplayer.ui.components.LiquidSegmentedControl
 import com.nodeplayer.ui.components.SoundWaveVisualizer
 import com.nodeplayer.ui.components.TrackArtwork
+import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 
 @Composable
 fun LibraryView(
@@ -47,13 +56,34 @@ fun LibraryView(
     searchQuery: String = "",
     onSearchChange: (String) -> Unit = {},
     remoteTracks: List<Track> = emptyList(),
+    dockScrollController: DockScrollController? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val themeConfig = LocalGlassThemeConfig.current
     var selectedTab by remember { mutableIntStateOf(0) }
     var isGridView by remember { mutableStateOf(false) }
     var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) }
     val tabs = listOf("Songs", "Albums", "Artists", "Folders")
+
+    val dockConnection = rememberDockScrollConnection(
+        controller = dockScrollController,
+        enabled = themeConfig.dockAutoHideEnabled
+    )
+    val songsListState = rememberLazyListState()
+    val folderTracksListState = rememberLazyListState()
+
+    LaunchedEffect(songsListState.firstVisibleItemIndex, songsListState.firstVisibleItemScrollOffset) {
+        if (songsListState.firstVisibleItemIndex == 0 && songsListState.firstVisibleItemScrollOffset == 0) {
+            dockScrollController?.onListScrolledToTop(0, 0)
+        }
+    }
+
+    LaunchedEffect(folderTracksListState.firstVisibleItemIndex, folderTracksListState.firstVisibleItemScrollOffset) {
+        if (folderTracksListState.firstVisibleItemIndex == 0 && folderTracksListState.firstVisibleItemScrollOffset == 0) {
+            dockScrollController?.onListScrolledToTop(0, 0)
+        }
+    }
 
     val filteredTracks = remember(tracks, remoteTracks, searchQuery) {
         if (searchQuery.isBlank()) tracks
@@ -75,6 +105,7 @@ fun LibraryView(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .nestedScroll(dockConnection)
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         // Search & Rescan Header
@@ -90,9 +121,13 @@ fun LibraryView(
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = accent) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { onSearchChange("") }) {
-                            Icon(Icons.Rounded.Clear, contentDescription = "Clear")
-                        }
+                        LiquidIconButton(
+                            icon = Icons.Rounded.Clear,
+                            onClick = { onSearchChange("") },
+                            contentDescription = "Clear",
+                            size = 36.dp,
+                            lighterStyle = true
+                        )
                     }
                 },
                 singleLine = true,
@@ -105,14 +140,14 @@ fun LibraryView(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            IconButton(
+            LiquidIconButton(
+                icon = Icons.Rounded.Refresh,
                 onClick = onRescanClick,
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .background(accent.copy(alpha = 0.2f))
-            ) {
-                Icon(Icons.Rounded.Refresh, contentDescription = "Rescan", tint = accent)
-            }
+                contentDescription = "Rescan",
+                size = 48.dp,
+                tint = accent,
+                lighterStyle = true
+            )
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -123,42 +158,30 @@ fun LibraryView(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ScrollableTabRow(
-                selectedTabIndex = selectedTab,
-                edgePadding = 0.dp,
-                modifier = Modifier.weight(1f),
-                containerColor = Color.Transparent,
-                contentColor = accent,
-                divider = {}
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = {
-                            val count = when (index) {
-                                0 -> filteredTracks.size
-                                1 -> albums.size
-                                2 -> artists.size
-                                else -> folders.size
-                            }
-                            Text(
-                                text = if (count > 0) "$title ($count)" else title,
-                                fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                                fontSize = 13.sp
-                            )
-                        }
-                    )
+            LiquidSegmentedControl(
+                items = tabs,
+                selectedIndex = selectedTab,
+                onSelect = { selectedTab = it },
+                modifier = Modifier.weight(1f)
+            ) { tab ->
+                val count = when (tabs.indexOf(tab)) {
+                    0 -> filteredTracks.size
+                    1 -> albums.size
+                    2 -> artists.size
+                    else -> folders.size
                 }
+                if (count > 0) "$tab ($count)" else tab
             }
 
-            IconButton(onClick = { isGridView = !isGridView }) {
-                Icon(
-                    imageVector = if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView,
-                    contentDescription = "Toggle Grid View",
-                    tint = Color.White.copy(alpha = 0.8f)
-                )
-            }
+            Spacer(modifier = Modifier.width(8.dp))
+
+            LiquidIconButton(
+                icon = if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView,
+                onClick = { isGridView = !isGridView },
+                contentDescription = "Toggle Grid View",
+                size = 48.dp,
+                lighterStyle = true
+            )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -178,7 +201,7 @@ fun LibraryView(
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 160.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 120.dp),
+                        contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -230,8 +253,9 @@ fun LibraryView(
                     }
                 } else {
                     LazyColumn(
+                        state = songsListState,
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 120.dp),
+                        contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(filteredTracks, key = { it.id }) { track ->
@@ -310,7 +334,7 @@ fun LibraryView(
                 LazyVerticalGrid(
                     columns = GridCells.Adaptive(minSize = 160.dp),
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 120.dp),
+                    contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
@@ -345,7 +369,7 @@ fun LibraryView(
                 // Artists Tab
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = 120.dp),
+                    contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(artists, key = { it.id }) { artist ->
@@ -397,14 +421,13 @@ fun LibraryView(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.weight(1f)
                             ) {
-                                IconButton(
+                                LiquidIconButton(
+                                    icon = Icons.Rounded.ArrowBack,
                                     onClick = { selectedFolder = null },
-                                    modifier = Modifier
-                                        .clip(CircleShape)
-                                        .background(Color.White.copy(alpha = 0.08f))
-                                ) {
-                                    Icon(Icons.Rounded.ArrowBack, contentDescription = "Back to Folders", tint = Color.White)
-                                }
+                                    contentDescription = "Back to Folders",
+                                    size = 42.dp,
+                                    lighterStyle = true
+                                )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Column {
                                     Text(
@@ -424,14 +447,13 @@ fun LibraryView(
                             }
 
                             if (folderTracks.isNotEmpty()) {
-                                Button(
+                                LiquidButton(
                                     onClick = { onTrackClick(folderTracks.first(), folderTracks) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = accent),
-                                    shape = RoundedCornerShape(12.dp)
+                                    lighterStyle = true
                                 ) {
-                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color(0xFF131728), modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Play All", color = Color(0xFF131728), fontWeight = FontWeight.Bold)
+                                    Text("Play All", color = Color.White, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -439,8 +461,9 @@ fun LibraryView(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         LazyColumn(
+                            state = folderTracksListState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(bottom = 120.dp),
+                            contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             items(folderTracks, key = { it.id }) { track ->
@@ -501,7 +524,7 @@ fun LibraryView(
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = 120.dp),
+                        contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         items(folders, key = { it.path }) { folder ->

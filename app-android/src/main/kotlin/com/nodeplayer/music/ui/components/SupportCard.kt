@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.music.support.SupportConfig
 import com.nodeplayer.music.ui.theme.LocalAccentColor
-import dev.chrisbanes.haze.HazeState
 
 @Composable
 fun SupportCard(
@@ -29,7 +28,7 @@ fun SupportCard(
 
     GlassCard(
         modifier = modifier.fillMaxWidth(),
-        hazeState = hazeState,
+        
         tintAlpha = 0.40f
     ) {
         Column(modifier = Modifier.padding(16.dp)) {

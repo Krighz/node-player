@@ -60,6 +60,13 @@ Node Player incorporates and depends upon open-source software libraries. We gra
 
 ---
 
+### AndroidLiquidGlass (Kyant0)
+- **License**: Apache License 2.0
+- **Copyright**: (c) 2025 Kyant
+- **URL**: https://github.com/Kyant0/AndroidLiquidGlass
+
+---
+
 ## Apache License 2.0 Full Text
 
 ```
