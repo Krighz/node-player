@@ -47,6 +47,11 @@ class StreamResolver(
     probeEngine: HttpClientEngine? = null,
 ) : Closeable {
 
+    constructor(
+        innerTubeClient: InnerTubeClient = InnerTubeClient(),
+        cipherSolver: CipherSolver? = CipherSolver.current,
+    ) : this(innerTubeClient, cipherSolver, null)
+
     private val probeClient: HttpClient = if (probeEngine != null) {
         HttpClient(probeEngine) { configureProbeClient() }
     } else {

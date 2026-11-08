@@ -314,8 +314,7 @@ class CrossfadePlayerManager(
         player.stop()
         player.clearMediaItems()
         player.volume = 1.0f
-        val mediaItem = createMediaItem(track)
-        player.setMediaItem(mediaItem)
+        setPlayerMediaSource(player, track)
         if (startPositionMs > 0L) {
             player.seekTo(startPositionMs)
         }
@@ -417,7 +416,7 @@ class CrossfadePlayerManager(
             val nextTrack = currentQueue[currentQueueIndex]
             activePlayer.stop()
             activePlayer.clearMediaItems()
-            activePlayer.setMediaItem(createMediaItem(nextTrack))
+            setPlayerMediaSource(activePlayer, nextTrack)
             activePlayer.prepare()
             activePlayer.play()
             onTrackTransition(nextTrack)
@@ -621,7 +620,7 @@ class CrossfadePlayerManager(
         secondary.stop()
         secondary.clearMediaItems()
         secondary.volume = 0.0f
-        secondary.setMediaItem(createMediaItem(nextTrack))
+        setPlayerMediaSource(secondary, nextTrack)
         secondary.prepare()
         secondary.play()
     }
@@ -694,8 +693,24 @@ class CrossfadePlayerManager(
         return false
     }
 
+    private fun setPlayerMediaSource(player: ExoPlayer, track: Track) {
+        val mediaItem = createMediaItem(track)
+        val uri = mediaItem.localConfiguration?.uri
+        val isSyntheticYouTube = track.path.startsWith("nodeplayer://youtube/") ||
+            (uri != null && uri.scheme.equals("nodeplayer", ignoreCase = true) && uri.host.equals("youtube", ignoreCase = true))
+
+        if (isSyntheticYouTube) {
+            val resolvingSource = com.nodeplayer.music.playback.ResolvingMediaSource(context, mediaItem)
+            player.setMediaSource(resolvingSource)
+        } else {
+            player.setMediaItem(mediaItem)
+        }
+    }
+
     private fun createMediaItem(track: Track): MediaItem {
-        val contentUri = if (track.path.isNotBlank() && (track.path.startsWith("/") || track.path.startsWith("file:"))) {
+        val contentUri = if (track.path.startsWith("nodeplayer://")) {
+            Uri.parse(track.path)
+        } else if (track.path.isNotBlank() && (track.path.startsWith("/") || track.path.startsWith("file:"))) {
             val f = java.io.File(track.path)
             if (f.exists() && f.canRead()) {
                 android.net.Uri.fromFile(f)

@@ -520,6 +520,7 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         instance = this
         onServiceCreated?.invoke(this)
+        com.nodeplayer.music.playback.AudioCache.init(this)
         createNotificationChannel()
 
         setMediaNotificationProvider(
