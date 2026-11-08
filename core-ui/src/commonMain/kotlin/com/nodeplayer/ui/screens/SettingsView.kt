@@ -697,7 +697,7 @@ private fun AboutAndScrobblerCard(
             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
             Spacer(modifier = Modifier.height(14.dp))
 
-            Text("Node Player v1.6.0", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
+            Text("Node Player v1.7.0", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
             Spacer(modifier = Modifier.height(4.dp))
             Text("No network use unless you opt in. Local peer-to-peer audio streaming & sync.", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
             Text("Windows MSI/EXE is Authenticode-unsigned (SmartScreen prompt on first run). Android APK signed with release key.", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.45f))
