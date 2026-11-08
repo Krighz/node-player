@@ -1,9 +1,12 @@
 package com.nodeplayer.desktop.audio
 
+import com.nodeplayer.common.AppModeState
+import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.common.platform.AudioFormatConfig
 import com.nodeplayer.dsp.DspChain
 import com.nodeplayer.model.AudioEffectConfig
 import com.nodeplayer.model.Track
+import com.nodeplayer.network.innertube.StreamResolver
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,7 +17,9 @@ import java.util.concurrent.atomic.AtomicLong
 
 class WindowsPlaybackEngine(
     val audioOutput: WasapiAudioOutput = WasapiAudioOutput(),
-    private val decoder: CompositeAudioDecoder = CompositeAudioDecoder()
+    private val decoder: CompositeAudioDecoder = CompositeAudioDecoder(),
+    private val audioCache: DesktopAudioCache = DesktopAudioCache.default,
+    private val streamResolver: StreamResolver = StreamResolver()
 ) {
     val dspChain = DspChain()
 
@@ -105,80 +110,129 @@ class WindowsPlaybackEngine(
         loadLrcForTrack(track.path)
 
         playbackJob = engineScope.launch {
-            val opened = decoder.open(track.path)
-            val meta = decoder.metadata
-            if (!opened || meta == null) {
+            playTrackInternal(this, track)
+        }
+    }
+
+    private suspend fun playTrackInternal(scope: CoroutineScope, track: Track) {
+        var effectivePlayPath = track.path
+
+        if (track.path.startsWith("nodeplayer://youtube/", ignoreCase = true)) {
+            val videoId = audioCache.extractVideoId(track.path)
+            if (videoId == null) {
+                NodeLog.e("WindowsPlaybackEngine", "Invalid YouTube synthetic URI: ${track.path}")
                 _isPlaying.value = false
-                return@launch
+                return
             }
 
-            if (meta.durationMs > 0L) {
-                _durationMs.value = meta.durationMs
-            }
-
-            dspChain.sampleRate = meta.sampleRate
-            dspChain.applyConfig(currentEffectConfig)
-
-            audioOutput.open(
-                AudioFormatConfig(
-                    sampleRate = meta.sampleRate,
-                    channelCount = meta.channels,
-                    isFloat32 = true,
-                    isExclusiveMode = _isExclusiveMode.value
-                )
-            )
-
-            _isPlaying.value = true
-            isPaused.set(false)
-
-            val bufferSize = 8192
-            val buffer = FloatArray(bufferSize)
-            var framesPlayed = 0L
-
-            try {
-                while (isActive) {
-                    if (isPaused.get()) {
-                        delay(40)
-                        continue
-                    }
-
-                    val seekTarget = pendingSeekMs.getAndSet(-1L)
-                    if (seekTarget >= 0L) {
-                        decoder.seekTo(seekTarget)
-                        audioOutput.flush()
-                        framesPlayed = (seekTarget * meta.sampleRate) / 1000L
-                        _currentPositionMs.value = seekTarget
-                    }
-
-                    val samplesRead = decoder.decodeFrame(buffer)
-                    if (samplesRead <= 0) {
-                        break
-                    }
-
-                    // Pre-DSP PCM Audio Streaming Tap for Node Connect
-                    if (preDspPcmTap != null && samplesRead > 0) {
-                        val pcmBytes = floatToBytes16(buffer, samplesRead)
-                        preDspPcmTap?.invoke(pcmBytes, _currentPositionMs.value)
-                    }
-
-                    dspChain.processInterleavedFloat(buffer, 0, samplesRead)
-                    audioOutput.write(buffer, 0, samplesRead)
-
-                    framesPlayed += (samplesRead / meta.channels)
-                    val posMs = (framesPlayed * 1000L) / meta.sampleRate
-                    _currentPositionMs.value = posMs
-                }
-
-                if (isActive) {
-                    onTrackCompleted()
-                }
-            } catch (e: Exception) {
-                // Cancellation
-            } finally {
-                decoder.close()
-                if (!isActive) {
+            val cachedFile = audioCache.getCachedFile(videoId)
+            if (cachedFile != null && cachedFile.exists() && cachedFile.length() > 0) {
+                NodeLog.i("WindowsPlaybackEngine", "Playing cached track for $videoId: ${cachedFile.absolutePath}")
+                effectivePlayPath = cachedFile.absolutePath
+            } else {
+                if (!AppModeState.isOnlineMode.value) {
+                    NodeLog.w("WindowsPlaybackEngine", "Track $videoId not cached offline and online mode is disabled")
                     _isPlaying.value = false
+                    return
                 }
+
+                NodeLog.i("WindowsPlaybackEngine", "Resolving stream for videoId=$videoId asynchronously")
+                val streamResult = withContext(Dispatchers.IO) {
+                    streamResolver.resolveStream(videoId)
+                }
+
+                if (streamResult.isFailure) {
+                    NodeLog.e("WindowsPlaybackEngine", "Stream resolution failed for $videoId: ${streamResult.exceptionOrNull()?.message}")
+                    _isPlaying.value = false
+                    return
+                }
+
+                val resolved = streamResult.getOrThrow()
+                NodeLog.i("WindowsPlaybackEngine", "Stream resolved for $videoId (${resolved.clientName}, itag=${resolved.itag})")
+
+                // Cache stream asynchronously in background
+                engineScope.launch {
+                    val ext = if (resolved.mimeType.contains("mp4") || resolved.mimeType.contains("m4a")) "m4a" else "opus"
+                    audioCache.cacheStream(videoId, resolved.streamUrl, ext)
+                }
+
+                effectivePlayPath = resolved.streamUrl
+            }
+        }
+
+        val opened = decoder.open(effectivePlayPath)
+        val meta = decoder.metadata
+        if (!opened || meta == null) {
+            _isPlaying.value = false
+            return
+        }
+
+        if (meta.durationMs > 0L) {
+            _durationMs.value = meta.durationMs
+        }
+
+        dspChain.sampleRate = meta.sampleRate
+        dspChain.applyConfig(currentEffectConfig)
+
+        audioOutput.open(
+            AudioFormatConfig(
+                sampleRate = meta.sampleRate,
+                channelCount = meta.channels,
+                isFloat32 = true,
+                isExclusiveMode = _isExclusiveMode.value
+            )
+        )
+
+        _isPlaying.value = true
+        isPaused.set(false)
+
+        val bufferSize = 8192
+        val buffer = FloatArray(bufferSize)
+        var framesPlayed = 0L
+
+        try {
+            while (scope.isActive) {
+                if (isPaused.get()) {
+                    delay(40)
+                    continue
+                }
+
+                val seekTarget = pendingSeekMs.getAndSet(-1L)
+                if (seekTarget >= 0L) {
+                    decoder.seekTo(seekTarget)
+                    audioOutput.flush()
+                    framesPlayed = (seekTarget * meta.sampleRate) / 1000L
+                    _currentPositionMs.value = seekTarget
+                }
+
+                val samplesRead = decoder.decodeFrame(buffer)
+                if (samplesRead <= 0) {
+                    break
+                }
+
+                // Pre-DSP PCM Audio Streaming Tap for Node Connect
+                if (preDspPcmTap != null && samplesRead > 0) {
+                    val pcmBytes = floatToBytes16(buffer, samplesRead)
+                    preDspPcmTap?.invoke(pcmBytes, _currentPositionMs.value)
+                }
+
+                dspChain.processInterleavedFloat(buffer, 0, samplesRead)
+                audioOutput.write(buffer, 0, samplesRead)
+
+                framesPlayed += (samplesRead / meta.channels)
+                val posMs = (framesPlayed * 1000L) / meta.sampleRate
+                _currentPositionMs.value = posMs
+            }
+
+            if (scope.isActive) {
+                onTrackCompleted()
+            }
+        } catch (e: Exception) {
+            // Cancellation
+        } finally {
+            decoder.close()
+            if (!scope.isActive) {
+                _isPlaying.value = false
             }
         }
     }
