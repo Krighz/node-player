@@ -871,10 +871,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             while (isActive) {
                 val service = PlaybackService.instance
                 val pos = service?.player?.currentPosition ?: mediaController?.currentPosition ?: 0L
+                val dur = service?.player?.duration ?: mediaController?.duration ?: 0L
                 val playing = service?.player?.isPlaying ?: mediaController?.isPlaying ?: false
                 _isPlaying.value = playing
                 _currentPositionMs.value = pos
                 _currentTrack.value?.let { track ->
+                    if (dur > 0L && track.durationMs != dur) {
+                        _currentTrack.value = track.copy(durationMs = dur)
+                    }
                     prefs.edit().putLong("last_pos", pos).putLong("last_track_id", track.id).apply()
                 }
 
@@ -1381,6 +1385,43 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun stopAudioCasting() {
         PlaybackService.instance?.stopAudioCasting()
+    }
+
+    fun createPlaylist(name: String, initialTracks: List<Track> = emptyList()) {
+        if (name.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val playlistId = dao.insertPlaylist(com.nodeplayer.music.data.PlaylistEntity(name = name.trim()))
+            if (initialTracks.isNotEmpty()) {
+                val refs = initialTracks.mapIndexed { index, t ->
+                    com.nodeplayer.music.data.PlaylistTrackCrossRef(
+                        playlistId = playlistId,
+                        trackId = t.id,
+                        position = index
+                    )
+                }
+                dao.insertPlaylistTracks(refs)
+            }
+        }
+    }
+
+    fun addTrackToPlaylist(playlistId: Long, track: Track) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val existingIds = dao.getPlaylistTrackIds(playlistId)
+            if (!existingIds.contains(track.id)) {
+                val ref = com.nodeplayer.music.data.PlaylistTrackCrossRef(
+                    playlistId = playlistId,
+                    trackId = track.id,
+                    position = existingIds.size
+                )
+                dao.insertPlaylistTracks(listOf(ref))
+            }
+        }
+    }
+
+    fun deletePlaylist(playlist: com.nodeplayer.music.data.PlaylistEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deletePlaylist(playlist)
+        }
     }
 
     override fun onCleared() {

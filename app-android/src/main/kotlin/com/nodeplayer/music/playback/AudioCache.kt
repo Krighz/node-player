@@ -29,6 +29,15 @@ object AudioCache {
     @Volatile
     private var simpleCacheInstance: SimpleCache? = null
 
+    // In-memory cache for resolved HTTPS stream URLs by videoId with expiration check
+    private val resolvedStreamUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    fun cacheResolvedUrl(videoId: String, url: String) {
+        resolvedStreamUrls[videoId] = url
+    }
+
+    fun getCachedResolvedUrl(videoId: String): String? = resolvedStreamUrls[videoId]
+
     val cache: SimpleCache?
         get() = simpleCacheInstance
 
@@ -154,17 +163,15 @@ object AudioCache {
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(20_000)
 
-        val rangedUpstreamFactory = RangedUpstreamDataSource.Factory(httpFactory, 512L * 1024)
-
         val cache = simpleCacheInstance
         return if (cache != null) {
             CacheDataSource.Factory()
                 .setCache(cache)
-                .setUpstreamDataSourceFactory(rangedUpstreamFactory)
+                .setUpstreamDataSourceFactory(httpFactory)
                 .setCacheKeyFactory(keyFactory)
                 .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         } else {
-            rangedUpstreamFactory
+            httpFactory
         }
     }
 
@@ -193,7 +200,18 @@ object AudioCache {
             val cacheKey = "nodeplayer_yt_$videoId"
             if (isVideoIdCached(videoId)) {
                 NodeLog.d(TAG, "Serving cached YouTube stream for videoId=$videoId (key=$cacheKey)")
-                return@Factory dataSpec.buildUpon().setKey(cacheKey).build()
+                val cachedHttps = getCachedResolvedUrl(videoId)
+                return@Factory if (cachedHttps != null) {
+                    dataSpec.withUri(Uri.parse(cachedHttps)).buildUpon().setKey(cacheKey).build()
+                } else {
+                    dataSpec.buildUpon().setKey(cacheKey).build()
+                }
+            }
+
+            // Check if we already have a live resolved HTTPS URL in memory
+            val existingUrl = getCachedResolvedUrl(videoId)
+            if (!existingUrl.isNullOrBlank()) {
+                return@Factory dataSpec.withUri(Uri.parse(existingUrl)).buildUpon().setKey(cacheKey).build()
             }
 
             if (!com.nodeplayer.common.AppModeState.isOnlineMode.value) {
@@ -213,6 +231,7 @@ object AudioCache {
             }
 
             val streamUrl = resolvedResult.getOrThrow().streamUrl
+            cacheResolvedUrl(videoId, streamUrl)
             NodeLog.i(TAG, "Resolved live stream for videoId=$videoId successfully, applying CDN URL")
             dataSpec.withUri(Uri.parse(streamUrl)).buildUpon().setKey(cacheKey).build()
         }

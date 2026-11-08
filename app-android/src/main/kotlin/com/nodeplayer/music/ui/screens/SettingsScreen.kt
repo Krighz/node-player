@@ -1691,7 +1691,16 @@ fun SettingsScreen(
                     }
                     LiquidToggle(
                         checked = isOnlineMode,
-                        onCheckedChange = { com.nodeplayer.common.AppModeState.toggleMode() },
+                        onCheckedChange = { enabled ->
+                            com.nodeplayer.common.AppModeState.setOnlineMode(enabled)
+                            coroutineScope.launch {
+                                com.nodeplayer.music.data.AppSettingsRepository.updateSetting(
+                                    context,
+                                    com.nodeplayer.music.data.AppSettingsRepository.KEY_IS_ONLINE_MODE,
+                                    enabled
+                                )
+                            }
+                        },
                         colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF00E5FF), checkedTrackColor = Color(0xFF00E5FF).copy(alpha = 0.5f))
                     )
                 }
@@ -2452,6 +2461,27 @@ fun SettingsScreen(
             
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                // Refresh Rate Setting
+                var refreshRatePref by remember { mutableStateOf(sharedPrefs.getString("display_refresh_rate", "AUTO") ?: "AUTO") }
+                Text("Refresh Rate", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                Text("Auto / 60 Hz / 120 Hz / Highest available", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("AUTO", "60Hz", "120Hz", "HIGHEST").forEach { mode ->
+                        LiquidChip(
+                            selected = refreshRatePref == mode,
+                            onClick = {
+                                refreshRatePref = mode
+                                sharedPrefs.edit().putString("display_refresh_rate", mode).apply()
+                                (context as? com.nodeplayer.music.MainActivity)?.applyDisplayRefreshRate(mode)
+                            },
+                            label = { Text(mode) }
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
                 // Quality Badges Mode
                 Text("Quality Badges Display", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                 Spacer(modifier = Modifier.height(6.dp))

@@ -99,6 +99,11 @@ class MainActivity : ComponentActivity() {
             Log.e("MainActivity", "Failed to eagerly start PlaybackService", e)
         }
 
+        // Apply configured or highest supported refresh rate (e.g. 120Hz)
+        val refreshMode = getSharedPreferences("node_player_prefs", android.content.Context.MODE_PRIVATE)
+            .getString("display_refresh_rate", "AUTO") ?: "AUTO"
+        applyDisplayRefreshRate(refreshMode)
+
         checkAndRequestPermissions()
 
         setContent {
@@ -459,38 +464,31 @@ class MainActivity : ComponentActivity() {
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
-                                .graphicsLayer {
-                                    translationY = dockOffsetFraction * 110f.dp.toPx()
-                                    alpha = 1f - (dockOffsetFraction * 0.85f).coerceIn(0f, 1f)
-                                }
                                 .navigationBarsPadding()
                         ) {
-                            if (currentTrack != null) {
-                                val duration = currentTrack!!.durationMs.coerceAtLeast(1L)
+                            val activeTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
+                            if (activeTrack != null) {
+                                val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
+                                val effectiveDuration = if (srvDur > 0L) srvDur else activeTrack.durationMs
+                                val duration = effectiveDuration.coerceAtLeast(1L)
                                 val progress = (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
 
                                 val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
 
                                 ConvxMiniPlayer(
-                                    currentTrack = currentTrack,
+                                    currentTrack = activeTrack,
                                     isPlaying = isPlaying,
                                     progressFraction = progress,
                                     onPlayPauseClick = { viewModel.togglePlayPause() },
                                     onSkipNextClick = { viewModel.skipNext() },
                                     onSkipPreviousClick = { viewModel.skipPrevious() },
                                     onClick = { isNowPlayingExpanded = true },
-                                    gesturesEnabled = appSettings.miniPlayerGesturesEnabled,
+                                    gesturesEnabled = false,
                                     rmsLevel = currentRms,
                                     isPerformanceMode = themeConfig.isPerformanceMode,
                                     shaderEnabled = isShaderActive,
                                     chromaticFringe = themeConfig.chromaticFringeValue(),
-                                    backdrop = pageBackdrop,
-                                    modifier = if (dockAutoHide && !miniPlayerAutoHide) {
-                                        Modifier.graphicsLayer {
-                                            // Counter-translate to keep mini player pinned when dock slides down
-                                            translationY = -dockOffsetFraction * 72f.dp.toPx()
-                                        }
-                                    } else Modifier
+                                    backdrop = pageBackdrop
                                 )
                             }
 
@@ -518,12 +516,13 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // 4. Full Now Playing Sheet (Smooth slide animation)
+                    val activeNowPlayingTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
                     AnimatedVisibility(
-                        visible = isNowPlayingExpanded && currentTrack != null,
+                        visible = isNowPlayingExpanded && activeNowPlayingTrack != null,
                         enter = slideInVertically(initialOffsetY = { it }),
                         exit = slideOutVertically(targetOffsetY = { it })
                     ) {
-                        currentTrack?.let { track ->
+                        activeNowPlayingTrack?.let { track ->
                             NowPlayingSheet(
                                 track = track,
                                 isPlaying = isPlaying,
@@ -674,8 +673,10 @@ class MainActivity : ComponentActivity() {
                                     }
                                 } else if (track.path.startsWith("nodeplayer://youtube/")) {
                                     viewModel.playTrack(track, listOf(track))
+                                    isNowPlayingExpanded = true
                                 } else {
                                     viewModel.playTrack(track, allTracks)
+                                    isNowPlayingExpanded = true
                                 }
                                 showSearchSheet = false
                             },
@@ -997,6 +998,34 @@ class MainActivity : ComponentActivity() {
             permissionLauncher.launch(missing.toTypedArray())
         } else {
             viewModel.refreshLibrary()
+        }
+    }
+
+    fun applyDisplayRefreshRate(mode: String) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val disp = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    display
+                } else {
+                    @Suppress("DEPRECATION")
+                    windowManager.defaultDisplay
+                }
+                val modes = disp?.supportedModes ?: return
+                val targetMode = when (mode.uppercase()) {
+                    "60HZ" -> modes.filter { it.refreshRate in 58f..62f }.maxByOrNull { it.refreshRate }
+                    "120HZ" -> modes.filter { it.refreshRate in 118f..122f }.maxByOrNull { it.refreshRate } ?: modes.maxByOrNull { it.refreshRate }
+                    "HIGHEST" -> modes.maxByOrNull { it.refreshRate }
+                    else -> modes.maxByOrNull { it.refreshRate } // AUTO defaults to highest available
+                }
+                if (targetMode != null) {
+                    val params = window.attributes
+                    params.preferredDisplayModeId = targetMode.modeId
+                    window.attributes = params
+                    Log.i("MainActivity", "Applied display refresh rate mode $mode: ${targetMode.modeId} (${targetMode.refreshRate} Hz)")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("MainActivity", "Unable to set display refresh rate: ${e.message}")
         }
     }
 }

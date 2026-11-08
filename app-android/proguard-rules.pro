@@ -42,3 +42,6 @@
 
 # JNA Native Bindings
 -keep class com.sun.jna.** { *; }
+
+# SLF4J logger binder warning suppression
+-dontwarn org.slf4j.impl.StaticLoggerBinder

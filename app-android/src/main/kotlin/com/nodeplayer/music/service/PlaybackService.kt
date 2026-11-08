@@ -901,7 +901,7 @@ class PlaybackService : MediaSessionService() {
 
 
 
-    private fun startInitialForegroundIfNeeded() {
+    fun startInitialForegroundIfNeeded() {
         try {
             createNotificationChannel()
             val initialNotification = buildInitialNotification()

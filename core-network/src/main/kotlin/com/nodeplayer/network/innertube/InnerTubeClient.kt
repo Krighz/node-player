@@ -205,20 +205,57 @@ class InnerTubeClient(
     }
 
     /**
-     * Fetches a rich multi-shelf online home feed combining Quick Picks (from Home)
-     * and Trending / New Releases (from Explore).
+     * Fetches a rich multi-shelf online home feed combining Quick Picks (from Home),
+     * Trending / New Releases (from Explore), and Top Charts (Top 50 Worldwide & Regional).
      */
     suspend fun getCombinedHomeFeed(): Result<List<YouTubeSection>> = runCatching {
         val homeResult = getHomeRecommendations().getOrDefault(emptyList())
         val exploreResult = getExploreSections().getOrDefault(emptyList())
+        val chartsResult = getChartsSections().getOrDefault(emptyList())
 
         val combined = mutableListOf<YouTubeSection>()
         combined.addAll(homeResult)
 
-        val existingTitles = homeResult.map { it.title.lowercase().trim() }.toSet()
-        for (section in exploreResult) {
-            if (section.title.lowercase().trim() !in existingTitles) {
+        val existingTitles = homeResult.map { it.title.lowercase().trim() }.toMutableSet()
+        for (section in chartsResult) {
+            if (section.title.lowercase().trim() !in existingTitles && section.items.isNotEmpty()) {
                 combined.add(section)
+                existingTitles.add(section.title.lowercase().trim())
+            }
+        }
+
+        for (section in exploreResult) {
+            if (section.title.lowercase().trim() !in existingTitles && section.items.isNotEmpty()) {
+                combined.add(section)
+                existingTitles.add(section.title.lowercase().trim())
+            }
+        }
+
+        // Add curated Top 50 Worldwide & Top 50 India search mixes if not explicitly present
+        val hasIndia = combined.any { it.title.contains("India", ignoreCase = true) }
+        val hasTop50 = combined.any { it.title.contains("Top 50", ignoreCase = true) || it.title.contains("Charts", ignoreCase = true) }
+
+        if (!hasTop50) {
+            val top50Worldwide = search("Top 50 Worldwide", SearchFilter.SONGS).getOrNull()
+            if (top50Worldwide != null && top50Worldwide.songs.isNotEmpty()) {
+                combined.add(
+                    YouTubeSection(
+                        title = "Top 50 - Worldwide",
+                        items = top50Worldwide.songs.take(20)
+                    )
+                )
+            }
+        }
+
+        if (!hasIndia) {
+            val topIndia = search("Top 50 India Trending Songs", SearchFilter.SONGS).getOrNull()
+            if (topIndia != null && topIndia.songs.isNotEmpty()) {
+                combined.add(
+                    YouTubeSection(
+                        title = "Top 50 - India Trending",
+                        items = topIndia.songs.take(20)
+                    )
+                )
             }
         }
 
@@ -235,12 +272,18 @@ class InnerTubeClient(
      * Searches YouTube Music for songs, albums, and artists matching [query] and [filter].
      */
     suspend fun search(query: String, filter: SearchFilter = SearchFilter.ALL): Result<YouTubeSearchResult> = runCatching {
-        NodeLog.d(TAG, "Executing search: query=\"$query\", filter=$filter")
+        val client = YouTubeClient.WEB_REMIX
+        NodeLog.d(TAG, "Executing search: query=\"$query\", filter=$filter, client=${client.clientName}")
         val response = withRetry {
             httpClient.post("search") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
+                header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
                 setBody(
                     SearchBody(
-                        context = clientContext.toContext(locale),
+                        context = client.toContext(locale),
                         query = query,
                         params = filter.paramValue
                     )

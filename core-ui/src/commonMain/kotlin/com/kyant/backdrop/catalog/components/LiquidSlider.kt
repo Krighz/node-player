@@ -54,7 +54,8 @@ fun LiquidSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     visibilityThreshold: Float,
     backdrop: Backdrop,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onValueChangeFinished: (() -> Unit)? = null
 ) {
     val isLightTheme = !isSystemInDarkTheme()
     val accentColor =
@@ -93,6 +94,7 @@ fun LiquidSlider(
                     isDragging = false
                     if (didDrag) {
                         onValueChange(targetValue)
+                        onValueChangeFinished?.invoke()
                     }
                 },
                 onDrag = { _, dragAmount ->
@@ -140,6 +142,7 @@ fun LiquidSlider(
                                     .coerceIn(valueRange)
                             dampedDragAnimation.animateToValue(targetVal)
                             onValueChange(targetVal)
+                            onValueChangeFinished?.invoke()
                         }
                     }
                     .height(6f.dp)

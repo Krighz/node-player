@@ -127,7 +127,11 @@ class RangedUpstreamDataSource(
         val child = upstreamFactory.createDataSource()
         upstream = child
         return try {
-            val result = child.open(requireNotNull(spec).buildUpon().setPosition(position).setLength(length).build())
+            val childSpec = requireNotNull(spec).buildUpon()
+                .setPosition(position)
+                .setLength(length)
+                .build()
+            val result = child.open(childSpec)
             headers = child.responseHeaders
             result
         } catch (error: Exception) {

@@ -106,8 +106,12 @@ fun NowPlayingSheet(
     var showTopMenu by remember { mutableStateOf(false) }
     var isRepeatOne by remember { mutableStateOf(false) }
 
+    val liveDuration = remember(track.id, currentPositionMs) {
+        val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
+        if (srvDur > 0L) srvDur else track.durationMs
+    }
     val currentMs = if (isSeeking) sliderPosition.toLong() else currentPositionMs
-    val totalMs = track.durationMs.coerceAtLeast(1L)
+    val totalMs = liveDuration.coerceAtLeast(1L)
     val progress = (currentMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
 
     // Load local LRC if exists in the same directory
@@ -1143,9 +1147,15 @@ private fun PlayerSeekBar(
     onSeekFinished: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        LiquidGlassSlider(
+        androidx.compose.material3.Slider(
             value = progress,
             onValueChange = onSeek,
+            onValueChangeFinished = onSeekFinished,
+            colors = androidx.compose.material3.SliderDefaults.colors(
+                thumbColor = Color.White,
+                activeTrackColor = accent,
+                inactiveTrackColor = Color.White.copy(alpha = 0.20f)
+            ),
             modifier = Modifier.fillMaxWidth()
         )
         Row(

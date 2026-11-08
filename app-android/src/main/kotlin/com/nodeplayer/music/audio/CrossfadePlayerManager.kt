@@ -140,6 +140,7 @@ class CrossfadePlayerManager(
                 false // Allow dual players to play concurrently during crossfade
             )
             .setHandleAudioBecomingNoisy(true)
+            .setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
             .build()
 
         player.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
@@ -169,6 +170,20 @@ class CrossfadePlayerManager(
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (activeIndex == 0) handlePlayWhenReadyChanged(playWhenReady)
             }
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                val dur = playerA.duration
+                if (dur > 0L && activeIndex == 0) {
+                    val current = currentPlayingTrack
+                    if (current != null && current.durationMs != dur) {
+                        val updated = current.copy(durationMs = dur)
+                        if (currentQueueIndex in currentQueue.indices) {
+                            val mutable = currentQueue.toMutableList()
+                            mutable[currentQueueIndex] = updated
+                            currentQueue = mutable
+                        }
+                    }
+                }
+            }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 Log.e(TAG, "[PlayerA Error] code=${error.errorCode}, message=${error.message}", error)
                 com.nodeplayer.common.logging.NodeLog.e(TAG, "[PlayerA Error] code=${error.errorCode}: ${error.message}", error)
@@ -180,6 +195,20 @@ class CrossfadePlayerManager(
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (activeIndex == 1) handlePlayWhenReadyChanged(playWhenReady)
+            }
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                val dur = playerB.duration
+                if (dur > 0L && activeIndex == 1) {
+                    val current = currentPlayingTrack
+                    if (current != null && current.durationMs != dur) {
+                        val updated = current.copy(durationMs = dur)
+                        if (currentQueueIndex in currentQueue.indices) {
+                            val mutable = currentQueue.toMutableList()
+                            mutable[currentQueueIndex] = updated
+                            currentQueue = mutable
+                        }
+                    }
+                }
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 Log.e(TAG, "[PlayerB Error] code=${error.errorCode}, message=${error.message}", error)
@@ -337,6 +366,7 @@ class CrossfadePlayerManager(
         }
 
         Log.d(TAG, "[Playback] Playing track [idx=$startIndex]: \"${track.title}\" on ${if (activeIndex == 0) "PlayerA" else "PlayerB"}")
+        com.nodeplayer.music.service.PlaybackService.instance?.startInitialForegroundIfNeeded()
         onTrackTransition(track)
     }
 
@@ -561,8 +591,9 @@ class CrossfadePlayerManager(
             return
         }
 
-        // Check whether to initiate crossfade
-        if (crossfadeConfig.enabled && currentQueue.isNotEmpty()) {
+        // Check whether to initiate crossfade (skip for synthetic single online streams)
+        val isOnline = currentQueue.getOrNull(currentQueueIndex)?.path?.startsWith("nodeplayer://youtube/") == true
+        if (crossfadeConfig.enabled && currentQueue.isNotEmpty() && !isOnline) {
             val hasNext = currentQueueIndex + 1 < currentQueue.size
             val nextTrack = if (hasNext) {
                 currentQueue[currentQueueIndex + 1]

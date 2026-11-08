@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://krighz.github.io/node-player/sitemap.xml

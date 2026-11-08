@@ -639,6 +639,8 @@ data class MusicResponsiveListItemRenderer(
             ?: navigationEndpoint?.watchEndpoint?.videoId
             ?: overlay?.musicItemThumbnailOverlayRenderer?.content
                 ?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId
+            ?: flexColumns.firstOrNull()?.musicResponsiveListItemFlexColumnRenderer?.text?.runs
+                ?.firstOrNull()?.navigationEndpoint?.watchEndpoint?.videoId
 
     @Serializable
     data class FlexColumn(

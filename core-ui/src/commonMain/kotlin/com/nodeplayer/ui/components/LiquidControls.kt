@@ -113,7 +113,8 @@ fun LiquidSlider(
             onValueChange = { if (enabled) onValueChange(it) },
             valueRange = valueRange,
             visibilityThreshold = if (steps > 0) (valueRange.endInclusive - valueRange.start) / steps.toFloat() else 0.001f,
-            backdrop = effectiveBackdrop
+            backdrop = effectiveBackdrop,
+            onValueChangeFinished = onValueChangeFinished
         )
     }
 }
