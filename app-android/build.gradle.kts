@@ -40,8 +40,8 @@ android {
         applicationId = "com.nodeplayer.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = (project.findProperty("appVersionCode") as? String)?.toInt() ?: 12
-        versionName = (project.findProperty("appVersionName") as? String) ?: "1.7.0"
+        versionCode = (project.findProperty("appVersionCode") as? String)?.toInt() ?: 13
+        versionName = (project.findProperty("appVersionName") as? String) ?: "1.8.0"
 
         manifestPlaceholders["appName"] = "Node Player"
 
@@ -133,6 +133,9 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 dependencies {
@@ -143,6 +146,11 @@ dependencies {
     implementation(project(":core-network"))
     implementation(project(":integration-api"))
     implementation(project(":core-ui"))
+
+    // Ktor client (required by core-network StreamResolver)
+    val ktorVersion = "2.3.12"
+    implementation("io.ktor:ktor-client-core:$ktorVersion")
+    implementation("io.ktor:ktor-client-cio:$ktorVersion")
 
     // Compose
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))

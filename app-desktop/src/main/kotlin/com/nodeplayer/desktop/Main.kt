@@ -70,9 +70,18 @@ fun main() = application {
             println("[${level.name}] [$tag] $msg")
             tr?.printStackTrace()
         }
+        com.nodeplayer.common.media.CipherSolver.current = com.nodeplayer.desktop.cipher.DesktopCipherSolver()
     }
 
     val settingsStore = remember { DesktopSettingsStore() }
+    LaunchedEffect(Unit) {
+        com.nodeplayer.common.AppModeState.setOnlineMode(settingsStore.isOnlineMode())
+    }
+    LaunchedEffect(Unit) {
+        com.nodeplayer.common.AppModeState.isOnlineMode.collect { online ->
+            settingsStore.setOnlineMode(online)
+        }
+    }
     val database = remember { DesktopTrackDatabase() }
     val scanner = remember { WindowsFileScanner() }
     val engine = remember { WindowsPlaybackEngine() }

@@ -311,6 +311,7 @@ fun SharedPlayerLayout(
                             else DeviceConnectStatus.DISCONNECTED,
                             connectedDeviceCount = connectedDeviceCount,
                             allowCastingToThisDevice = nodeConnectEnabled,
+                            outputDeviceName = audioOutputInfo.outputDeviceName,
                             onToggleAllowCasting = onToggleNodeConnect,
                             onPairNewDevice = onPairNewDevice,
                             onCastToDevice = onCastToPeer,

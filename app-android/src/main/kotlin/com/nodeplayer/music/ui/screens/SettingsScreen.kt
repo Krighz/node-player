@@ -1656,6 +1656,59 @@ fun SettingsScreen(
                 }
 
         if (shouldShow("lastfm")) {
+        // Online Streaming & YouTube Music Cloud Section
+        val isOnlineMode by com.nodeplayer.common.AppModeState.isOnlineMode.collectAsState()
+
+        Text(
+            text = "ONLINE & STREAMING",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "YouTube Music Online Mode",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                        )
+                        Text(
+                            text = if (isOnlineMode) "Active: Curated YouTube Music feeds, trending charts & high-res Opus streaming enabled"
+                            else "Inactive: 100% offline silence (zero network queries or background requests)",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = if (isOnlineMode) Color(0xFF00E5FF).copy(alpha = 0.9f) else Color.White.copy(alpha = 0.65f)
+                            )
+                        )
+                    }
+                    LiquidToggle(
+                        checked = isOnlineMode,
+                        onCheckedChange = { enabled ->
+                            com.nodeplayer.common.AppModeState.setOnlineMode(enabled)
+                            coroutineScope.launch {
+                                com.nodeplayer.music.data.AppSettingsRepository.updateSetting(
+                                    context,
+                                    com.nodeplayer.music.data.AppSettingsRepository.KEY_IS_ONLINE_MODE,
+                                    enabled
+                                )
+                            }
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF00E5FF), checkedTrackColor = Color(0xFF00E5FF).copy(alpha = 0.5f))
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // 6. Last.fm Scrobbling Section
         Text(
             text = "LAST.FM SCROBBLING",
@@ -2408,6 +2461,27 @@ fun SettingsScreen(
             
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
+                // Refresh Rate Setting
+                var refreshRatePref by remember { mutableStateOf(sharedPrefs.getString("display_refresh_rate", "AUTO") ?: "AUTO") }
+                Text("Refresh Rate", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                Text("Auto / 60 Hz / 120 Hz / Highest available", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("AUTO", "60Hz", "120Hz", "HIGHEST").forEach { mode ->
+                        LiquidChip(
+                            selected = refreshRatePref == mode,
+                            onClick = {
+                                refreshRatePref = mode
+                                sharedPrefs.edit().putString("display_refresh_rate", mode).apply()
+                                (context as? com.nodeplayer.music.MainActivity)?.applyDisplayRefreshRate(mode)
+                            },
+                            label = { Text(mode) }
+                        )
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
                 // Quality Badges Mode
                 Text("Quality Badges Display", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                 Spacer(modifier = Modifier.height(6.dp))

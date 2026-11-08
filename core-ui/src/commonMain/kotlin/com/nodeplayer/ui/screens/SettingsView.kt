@@ -676,8 +676,38 @@ private fun AboutAndScrobblerCard(
     onLastFmToggle: (Boolean) -> Unit,
     accent: Color
 ) {
+    val isOnlineMode by com.nodeplayer.common.AppModeState.isOnlineMode.collectAsState()
+
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(18.dp)) {
+            // Online Mode (YouTube Music & Cloud Streaming)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Online Streaming & YouTube Music",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = if (isOnlineMode) "Enabled: Recommendations, radio & online streaming active" else "Disabled: 100% offline library silence (zero network requests)",
+                        fontSize = 11.sp,
+                        color = if (isOnlineMode) Color(0xFF00E5FF).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.55f)
+                    )
+                }
+                LiquidToggle(
+                    checked = isOnlineMode,
+                    onCheckedChange = { com.nodeplayer.common.AppModeState.toggleMode() }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Last.fm Scrobbler
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -697,7 +727,7 @@ private fun AboutAndScrobblerCard(
             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
             Spacer(modifier = Modifier.height(14.dp))
 
-            Text("Node Player v1.7.0", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
+            Text("Node Player v1.8.0", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
             Spacer(modifier = Modifier.height(4.dp))
             Text("No network use unless you opt in. Local peer-to-peer audio streaming & sync.", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
             Text("Windows MSI/EXE is Authenticode-unsigned (SmartScreen prompt on first run). Android APK signed with release key.", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.45f))

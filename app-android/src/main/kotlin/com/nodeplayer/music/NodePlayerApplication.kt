@@ -57,6 +57,8 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             com.kyant.backdrop.RuntimeShaderCache.warmUp()
         }
 
+        com.nodeplayer.common.media.CipherSolver.current = com.nodeplayer.music.cipher.AndroidCipherSolver(this)
+
         if (BuildConfig.DEBUG) {
             android.os.StrictMode.setThreadPolicy(
                 android.os.StrictMode.ThreadPolicy.Builder()

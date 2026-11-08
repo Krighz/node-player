@@ -190,6 +190,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         registerAudioDeviceCallback()
         detectAudioOutput()
         restoreLastPlaybackSession()
+
+        // Sync and observe AppModeState with persistent settings
+        viewModelScope.launch {
+            appSettings.collect { settings ->
+                com.nodeplayer.common.AppModeState.setOnlineMode(settings.isOnlineMode)
+            }
+        }
     }
 
     private fun runGraphicsSelfTest() {
@@ -568,7 +575,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun playTrack(track: Track, newQueue: List<Track> = listOf(track)) {
         val tapTime = System.currentTimeMillis()
-        val effectiveQueue = if (newQueue.size <= 1 && allTracks.value.isNotEmpty()) {
+        val isOnlineTrack = track.path.startsWith("nodeplayer://youtube/") || com.nodeplayer.common.AppModeState.isOnlineMode.value
+        val effectiveQueue = if (!isOnlineTrack && newQueue.size <= 1 && allTracks.value.isNotEmpty()) {
             allTracks.value
         } else {
             newQueue
@@ -598,11 +606,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             viewModelScope.launch(Dispatchers.Default) {
                 val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
                 val mediaItems = effectiveQueue.map {
-                    val contentUri = ContentUris.withAppendedId(
-                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        it.id
-                    )
-                    val artworkUri = ContentUris.withAppendedId(albumArtBaseUri, it.albumId)
+                    val contentUri = if (it.path.startsWith("nodeplayer://")) {
+                        Uri.parse(it.path)
+                    } else if (it.path.startsWith("content:")) {
+                        Uri.parse(it.path)
+                    } else if (it.path.isNotBlank() && (it.path.startsWith("/") || it.path.startsWith("file:"))) {
+                        val f = java.io.File(it.path)
+                        if (f.exists() && f.canRead()) Uri.fromFile(f)
+                        else ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it.id)
+                    } else {
+                        ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it.id)
+                    }
+                    val artworkUri = if (it.path.startsWith("nodeplayer://")) {
+                        Uri.parse(it.path)
+                    } else {
+                        ContentUris.withAppendedId(albumArtBaseUri, it.albumId)
+                    }
                     val metadata = androidx.media3.common.MediaMetadata.Builder()
                         .setTitle(it.title)
                         .setArtist(it.artist)
@@ -611,7 +630,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         .build()
 
                     MediaItem.Builder()
-                        .setMediaId(it.id.toString())
+                        .setMediaId(if (it.path.startsWith("nodeplayer://")) it.path else it.id.toString())
                         .setUri(contentUri)
                         .setMediaMetadata(metadata)
                         .build()
@@ -852,10 +871,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             while (isActive) {
                 val service = PlaybackService.instance
                 val pos = service?.player?.currentPosition ?: mediaController?.currentPosition ?: 0L
+                val dur = service?.player?.duration ?: mediaController?.duration ?: 0L
                 val playing = service?.player?.isPlaying ?: mediaController?.isPlaying ?: false
                 _isPlaying.value = playing
                 _currentPositionMs.value = pos
                 _currentTrack.value?.let { track ->
+                    if (dur > 0L && track.durationMs != dur) {
+                        _currentTrack.value = track.copy(durationMs = dur)
+                    }
                     prefs.edit().putLong("last_pos", pos).putLong("last_track_id", track.id).apply()
                 }
 
@@ -1362,6 +1385,43 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun stopAudioCasting() {
         PlaybackService.instance?.stopAudioCasting()
+    }
+
+    fun createPlaylist(name: String, initialTracks: List<Track> = emptyList()) {
+        if (name.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val playlistId = dao.insertPlaylist(com.nodeplayer.music.data.PlaylistEntity(name = name.trim()))
+            if (initialTracks.isNotEmpty()) {
+                val refs = initialTracks.mapIndexed { index, t ->
+                    com.nodeplayer.music.data.PlaylistTrackCrossRef(
+                        playlistId = playlistId,
+                        trackId = t.id,
+                        position = index
+                    )
+                }
+                dao.insertPlaylistTracks(refs)
+            }
+        }
+    }
+
+    fun addTrackToPlaylist(playlistId: Long, track: Track) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val existingIds = dao.getPlaylistTrackIds(playlistId)
+            if (!existingIds.contains(track.id)) {
+                val ref = com.nodeplayer.music.data.PlaylistTrackCrossRef(
+                    playlistId = playlistId,
+                    trackId = track.id,
+                    position = existingIds.size
+                )
+                dao.insertPlaylistTracks(listOf(ref))
+            }
+        }
+    }
+
+    fun deletePlaylist(playlist: com.nodeplayer.music.data.PlaylistEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.deletePlaylist(playlist)
+        }
     }
 
     override fun onCleared() {

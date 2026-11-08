@@ -26,6 +26,26 @@ actual object PlatformArtworkProvider {
             }
         }
 
+        // 0.1 Check for YouTube Music remote/cached tracks: fetch thumbnail if online
+        if (path.startsWith("nodeplayer://youtube/")) {
+            val videoId = path.removePrefix("nodeplayer://youtube/")
+            return try {
+                val url = java.net.URI("https://i.ytimg.com/vi/$videoId/hqdefault.jpg").toURL()
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                conn.instanceFollowRedirects = true
+                val bytes = conn.inputStream.use { it.readBytes() }
+                if (bytes.isNotEmpty()) {
+                    ArtworkCache.putBytes(path, bytes)
+                    val skiaImage = Image.makeFromEncoded(bytes)
+                    skiaImage.toComposeImageBitmap()
+                } else null
+            } catch (_: Exception) {
+                null
+            }
+        }
+
         val file = File(path)
         if (!file.exists() || !file.canRead()) return null
 

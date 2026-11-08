@@ -140,6 +140,7 @@ class CrossfadePlayerManager(
                 false // Allow dual players to play concurrently during crossfade
             )
             .setHandleAudioBecomingNoisy(true)
+            .setSeekParameters(androidx.media3.exoplayer.SeekParameters.CLOSEST_SYNC)
             .build()
 
         player.addAnalyticsListener(object : androidx.media3.exoplayer.analytics.AnalyticsListener {
@@ -169,6 +170,24 @@ class CrossfadePlayerManager(
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (activeIndex == 0) handlePlayWhenReadyChanged(playWhenReady)
             }
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                val dur = playerA.duration
+                if (dur > 0L && activeIndex == 0) {
+                    val current = currentPlayingTrack
+                    if (current != null && current.durationMs != dur) {
+                        val updated = current.copy(durationMs = dur)
+                        if (currentQueueIndex in currentQueue.indices) {
+                            val mutable = currentQueue.toMutableList()
+                            mutable[currentQueueIndex] = updated
+                            currentQueue = mutable
+                        }
+                    }
+                }
+            }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                Log.e(TAG, "[PlayerA Error] code=${error.errorCode}, message=${error.message}", error)
+                com.nodeplayer.common.logging.NodeLog.e(TAG, "[PlayerA Error] code=${error.errorCode}: ${error.message}", error)
+            }
         }
         val listenerB = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -176,6 +195,24 @@ class CrossfadePlayerManager(
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (activeIndex == 1) handlePlayWhenReadyChanged(playWhenReady)
+            }
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                val dur = playerB.duration
+                if (dur > 0L && activeIndex == 1) {
+                    val current = currentPlayingTrack
+                    if (current != null && current.durationMs != dur) {
+                        val updated = current.copy(durationMs = dur)
+                        if (currentQueueIndex in currentQueue.indices) {
+                            val mutable = currentQueue.toMutableList()
+                            mutable[currentQueueIndex] = updated
+                            currentQueue = mutable
+                        }
+                    }
+                }
+            }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                Log.e(TAG, "[PlayerB Error] code=${error.errorCode}, message=${error.message}", error)
+                com.nodeplayer.common.logging.NodeLog.e(TAG, "[PlayerB Error] code=${error.errorCode}: ${error.message}", error)
             }
         }
         playerA.addListener(listenerA)
@@ -314,8 +351,7 @@ class CrossfadePlayerManager(
         player.stop()
         player.clearMediaItems()
         player.volume = 1.0f
-        val mediaItem = createMediaItem(track)
-        player.setMediaItem(mediaItem)
+        setPlayerMediaSource(player, track)
         if (startPositionMs > 0L) {
             player.seekTo(startPositionMs)
         }
@@ -330,6 +366,7 @@ class CrossfadePlayerManager(
         }
 
         Log.d(TAG, "[Playback] Playing track [idx=$startIndex]: \"${track.title}\" on ${if (activeIndex == 0) "PlayerA" else "PlayerB"}")
+        com.nodeplayer.music.service.PlaybackService.instance?.startInitialForegroundIfNeeded()
         onTrackTransition(track)
     }
 
@@ -417,7 +454,7 @@ class CrossfadePlayerManager(
             val nextTrack = currentQueue[currentQueueIndex]
             activePlayer.stop()
             activePlayer.clearMediaItems()
-            activePlayer.setMediaItem(createMediaItem(nextTrack))
+            setPlayerMediaSource(activePlayer, nextTrack)
             activePlayer.prepare()
             activePlayer.play()
             onTrackTransition(nextTrack)
@@ -554,8 +591,9 @@ class CrossfadePlayerManager(
             return
         }
 
-        // Check whether to initiate crossfade
-        if (crossfadeConfig.enabled && currentQueue.isNotEmpty()) {
+        // Check whether to initiate crossfade (skip for synthetic single online streams)
+        val isOnline = currentQueue.getOrNull(currentQueueIndex)?.path?.startsWith("nodeplayer://youtube/") == true
+        if (crossfadeConfig.enabled && currentQueue.isNotEmpty() && !isOnline) {
             val hasNext = currentQueueIndex + 1 < currentQueue.size
             val nextTrack = if (hasNext) {
                 currentQueue[currentQueueIndex + 1]
@@ -621,7 +659,7 @@ class CrossfadePlayerManager(
         secondary.stop()
         secondary.clearMediaItems()
         secondary.volume = 0.0f
-        secondary.setMediaItem(createMediaItem(nextTrack))
+        setPlayerMediaSource(secondary, nextTrack)
         secondary.prepare()
         secondary.play()
     }
@@ -694,8 +732,28 @@ class CrossfadePlayerManager(
         return false
     }
 
+    private fun setPlayerMediaSource(player: ExoPlayer, track: Track) {
+        val mediaItem = createMediaItem(track)
+        val uri = mediaItem.localConfiguration?.uri
+        val isSyntheticYouTube = track.path.startsWith("nodeplayer://youtube/") ||
+            (uri != null && uri.scheme.equals("nodeplayer", ignoreCase = true) && uri.host.equals("youtube", ignoreCase = true))
+
+        if (isSyntheticYouTube) {
+            val resolvingDataSourceFactory = com.nodeplayer.music.playback.AudioCache.createResolvingDataSourceFactory(context)
+            val mediaSource = androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(
+                resolvingDataSourceFactory,
+                androidx.media3.extractor.DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
+            ).createMediaSource(mediaItem)
+            player.setMediaSource(mediaSource)
+        } else {
+            player.setMediaItem(mediaItem)
+        }
+    }
+
     private fun createMediaItem(track: Track): MediaItem {
-        val contentUri = if (track.path.isNotBlank() && (track.path.startsWith("/") || track.path.startsWith("file:"))) {
+        val contentUri = if (track.path.startsWith("nodeplayer://")) {
+            Uri.parse(track.path)
+        } else if (track.path.isNotBlank() && (track.path.startsWith("/") || track.path.startsWith("file:"))) {
             val f = java.io.File(track.path)
             if (f.exists() && f.canRead()) {
                 android.net.Uri.fromFile(f)
