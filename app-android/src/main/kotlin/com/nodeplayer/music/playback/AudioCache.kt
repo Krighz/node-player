@@ -148,21 +148,23 @@ object AudioCache {
      * Builds a DataSource.Factory wrapping DefaultHttpDataSource with CacheDataSource.
      */
     fun createDataSourceFactory(context: Context): DataSource.Factory {
-        val upstreamFactory = DefaultHttpDataSource.Factory()
+        val httpFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0")
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(20_000)
 
+        val rangedUpstreamFactory = RangedUpstreamDataSource.Factory(httpFactory, 512L * 1024)
+
         val cache = simpleCacheInstance
         return if (cache != null) {
             CacheDataSource.Factory()
                 .setCache(cache)
-                .setUpstreamDataSourceFactory(upstreamFactory)
+                .setUpstreamDataSourceFactory(rangedUpstreamFactory)
                 .setCacheKeyFactory(keyFactory)
                 .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         } else {
-            upstreamFactory
+            rangedUpstreamFactory
         }
     }
 

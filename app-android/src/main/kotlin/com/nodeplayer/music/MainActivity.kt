@@ -672,6 +672,8 @@ class MainActivity : ComponentActivity() {
                                             safeToast("Playing '${track.title}' from ${conn.peerDeviceName}...", android.widget.Toast.LENGTH_SHORT)
                                         }
                                     }
+                                } else if (track.path.startsWith("nodeplayer://youtube/")) {
+                                    viewModel.playTrack(track, listOf(track))
                                 } else {
                                     viewModel.playTrack(track, allTracks)
                                 }
