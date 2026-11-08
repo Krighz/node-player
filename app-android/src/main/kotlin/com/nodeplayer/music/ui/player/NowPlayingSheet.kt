@@ -106,13 +106,23 @@ fun NowPlayingSheet(
     var showTopMenu by remember { mutableStateOf(false) }
     var isRepeatOne by remember { mutableStateOf(false) }
 
-    val liveDuration = remember(track.id, currentPositionMs) {
+    val liveDuration = remember(track.id, track.durationMs) {
         val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
-        if (srvDur > 0L) srvDur else track.durationMs
+        if (srvDur > 1000L) srvDur else if (track.durationMs > 1000L) track.durationMs else 0L
+    }
+    val effectiveDuration = if (liveDuration > 1000L) {
+        liveDuration
+    } else {
+        val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
+        if (srvDur > 1000L) srvDur else if (track.durationMs > 1000L) track.durationMs else 1L
     }
     val currentMs = if (isSeeking) sliderPosition.toLong() else currentPositionMs
-    val totalMs = liveDuration.coerceAtLeast(1L)
-    val progress = (currentMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
+    val totalMs = effectiveDuration.coerceAtLeast(1L)
+    val progress = if (totalMs > 1000L) {
+        (currentMs.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
 
     // Load local LRC if exists in the same directory
     val lyrics: Lyrics? = remember(track.path) {

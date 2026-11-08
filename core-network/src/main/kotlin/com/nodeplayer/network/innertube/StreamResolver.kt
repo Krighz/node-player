@@ -119,6 +119,7 @@ class StreamResolver(
 
             var chosenCandidate: Pair<PlayerResponse.StreamingData.Format, String>? = null
 
+            var probeAttempted = false
             for (candidate in audioCandidates) {
                 var url = candidate.url
 
@@ -157,6 +158,7 @@ class StreamResolver(
                 }
 
                 // Active HTTP Range Probe validation
+                probeAttempted = true
                 if (verifyStreamUrl(url, client.userAgent)) {
                     chosenCandidate = candidate to url
                     break
@@ -165,9 +167,9 @@ class StreamResolver(
                 }
             }
 
-            // Fallback: If direct candidate URL exists but network probe timed out or had a transient error,
-            // fall back to the top candidate rather than discarding the working client.
-            if (chosenCandidate == null && audioCandidates.isNotEmpty()) {
+            // Fallback: Only if candidate URLs were present but no probe was attempted (e.g. all empty URLs)
+            // or if direct fallback is needed without probe failure
+            if (chosenCandidate == null && audioCandidates.isNotEmpty() && !probeAttempted) {
                 val directFallback = audioCandidates.firstOrNull { !it.url.isNullOrBlank() }
                 if (directFallback != null) {
                     NodeLog.i(TAG, "Using direct audio format itag=${directFallback.itag} as fallback for ${client.clientName}")
@@ -245,9 +247,9 @@ class StreamResolver(
         private const val PROBE_TIMEOUT_MS = 5_000L
 
         val CLIENT_ROTATION = listOf(
-            YouTubeClient.IOS,
-            YouTubeClient.ANDROID_VR,
             YouTubeClient.VISIONOS,
+            YouTubeClient.ANDROID_VR,
+            YouTubeClient.IOS,
             YouTubeClient.WEB_REMIX,
         )
     }

@@ -10,6 +10,7 @@ import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.compression.ContentEncoding
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -18,6 +19,9 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
 import java.io.Closeable
 import kotlin.math.abs
 
@@ -335,6 +339,53 @@ class InnerTubeClient(
         NodeLog.e(TAG, "Search failed for query=\"$query\"", e)
     }
 
+    private var cachedVisitorData: String? = null
+    private var visitorDataExpiryMs: Long = 0L
+
+    /**
+     * Retrieves valid visitorData required for unauthenticated direct stream playback.
+     * Fetched from `https://www.youtube.com/sw.js_data` or fallback headers.
+     */
+    suspend fun getVisitorData(): String? {
+        val now = System.currentTimeMillis()
+        if (cachedVisitorData != null && now < visitorDataExpiryMs) {
+            return cachedVisitorData
+        }
+
+        return try {
+            val responseText = httpClient.get("https://www.youtube.com/sw.js_data") {
+                header("User-Agent", YouTubeClient.USER_AGENT_WEB)
+                header("Accept", "application/json,text/plain,*/*")
+            }.body<String>()
+
+            val parsed = parseServiceWorkerVisitorData(responseText)
+            if (!parsed.isNullOrBlank()) {
+                cachedVisitorData = parsed
+                visitorDataExpiryMs = now + 6 * 3600 * 1000L // 6 hours
+                NodeLog.i(TAG, "Successfully fetched and cached YouTube visitorData")
+                parsed
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            NodeLog.w(TAG, "Failed to fetch YouTube visitorData: ${e.message}")
+            cachedVisitorData
+        }
+    }
+
+    private fun parseServiceWorkerVisitorData(responseText: String): String? = runCatching {
+        val jsonText = responseText.substringAfter('\n').trimStart()
+        val root = json.parseToJsonElement(jsonText)
+        root.jsonArray.getOrNull(0)
+            ?.jsonArray?.getOrNull(2)
+            ?.jsonArray?.getOrNull(0)
+            ?.jsonArray?.getOrNull(0)
+            ?.jsonArray?.getOrNull(13)
+            ?.jsonPrimitive
+            ?.contentOrNull
+            ?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+
     /**
      * Fetches raw [PlayerResponse] for [videoId] using specified [client].
      */
@@ -343,6 +394,7 @@ class InnerTubeClient(
         client: YouTubeClient = clientContext,
     ): Result<PlayerResponse> = runCatching {
         NodeLog.d(TAG, "Fetching player response for videoId=$videoId (client=${client.clientName})")
+        val visitorData = getVisitorData()
         withRetry {
             httpClient.post("player") {
                 header("User-Agent", client.userAgent)
@@ -350,7 +402,7 @@ class InnerTubeClient(
                 header("X-YouTube-Client-Version", client.clientVersion)
                 setBody(
                     PlayerBody(
-                        context = client.toContext(locale),
+                        context = client.toContext(locale, visitorData = visitorData),
                         videoId = videoId
                     )
                 )

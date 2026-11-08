@@ -45,3 +45,13 @@
 
 # SLF4J logger binder warning suppression
 -dontwarn org.slf4j.impl.StaticLoggerBinder
+
+# InnerTube Network Models & Cipher Reflection
+-keep class com.nodeplayer.network.** { *; }
+-keepclassmembers class com.nodeplayer.network.** { *; }
+-keep class com.nodeplayer.music.cipher.** { *; }
+-keepclassmembers class com.nodeplayer.music.cipher.** { *; }
+-keepattributes JavascriptInterface
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}

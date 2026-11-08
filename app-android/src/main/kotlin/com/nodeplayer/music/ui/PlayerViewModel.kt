@@ -156,6 +156,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val sessionListeningSeconds = MutableStateFlow(0L)
     private var pauseStartTimestamp = 0L
     private var lastSessionTickMs = System.currentTimeMillis()
+    private var lastPrefsSaveMs = 0L
 
     // Resume on Headset Connect
     private val _resumeOnHeadsetConnect = MutableStateFlow(true)
@@ -879,7 +880,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     if (dur > 0L && track.durationMs != dur) {
                         _currentTrack.value = track.copy(durationMs = dur)
                     }
-                    prefs.edit().putLong("last_pos", pos).putLong("last_track_id", track.id).apply()
+                    val now = System.currentTimeMillis()
+                    if (now - lastPrefsSaveMs >= 5000L || !playing) {
+                        lastPrefsSaveMs = now
+                        viewModelScope.launch(Dispatchers.IO) {
+                            prefs.edit().putLong("last_pos", pos).putLong("last_track_id", track.id).apply()
+                        }
+                    }
                 }
 
                 if (playing) {

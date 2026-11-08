@@ -186,53 +186,61 @@ class InnerTubeClientTest {
     @Test
     fun testGetPlayerStreamInfoExtraction() = runTest {
         val mockEngine = MockEngine { request ->
-            assertEquals("https://music.youtube.com/youtubei/v1/player", request.url.toString())
-            val responseBody = """
-            {
-              "playabilityStatus": {
-                "status": "OK"
-              },
-              "playerConfig": {
-                "audioConfig": {
-                  "loudnessDb": -6.8
-                }
-              },
-              "videoDetails": {
-                "videoId": "stream_123",
-                "title": "Hotel California",
-                "author": "Eagles",
-                "lengthSeconds": "391"
-              },
-              "streamingData": {
-                "adaptiveFormats": [
-                  {
-                    "itag": 140,
-                    "url": "https://googlevideo.com/playback?itag=140",
-                    "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
-                    "bitrate": 128000,
-                    "contentLength": 6250000,
-                    "approxDurationMs": "391000",
-                    "loudnessDb": -6.8
+            if (request.url.toString().contains("sw.js_data")) {
+                respond(
+                    content = ")]}'\n[[null,null,[[null,null,null,null,null,null,null,null,null,null,null,null,null,\"VISITOR_123\"]]]]",
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else {
+                assertEquals("https://music.youtube.com/youtubei/v1/player", request.url.toString())
+                val responseBody = """
+                {
+                  "playabilityStatus": {
+                    "status": "OK"
                   },
-                  {
-                    "itag": 251,
-                    "url": "https://googlevideo.com/playback?itag=251",
-                    "mimeType": "audio/webm; codecs=\"opus\"",
-                    "bitrate": 160000,
-                    "contentLength": 7100000,
-                    "approxDurationMs": "391000",
-                    "loudnessDb": -6.8
+                  "playerConfig": {
+                    "audioConfig": {
+                      "loudnessDb": -6.8
+                    }
+                  },
+                  "videoDetails": {
+                    "videoId": "stream_123",
+                    "title": "Hotel California",
+                    "author": "Eagles",
+                    "lengthSeconds": "391"
+                  },
+                  "streamingData": {
+                    "adaptiveFormats": [
+                      {
+                        "itag": 140,
+                        "url": "https://googlevideo.com/playback?itag=140",
+                        "mimeType": "audio/mp4; codecs=\"mp4a.40.2\"",
+                        "bitrate": 128000,
+                        "contentLength": 6250000,
+                        "approxDurationMs": "391000",
+                        "loudnessDb": -6.8
+                      },
+                      {
+                        "itag": 251,
+                        "url": "https://googlevideo.com/playback?itag=251",
+                        "mimeType": "audio/webm; codecs=\"opus\"",
+                        "bitrate": 160000,
+                        "contentLength": 7100000,
+                        "approxDurationMs": "391000",
+                        "loudnessDb": -6.8
+                      }
+                    ]
                   }
-                ]
-              }
-            }
-            """.trimIndent()
+                }
+                """.trimIndent()
 
-            respond(
-                content = responseBody,
-                status = HttpStatusCode.OK,
-                headers = headersOf(HttpHeaders.ContentType, "application/json")
-            )
+                respond(
+                    content = responseBody,
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            }
         }
 
         val client = InnerTubeClient(engine = mockEngine)

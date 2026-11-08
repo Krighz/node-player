@@ -120,7 +120,7 @@ data class YouTubeClient(
             clientName = "VISIONOS",
             clientVersion = "0.1",
             clientId = "101",
-            userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+            userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
             osName = "visionOS",
             osVersion = "1.3.21O771",
             deviceMake = "Apple",
