@@ -42,6 +42,33 @@ import com.nodeplayer.model.GlassComponentType
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalGlassControlsConfig
+import com.nodeplayer.ui.theme.LocalControlBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.effects.vibrancy
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+
+@Composable
+fun GlassControlSurface(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    val localBackdrop = rememberLayerBackdrop()
+    Box(modifier = modifier) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .layerBackdrop(localBackdrop)
+        )
+        CompositionLocalProvider(LocalControlBackdrop provides localBackdrop) {
+            content()
+        }
+    }
+}
 
 /**
  * Liquid Glass Continuous Slider with 48dp interactive height and full accessibility semantics.
@@ -56,11 +83,13 @@ fun LiquidSlider(
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     enabled: Boolean = true,
     steps: Int = 0,
-    backdrop: Backdrop = remember { emptyBackdrop() }
+    backdrop: Backdrop? = null
 ) {
     val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
     val resolved = controlsConfig.resolve(GlassComponentType.SLIDERS, inList = false)
-    val effectiveBackdrop = if (resolved.isPlainSquircle || !controlsConfig.masterEnabled) remember { emptyBackdrop() } else backdrop
+    val effectiveBackdrop = if (resolved.isPlainSquircle || !controlsConfig.masterEnabled) remember { emptyBackdrop() } else effectiveSuppliedBackdrop
 
     Box(
         modifier = modifier
@@ -96,7 +125,7 @@ fun LiquidGlassSlider(
     valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     enabled: Boolean = true,
     steps: Int = 0,
-    backdrop: Backdrop = remember { emptyBackdrop() }
+    backdrop: Backdrop? = null
 ) {
     LiquidSlider(
         value = value,
@@ -119,9 +148,11 @@ fun LiquidToggle(
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    backdrop: Backdrop = remember { emptyBackdrop() }
+    backdrop: Backdrop? = null
 ) {
     val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
     val resolved = controlsConfig.resolve(GlassComponentType.TOGGLES, inList = false)
     val isPlain = resolved.isPlainSquircle || !controlsConfig.masterEnabled
 
@@ -180,7 +211,7 @@ fun LiquidToggle(
             com.kyant.backdrop.catalog.components.LiquidToggle(
                 selected = { checked },
                 onSelect = { if (enabled && onCheckedChange != null) onCheckedChange(it) },
-                backdrop = backdrop
+                backdrop = effectiveSuppliedBackdrop
             )
         }
     }
@@ -238,11 +269,13 @@ fun LiquidButton(
     lighterStyle: Boolean = false,
     tint: Color = Color.Unspecified,
     surfaceColor: Color = Color.Unspecified,
-    backdrop: Backdrop = remember { emptyBackdrop() },
+    backdrop: Backdrop? = null,
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),
     content: @Composable RowScope.() -> Unit
 ) {
     val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
     val resolved = controlsConfig.resolve(GlassComponentType.BUTTONS, inList = lighterStyle)
     val squircleShape = ContinuousRoundedRectangle(resolved.cornerShapeDp.dp)
     val effectiveLighter = lighterStyle || resolved.isPlainSquircle || !controlsConfig.masterEnabled
@@ -298,7 +331,7 @@ fun LiquidButton(
         ) {
             com.kyant.backdrop.catalog.components.LiquidButton(
                 onClick = { if (enabled) onClick() },
-                backdrop = backdrop,
+                backdrop = effectiveSuppliedBackdrop,
                 isInteractive = enabled,
                 tint = tint,
                 surfaceColor = surfaceColor,
@@ -320,7 +353,7 @@ fun LiquidGlassButton(
     lighterStyle: Boolean = false,
     tint: Color = Color.Unspecified,
     surfaceColor: Color = Color.Unspecified,
-    backdrop: Backdrop = remember { emptyBackdrop() },
+    backdrop: Backdrop? = null,
     contentPadding: PaddingValues = PaddingValues(horizontal = 16.dp),
     content: @Composable RowScope.() -> Unit
 ) {
@@ -351,11 +384,14 @@ fun LiquidIconButton(
     size: Dp = 48.dp,
     tint: Color = Color.White,
     contentDescription: String? = null,
-    backdrop: Backdrop = remember { emptyBackdrop() }
+    backdrop: Backdrop? = null
 ) {
     val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
     val resolved = controlsConfig.resolve(GlassComponentType.BUTTONS, inList = lighterStyle)
-    val effectiveLighter = lighterStyle || resolved.isPlainSquircle || !controlsConfig.masterEnabled
+    val squircleShape = ContinuousRoundedRectangle(resolved.cornerShapeDp.dp)
+    val effectiveSize = size.coerceAtLeast(48.dp)
 
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -364,16 +400,34 @@ fun LiquidIconButton(
         animationSpec = spring(stiffness = resolved.springStiffness, dampingRatio = resolved.springDamping),
         label = "iconBtnScale"
     )
-    val squircleShape = ContinuousRoundedRectangle(resolved.cornerShapeDp.dp)
-    val effectiveSize = size.coerceAtLeast(48.dp)
 
-    Box(
-        modifier = modifier
-            .size(effectiveSize)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+    val useGlass = !lighterStyle && !resolved.isPlainSquircle && controlsConfig.masterEnabled && effectiveSuppliedBackdrop !is com.kyant.backdrop.backdrops.EmptyBackdrop
+
+    val glassModifier = if (useGlass) {
+        Modifier.drawBackdrop(
+            backdrop = effectiveSuppliedBackdrop,
+            shape = { squircleShape },
+            effects = {
+                blur(resolved.blurDp.dp.toPx())
+                lens(resolved.lensHeightDp.dp.toPx(), resolved.lensAmountDp.dp.toPx(), chromaticAberration = resolved.chromaticAberration > 0.05f)
+                vibrancy()
+            },
+            highlight = {
+                Highlight.Ambient.copy(
+                    width = 1.dp,
+                    alpha = (0.55f * resolved.highlightStrength).coerceIn(0.12f, 1f)
+                )
+            },
+            shadow = {
+                Shadow(radius = 8.dp, color = Color.Black.copy(alpha = 0.20f * resolved.shadowStrength))
+            },
+            onDrawSurface = {
+                drawRect(Color.White.copy(alpha = (resolved.tintOpacity * 0.25f).coerceIn(0.06f, 0.35f)))
             }
+        )
+    } else {
+        val effectiveLighter = lighterStyle || resolved.isPlainSquircle || !controlsConfig.masterEnabled
+        Modifier
             .clip(squircleShape)
             .background(
                 if (effectiveLighter) Color.White.copy(alpha = (resolved.tintOpacity * 0.3f).coerceIn(0.04f, 0.20f))
@@ -389,6 +443,16 @@ fun LiquidIconButton(
                 ),
                 shape = squircleShape
             )
+    }
+
+    Box(
+        modifier = modifier
+            .size(effectiveSize)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .then(glassModifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -420,7 +484,7 @@ fun LiquidGlassIconButton(
     size: Dp = 48.dp,
     tint: Color = Color.White,
     contentDescription: String? = null,
-    backdrop: Backdrop = remember { emptyBackdrop() }
+    backdrop: Backdrop? = null
 ) {
     LiquidIconButton(
         icon = icon,
@@ -448,9 +512,11 @@ fun LiquidChip(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     lighterStyle: Boolean = false,
-    backdrop: Backdrop = remember { emptyBackdrop() }
+    backdrop: Backdrop? = null
 ) {
     val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
     val resolved = controlsConfig.resolve(GlassComponentType.CHIPS, inList = lighterStyle)
     val squircleShape = ContinuousRoundedRectangle(resolved.cornerShapeDp.dp)
 
@@ -463,9 +529,37 @@ fun LiquidChip(
         label = "chipBg"
     )
 
-    Box(
-        modifier = modifier
-            .heightIn(min = 48.dp)
+    val useGlass = !lighterStyle && !resolved.isPlainSquircle && controlsConfig.masterEnabled && effectiveSuppliedBackdrop !is com.kyant.backdrop.backdrops.EmptyBackdrop
+
+    val glassModifier = if (useGlass) {
+        val primaryColor = MaterialTheme.colorScheme.primary
+        Modifier.drawBackdrop(
+            backdrop = effectiveSuppliedBackdrop,
+            shape = { squircleShape },
+            effects = {
+                blur(resolved.blurDp.dp.toPx())
+                lens(resolved.lensHeightDp.dp.toPx(), resolved.lensAmountDp.dp.toPx(), chromaticAberration = resolved.chromaticAberration > 0.05f)
+                vibrancy()
+            },
+            highlight = {
+                Highlight.Ambient.copy(
+                    width = 1.dp,
+                    alpha = (highlightAlpha * 0.65f).coerceIn(0.10f, 1f)
+                )
+            },
+            shadow = {
+                Shadow(radius = 6.dp, color = Color.Black.copy(alpha = 0.15f * resolved.shadowStrength))
+            },
+            onDrawSurface = {
+                if (selected) {
+                    drawRect(primaryColor.copy(alpha = bgAlpha))
+                } else {
+                    drawRect(Color.White.copy(alpha = bgAlpha))
+                }
+            }
+        )
+    } else {
+        Modifier
             .clip(squircleShape)
             .background(
                 if (selected) MaterialTheme.colorScheme.primary.copy(alpha = bgAlpha)
@@ -481,6 +575,12 @@ fun LiquidChip(
                 ),
                 shape = squircleShape
             )
+    }
+
+    Box(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .then(glassModifier)
             .clickable(
                 enabled = enabled,
                 role = Role.Checkbox,
@@ -525,7 +625,7 @@ fun LiquidGlassChip(
     icon: ImageVector? = null,
     enabled: Boolean = true,
     lighterStyle: Boolean = false,
-    backdrop: Backdrop = remember { emptyBackdrop() }
+    backdrop: Backdrop? = null
 ) {
     LiquidChip(
         selected = selected,
@@ -549,18 +649,42 @@ fun <T> LiquidSegmentedControl(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    backdrop: Backdrop = remember { emptyBackdrop() },
+    backdrop: Backdrop? = null,
     itemLabel: (T) -> String
 ) {
     val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
     val resolved = controlsConfig.resolve(GlassComponentType.DOCK, inList = false)
     val outerShape = ContinuousRoundedRectangle(resolved.cornerShapeDp.dp)
     val puckShape = ContinuousRoundedRectangle(resolved.cornerShapeDp.dp)
 
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
+    val useGlass = !resolved.isPlainSquircle && controlsConfig.masterEnabled && effectiveSuppliedBackdrop !is com.kyant.backdrop.backdrops.EmptyBackdrop
+
+    val outerModifier = if (useGlass) {
+        Modifier.drawBackdrop(
+            backdrop = effectiveSuppliedBackdrop,
+            shape = { outerShape },
+            effects = {
+                blur(resolved.blurDp.dp.toPx())
+                lens(resolved.lensHeightDp.dp.toPx(), resolved.lensAmountDp.dp.toPx(), chromaticAberration = resolved.chromaticAberration > 0.05f)
+                vibrancy()
+            },
+            highlight = {
+                Highlight.Ambient.copy(
+                    width = 1.dp,
+                    alpha = (0.45f * resolved.highlightStrength).coerceIn(0.1f, 1f)
+                )
+            },
+            shadow = {
+                Shadow(radius = 10.dp, color = Color.Black.copy(alpha = 0.20f * resolved.shadowStrength))
+            },
+            onDrawSurface = {
+                drawRect(Color.White.copy(alpha = (resolved.tintOpacity * 0.20f).coerceIn(0.04f, 0.25f)))
+            }
+        )
+    } else {
+        Modifier
             .clip(outerShape)
             .background(Color.White.copy(alpha = (resolved.tintOpacity * 0.20f).coerceIn(0.04f, 0.15f)))
             .border(
@@ -573,6 +697,13 @@ fun <T> LiquidSegmentedControl(
                 ),
                 shape = outerShape
             )
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .then(outerModifier)
             .padding(4.dp)
     ) {
         val count = items.size.coerceAtLeast(1)
@@ -645,7 +776,7 @@ fun <T> LiquidGlassSegmentedControl(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    backdrop: Backdrop = remember { emptyBackdrop() },
+    backdrop: Backdrop? = null,
     itemLabel: (T) -> String
 ) {
     LiquidSegmentedControl(
@@ -670,29 +801,60 @@ fun LiquidDialog(
     confirmButton: @Composable () -> Unit,
     dismissButton: @Composable (() -> Unit)? = null,
     modifier: Modifier = Modifier,
-    backdrop: Backdrop = remember { emptyBackdrop() }
+    backdrop: Backdrop? = null
 ) {
     val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
     val resolved = controlsConfig.resolve(GlassComponentType.DIALOGS, inList = false)
     val dialogShape = ContinuousRoundedRectangle(resolved.cornerShapeDp.dp)
+
+    val useGlass = !resolved.isPlainSquircle && controlsConfig.masterEnabled && effectiveSuppliedBackdrop !is com.kyant.backdrop.backdrops.EmptyBackdrop
+
+    val dialogModifier = if (useGlass) {
+        Modifier.drawBackdrop(
+            backdrop = effectiveSuppliedBackdrop,
+            shape = { dialogShape },
+            effects = {
+                blur(resolved.blurDp.dp.toPx())
+                lens(resolved.lensHeightDp.dp.toPx(), resolved.lensAmountDp.dp.toPx(), chromaticAberration = resolved.chromaticAberration > 0.05f)
+                vibrancy()
+            },
+            highlight = {
+                Highlight.Ambient.copy(
+                    width = 1.dp,
+                    alpha = (0.55f * resolved.highlightStrength).coerceIn(0.12f, 1f)
+                )
+            },
+            shadow = {
+                Shadow(radius = 16.dp, color = Color.Black.copy(alpha = 0.35f * resolved.shadowStrength))
+            },
+            onDrawSurface = {
+                drawRect(Color(0xFF1E1E22).copy(alpha = (resolved.tintOpacity * 0.90f).coerceIn(0.40f, 0.95f)))
+            }
+        )
+    } else {
+        Modifier
+            .clip(dialogShape)
+            .background(Color(0xFF1E1E22).copy(alpha = 0.92f))
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = (0.35f * resolved.highlightStrength).coerceIn(0.12f, 1f)),
+                        Color.White.copy(alpha = 0.08f)
+                    )
+                ),
+                shape = dialogShape
+            )
+    }
 
     Dialog(onDismissRequest = onDismissRequest) {
         Box(
             modifier = modifier
                 .fillMaxWidth()
                 .padding(24.dp)
-                .clip(dialogShape)
-                .background(Color(0xFF1E1E22).copy(alpha = 0.92f))
-                .border(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = (0.35f * resolved.highlightStrength).coerceIn(0.12f, 1f)),
-                            Color.White.copy(alpha = 0.08f)
-                        )
-                    ),
-                    shape = dialogShape
-                )
+                .then(dialogModifier)
                 .padding(24.dp)
         ) {
             Column(
@@ -735,14 +897,66 @@ fun LiquidCheckbox(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     lighterStyle: Boolean = false,
-    backdrop: Backdrop = remember { emptyBackdrop() }
+    backdrop: Backdrop? = null
 ) {
+    val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
+    val resolved = controlsConfig.resolve(GlassComponentType.TOGGLES, inList = lighterStyle)
     val checkShape = ContinuousRoundedRectangle(6.dp)
     val checkScale by animateFloatAsState(
         targetValue = if (checked) 1f else 0f,
         animationSpec = spring(stiffness = 500f, dampingRatio = 0.72f),
         label = "chkScale"
     )
+
+    val useGlass = !lighterStyle && !resolved.isPlainSquircle && controlsConfig.masterEnabled && effectiveSuppliedBackdrop !is com.kyant.backdrop.backdrops.EmptyBackdrop
+
+    val boxModifier = if (useGlass) {
+        val primaryColor = MaterialTheme.colorScheme.primary
+        Modifier.drawBackdrop(
+            backdrop = effectiveSuppliedBackdrop,
+            shape = { checkShape },
+            effects = {
+                blur(4f.dp.toPx())
+                lens(6f.dp.toPx(), 6f.dp.toPx())
+                vibrancy()
+            },
+            highlight = {
+                Highlight.Ambient.copy(
+                    width = 1.dp,
+                    alpha = (0.55f * resolved.highlightStrength).coerceIn(0.12f, 1f)
+                )
+            },
+            shadow = {
+                Shadow(radius = 4.dp, color = Color.Black.copy(alpha = 0.15f * resolved.shadowStrength))
+            },
+            onDrawSurface = {
+                if (checked) {
+                    drawRect(primaryColor.copy(alpha = 0.85f))
+                } else {
+                    drawRect(Color.White.copy(alpha = 0.10f))
+                }
+            }
+        )
+    } else {
+        Modifier
+            .clip(checkShape)
+            .background(
+                if (checked) MaterialTheme.colorScheme.primary.copy(alpha = if (lighterStyle) 0.85f else 0.95f)
+                else Color.White.copy(alpha = 0.08f)
+            )
+            .border(
+                width = 1.2.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        if (checked) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.35f),
+                        Color.White.copy(alpha = 0.12f)
+                    )
+                ),
+                shape = checkShape
+            )
+    }
 
     Box(
         modifier = modifier
@@ -762,21 +976,7 @@ fun LiquidCheckbox(
         Box(
             modifier = Modifier
                 .size(24.dp)
-                .clip(checkShape)
-                .background(
-                    if (checked) MaterialTheme.colorScheme.primary.copy(alpha = if (lighterStyle) 0.85f else 0.95f)
-                    else Color.White.copy(alpha = 0.08f)
-                )
-                .border(
-                    width = 1.2.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            if (checked) Color.White.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.35f),
-                            Color.White.copy(alpha = 0.12f)
-                        )
-                    ),
-                    shape = checkShape
-                ),
+                .then(boxModifier),
             contentAlignment = Alignment.Center
         ) {
             if (checkScale > 0.05f) {
@@ -823,14 +1023,66 @@ fun LiquidRadioButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     lighterStyle: Boolean = false,
-    backdrop: Backdrop = remember { emptyBackdrop() }
+    backdrop: Backdrop? = null
 ) {
+    val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
+    val resolved = controlsConfig.resolve(GlassComponentType.TOGGLES, inList = lighterStyle)
     val outerShape = CircleShape
     val dotScale by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
         animationSpec = spring(stiffness = 500f, dampingRatio = 0.72f),
         label = "radioDotScale"
     )
+
+    val useGlass = !lighterStyle && !resolved.isPlainSquircle && controlsConfig.masterEnabled && effectiveSuppliedBackdrop !is com.kyant.backdrop.backdrops.EmptyBackdrop
+
+    val radioModifier = if (useGlass) {
+        val primaryColor = MaterialTheme.colorScheme.primary
+        Modifier.drawBackdrop(
+            backdrop = effectiveSuppliedBackdrop,
+            shape = { outerShape },
+            effects = {
+                blur(4f.dp.toPx())
+                lens(6f.dp.toPx(), 6f.dp.toPx())
+                vibrancy()
+            },
+            highlight = {
+                Highlight.Ambient.copy(
+                    width = 1.dp,
+                    alpha = (0.55f * resolved.highlightStrength).coerceIn(0.12f, 1f)
+                )
+            },
+            shadow = {
+                Shadow(radius = 4.dp, color = Color.Black.copy(alpha = 0.15f * resolved.shadowStrength))
+            },
+            onDrawSurface = {
+                if (selected) {
+                    drawRect(primaryColor.copy(alpha = 0.25f))
+                } else {
+                    drawRect(Color.White.copy(alpha = 0.10f))
+                }
+            }
+        )
+    } else {
+        Modifier
+            .clip(outerShape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = if (lighterStyle) 0.18f else 0.25f)
+                else Color.White.copy(alpha = 0.08f)
+            )
+            .border(
+                width = 1.2.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.35f),
+                        Color.White.copy(alpha = 0.12f)
+                    )
+                ),
+                shape = outerShape
+            )
+    }
 
     Box(
         modifier = modifier
@@ -850,21 +1102,7 @@ fun LiquidRadioButton(
         Box(
             modifier = Modifier
                 .size(24.dp)
-                .clip(outerShape)
-                .background(
-                    if (selected) MaterialTheme.colorScheme.primary.copy(alpha = if (lighterStyle) 0.18f else 0.25f)
-                    else Color.White.copy(alpha = 0.08f)
-                )
-                .border(
-                    width = 1.2.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.35f),
-                            Color.White.copy(alpha = 0.12f)
-                        )
-                    ),
-                    shape = outerShape
-                ),
+                .then(radioModifier),
             contentAlignment = Alignment.Center
         ) {
             if (dotScale > 0.05f) {

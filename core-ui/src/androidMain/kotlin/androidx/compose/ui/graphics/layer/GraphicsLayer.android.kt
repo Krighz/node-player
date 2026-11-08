@@ -4,7 +4,9 @@ import android.graphics.Picture
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.RenderEffect
+import androidx.compose.ui.graphics.asAndroidRenderEffect
 import androidx.compose.ui.graphics.asComposeCanvas
+import androidx.compose.ui.graphics.setAndroidRenderEffect
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -58,9 +60,16 @@ actual fun DrawScope.drawLayer(graphicsLayer: GraphicsLayer) {
         if (graphicsLayer.topLeft != IntOffset.Zero) {
             nativeCanvas.translate(graphicsLayer.topLeft.x.toFloat(), graphicsLayer.topLeft.y.toFloat())
         }
-        if (graphicsLayer.alpha < 1f) {
-            val paint = android.graphics.Paint().apply {
-                alpha = (graphicsLayer.alpha.coerceIn(0f, 1f) * 255).toInt()
+        val effect = graphicsLayer.renderEffect
+        val needsLayer = effect != null || graphicsLayer.alpha < 1f || graphicsLayer.blendMode != BlendMode.SrcOver
+
+        if (needsLayer) {
+            val paint = android.graphics.Paint()
+            if (effect != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                paint.setAndroidRenderEffect(effect.asAndroidRenderEffect())
+            }
+            if (graphicsLayer.alpha < 1f) {
+                paint.alpha = (graphicsLayer.alpha.coerceIn(0f, 1f) * 255).toInt()
             }
             nativeCanvas.saveLayer(null, paint)
             nativeCanvas.drawPicture(pic)

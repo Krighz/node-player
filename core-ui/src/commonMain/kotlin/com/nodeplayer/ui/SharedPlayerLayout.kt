@@ -35,6 +35,7 @@ import com.nodeplayer.ui.player.NowPlayingView
 import com.nodeplayer.ui.screens.*
 import com.nodeplayer.ui.theme.GlassTokensData
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalControlBackdrop
 import com.nodeplayer.ui.theme.LocalGlassControlsConfig
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.LocalGlassTokens
@@ -179,7 +180,8 @@ fun SharedPlayerLayout(
         LocalGlassTokens provides glassTokens,
         LocalGlassThemeConfig provides themeConfig,
         LocalGlassControlsConfig provides themeConfig.controlsConfig,
-        LocalBottomBarPadding provides dynamicBottomPadding
+        LocalBottomBarPadding provides dynamicBottomPadding,
+        LocalControlBackdrop provides pageBackdrop
     ) {
         Box(
             modifier = modifier

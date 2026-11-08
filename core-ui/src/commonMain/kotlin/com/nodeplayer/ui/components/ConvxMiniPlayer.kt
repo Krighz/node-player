@@ -139,13 +139,19 @@ fun ConvxMiniPlayer(
                             Shadow(radius = 10.dp, color = Color.Black.copy(alpha = 0.22f * resolvedMiniPlayer.shadowStrength))
                         },
                         onDrawSurface = {
-                            drawRect(Color(0xFF141923).copy(alpha = 0.70f))
+                            val isDark = themeConfig.themeMode != "LIGHT"
+                            val surfaceAlpha = (resolvedMiniPlayer.tintOpacity * (if (isDark) 0.55f else 0.40f)).coerceIn(0.15f, 0.75f)
+                            val surfaceColor = if (isDark) Color(0xFF141923) else Color.White
+                            drawRect(surfaceColor.copy(alpha = surfaceAlpha))
                         }
                     )
                 } else {
+                    val isDark = themeConfig.themeMode != "LIGHT"
+                    val fallbackAlpha = (resolvedMiniPlayer.tintOpacity * (if (isDark) 0.75f else 0.60f)).coerceIn(0.25f, 0.85f)
+                    val fallbackColor = if (isDark) Color(0xFF141923) else Color.White
                     Modifier
                         .clip(containerShape)
-                        .background(Color(0xFF141923).copy(alpha = 0.85f))
+                        .background(fallbackColor.copy(alpha = fallbackAlpha))
                         .border(
                             width = 1.dp,
                             brush = Brush.verticalGradient(

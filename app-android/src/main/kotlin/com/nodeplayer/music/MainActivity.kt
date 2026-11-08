@@ -43,6 +43,7 @@ import java.io.File
 import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.player.NowPlayingSheet
 import com.nodeplayer.music.ui.screens.EqualizerScreen
+import com.nodeplayer.ui.theme.LocalControlBackdrop
 import dev.chrisbanes.haze.haze
 import com.nodeplayer.music.ui.screens.LibraryScreen
 import com.nodeplayer.music.ui.screens.SettingsScreen
@@ -123,8 +124,13 @@ class MainActivity : ComponentActivity() {
             }
             val isOled = themeConfig.isOledBlack || themeConfig.themeMode == "OLED"
 
+            val appSettings by viewModel.appSettings.collectAsState()
+            val effectiveThemeConfig = remember(themeConfig, appSettings.glassControlsConfig) {
+                themeConfig.copy(controlsConfig = appSettings.glassControlsConfig)
+            }
+
             NodePlayerTheme(
-                themeConfig = themeConfig,
+                themeConfig = effectiveThemeConfig,
                 artworkAccentColor = accentColor
             ) {
                 val prefs = remember { getSharedPreferences("node_player_prefs", android.content.Context.MODE_PRIVATE) }
@@ -136,7 +142,6 @@ class MainActivity : ComponentActivity() {
                 var currentRoute by remember { mutableStateOf(intentRoute ?: "home") }
                 var isNowPlayingExpanded by remember { mutableStateOf(false) }
 
-                val appSettings by viewModel.appSettings.collectAsState()
                 val dailyStats by viewModel.dailyListeningStats.collectAsState()
                 val sessionSec by viewModel.sessionListeningSeconds.collectAsState()
 
@@ -255,9 +260,12 @@ class MainActivity : ComponentActivity() {
 
                 val pageBackdrop = rememberLayerBackdrop()
 
-                Box(
-                    modifier = Modifier.fillMaxSize()
+                CompositionLocalProvider(
+                    LocalControlBackdrop provides pageBackdrop
                 ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
                     // Blur Source Container: Encloses both background AND scrolling screen content recorded into pageBackdrop
                     Box(
                         modifier = Modifier
@@ -965,6 +973,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                }
                 }
             }
         }

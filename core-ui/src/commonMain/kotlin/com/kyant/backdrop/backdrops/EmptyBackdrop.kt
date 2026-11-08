@@ -12,7 +12,7 @@ import com.kyant.backdrop.Backdrop
 fun emptyBackdrop(): Backdrop = EmptyBackdrop
 
 @Immutable
-private object EmptyBackdrop : Backdrop {
+object EmptyBackdrop : Backdrop {
 
     override val isCoordinatesDependent: Boolean = false
 

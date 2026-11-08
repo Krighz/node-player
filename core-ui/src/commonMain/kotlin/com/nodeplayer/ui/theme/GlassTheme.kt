@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,8 +19,10 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.nodeplayer.model.GlassThemeConfig
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.nodeplayer.model.GlassControlsConfig
+import com.nodeplayer.model.GlassThemeConfig
 
 data class GlassTokensData(
     val opacity: Float = 0.55f,
@@ -76,6 +79,7 @@ val LocalGlassTokens = staticCompositionLocalOf { GlassTokensData() }
 val LocalAccentColor = staticCompositionLocalOf { Color(0xFF6366F1) }
 val LocalGlassThemeConfig = staticCompositionLocalOf { GlassThemeConfig() }
 val LocalGlassControlsConfig = staticCompositionLocalOf { GlassControlsConfig() }
+val LocalControlBackdrop = compositionLocalOf<Backdrop> { emptyBackdrop() }
 
 object GlassTokens {
     val defaultCornerRadius: Dp = 26.dp

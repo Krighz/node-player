@@ -97,6 +97,7 @@ fun ConvxLiquidDock(
     val controlsConfig = LocalGlassControlsConfig.current
     val resolvedDock = controlsConfig.resolve(GlassComponentType.DOCK)
     val density = LocalDensity.current
+    val isDark = themeConfig.themeMode != "LIGHT"
 
     val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF" && !resolvedDock.isPlainSquircle && controlsConfig.masterEnabled
     val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
@@ -176,13 +177,17 @@ fun ConvxLiquidDock(
                                 Shadow(radius = 12.dp, color = Color.Black.copy(alpha = 0.28f * resolvedDock.shadowStrength))
                             },
                             onDrawSurface = {
-                                drawRect(Color(0xFF141923).copy(alpha = 0.65f))
+                                val surfaceAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.55f else 0.40f)).coerceIn(0.15f, 0.75f)
+                                val surfaceColor = if (isDark) Color(0xFF141923) else Color.White
+                                drawRect(surfaceColor.copy(alpha = surfaceAlpha))
                             }
                         )
                     } else {
+                        val fallbackAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.75f else 0.60f)).coerceIn(0.25f, 0.85f)
+                        val fallbackColor = if (isDark) Color(0xFF141923) else Color.White
                         Modifier
                             .clip(dockShape)
-                            .background(Color(0xFF141923).copy(alpha = 0.82f))
+                            .background(fallbackColor.copy(alpha = fallbackAlpha))
                             .border(
                                 width = 1.dp,
                                 brush = Brush.verticalGradient(
@@ -350,13 +355,17 @@ fun ConvxLiquidDock(
                                     Shadow(radius = 10.dp, color = Color.Black.copy(alpha = 0.25f))
                                 },
                                 onDrawSurface = {
-                                    drawRect(Color(0xFF141923).copy(alpha = 0.65f))
+                                    val surfaceAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.55f else 0.40f)).coerceIn(0.15f, 0.75f)
+                                    val surfaceColor = if (isDark) Color(0xFF141923) else Color.White
+                                    drawRect(surfaceColor.copy(alpha = surfaceAlpha))
                                 }
                             )
                         } else {
+                            val fallbackAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.75f else 0.60f)).coerceIn(0.25f, 0.85f)
+                            val fallbackColor = if (isDark) Color(0xFF141923) else Color.White
                             Modifier
                                 .clip(searchShape)
-                                .background(Color(0xFF141923).copy(alpha = 0.82f))
+                                .background(fallbackColor.copy(alpha = fallbackAlpha))
                                 .border(
                                     width = 1.dp,
                                     brush = Brush.verticalGradient(

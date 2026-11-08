@@ -15,3 +15,13 @@ fun RenderEffect.asAndroidRenderEffect(): android.graphics.RenderEffect {
         field.get(this) as android.graphics.RenderEffect
     }
 }
+
+@RequiresApi(Build.VERSION_CODES.S)
+fun android.graphics.Paint.setAndroidRenderEffect(renderEffect: android.graphics.RenderEffect?) {
+    try {
+        val method = android.graphics.Paint::class.java.getMethod("setRenderEffect", android.graphics.RenderEffect::class.java)
+        method.invoke(this, renderEffect)
+    } catch (_: Throwable) {
+        // Fallback or ignore
+    }
+}
