@@ -242,6 +242,25 @@ fun OfflineHomeView(
             }
         }
 
+        // Section: 4-Item Mobile Home Shortcuts Grid
+        item {
+            com.nodeplayer.ui.components.HomeShortcutsGrid(
+                onOfflineMusicClick = {
+                    com.nodeplayer.common.AppModeState.setOnlineMode(false)
+                    onNavigateToLibrary()
+                },
+                onDeviceConnectClick = {
+                    onPairNewDevice()
+                },
+                onHiResCollectionClick = {
+                    onNavigateToLibrary()
+                },
+                onMyPlaylistsClick = {
+                    onNavigateToLibrary()
+                }
+            )
+        }
+
         // Section 1: FOR YOU (Mix Cards)
         item {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -331,41 +350,12 @@ fun OfflineHomeView(
             }
         }
 
-        // Section 3: RECENTLY PLAYED
+        // Section 3: RECENTLY PLAYED (Continuous squircle covers with high-contrast frosted badges)
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(
-                    text = "RECENTLY PLAYED",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.2.sp,
-                        color = Color.White
-                    )
-                )
-
-                val rowState = rememberLazyListState()
-
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    LazyRow(
-                        state = rowState,
-                        horizontalArrangement = Arrangement.spacedBy(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onHorizontalScrollWheel { delta ->
-                                coroutineScope.launch {
-                                    rowState.scrollBy(delta * 120f)
-                                }
-                            }
-                    ) {
-                        items(recentlyPlayedTracks) { track ->
-                            StandardTrackCard(
-                                track = track,
-                                onClick = { onPlayTrack(track, recentlyPlayedTracks) }
-                            )
-                        }
-                    }
-                }
-            }
+            com.nodeplayer.ui.components.RecentlyPlayedShelf(
+                recentTracks = recentlyPlayedTracks,
+                onTrackClick = { track -> onPlayTrack(track, recentlyPlayedTracks) }
+            )
         }
     }
 }

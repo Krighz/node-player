@@ -59,11 +59,15 @@ fun HomeView(
         modifier = modifier.fillMaxSize()
     ) { online ->
         if (online) {
+            val recentTracks = remember(tracks) {
+                tracks.filter { it.lastPlayedTimestamp > 0L }.sortedByDescending { it.lastPlayedTimestamp }
+            }
             OnlineHomeView(
                 currentTrack = currentTrack,
                 isPlaying = isPlaying,
                 onPlayTrack = onPlayTrack,
                 onPlayPause = onPlayPause,
+                recentTracks = recentTracks,
                 dockScrollController = dockScrollController,
                 listState = onlineListState
             )

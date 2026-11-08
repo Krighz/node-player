@@ -48,6 +48,7 @@ fun OnlineHomeView(
     isPlaying: Boolean,
     onPlayTrack: (Track, List<Track>) -> Unit,
     onPlayPause: () -> Unit,
+    recentTracks: List<Track> = emptyList(),
     dockScrollController: DockScrollController? = null,
     listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier
@@ -109,6 +110,34 @@ fun OnlineHomeView(
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = Color.White.copy(alpha = 0.65f)
                     )
+                )
+            }
+        }
+
+        // Section: 4-Item Mobile Home Shortcuts Grid
+        item {
+            com.nodeplayer.ui.components.HomeShortcutsGrid(
+                onOfflineMusicClick = {
+                    com.nodeplayer.common.AppModeState.setOnlineMode(false)
+                },
+                onDeviceConnectClick = {
+                    // Open device connect dialog or node connect
+                },
+                onHiResCollectionClick = {
+                    com.nodeplayer.common.AppModeState.setOnlineMode(false)
+                },
+                onMyPlaylistsClick = {
+                    com.nodeplayer.common.AppModeState.setOnlineMode(false)
+                }
+            )
+        }
+
+        // Section: RECENTLY PLAYED
+        if (recentTracks.isNotEmpty()) {
+            item {
+                com.nodeplayer.ui.components.RecentlyPlayedShelf(
+                    recentTracks = recentTracks,
+                    onTrackClick = { track -> onPlayTrack(track, recentTracks) }
                 )
             }
         }
