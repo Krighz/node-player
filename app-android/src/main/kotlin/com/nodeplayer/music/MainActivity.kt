@@ -44,11 +44,9 @@ import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.player.NowPlayingSheet
 import com.nodeplayer.music.ui.screens.EqualizerScreen
 import com.nodeplayer.ui.theme.LocalControlBackdrop
-import dev.chrisbanes.haze.haze
 import com.nodeplayer.music.ui.screens.LibraryScreen
 import com.nodeplayer.music.ui.screens.SettingsScreen
 import com.nodeplayer.music.ui.theme.NodePlayerTheme
-import dev.chrisbanes.haze.HazeState
 import com.nodeplayer.music.update.UpdateManager
 import com.nodeplayer.music.update.UpdateOptInDialog
 import com.nodeplayer.music.update.UpdateChecker
@@ -105,7 +103,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeConfig by viewModel.themeConfig.collectAsState()
             val accentColor by viewModel.accentColor.collectAsState()
-            val dockHazeState = remember { HazeState() }
             val coroutineScope = rememberCoroutineScope()
             val dockScrollController = remember(coroutineScope, themeConfig.dockScrollSensitivity, themeConfig.dockReturnDelayMs) {
                 DockScrollController(
@@ -271,7 +268,6 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxSize()
                             .layerBackdrop(pageBackdrop)
-                            .haze(dockHazeState)
                             .then(
                                 if (themeConfig.dockAutoHideEnabled) {
                                     Modifier.nestedScroll(
@@ -322,7 +318,6 @@ class MainActivity : ComponentActivity() {
                                         safeToast("Download not ready yet", Toast.LENGTH_SHORT)
                                     }
                                 },
-                                hazeState = null
                             )
                             "library" -> LibraryScreen(
                                 tracks = allTracks,
@@ -341,7 +336,6 @@ class MainActivity : ComponentActivity() {
                                 onPlayNext = { viewModel.playNext(it) },
                                 onAddToQueue = { viewModel.addToQueue(it) },
                                 qualityBadgeMode = appSettings.qualityBadgesMode,
-                                hazeState = null,
                                 audioOutputInfo = audioOutputInfo,
                                 onAnalyzeTrack = { viewModel.analyzeTrack(it) },
                                 analyzingTrackId = analyzingTrackId
@@ -365,7 +359,6 @@ class MainActivity : ComponentActivity() {
                                 onLoadConvolverPreset = { viewModel.setConvolverPreset(it) },
                                 rmsLevel = currentRms,
                                 isPerformanceMode = themeConfig.isPerformanceMode,
-                                hazeState = null
                             )
                             "more" -> com.nodeplayer.music.ui.screens.MoreScreen(
                                 dailyStats = dailyStats,
@@ -375,7 +368,6 @@ class MainActivity : ComponentActivity() {
                                 onOpenSmartPlaylists = { currentRoute = "smart_playlists" },
                                 onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
                                 onOpenDiagnostics = { currentRoute = "graphics_diagnostics" },
-                                hazeState = null
                             )
                             "graphics_diagnostics" -> com.nodeplayer.music.ui.screens.GraphicsDiagnosticsScreen(
                                 themeConfig = themeConfig,
@@ -383,20 +375,17 @@ class MainActivity : ComponentActivity() {
                                 onToggleForceFail = { viewModel.toggleForceSelfTestFail(it) },
                                 onReportProblemClick = { showDiagnosticsDialog = true },
                                 onBack = { currentRoute = "more" },
-                                hazeState = null
                             )
                             "stats" -> com.nodeplayer.music.ui.screens.StatsScreen(
                                 dailyStats = dailyStats,
                                 allTracks = allTracks,
                                 onBack = { currentRoute = "more" },
                                 onOpenRecap = { currentRoute = "recap" },
-                                hazeState = null
                             )
                             "recap" -> com.nodeplayer.music.ui.screens.YearlyRecapScreen(
                                 dailyStats = dailyStats,
                                 allTracks = allTracks,
                                 onBack = { currentRoute = "more" },
-                                hazeState = null
                             )
                             "smart_playlists" -> com.nodeplayer.music.ui.screens.SmartPlaylistsScreen(
                                 allTracks = allTracks,
@@ -406,13 +395,11 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 onBack = { currentRoute = "more" },
-                                hazeState = null
                             )
                             "duplicate_finder" -> com.nodeplayer.music.ui.screens.DuplicateFinderScreen(
                                 allTracks = allTracks,
                                 onBack = { currentRoute = "more" },
                                 onTrackDeleted = { viewModel.refreshLibrary() },
-                                hazeState = null
                             )
                             "settings" -> SettingsScreen(
                                 outputInfo = audioOutputInfo,
@@ -443,13 +430,11 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToOpticalDiagnostics = { currentRoute = "optical_diagnostics" },
                                 onPairNewDevice = { showPairingDialog = true },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
-                                hazeState = null
                             )
                             "widgets", "widget_settings" -> com.nodeplayer.music.ui.screens.WidgetSettingsScreen(
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
                                 onBack = { currentRoute = "settings" },
-                                hazeState = null
                             )
                             "optical_diagnostics" -> com.nodeplayer.ui.screens.OpticalDiagnosticsView(
                                 onBack = { currentRoute = "settings" },
@@ -562,7 +547,6 @@ class MainActivity : ComponentActivity() {
                                     // Open signal path dialog / inspector
                                 },
                                 themeConfig = themeConfig,
-                                hazeState = dockHazeState
                             )
                         }
                     }

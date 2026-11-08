@@ -23,8 +23,9 @@ import com.nodeplayer.music.audio.AudioTestTools
 import com.nodeplayer.music.data.DailyListeningStatEntity
 import com.nodeplayer.music.feedback.FeedbackHelper
 import com.nodeplayer.music.ui.components.GlassCard
+import com.nodeplayer.music.ui.components.HazeState
 import com.nodeplayer.music.ui.theme.LocalAccentColor
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.ui.components.LiquidSlider
 import java.time.LocalDate
 
 @Composable
@@ -35,8 +36,7 @@ fun MoreScreen(
     onOpenRecap: () -> Unit,
     onOpenSmartPlaylists: () -> Unit,
     onOpenDuplicateFinder: () -> Unit,
-    onOpenDiagnostics: () -> Unit = {},
-    hazeState: HazeState? = null
+    onOpenDiagnostics: () -> Unit = {}
 ) {
     val accent = LocalAccentColor.current
     val context = LocalContext.current
@@ -117,10 +117,10 @@ fun MoreScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            ListeningCounterCard("Today", "${todaySec / 60}m", "${todaySec % 60}s", Modifier.weight(1f), hazeState)
-            ListeningCounterCard("Month", "%.1fh".format(monthSec / 3600f), "${(monthSec % 3600) / 60}m", Modifier.weight(1f), hazeState)
-            ListeningCounterCard("Year", "%.1fh".format(yearSec / 3600f), "", Modifier.weight(1f), hazeState)
-            ListeningCounterCard("Session", "${sessionListeningSeconds / 60}m", "${sessionListeningSeconds % 60}s", Modifier.weight(1f), hazeState, isAccent = true)
+            ListeningCounterCard("Today", "${todaySec / 60}m", "${todaySec % 60}s", Modifier.weight(1f))
+            ListeningCounterCard("Month", "%.1fh".format(monthSec / 3600f), "${(monthSec % 3600) / 60}m", Modifier.weight(1f))
+            ListeningCounterCard("Year", "%.1fh".format(yearSec / 3600f), "", Modifier.weight(1f))
+            ListeningCounterCard("Session", "${sessionListeningSeconds / 60}m", "${sessionListeningSeconds % 60}s", Modifier.weight(1f), isAccent = true)
         }
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -141,7 +141,7 @@ fun MoreScreen(
             title = "Listening Stats",
             subtitle = "Daily activity charts, top tracks and artists",
             onClick = onOpenStats,
-            hazeState = hazeState
+            
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -150,7 +150,7 @@ fun MoreScreen(
             title = "Yearly Recap",
             subtitle = "Your year in sound, streak, and shareable cards",
             onClick = onOpenRecap,
-            hazeState = hazeState
+            
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -159,7 +159,7 @@ fun MoreScreen(
             title = "Smart Playlists",
             subtitle = "Rule builder with lossless, DR, year, and M3U export",
             onClick = onOpenSmartPlaylists,
-            hazeState = hazeState
+            
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -168,7 +168,7 @@ fun MoreScreen(
             title = "Duplicate Finder",
             subtitle = "Exact hash & metadata duplicate detection with keep best",
             onClick = onOpenDuplicateFinder,
-            hazeState = hazeState
+            
         )
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -177,7 +177,7 @@ fun MoreScreen(
             title = "Graphics Diagnostics",
             subtitle = "GPU hardware inspection, shader self-test & previews",
             onClick = onOpenDiagnostics,
-            hazeState = hazeState
+            
         )
 
         Spacer(modifier = Modifier.height(20.dp))
@@ -199,7 +199,7 @@ fun MoreScreen(
         ) {
             GlassCard(
                 modifier = Modifier.weight(1f),
-                hazeState = hazeState,
+                
                 onClick = { FeedbackHelper.openFeedback(context) },
                 tintAlpha = 0.40f
             ) {
@@ -218,7 +218,7 @@ fun MoreScreen(
 
             GlassCard(
                 modifier = Modifier.weight(1f),
-                hazeState = hazeState,
+                
                 onClick = { FeedbackHelper.openBugReport(context) },
                 tintAlpha = 0.40f
             ) {
@@ -238,7 +238,7 @@ fun MoreScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        com.nodeplayer.music.ui.components.SupportCard(hazeState = hazeState)
+        com.nodeplayer.music.ui.components.SupportCard()
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -269,7 +269,7 @@ fun MoreScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState,
+            
             tintAlpha = 0.45f
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -446,7 +446,7 @@ fun MoreScreen(
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
-                    Slider(
+                    LiquidSlider(
                         value = sineFreqHz,
                         onValueChange = {
                             sineFreqHz = it
@@ -454,8 +454,7 @@ fun MoreScreen(
                                 AudioTestTools.playSineTone(sineFreqHz.toDouble())
                             }
                         },
-                        valueRange = 20f..20000f,
-                        colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                        valueRange = 20f..20000f
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -496,7 +495,7 @@ private fun ListeningCounterCard(
     val accent = LocalAccentColor.current
     GlassCard(
         modifier = modifier,
-        hazeState = hazeState,
+        
         tintAlpha = if (isAccent) 0.65f else 0.40f
     ) {
         Column(
@@ -537,7 +536,7 @@ private fun HubRow(
     val accent = LocalAccentColor.current
     GlassCard(
         modifier = Modifier.fillMaxWidth(),
-        hazeState = hazeState,
+        
         onClick = onClick,
         tintAlpha = 0.40f
     ) {

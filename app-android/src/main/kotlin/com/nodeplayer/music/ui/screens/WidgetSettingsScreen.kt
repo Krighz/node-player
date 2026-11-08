@@ -31,7 +31,11 @@ import com.nodeplayer.model.WidgetSettings
 import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.music.widget.WidgetPreferences
 import com.nodeplayer.music.widget.WidgetUpdateManager
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.music.ui.components.HazeState
+import com.nodeplayer.ui.components.LiquidChip
+import com.nodeplayer.ui.components.LiquidRadioButton
+import com.nodeplayer.ui.components.LiquidSlider
+import com.nodeplayer.ui.components.LiquidToggle
 
 enum class WidgetVariant(val label: String, val desc: String) {
     CARD_4X2("Card 4x2", "Standard full player with seekbar and scrubber"),
@@ -45,8 +49,7 @@ enum class WidgetVariant(val label: String, val desc: String) {
 fun WidgetSettingsScreen(
     currentTrack: Track?,
     isPlaying: Boolean,
-    onBack: () -> Unit,
-    hazeState: HazeState? = null
+    onBack: () -> Unit
 ) {
     val context = LocalContext.current
     var settings by remember { mutableStateOf(WidgetPreferences.getSettings(context)) }
@@ -108,7 +111,7 @@ fun WidgetSettingsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .glassSurface(hazeState = hazeState, shape = RoundedCornerShape(16.dp), tintAlpha = 0.45f)
+                    .glassSurface( shape = RoundedCornerShape(16.dp), tintAlpha = 0.45f)
                     .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
                     .padding(14.dp)
             ) {
@@ -137,7 +140,7 @@ fun WidgetSettingsScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .glassSurface(hazeState = hazeState, shape = RoundedCornerShape(20.dp), tintAlpha = 0.35f)
+                    .glassSurface( shape = RoundedCornerShape(20.dp), tintAlpha = 0.35f)
                     .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -184,7 +187,7 @@ fun WidgetSettingsScreen(
                 title = displayTitle,
                 artist = displayArtist,
                 isPlaying = isPlaying,
-                hazeState = hazeState
+                
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -203,7 +206,7 @@ fun WidgetSettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .glassSurface(hazeState = hazeState, shape = RoundedCornerShape(20.dp), tintAlpha = 0.50f)
+                    .glassSurface( shape = RoundedCornerShape(20.dp), tintAlpha = 0.50f)
                     .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -283,7 +286,7 @@ fun WidgetSettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .glassSurface(hazeState = hazeState, shape = RoundedCornerShape(20.dp), tintAlpha = 0.50f)
+                    .glassSurface( shape = RoundedCornerShape(20.dp), tintAlpha = 0.50f)
                     .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -309,7 +312,7 @@ fun WidgetSettingsScreen(
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            RadioButton(
+                            LiquidRadioButton(
                                 selected = isModeSelected,
                                 onClick = { updateSettings(settings.copy(accentMode = mode)) },
                                 colors = RadioButtonDefaults.colors(
@@ -353,7 +356,7 @@ fun WidgetSettingsScreen(
                         )
                         styles.forEach { (styleKey, styleLabel) ->
                             val isSel = settings.refractionStyle == styleKey
-                            FilterChip(
+                            LiquidChip(
                                 selected = isSel,
                                 onClick = { updateSettings(settings.copy(refractionStyle = styleKey)) },
                                 label = { Text(styleLabel, fontSize = 11.sp) },
@@ -388,7 +391,7 @@ fun WidgetSettingsScreen(
                             style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF6366F1), fontWeight = FontWeight.Bold)
                         )
                     }
-                    Slider(
+                    LiquidSlider(
                         value = settings.glassOpacity,
                         onValueChange = { updateSettings(settings.copy(glassOpacity = it)) },
                         valueRange = 0.1f..1.0f,
@@ -419,7 +422,7 @@ fun WidgetSettingsScreen(
                             style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF6366F1), fontWeight = FontWeight.Bold)
                         )
                     }
-                    Slider(
+                    LiquidSlider(
                         value = settings.edgeHighlightStrength,
                         onValueChange = { updateSettings(settings.copy(edgeHighlightStrength = it)) },
                         valueRange = 0.0f..1.0f,
@@ -450,7 +453,7 @@ fun WidgetSettingsScreen(
                             style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF6366F1), fontWeight = FontWeight.Bold)
                         )
                     }
-                    Slider(
+                    LiquidSlider(
                         value = settings.cornerRadiusDp,
                         onValueChange = { updateSettings(settings.copy(cornerRadiusDp = it)) },
                         valueRange = 12f..36f,
@@ -496,7 +499,7 @@ private fun WidgetLivePreviewCard(
     title: String,
     artist: String,
     isPlaying: Boolean,
-    hazeState: HazeState?
+    hazeState: HazeState? = null
 ) {
     val cornerShape = RoundedCornerShape(settings.cornerRadiusDp.dp)
 
@@ -512,7 +515,7 @@ private fun WidgetLivePreviewCard(
                 }
             )
             .glassSurface(
-                hazeState = hazeState,
+                
                 shape = cornerShape,
                 tintAlpha = settings.glassOpacity.coerceIn(0.1f, 0.95f)
             )
@@ -823,7 +826,7 @@ private fun WidgetToggleRow(
                 )
             )
         }
-        Switch(
+        LiquidToggle(
             checked = checked,
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(

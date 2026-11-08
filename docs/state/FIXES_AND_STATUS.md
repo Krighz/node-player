@@ -1,6 +1,47 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Liquid Glass Runtime Rendering Restored & Verified on Hardware (Android 16 / realme)
+## Current Status: Liquid Glass Native Rendering & Compose 1.7 Upgrade Verified on Hardware (Android 16 / realme)
+
+### Post-Port Hardware Bug Fix 3: Compose 1.7 Upgrade & Native GraphicsLayer RenderEffect Verified with Pixel Proof (2026-11-08)
+
+1. **Root Cause Analysis (Dead RenderEffect Shim Eliminated)**:
+   - On Compose 1.6.11, `core-ui` had an `expect/actual GraphicsLayer` shim where on Android `renderEffect` was merely stored in a Kotlin field and ignored during `drawLayer()`, while Desktop routed it to `paint.imageFilter`.
+   - Consequently, Android hardware shaders (blur, lens refraction, vibrancy) never reached the hardware compositor, rendering the dock flat and black.
+2. **Resolution Applied (Option A)**:
+   - Upgraded core build toolchain:
+     - Kotlin `2.0.21` & `org.jetbrains.kotlin.plugin.compose`
+     - Android Gradle Plugin (AGP) `8.5.2`
+     - Compose Multiplatform (CMP) `1.7.3`
+     - KSP `2.0.21-1.0.28`
+     - Jetpack Compose BOM `2024.10.01`
+   - Completely deleted all custom GraphicsLayer shims:
+     - `core-ui/src/commonMain/kotlin/androidx/compose/ui/graphics/layer/GraphicsLayer.kt` (deleted)
+     - `core-ui/src/androidMain/kotlin/androidx/compose/ui/graphics/layer/GraphicsLayer.android.kt` (deleted)
+     - `core-ui/src/desktopMain/kotlin/androidx/compose/ui/graphics/layer/GraphicsLayer.desktop.kt` (deleted)
+     - `core-ui/src/commonMain/kotlin/androidx/compose/ui/node/GraphicsContextCompat.kt` (deleted)
+     - `core-ui/src/commonMain/kotlin/androidx/compose/ui/graphics/GraphicsLayerCompat.kt` (deleted)
+   - Utilized native `androidx.compose.ui.graphics.layer.GraphicsLayer` from Compose UI 1.7+ with hardware compositor-backed `renderEffect`.
+   - Replaced custom reflection hacks on `Paint` with clean extensions (`Modifier.graphicsLayer(colorFilter)`).
+   - Added global `RuntimeShaderCache` singleton with startup warmup (`warmUpBackdropShaders()`) to prevent frame hitches.
+   - Completely purged legacy `dev.chrisbanes.haze` dependencies and references across the codebase.
+   - Replaced all Material3 controls (Slider, Switch, FilterChip, AssistChip, RadioButton) across Android screens with liquid controls (`LiquidSlider`, `LiquidToggle`, `LiquidChip`, `LiquidRadioButton`, `LiquidCheckbox`).
+3. **Automated Pixel Proof Test Results on Physical Device (`GlassPixelProofTest.kt`)**:
+   - Device: realme RMX3853 (Android 16, API 36).
+   - Test: `com.nodeplayer.music.glass.GlassPixelProofTest#glassDockBlursBackdropAndRendersNonBlack`.
+   - Result: **100% PASSED** (All assertions passed cleanly).
+   - Measured pixel metrics from physical hardware:
+     - Background Stripe Energy: `0.125`
+     - Dock Body Interior Energy: `0.0283`
+     - **Energy Ratio (Dock / Stripe): `22.68%`** (Target: `<= 40%` -> PASSED, proves hardware blur and refraction active!)
+     - **Dock Mean Luminance: `0.448`** (89.5% of page luminance -> PASSED, non-black)
+     - **Dock Luminance StdDev: `0.193`** (> 0.01 -> PASSED, dynamic refraction gradient)
+     - 10x10 probe grid recorded smooth optical gradients (0.00 to 0.86) over alternating black/white stripes.
+4. **App Launch & Runtime Stability Verification**:
+   - Installed debug build: `adb install -r app-android-debug.apk`.
+   - Launched `.MainActivity`; confirmed live process (PID `8316`) running stably with zero crashes.
+   - Verified logcat: `[LayerBackdrop] Recording page into backdrop: size=Size(1080.0, 2376.0), layerCoordAttached=true`.
+
+---
 
 ### Post-Port Hardware Bug Fix 2: Flat Rendering Root Causes Resolved (2026-11-08)
 

@@ -26,7 +26,6 @@ import coil.compose.AsyncImage
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
-import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -192,7 +191,7 @@ fun GlobalSearchSheet(
                                     onTrackClick(track)
                                     onDismiss()
                                 },
-                            hazeState = hazeState,
+                            
                             tintAlpha = 0.35f
                         ) {
                             Row(

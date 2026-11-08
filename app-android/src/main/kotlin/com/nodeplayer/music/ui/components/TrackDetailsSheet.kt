@@ -24,7 +24,6 @@ import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
-import dev.chrisbanes.haze.HazeState
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -131,7 +130,7 @@ fun TrackDetailsSheet(
 
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState,
+                
                 tintAlpha = 0.45f
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -208,7 +207,7 @@ fun TrackDetailsSheet(
 
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState,
+                
                 tintAlpha = 0.45f
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
@@ -366,7 +365,7 @@ fun TrackDetailsSheet(
 
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState,
+                
                 tintAlpha = 0.35f
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {

@@ -5,6 +5,27 @@
 
 ---
 
+### [2026-11-08] - Post-Port Hardware Fix 3: Compose 1.7 Upgrade & Native GraphicsLayer RenderEffect with Pixel Proof
+- **Build Toolchain Upgrade (Option A)**:
+  - Upgraded Kotlin to `2.0.21`, AGP to `8.5.2`, Compose Multiplatform to `1.7.3`, KSP to `2.0.21-1.0.28`, and Compose BOM to `2024.10.01`.
+  - Applied `org.jetbrains.kotlin.plugin.compose` across multiplatform and Android modules.
+- **Deleted GraphicsLayer Shims**:
+  - Deleted custom shims (`GraphicsLayer.kt`, `GraphicsLayer.android.kt`, `GraphicsLayer.desktop.kt`, `GraphicsLayerCompat.kt`, `GraphicsContextCompat.kt`).
+  - Switched to native `androidx.compose.ui.graphics.layer.GraphicsLayer` from Compose UI 1.7, restoring hardware compositor `RenderEffect` on Android.
+- **Haze Purge & Control Modernization**:
+  - Fully purged all legacy `dev.chrisbanes.haze` dependencies, states, and modifier extensions.
+  - Replaced Material3 controls across Android screens with `LiquidSlider`, `LiquidToggle`/`LiquidSwitch`, `LiquidChip`, `LiquidRadioButton`, and `LiquidCheckbox`.
+- **Physical Device Pixel Proof Verification (`GlassPixelProofTest.kt`)**:
+  - Executed automated instrumented test on realme device (RMX3853, Android 16) with 100% PASS:
+    - Stripe Background Edge Energy: `0.125`
+    - Dock Body Interior Edge Energy: `0.0283`
+    - Energy Ratio (Dock / Stripe): `22.68%` (<= 40% target passed)
+    - Dock Mean Luminance: `0.448` (89.5% of page luminance -> non-black passed)
+    - Dock Luminance StdDev: `0.193` (non-flat passed)
+- **App Launch Verification**:
+  - Installed `app-android-debug.apk` via `adb install -r`.
+  - Process PID `8316` verified running stably with 0 crashes.
+
 ### [2026-11-08] - Ground-Up Liquid Glass Rebuild: Phase 5 Diagnostics Test Screen, Verification, Builds & Acceptance
 - **Dedicated Optical Diagnostics Test Screen & Triple-Zone Pattern (VERIFY-01)**:
   - Created `OpticalDiagnosticsView.kt` in `:core-ui` featuring a high-contrast, vertically scrollable triple-zone backdrop:

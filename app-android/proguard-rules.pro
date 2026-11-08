@@ -3,8 +3,7 @@
 # Media3 & ExoPlayer
 -keep class androidx.media3.** { *; }
 
-# Haze Glassmorphism
--keep class dev.chrisbanes.haze.** { *; }
+
 
 # Models & Data entities
 -keep class com.nodeplayer.music.model.** { *; }

@@ -26,15 +26,14 @@ import androidx.core.content.FileProvider
 import com.nodeplayer.model.*
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.theme.LocalAccentColor
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.ui.components.LiquidChip
 import java.io.File
 
 @Composable
 fun SmartPlaylistsScreen(
     allTracks: List<Track>,
     onPlayTracks: (List<Track>) -> Unit,
-    onBack: () -> Unit,
-    hazeState: HazeState? = null
+    onBack: () -> Unit
 ) {
     val accent = LocalAccentColor.current
     val context = LocalContext.current
@@ -140,7 +139,7 @@ fun SmartPlaylistsScreen(
                 itemsIndexed(matching, key = { index, track -> "${track.id}_$index" }) { _, track ->
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        hazeState = hazeState,
+                        
                         onClick = { onPlayTracks(listOf(track) + matching.filter { it.id != track.id }) }
                     ) {
                         Row(
@@ -176,7 +175,7 @@ fun SmartPlaylistsScreen(
 
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        hazeState = hazeState,
+                        
                         onClick = { selectedPlaylistForDetail = playlist }
                     ) {
                         Row(
@@ -309,7 +308,7 @@ fun SmartPlaylistEditorDialog(
                         SmartRuleField.DR_SCORE to "DR",
                         SmartRuleField.YEAR to "Year"
                     ).forEach { (field, label) ->
-                        FilterChip(
+                        LiquidChip(
                             selected = selectedField == field,
                             onClick = {
                                 selectedField = field

@@ -53,8 +53,6 @@ import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
 import com.nodeplayer.music.ui.components.SoundWaveVisualizer
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
@@ -89,7 +87,6 @@ fun NowPlayingSheet(
     onSetSleepTimer: (Int?) -> Unit = {},
     onOpenSignalPath: () -> Unit = {},
     themeConfig: GlassThemeConfig? = null,
-    hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -128,7 +125,6 @@ fun NowPlayingSheet(
     }
 
     val activeThemeConfig = themeConfig ?: LocalGlassThemeConfig.current
-    val sheetHazeState = hazeState ?: remember { HazeState() }
 
     Box(
         modifier = modifier
@@ -148,7 +144,6 @@ fun NowPlayingSheet(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .haze(sheetHazeState)
         ) {
             LiquidGlassBackground(
                 accentColor = accent,
@@ -294,7 +289,6 @@ fun NowPlayingSheet(
                         onSkipPrevious = onSkipPreviousClick,
                         rmsLevel = rmsLevel,
                         isPerformanceMode = isPerformanceMode,
-                        hazeState = sheetHazeState,
                         themeConfig = activeThemeConfig
                     )
 
@@ -633,7 +627,6 @@ fun NowPlayingSheet(
                     onSkipPrevious = onSkipPreviousClick,
                     rmsLevel = rmsLevel,
                     isPerformanceMode = isPerformanceMode,
-                    hazeState = sheetHazeState,
                     themeConfig = activeThemeConfig
                 )
 
@@ -1181,7 +1174,6 @@ private fun PlayerControlButtons(
     onSkipPrevious: () -> Unit,
     rmsLevel: Float = 0.0f,
     isPerformanceMode: Boolean = false,
-    hazeState: HazeState? = null,
     themeConfig: GlassThemeConfig? = null
 ) {
     val cfg = themeConfig ?: LocalGlassThemeConfig.current

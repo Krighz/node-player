@@ -53,6 +53,10 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
 
         com.nodeplayer.music.diagnostics.LocalCrashLogger.init(this)
 
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            com.kyant.backdrop.RuntimeShaderCache.warmUp()
+        }
+
         if (BuildConfig.DEBUG) {
             android.os.StrictMode.setThreadPolicy(
                 android.os.StrictMode.ThreadPolicy.Builder()

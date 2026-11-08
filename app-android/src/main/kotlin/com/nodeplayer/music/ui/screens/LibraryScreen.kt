@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
+import com.nodeplayer.music.ui.components.HazeState
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
@@ -37,7 +38,6 @@ import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.music.ui.theme.pressScale
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
-import dev.chrisbanes.haze.HazeState
 import java.io.File
 
 @Composable
@@ -131,7 +131,7 @@ fun LibraryScreen(
                 Box(
                     modifier = Modifier
                         .glassSurface(
-                            hazeState = hazeState,
+                            
                             shape = pillShape,
                             tintAlpha = if (isSelected) 0.85f else 0.35f,
                             customTint = if (isSelected) accent.copy(alpha = 0.4f) else null
@@ -168,7 +168,7 @@ fun LibraryScreen(
                 onTrackClick = onTrackClick,
                 onPlayNext = onPlayNext,
                 onAddToQueue = onAddToQueue,
-                hazeState = hazeState
+                
             )
         } else if (tracks.isEmpty()) {
             EmptyLibraryView(onRescanClick)
@@ -183,14 +183,14 @@ fun LibraryScreen(
                     onAddToQueue = onAddToQueue,
                     qualityBadgeMode = qualityBadgeMode,
                     onInspectTrack = { inspectingTrack = it },
-                    hazeState = hazeState
+                    
                 )
-                1 -> AlbumsGrid(albums = albums, isGridView = isGridView, onAlbumClick = {}, hazeState = hazeState)
-                2 -> ArtistsList(artists = artists, isGridView = isGridView, onArtistClick = {}, hazeState = hazeState)
+                1 -> AlbumsGrid(albums = albums, isGridView = isGridView, onAlbumClick = {}, )
+                2 -> ArtistsList(artists = artists, isGridView = isGridView, onArtistClick = {}, )
                 3 -> FoldersList(
                     folders = folders,
                     onFolderClick = { viewingFolder = it },
-                    hazeState = hazeState
+                    
                 )
             }
         }
@@ -202,7 +202,7 @@ fun LibraryScreen(
             track = targetTrack,
             audioOutputInfo = audioOutputInfo,
             onDismiss = { inspectingTrack = null },
-            hazeState = hazeState,
+            
             onAnalyzeSong = onAnalyzeTrack,
             isAnalyzing = analyzingTrackId == targetTrack.id
         )
@@ -219,7 +219,7 @@ fun SongsList(
     onAddToQueue: (Track) -> Unit = {},
     qualityBadgeMode: String = "DETAILED",
     onInspectTrack: (Track) -> Unit = {},
-    hazeState: HazeState?
+    hazeState: HazeState? = null
 ) {
     val accent = LocalAccentColor.current
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -239,7 +239,7 @@ fun SongsList(
 
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState,
+                
                 onClick = { onTrackClick(track, tracks) },
                 tintAlpha = if (isCurrent) 0.70f else 0.40f
             ) {
@@ -424,7 +424,7 @@ fun SongsList(
 fun FoldersList(
     folders: List<MusicFolder>,
     onFolderClick: (MusicFolder) -> Unit,
-    hazeState: HazeState?
+    hazeState: HazeState? = null
 ) {
     val accent = LocalAccentColor.current
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -442,7 +442,7 @@ fun FoldersList(
         items(folders, key = { it.path }) { folder ->
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState,
+                
                 onClick = { onFolderClick(folder) }
             ) {
                 Row(
@@ -510,7 +510,7 @@ fun FolderDetailView(
     onTrackClick: (Track, List<Track>) -> Unit,
     onPlayNext: (Track) -> Unit = {},
     onAddToQueue: (Track) -> Unit = {},
-    hazeState: HazeState?
+    hazeState: HazeState? = null
 ) {
     val accent = LocalAccentColor.current
 
@@ -568,7 +568,7 @@ fun FolderDetailView(
             onTrackClick = onTrackClick,
             onPlayNext = onPlayNext,
             onAddToQueue = onAddToQueue,
-            hazeState = hazeState
+            
         )
     }
 }
@@ -610,7 +610,7 @@ fun AlbumsGrid(
             items(albums, key = { it.id }) { album ->
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    hazeState = hazeState,
+                    
                     onClick = { onAlbumClick(album) }
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
@@ -666,7 +666,7 @@ fun AlbumsGrid(
             items(albums, key = { it.id }) { album ->
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    hazeState = hazeState,
+                    
                     onClick = { onAlbumClick(album) }
                 ) {
                     Row(
@@ -747,7 +747,7 @@ fun ArtistsList(
             items(artists, key = { it.id }) { artist ->
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    hazeState = hazeState,
+                    
                     onClick = { onArtistClick(artist) }
                 ) {
                     Column(
@@ -802,7 +802,7 @@ fun ArtistsList(
             items(artists, key = { it.id }) { artist ->
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    hazeState = hazeState,
+                    
                     onClick = { onArtistClick(artist) }
                 ) {
                     Row(

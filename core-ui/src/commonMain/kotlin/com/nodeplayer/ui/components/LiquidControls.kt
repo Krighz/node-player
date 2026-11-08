@@ -16,6 +16,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,9 +82,11 @@ fun LiquidSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
-    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     enabled: Boolean = true,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     steps: Int = 0,
+    onValueChangeFinished: (() -> Unit)? = null,
+    colors: Any? = null,
     backdrop: Backdrop? = null
 ) {
     val controlsConfig = LocalGlassControlsConfig.current
@@ -122,18 +126,47 @@ fun LiquidGlassSlider(
     value: Float,
     onValueChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
-    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     enabled: Boolean = true,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
     steps: Int = 0,
+    onValueChangeFinished: (() -> Unit)? = null,
+    colors: Any? = null,
     backdrop: Backdrop? = null
 ) {
     LiquidSlider(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier,
-        valueRange = valueRange,
         enabled = enabled,
+        valueRange = valueRange,
         steps = steps,
+        onValueChangeFinished = onValueChangeFinished,
+        colors = colors,
+        backdrop = backdrop
+    )
+}
+
+@Composable
+fun LiquidGlassLiquidSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    steps: Int = 0,
+    onValueChangeFinished: (() -> Unit)? = null,
+    colors: Any? = null,
+    backdrop: Backdrop? = null
+) {
+    LiquidSlider(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        enabled = enabled,
+        valueRange = valueRange,
+        steps = steps,
+        onValueChangeFinished = onValueChangeFinished,
+        colors = colors,
         backdrop = backdrop
     )
 }
@@ -148,6 +181,8 @@ fun LiquidToggle(
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    colors: Any? = null,
+    thumbContent: (@Composable () -> Unit)? = null,
     backdrop: Backdrop? = null
 ) {
     val controlsConfig = LocalGlassControlsConfig.current
@@ -226,6 +261,8 @@ fun LiquidSwitch(
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    colors: Any? = null,
+    thumbContent: (@Composable () -> Unit)? = null,
     backdrop: Backdrop = remember { emptyBackdrop() }
 ) {
     LiquidToggle(
@@ -233,6 +270,8 @@ fun LiquidSwitch(
         onCheckedChange = onCheckedChange,
         modifier = modifier,
         enabled = enabled,
+        colors = colors,
+        thumbContent = thumbContent,
         backdrop = backdrop
     )
 }
@@ -246,6 +285,8 @@ fun LiquidGlassSwitch(
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    colors: Any? = null,
+    thumbContent: (@Composable () -> Unit)? = null,
     backdrop: Backdrop = remember { emptyBackdrop() }
 ) {
     LiquidToggle(
@@ -253,6 +294,8 @@ fun LiquidGlassSwitch(
         onCheckedChange = onCheckedChange,
         modifier = modifier,
         enabled = enabled,
+        colors = colors,
+        thumbContent = thumbContent,
         backdrop = backdrop
     )
 }
@@ -511,6 +554,8 @@ fun LiquidChip(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     enabled: Boolean = true,
+    colors: Any? = null,
+    border: Any? = null,
     lighterStyle: Boolean = false,
     backdrop: Backdrop? = null
 ) {
@@ -609,6 +654,113 @@ fun LiquidChip(
                     fontSize = 13.sp
                 )
             )
+        }
+    }
+}
+
+@Composable
+fun LiquidChip(
+    selected: Boolean = false,
+    onClick: () -> Unit,
+    label: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    leadingIcon: (@Composable () -> Unit)? = null,
+    trailingIcon: (@Composable () -> Unit)? = null,
+    enabled: Boolean = true,
+    colors: Any? = null,
+    border: Any? = null,
+    lighterStyle: Boolean = false,
+    backdrop: Backdrop? = null
+) {
+    val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
+    val resolved = controlsConfig.resolve(GlassComponentType.CHIPS, inList = lighterStyle)
+    val squircleShape = ContinuousRoundedRectangle(resolved.cornerShapeDp.dp)
+
+    val highlightAlpha by animateFloatAsState(
+        targetValue = if (selected) resolved.highlightStrength else 0.35f * resolved.highlightStrength,
+        label = "chipHighlight"
+    )
+    val bgAlpha by animateFloatAsState(
+        targetValue = if (selected) (if (lighterStyle || resolved.isPlainSquircle) 0.20f else 0.25f) else (resolved.tintOpacity * 0.25f).coerceIn(0.04f, 0.15f),
+        label = "chipBg"
+    )
+
+    val useGlass = !lighterStyle && !resolved.isPlainSquircle && controlsConfig.masterEnabled && effectiveSuppliedBackdrop !is com.kyant.backdrop.backdrops.EmptyBackdrop
+
+    val glassModifier = if (useGlass) {
+        val primaryColor = MaterialTheme.colorScheme.primary
+        Modifier.drawBackdrop(
+            backdrop = effectiveSuppliedBackdrop,
+            shape = { squircleShape },
+            effects = {
+                blur(resolved.blurDp.dp.toPx())
+                lens(resolved.lensHeightDp.dp.toPx(), resolved.lensAmountDp.dp.toPx(), chromaticAberration = resolved.chromaticAberration > 0.05f)
+                vibrancy()
+            },
+            highlight = {
+                Highlight.Ambient.copy(
+                    width = 1.dp,
+                    alpha = (highlightAlpha * 0.65f).coerceIn(0.10f, 1f)
+                )
+            },
+            shadow = {
+                Shadow(radius = 6.dp, color = Color.Black.copy(alpha = 0.15f * resolved.shadowStrength))
+            },
+            onDrawSurface = {
+                if (selected) {
+                    drawRect(primaryColor.copy(alpha = bgAlpha))
+                } else {
+                    drawRect(Color.White.copy(alpha = bgAlpha))
+                }
+            }
+        )
+    } else {
+        Modifier
+            .clip(squircleShape)
+            .background(
+                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = bgAlpha)
+                else Color.White.copy(alpha = bgAlpha)
+            )
+            .border(
+                width = 1.dp,
+                brush = Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = (highlightAlpha * 0.5f).coerceIn(0.08f, 1f)),
+                        Color.White.copy(alpha = 0.08f)
+                    )
+                ),
+                shape = squircleShape
+            )
+    }
+
+    Box(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .then(glassModifier)
+            .clickable(
+                enabled = enabled,
+                role = Role.Checkbox,
+                onClick = onClick
+            )
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            leadingIcon?.invoke()
+            CompositionLocalProvider(
+                LocalContentColor provides if (selected) Color.White else Color.White.copy(alpha = 0.75f),
+                LocalTextStyle provides MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                    fontSize = 13.sp
+                )
+            ) {
+                label()
+            }
         }
     }
 }
@@ -896,6 +1048,7 @@ fun LiquidCheckbox(
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    colors: Any? = null,
     lighterStyle: Boolean = false,
     backdrop: Backdrop? = null
 ) {
@@ -1022,6 +1175,7 @@ fun LiquidRadioButton(
     onClick: (() -> Unit)?,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    colors: Any? = null,
     lighterStyle: Boolean = false,
     backdrop: Backdrop? = null
 ) {

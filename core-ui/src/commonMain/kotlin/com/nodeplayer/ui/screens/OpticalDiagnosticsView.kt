@@ -30,6 +30,7 @@ import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.model.Track
 import com.nodeplayer.ui.PlayerNavDestination
 import com.nodeplayer.ui.components.ConvxMiniPlayer
+import com.nodeplayer.ui.components.GlassControlSurface
 import com.nodeplayer.ui.components.LiquidDock
 import com.nodeplayer.ui.components.LiquidSlider
 import com.nodeplayer.ui.theme.LocalAccentColor
@@ -188,43 +189,44 @@ fun OpticalDiagnosticsView(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // INTERACTIVE TEST SLIDER OVER PATTERN
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF141824).copy(alpha = 0.85f)),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Rounded.Tune, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Interactive LiquidSlider Test", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            // INTERACTIVE TEST SLIDER OVER PATTERN (Wrapped in GlassControlSurface to prevent self-sampling recursion)
+            GlassControlSurface(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF141824).copy(alpha = 0.85f)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Rounded.Tune, contentDescription = null, tint = accent, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Interactive LiquidSlider Test", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                            Text(
+                                text = "${(testSliderValue * 100).toInt()}%",
+                                color = accent,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 13.sp
+                            )
                         }
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "${(testSliderValue * 100).toInt()}%",
-                            color = accent,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 13.sp
+                            text = "Drag continuously to test damped spring velocity stretch, finger squish, and live refraction over the test pattern.",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        LiquidSlider(
+                            value = testSliderValue,
+                            onValueChange = { testSliderValue = it },
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "Drag continuously to test damped spring velocity stretch, finger squish, and live refraction over the test pattern.",
-                        fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.6f)
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    LiquidSlider(
-                        value = testSliderValue,
-                        onValueChange = { testSliderValue = it },
-                        backdrop = pageBackdrop,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
             }
 

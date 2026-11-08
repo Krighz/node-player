@@ -33,7 +33,7 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.music.data.DailyListeningStatEntity
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.theme.LocalAccentColor
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.ui.components.LiquidChip
 import java.io.File
 import java.io.FileOutputStream
 import java.time.LocalDate
@@ -42,8 +42,7 @@ import java.time.LocalDate
 fun YearlyRecapScreen(
     dailyStats: List<DailyListeningStatEntity>,
     allTracks: List<Track>,
-    onBack: () -> Unit,
-    hazeState: HazeState? = null
+    onBack: () -> Unit
 ) {
     val accent = LocalAccentColor.current
     val context = LocalContext.current
@@ -149,7 +148,7 @@ fun YearlyRecapScreen(
         ) {
             listOf(currentYear, currentYear - 1).forEach { year ->
                 val isSelected = selectedYear == year
-                FilterChip(
+                LiquidChip(
                     selected = isSelected,
                     onClick = { selectedYear = year },
                     label = { Text("$year", fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },

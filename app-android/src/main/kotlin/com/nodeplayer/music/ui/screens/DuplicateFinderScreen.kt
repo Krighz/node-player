@@ -30,8 +30,8 @@ import com.nodeplayer.library.DuplicateFinder
 import com.nodeplayer.library.DuplicateGroup
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
+import com.nodeplayer.music.ui.components.HazeState
 import com.nodeplayer.music.ui.theme.LocalAccentColor
-import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -181,7 +181,7 @@ fun DuplicateFinderScreen(
                 items(duplicateGroups) { group ->
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        hazeState = hazeState,
+                        
                         tintAlpha = 0.45f
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {

@@ -34,13 +34,13 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
+import com.nodeplayer.music.ui.components.HazeState
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.pressScale
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.DeviceConnectPill
 import com.nodeplayer.ui.components.DeviceConnectStatus
 import com.nodeplayer.ui.components.LiquidIconButton
-import dev.chrisbanes.haze.HazeState
 import java.io.File
 
 @Composable
@@ -188,7 +188,7 @@ fun HomeScreen(
                 UpdateBanner(
                     updateInfo = availableUpdate!!,
                     downloadStatus = downloadStatus,
-                    hazeState = hazeState,
+                    
                     onUpdateNow = {
                         onStartUpdate(availableUpdate!!)
                         UpdateManager.startDownload(context, availableUpdate!!)
@@ -215,7 +215,7 @@ fun HomeScreen(
                 Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        hazeState = hazeState
+                        
                     ) {
                         Row(
                             modifier = Modifier

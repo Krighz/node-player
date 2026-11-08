@@ -20,8 +20,8 @@ import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.data.DailyListeningStatEntity
 import com.nodeplayer.music.ui.components.GlassCard
+import com.nodeplayer.music.ui.components.HazeState
 import com.nodeplayer.music.ui.theme.LocalAccentColor
-import dev.chrisbanes.haze.HazeState
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
@@ -141,7 +141,7 @@ fun StatsScreen(
                 ) {
                     GlassCard(
                         modifier = Modifier.weight(1f),
-                        hazeState = hazeState,
+                        
                         tintAlpha = 0.45f
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
@@ -157,7 +157,7 @@ fun StatsScreen(
 
                     GlassCard(
                         modifier = Modifier.weight(1f),
-                        hazeState = hazeState,
+                        
                         tintAlpha = 0.45f
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
@@ -173,7 +173,7 @@ fun StatsScreen(
 
                     GlassCard(
                         modifier = Modifier.weight(1f),
-                        hazeState = hazeState,
+                        
                         tintAlpha = 0.45f
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
@@ -194,7 +194,7 @@ fun StatsScreen(
             item {
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    hazeState = hazeState,
+                    
                     tintAlpha = 0.45f
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -283,7 +283,7 @@ fun StatsScreen(
                 items(topArtists) { (artist, plays) ->
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        hazeState = hazeState,
+                        
                         tintAlpha = 0.35f
                     ) {
                         Row(
@@ -332,7 +332,7 @@ fun StatsScreen(
                 items(topTracks) { track ->
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
-                        hazeState = hazeState,
+                        
                         tintAlpha = 0.35f
                     ) {
                         Row(

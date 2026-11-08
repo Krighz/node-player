@@ -29,11 +29,12 @@ import com.nodeplayer.music.diagnostics.GlassShaderSelfTest
 import com.nodeplayer.music.diagnostics.GpuInspector
 import com.nodeplayer.music.diagnostics.ShaderSelfTestResult
 import com.nodeplayer.music.ui.components.GlassCard
+import com.nodeplayer.music.ui.components.HazeState
 import com.nodeplayer.music.ui.components.glassRefraction
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.ui.components.LiquidToggle
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,7 +45,6 @@ fun GraphicsDiagnosticsScreen(
     onToggleForceFail: (Boolean) -> Unit,
     onReportProblemClick: () -> Unit = {},
     onBack: () -> Unit,
-    hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -106,7 +106,7 @@ fun GraphicsDiagnosticsScreen(
             )
             Spacer(modifier = Modifier.height(6.dp))
 
-            GlassCard(modifier = Modifier.fillMaxWidth(), hazeState = hazeState) {
+            GlassCard(modifier = Modifier.fillMaxWidth(), ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     DiagRow("Device", "${deviceInfo.manufacturer} ${deviceInfo.model} (${deviceInfo.device})")
                     DiagRow("Android OS", "${deviceInfo.androidVersion} (API ${deviceInfo.apiLevel})")
@@ -131,7 +131,7 @@ fun GraphicsDiagnosticsScreen(
             )
             Spacer(modifier = Modifier.height(6.dp))
 
-            GlassCard(modifier = Modifier.fillMaxWidth(), hazeState = hazeState) {
+            GlassCard(modifier = Modifier.fillMaxWidth(), ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -182,13 +182,12 @@ fun GraphicsDiagnosticsScreen(
                             Text("Force Self-Test Failure", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                             Text("Simulates a GPU spill failure to test safe fallback on phone/emulator", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                         }
-                        Switch(
+                        LiquidToggle(
                             checked = forceFailEnabled,
                             onCheckedChange = {
                                 forceFailEnabled = it
                                 onToggleForceFail(it)
-                            },
-                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                            }
                         )
                     }
 
@@ -207,7 +206,7 @@ fun GraphicsDiagnosticsScreen(
                             Text("Debug Mock Update", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                             Text("Simulates v9.9.0 update banner for UI testing", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                         }
-                        Switch(
+                        LiquidToggle(
                             checked = mockUpdateEnabled,
                             onCheckedChange = { enabled ->
                                 mockUpdateEnabled = enabled
@@ -228,8 +227,7 @@ fun GraphicsDiagnosticsScreen(
                                     com.nodeplayer.music.update.UpdatePreferences.setDebugMockUrl(context, null)
                                     com.nodeplayer.music.update.UpdateManager.clearCachedUpdate(context)
                                 }
-                            },
-                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                            }
                         )
                     }
                 }
@@ -261,7 +259,7 @@ fun GraphicsDiagnosticsScreen(
                     chromaticFringe = 1.0f,
                     grainStrength = 1.0f,
                     modifier = Modifier.weight(1f),
-                    hazeState = hazeState
+                    
                 )
                 ShaderVariantPreviewCard(
                     title = "Simple AGSL",
@@ -270,7 +268,7 @@ fun GraphicsDiagnosticsScreen(
                     chromaticFringe = 0.0f,
                     grainStrength = 0.0f,
                     modifier = Modifier.weight(1f),
-                    hazeState = hazeState
+                    
                 )
             }
 
@@ -284,7 +282,7 @@ fun GraphicsDiagnosticsScreen(
                     chromaticFringe = 0.0f,
                     grainStrength = 0.0f,
                     modifier = Modifier.weight(1f),
-                    hazeState = hazeState
+                    
                 )
                 ShaderVariantPreviewCard(
                     title = "Off / Flat",
@@ -294,7 +292,7 @@ fun GraphicsDiagnosticsScreen(
                     grainStrength = 0.0f,
                     isOff = true,
                     modifier = Modifier.weight(1f),
-                    hazeState = hazeState
+                    
                 )
             }
 
@@ -367,7 +365,7 @@ private fun ShaderVariantPreviewCard(
                             chromaticFringe = chromaticFringe,
                             grainStrength = grainStrength
                         )
-                        .glassSurface(hazeState = hazeState, shape = cardShape, tintAlpha = 0.60f)
+                        .glassSurface( shape = cardShape, tintAlpha = 0.60f)
                 } else {
                     Modifier.border(1.dp, Color.White.copy(alpha = 0.15f), cardShape)
                 }

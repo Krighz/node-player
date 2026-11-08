@@ -17,9 +17,8 @@ object GlassDebug {
         if (!isEnabled) return
         val now = System.currentTimeMillis()
         val lastTime = lastLogTimes[key] ?: 0L
-        val lastVal = lastLogValues[key]
 
-        if (lastVal != message || (now - lastTime >= minIntervalMs)) {
+        if (now - lastTime >= minIntervalMs) {
             lastLogTimes[key] = now
             lastLogValues[key] = message
             NodeLog.i("GlassDebug", "[$key] $message")

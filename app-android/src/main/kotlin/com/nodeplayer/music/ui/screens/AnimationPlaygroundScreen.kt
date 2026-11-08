@@ -36,7 +36,9 @@ import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.MotionTokens
 import com.nodeplayer.music.ui.theme.pressScale
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.ui.components.LiquidChip
+import com.nodeplayer.ui.components.LiquidSlider
+import com.nodeplayer.ui.components.LiquidToggle
 import kotlin.math.roundToInt
 
 @Composable
@@ -44,7 +46,6 @@ fun AnimationPlaygroundScreen(
     themeConfig: GlassThemeConfig,
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
     onBack: () -> Unit = {},
-    hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
@@ -112,7 +113,7 @@ fun AnimationPlaygroundScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // 1. Animation Preset Picker
-        GlassCard(modifier = Modifier.fillMaxWidth(), hazeState = hazeState) {
+        GlassCard(modifier = Modifier.fillMaxWidth(), ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "ANIMATION PRESET",
@@ -126,7 +127,7 @@ fun AnimationPlaygroundScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf("OFF" to "Off", "MINIMAL" to "Minimal", "SMOOTH" to "Smooth (Default)", "BOUNCY" to "Bouncy", "CUSTOM" to "Custom").forEach { (preset, label) ->
-                        FilterChip(
+                        LiquidChip(
                             selected = themeConfig.animationPreset == preset,
                             onClick = {
                                 onThemeConfigChange(themeConfig.copy(animationPreset = preset))
@@ -150,7 +151,7 @@ fun AnimationPlaygroundScreen(
                     Text("Motion Speed", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("%.1fx".format(themeConfig.motionSpeed), style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                 }
-                Slider(
+                LiquidSlider(
                     value = themeConfig.motionSpeed,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(motionSpeed = it)) },
                     valueRange = 0.5f..2.0f,
@@ -165,7 +166,7 @@ fun AnimationPlaygroundScreen(
                         Text("Custom Bounciness (Damping)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("%.2f".format(themeConfig.springBounciness), style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                     }
-                    Slider(
+                    LiquidSlider(
                         value = themeConfig.springBounciness,
                         onValueChange = { onThemeConfigChange(themeConfig.copy(springBounciness = it)) },
                         valueRange = 0.35f..1.0f,
@@ -177,7 +178,7 @@ fun AnimationPlaygroundScreen(
                         Text("Custom Stiffness", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("${themeConfig.springStiffness.roundToInt()}", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                     }
-                    Slider(
+                    LiquidSlider(
                         value = themeConfig.springStiffness,
                         onValueChange = { onThemeConfigChange(themeConfig.copy(springStiffness = it)) },
                         valueRange = 150f..1000f,
@@ -190,7 +191,7 @@ fun AnimationPlaygroundScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // 2. Motion Behavior Toggles
-        GlassCard(modifier = Modifier.fillMaxWidth(), hazeState = hazeState) {
+        GlassCard(modifier = Modifier.fillMaxWidth(), ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "MOTION BEHAVIORS & TOGGLES",
@@ -204,7 +205,7 @@ fun AnimationPlaygroundScreen(
                         Text("Reduce Motion", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Replaces springs and large slides with immediate cuts", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.reduceMotion,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(reduceMotion = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -219,7 +220,7 @@ fun AnimationPlaygroundScreen(
                         Text("Switch & Toggle Overshoot", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Thumb springs slightly past destination before resting", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.switchOvershootEnabled && !themeConfig.reduceMotion,
                         enabled = !themeConfig.reduceMotion,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(switchOvershootEnabled = it)) },
@@ -235,7 +236,7 @@ fun AnimationPlaygroundScreen(
                         Text("Press-Scale Feedback (.pressScale)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Cards and buttons compress slightly under your touch", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.pressScaleEnabled && !themeConfig.reduceMotion,
                         enabled = !themeConfig.reduceMotion,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(pressScaleEnabled = it)) },
@@ -249,7 +250,7 @@ fun AnimationPlaygroundScreen(
                         Text("Press Compression Depth", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.75f)))
                         Text("${((1.0f - themeConfig.pressScaleStrength) * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                     }
-                    Slider(
+                    LiquidSlider(
                         value = themeConfig.pressScaleStrength,
                         onValueChange = { onThemeConfigChange(themeConfig.copy(pressScaleStrength = it)) },
                         valueRange = 0.90f..0.98f,
@@ -265,7 +266,7 @@ fun AnimationPlaygroundScreen(
                         Text("Staggered List Cascade", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Smooth staggered entrance cascade for initial screen lists", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.staggeredListAnimation && !themeConfig.reduceMotion,
                         enabled = !themeConfig.reduceMotion,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(staggeredListAnimation = it)) },
@@ -281,7 +282,7 @@ fun AnimationPlaygroundScreen(
                         Text("Lyrics Active Line Springs", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Smooth scale & focal blur for active karaoke lyric lines", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.lyricsAnimationEnabled && !themeConfig.reduceMotion,
                         enabled = !themeConfig.reduceMotion,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(lyricsAnimationEnabled = it)) },
@@ -299,7 +300,7 @@ fun AnimationPlaygroundScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf("SLIDE" to "Spring Slide", "FADE" to "Crossfade", "SHARED" to "Shared Expand").forEach { (style, label) ->
-                        FilterChip(
+                        LiquidChip(
                             selected = themeConfig.screenTransitionStyle == style,
                             onClick = { onThemeConfigChange(themeConfig.copy(screenTransitionStyle = style)) },
                             label = { Text(label, fontSize = 12.sp) },
@@ -318,7 +319,7 @@ fun AnimationPlaygroundScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // 3. Interactive Touch & Spring Testing Area
-        GlassCard(modifier = Modifier.fillMaxWidth(), hazeState = hazeState) {
+        GlassCard(modifier = Modifier.fillMaxWidth(), ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "INTERACTIVE TESTING SUITE",
@@ -411,7 +412,7 @@ fun AnimationPlaygroundScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Interactive Switch Test", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                    Switch(
+                    LiquidToggle(
                         checked = testSwitchState,
                         onCheckedChange = {
                             testSwitchState = it

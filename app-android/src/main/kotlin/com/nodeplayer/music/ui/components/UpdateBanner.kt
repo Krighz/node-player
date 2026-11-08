@@ -18,14 +18,13 @@ import androidx.compose.ui.unit.sp
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.update.AppUpdateInfo
 import com.nodeplayer.music.update.DownloadStatus
-import dev.chrisbanes.haze.HazeState
 import java.util.Locale
 
 @Composable
 fun UpdateBanner(
     updateInfo: AppUpdateInfo,
     downloadStatus: DownloadStatus,
-    hazeState: HazeState?,
+    hazeState: HazeState? = null,
     onUpdateNow: () -> Unit,
     onLater: () -> Unit,
     onSkip: () -> Unit,
@@ -41,7 +40,7 @@ fun UpdateBanner(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        hazeState = hazeState,
+        
         shape = RoundedCornerShape(20.dp)
     ) {
         Column(

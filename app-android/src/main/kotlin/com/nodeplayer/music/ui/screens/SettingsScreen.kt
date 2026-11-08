@@ -69,7 +69,9 @@ import java.util.Locale
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings as AndroidSettings
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.ui.components.LiquidChip
+import com.nodeplayer.ui.components.LiquidSlider
+import com.nodeplayer.ui.components.LiquidToggle
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -103,7 +105,6 @@ fun SettingsScreen(
     onNavigateToOpticalDiagnostics: () -> Unit = {},
     onPairNewDevice: () -> Unit = {},
     onRescanLibrary: () -> Unit,
-    hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -179,7 +180,7 @@ fun SettingsScreen(
             themeConfig = themeConfig,
             onThemeConfigChange = onThemeConfigChange,
             onBack = { activeSection = "customize_ui" },
-            hazeState = hazeState,
+            
             modifier = modifier
         )
         return
@@ -422,7 +423,7 @@ fun SettingsScreen(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                FilterChip(
+                LiquidChip(
                     selected = themeConfig.isPerformanceMode,
                     onClick = {
                         onThemeConfigChange(themeConfig.copy(isPerformanceMode = !themeConfig.isPerformanceMode))
@@ -433,7 +434,7 @@ fun SettingsScreen(
                     }
                 )
 
-                FilterChip(
+                LiquidChip(
                     selected = themeConfig.shaderMode != "OFF",
                     onClick = {
                         val nextMode = when (themeConfig.shaderMode) {
@@ -451,7 +452,7 @@ fun SettingsScreen(
                     }
                 )
 
-                FilterChip(
+                LiquidChip(
                     selected = true,
                     onClick = {
                         val nextTheme = when (themeConfig.themeMode) {
@@ -588,7 +589,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Device
@@ -620,7 +621,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = outputInfo.isBitPerfect,
                         onCheckedChange = { /* Bit perfect toggle */ },
                         enabled = outputInfo.outputDeviceName.contains("USB"),
@@ -658,7 +659,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = accent)
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = autoDeviceProfilesEnabled,
                         onCheckedChange = onToggleAutoDeviceProfiles,
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -680,7 +681,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = resumeOnHeadsetConnect,
                         onCheckedChange = onToggleResumeOnHeadsetConnect,
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -735,7 +736,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Crossfade Main Toggle
@@ -751,7 +752,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = crossfadeConfig.enabled,
                         onCheckedChange = { onCrossfadeConfigChange(crossfadeConfig.copy(enabled = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -776,7 +777,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = accent)
                         )
                     }
-                    Slider(
+                    LiquidSlider(
                         value = crossfadeConfig.durationSeconds,
                         onValueChange = { onCrossfadeConfigChange(crossfadeConfig.copy(durationSeconds = (it * 2).roundToInt() / 2f)) },
                         valueRange = 1.0f..12.0f,
@@ -807,7 +808,7 @@ fun SettingsScreen(
                     ) {
                         FadeCurve.values().forEach { curve ->
                             val isSelected = crossfadeConfig.curve == curve
-                            FilterChip(
+                            LiquidChip(
                                 selected = isSelected,
                                 onClick = { onCrossfadeConfigChange(crossfadeConfig.copy(curve = curve)) },
                                 label = { Text(curve.displayName, fontSize = 12.sp) },
@@ -834,7 +835,7 @@ fun SettingsScreen(
                                 style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                             )
                         }
-                        Switch(
+                        LiquidToggle(
                             checked = crossfadeConfig.autoGapless,
                             onCheckedChange = { onCrossfadeConfigChange(crossfadeConfig.copy(autoGapless = it)) },
                             colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -862,7 +863,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Main Switch
@@ -878,7 +879,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = systemEqEnabled,
                         onCheckedChange = onToggleSystemEq,
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -976,7 +977,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Rescan Action Row
@@ -1020,7 +1021,7 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = accent)
                     )
                 }
-                Slider(
+                LiquidSlider(
                     value = minDurationSeconds.toFloat(),
                     onValueChange = { onMinDurationChange(it.toInt()) },
                     valueRange = 0f..60f,
@@ -1120,7 +1121,7 @@ fun SettingsScreen(
                                             )
                                         }
                                     }
-                                    Switch(
+                                    LiquidToggle(
                                         checked = !isExcluded,
                                         onCheckedChange = { onToggleExcludeFolder(folder.path) },
                                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -1241,7 +1242,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Gapless
@@ -1254,7 +1255,7 @@ fun SettingsScreen(
                         Text("Gapless Playback", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Zero-gap transition for live and concept albums", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = gaplessEnabled,
                         onCheckedChange = { gaplessEnabled = it },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -1271,7 +1272,7 @@ fun SettingsScreen(
                     Text("Crossfade Duration", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("%.1fs".format(crossfadeSeconds), color = accent, fontWeight = FontWeight.Bold)
                 }
-                Slider(
+                LiquidSlider(
                     value = crossfadeSeconds,
                     onValueChange = { crossfadeSeconds = it },
                     valueRange = 0.0f..10.0f,
@@ -1291,7 +1292,7 @@ fun SettingsScreen(
                 onApplySafeGraphicsMode = onApplySafeGraphicsMode,
                 onReportProblem = onReportProblem,
                 onOpenMotionPlayground = { activeSection = "motion_playground" },
-                hazeState = hazeState
+                
             )
             Spacer(modifier = Modifier.height(20.dp))
         }
@@ -1310,7 +1311,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1436,7 +1437,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             var widgetSettings by remember { mutableStateOf(WidgetPreferences.getSettings(context)) }
             var isOverlayRunning by remember { mutableStateOf(FloatingOverlayService.isRunning) }
@@ -1541,7 +1542,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = isOverlayRunning,
                         onCheckedChange = { enabled ->
                             if (enabled) {
@@ -1594,7 +1595,7 @@ fun SettingsScreen(
                     Text("Widget Corner Radius", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("${widgetSettings.cornerRadiusDp.toInt()} dp", color = accent, fontWeight = FontWeight.Bold)
                 }
-                Slider(
+                LiquidSlider(
                     value = widgetSettings.cornerRadiusDp,
                     onValueChange = {
                         widgetSettings = widgetSettings.copy(cornerRadiusDp = it)
@@ -1625,7 +1626,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -1640,7 +1641,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = false,
                         enabled = false,
                         onCheckedChange = {},
@@ -1669,7 +1670,7 @@ fun SettingsScreen(
         // Last.fm Scrobbler Glass Card
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -1681,7 +1682,7 @@ fun SettingsScreen(
                         Text("Enable Last.fm Scrobbling", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Scrobble qualifying tracks (>30s & 50%)", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = lastFmScrobbleEnabled,
                         onCheckedChange = {
                             lastFmScrobbleEnabled = it
@@ -1976,7 +1977,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Master Switch: Audio Quality Analysis
@@ -1989,7 +1990,7 @@ fun SettingsScreen(
                         Text("Audio Quality & Analysis", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White))
                         Text("Run spectral analysis, DR rating and loudness normalization", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = audioAnalysisEnabled,
                         onCheckedChange = {
                             audioAnalysisEnabled = it
@@ -2015,7 +2016,7 @@ fun SettingsScreen(
                             Text("Fake Hi-Res Detector", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                             Text("FFT background spectrum analysis for cutoffs & upsampling", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                         }
-                        Switch(
+                        LiquidToggle(
                             checked = fakeHiRes,
                             onCheckedChange = {
                                 fakeHiRes = it
@@ -2037,7 +2038,7 @@ fun SettingsScreen(
                             Text("EBU R128 Loudness Scan", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                             Text("Integrated LUFS measurement & automatic gain matching", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                         }
-                        Switch(
+                        LiquidToggle(
                             checked = loudnessScan,
                             onCheckedChange = {
                                 loudnessScan = it
@@ -2057,7 +2058,7 @@ fun SettingsScreen(
                         Text("Target Loudness", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f)))
                         Text("%.1f LUFS".format(targetLufs), color = accent, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
                     }
-                    Slider(
+                    LiquidSlider(
                         value = targetLufs,
                         onValueChange = {
                             targetLufs = it
@@ -2073,7 +2074,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Anti-Clipping Guard", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f)))
-                        Switch(
+                        LiquidToggle(
                             checked = clipGuard,
                             onCheckedChange = {
                                 clipGuard = it
@@ -2095,7 +2096,7 @@ fun SettingsScreen(
                             Text("Dynamic Range (DR) Meter", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                             Text("Standard 3s block dynamic range rating", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                         }
-                        Switch(
+                        LiquidToggle(
                             checked = drMeter,
                             onCheckedChange = {
                                 drMeter = it
@@ -2148,7 +2149,7 @@ fun SettingsScreen(
                             Text("Only While Charging", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                             Text("Postpone background scan until device is plugged in", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                         }
-                        Switch(
+                        LiquidToggle(
                             checked = analysisChargingOnly,
                             onCheckedChange = {
                                 analysisChargingOnly = it
@@ -2306,7 +2307,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Genre-Based Crossfade
@@ -2319,7 +2320,7 @@ fun SettingsScreen(
                         Text("Genre-Adaptive Crossfade", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Contextual curves & lengths (ambient longer, live zero)", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = genreCrossfade,
                         onCheckedChange = {
                             genreCrossfade = it
@@ -2339,7 +2340,7 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Sleep Timer: Finish Current Track", style = MaterialTheme.typography.bodyMedium.copy(color = Color.White))
-                    Switch(
+                    LiquidToggle(
                         checked = sleepFinishTrack,
                         onCheckedChange = {
                             sleepFinishTrack = it
@@ -2357,7 +2358,7 @@ fun SettingsScreen(
                     Text("Fade-Out Length", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.7f)))
                     Text("${sleepFadeSec}s", color = accent, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
                 }
-                Slider(
+                LiquidSlider(
                     value = sleepFadeSec.toFloat(),
                     onValueChange = {
                         sleepFadeSec = it.toInt()
@@ -2377,7 +2378,7 @@ fun SettingsScreen(
                         Text("Shake Phone to Extend", style = MaterialTheme.typography.bodyMedium.copy(color = Color.White))
                         Text("Adds +5 minutes when shake is detected", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = sleepShake,
                         onCheckedChange = {
                             sleepShake = it
@@ -2404,7 +2405,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Quality Badges Mode
@@ -2412,7 +2413,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("OFF", "COMPACT", "DETAILED").forEach { mode ->
-                        FilterChip(
+                        LiquidChip(
                             selected = badgeMode == mode,
                             onClick = {
                                 badgeMode = mode
@@ -2435,7 +2436,7 @@ fun SettingsScreen(
                         Text("Mini Player Gestures", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Swipe left/right next/prev, swipe up open, double-tap play", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = miniGestures,
                         onCheckedChange = {
                             miniGestures = it
@@ -2484,7 +2485,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -2532,7 +2533,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -2693,7 +2694,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
@@ -2826,7 +2827,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 // Check automatically switch
@@ -2848,7 +2849,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = updateCheckAuto,
                         onCheckedChange = { checked ->
                             updateCheckAuto = checked
@@ -2883,7 +2884,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                         )
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = updateWifiOnly,
                         onCheckedChange = { checked ->
                             updateWifiOnly = checked
@@ -3027,7 +3028,7 @@ fun SettingsScreen(
 
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                hazeState = hazeState
+                
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -3048,7 +3049,7 @@ fun SettingsScreen(
                                 color = Color.White.copy(alpha = 0.65f)
                             )
                         }
-                        Switch(
+                        LiquidToggle(
                             checked = nodeConnectOn,
                             onCheckedChange = { isChecked ->
                                 nodeConnectOn = isChecked
@@ -3137,7 +3138,7 @@ fun SettingsScreen(
                                 Text("Audio Cast (Direct Streaming)", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
                                 Text("Stream uncompressed live PCM audio directly to connected nodes", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
                             }
-                            Switch(
+                            LiquidToggle(
                                 checked = ncConfig.audioCastEnabled,
                                 onCheckedChange = { isChecked ->
                                     val updated = ncConfig.copy(audioCastEnabled = isChecked)
@@ -3159,7 +3160,7 @@ fun SettingsScreen(
                                 Text("Mute Local Device While Casting", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
                                 Text("Silence local phone speakers and output sound only on receiving PC", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
                             }
-                            Switch(
+                            LiquidToggle(
                                 checked = ncConfig.muteLocalOutputDuringCast,
                                 onCheckedChange = { isChecked ->
                                     val updated = ncConfig.copy(muteLocalOutputDuringCast = isChecked)
@@ -3181,7 +3182,7 @@ fun SettingsScreen(
                                 Text("Remote Control", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
                                 Text("Allow play, pause, and skip commands across connected devices", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
                             }
-                            Switch(
+                            LiquidToggle(
                                 checked = ncConfig.remoteControlEnabled,
                                 onCheckedChange = { isChecked ->
                                     val updated = ncConfig.copy(remoteControlEnabled = isChecked)
@@ -3203,7 +3204,7 @@ fun SettingsScreen(
                                 Text("Library Sharing & Search", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
                                 Text("Permit cross-device song searching (zero file path exposure)", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
                             }
-                            Switch(
+                            LiquidToggle(
                                 checked = ncConfig.shareLibraryEnabled,
                                 onCheckedChange = { isChecked ->
                                     val updated = ncConfig.copy(shareLibraryEnabled = isChecked)
@@ -3225,7 +3226,7 @@ fun SettingsScreen(
                                 Text("Playback Handoff", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = Color.White)
                                 Text("Seamlessly shift playback queue and position between devices", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.55f))
                             }
-                            Switch(
+                            LiquidToggle(
                                 checked = ncConfig.handoffEnabled,
                                 onCheckedChange = { isChecked ->
                                     val updated = ncConfig.copy(handoffEnabled = isChecked)
@@ -3299,7 +3300,7 @@ fun SettingsScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -3560,7 +3561,7 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        com.nodeplayer.music.ui.components.SupportCard(hazeState = hazeState)
+        com.nodeplayer.music.ui.components.SupportCard()
 
                 }
         }

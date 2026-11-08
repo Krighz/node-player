@@ -40,7 +40,9 @@ import com.nodeplayer.music.ui.components.glassLensBubble
 import com.nodeplayer.music.ui.components.glassRefraction
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
-import dev.chrisbanes.haze.HazeState
+import com.nodeplayer.ui.components.LiquidChip
+import com.nodeplayer.ui.components.LiquidSlider
+import com.nodeplayer.ui.components.LiquidToggle
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -51,7 +53,6 @@ fun CustomizeUiScreen(
     onApplySafeGraphicsMode: () -> Unit = {},
     onReportProblem: () -> Unit = {},
     onOpenMotionPlayground: () -> Unit = {},
-    hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -91,7 +92,7 @@ fun CustomizeUiScreen(
 
         GlassCard(
             modifier = Modifier.fillMaxWidth(),
-            hazeState = hazeState
+            
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
 
@@ -133,7 +134,7 @@ fun CustomizeUiScreen(
                                 grainStrength = themeConfig.grainStrengthValue()
                             )
                             .glassSurface(
-                                hazeState = hazeState,
+                                
                                 shape = previewShape,
                                 tintAlpha = themeConfig.effectiveTintAlpha
                             )
@@ -314,7 +315,7 @@ fun CustomizeUiScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf("SYSTEM" to "System", "DARK" to "Dark", "LIGHT" to "Light", "OLED" to "OLED").forEach { (mode, label) ->
-                        FilterChip(
+                        LiquidChip(
                             selected = themeConfig.themeMode == mode,
                             onClick = { onThemeConfigChange(themeConfig.copy(themeMode = mode, isOledBlack = mode == "OLED")) },
                             label = { Text(label, fontSize = 12.sp) },
@@ -336,7 +337,7 @@ fun CustomizeUiScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf("ARTWORK" to "Album Art", "MATERIAL_YOU" to "Material You", "PRESET" to "Custom Preset").forEach { (src, label) ->
-                        FilterChip(
+                        LiquidChip(
                             selected = themeConfig.accentSource == src,
                             onClick = { onThemeConfigChange(themeConfig.copy(accentSource = src, useDynamicAccent = src == "ARTWORK")) },
                             label = { Text(label, fontSize = 12.sp) },
@@ -392,7 +393,7 @@ fun CustomizeUiScreen(
                     Text("Glass Opacity", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("${(themeConfig.glassOpacity * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                 }
-                Slider(
+                LiquidSlider(
                     value = themeConfig.glassOpacity,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(glassOpacity = it, isFullyTransparent = false)) },
                     valueRange = 0f..1f,
@@ -404,7 +405,7 @@ fun CustomizeUiScreen(
                     Text("Blur Strength", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("${(themeConfig.blurStrength * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                 }
-                Slider(
+                LiquidSlider(
                     value = themeConfig.blurStrength,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(blurStrength = it)) },
                     valueRange = 0f..1f,
@@ -416,7 +417,7 @@ fun CustomizeUiScreen(
                     Text("Glass Texture (Grain)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("${(themeConfig.glassTexture * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                 }
-                Slider(
+                LiquidSlider(
                     value = themeConfig.glassTexture,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(glassTexture = it)) },
                     valueRange = 0f..1f,
@@ -428,7 +429,7 @@ fun CustomizeUiScreen(
                     Text("Edge Highlight Strength", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("${(themeConfig.edgeHighlightStrength * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                 }
-                Slider(
+                LiquidSlider(
                     value = themeConfig.edgeHighlightStrength,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(edgeHighlightStrength = it)) },
                     valueRange = 0f..1f,
@@ -441,7 +442,7 @@ fun CustomizeUiScreen(
                         Text("Fully Transparent Glass", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Removes fill and blur; keeps edge highlight", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.isFullyTransparent,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(isFullyTransparent = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -454,7 +455,7 @@ fun CustomizeUiScreen(
                         Text("Keep Text Readable", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Adaptive background contrast scrim for text", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.keepTextReadable,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(keepTextReadable = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -471,7 +472,7 @@ fun CustomizeUiScreen(
                     Text("Lens Refraction Strength", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("%.2fx".format(themeConfig.lensRefractionStrength), style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                 }
-                Slider(
+                LiquidSlider(
                     value = themeConfig.lensRefractionStrength,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(lensRefractionStrength = it)) },
                     valueRange = 0.20f..1.50f,
@@ -483,7 +484,7 @@ fun CustomizeUiScreen(
                     Text("Lens Rim Specular Intensity", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("${(themeConfig.lensRimSpecular * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                 }
-                Slider(
+                LiquidSlider(
                     value = themeConfig.lensRimSpecular,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(lensRimSpecular = it)) },
                     valueRange = 0f..1f,
@@ -513,7 +514,7 @@ fun CustomizeUiScreen(
                         "STATIC" to "Static Minimal"
                     )
                     styles.forEach { (styleKey, styleName) ->
-                        FilterChip(
+                        LiquidChip(
                             selected = themeConfig.backgroundAnimationStyle == styleKey,
                             onClick = { onThemeConfigChange(themeConfig.copy(backgroundAnimationStyle = styleKey)) },
                             label = { Text(styleName, fontSize = 12.sp) },
@@ -532,7 +533,7 @@ fun CustomizeUiScreen(
                     Text("Animation Speed", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("%.1fx".format(themeConfig.backgroundAnimationSpeed), style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                 }
-                Slider(
+                LiquidSlider(
                     value = themeConfig.backgroundAnimationSpeed,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(backgroundAnimationSpeed = it)) },
                     valueRange = 0.2f..3.0f,
@@ -544,7 +545,7 @@ fun CustomizeUiScreen(
                     Text("Animation Intensity", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                     Text("${(themeConfig.backgroundAnimationIntensity * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
                 }
-                Slider(
+                LiquidSlider(
                     value = themeConfig.backgroundAnimationIntensity,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(backgroundAnimationIntensity = it)) },
                     valueRange = 0.1f..1.0f,
@@ -559,7 +560,7 @@ fun CustomizeUiScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf("ARTWORK" to "Artwork", "PALETTE" to "Theme Palette", "CUSTOM" to "Custom Swatch").forEach { (src, label) ->
-                        FilterChip(
+                        LiquidChip(
                             selected = themeConfig.backgroundColorSource == src,
                             onClick = { onThemeConfigChange(themeConfig.copy(backgroundColorSource = src)) },
                             label = { Text(label, fontSize = 12.sp) },
@@ -579,7 +580,7 @@ fun CustomizeUiScreen(
                         Text("Animate Only While Playing", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Pauses fluid background shader when music is paused to save battery", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.animateOnlyWhilePlaying,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(animateOnlyWhilePlaying = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -602,7 +603,7 @@ fun CustomizeUiScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf("SYSTEM" to "System Default", "INTER" to "Inter", "OUTFIT" to "Outfit", "JETBRAINS_MONO" to "JetBrains Mono").forEach { (f, label) ->
-                        FilterChip(
+                        LiquidChip(
                             selected = themeConfig.fontFamily == f,
                             onClick = { onThemeConfigChange(themeConfig.copy(fontFamily = f)) },
                             label = { Text(label, fontSize = 12.sp) },
@@ -624,7 +625,7 @@ fun CustomizeUiScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf("SHARP" to "Sharp (8dp)", "ROUNDED" to "Rounded (16dp)", "PILL" to "Pill (24dp)").forEach { (r, label) ->
-                        FilterChip(
+                        LiquidChip(
                             selected = themeConfig.cornerRoundness == r,
                             onClick = {
                                 onThemeConfigChange(
@@ -653,7 +654,7 @@ fun CustomizeUiScreen(
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf("COMPACT" to "Compact (10dp)", "COMFORTABLE" to "Comfortable (16dp)", "ROOMY" to "Roomy (22dp)").forEach { (d, label) ->
-                        FilterChip(
+                        LiquidChip(
                             selected = themeConfig.spacingDensity == d,
                             onClick = { onThemeConfigChange(themeConfig.copy(spacingDensity = d)) },
                             label = { Text(label, fontSize = 12.sp) },
@@ -690,7 +691,7 @@ fun CustomizeUiScreen(
                         Text("Dock Search Button", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Show circular search icon next to the lens dock", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.showDockSearchButton,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(showDockSearchButton = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -703,7 +704,7 @@ fun CustomizeUiScreen(
                         Text("Mini Player Progress Bar", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Show bottom playback progress strip on mini player", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.showMiniPlayerWave,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(showMiniPlayerWave = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
@@ -716,7 +717,7 @@ fun CustomizeUiScreen(
                         Text("Audio Quality Format Badge", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
                         Text("Show bit-perfect / resampled sink badge in Now Playing", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f)))
                     }
-                    Switch(
+                    LiquidToggle(
                         checked = themeConfig.formatBadgeVisible,
                         onCheckedChange = { onThemeConfigChange(themeConfig.copy(formatBadgeVisible = it)) },
                         colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))

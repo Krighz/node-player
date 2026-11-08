@@ -2,22 +2,23 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.multiplatform")
     id("org.jetbrains.compose")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 kotlin {
     androidTarget {
         compilations.all {
-            kotlinOptions {
-                jvmTarget = "17"
-                freeCompilerArgs += listOf("-Xcontext-receivers")
+            compilerOptions.configure {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+                freeCompilerArgs.add("-Xcontext-receivers")
             }
         }
     }
     jvm("desktop") {
         compilations.all {
-            kotlinOptions {
-                jvmTarget = "17"
-                freeCompilerArgs += listOf("-Xcontext-receivers")
+            compilerOptions.configure {
+                jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+                freeCompilerArgs.add("-Xcontext-receivers")
             }
         }
     }
