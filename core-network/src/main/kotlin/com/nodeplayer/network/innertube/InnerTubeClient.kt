@@ -222,21 +222,37 @@ class InnerTubeClient(
     }
 
     /**
-     * Resolves playable audio stream metadata for [videoId].
-     * Uses `ANDROID_VR` client context allowing unthrottled direct audio stream extraction.
+     * Fetches raw [PlayerResponse] for [videoId] using specified [client].
      */
-    suspend fun getPlayer(videoId: String): Result<YouTubeStreamInfo> = runCatching {
-        NodeLog.d(TAG, "Fetching player stream info for videoId=$videoId")
-        val response = withRetry {
+    suspend fun getPlayerResponse(
+        videoId: String,
+        client: YouTubeClient = clientContext,
+    ): Result<PlayerResponse> = runCatching {
+        NodeLog.d(TAG, "Fetching player response for videoId=$videoId (client=${client.clientName})")
+        withRetry {
             httpClient.post("player") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
                 setBody(
                     PlayerBody(
-                        context = clientContext.toContext(locale),
+                        context = client.toContext(locale),
                         videoId = videoId
                     )
                 )
             }.body<PlayerResponse>()
         }
+    }
+
+    /**
+     * Resolves playable audio stream metadata for [videoId].
+     * Uses [client] context allowing unthrottled direct audio stream extraction.
+     */
+    suspend fun getPlayer(
+        videoId: String,
+        client: YouTubeClient = clientContext,
+    ): Result<YouTubeStreamInfo> = runCatching {
+        val response = getPlayerResponse(videoId, client).getOrThrow()
 
         val playability = response.playabilityStatus
         if (playability != null && playability.status != "OK") {

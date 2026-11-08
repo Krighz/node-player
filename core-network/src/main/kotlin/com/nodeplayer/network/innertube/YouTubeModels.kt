@@ -106,6 +106,30 @@ data class YouTubeClient(
             useSignatureTimestamp = false
         )
 
+        val ANDROID_VR = ANDROID_VR_1_65_10
+
+        val IOS = YouTubeClient(
+            clientName = "IOS",
+            clientVersion = "21.03.1",
+            clientId = "5",
+            userAgent = "com.google.ios.youtube/21.03.1 (iPhone16,2; U; CPU iOS 18_2 like Mac OS X;)",
+            osVersion = "18.2.22C152",
+        )
+
+        val VISIONOS = YouTubeClient(
+            clientName = "VISIONOS",
+            clientVersion = "0.1",
+            clientId = "101",
+            userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
+            osName = "visionOS",
+            osVersion = "1.3.21O771",
+            deviceMake = "Apple",
+            deviceModel = "RealityDevice14,1",
+            friendlyName = "visionOS",
+            loginSupported = false,
+            useSignatureTimestamp = false
+        )
+
         val ANDROID_MUSIC = YouTubeClient(
             clientName = "ANDROID_MUSIC",
             clientVersion = "6.37.50",
