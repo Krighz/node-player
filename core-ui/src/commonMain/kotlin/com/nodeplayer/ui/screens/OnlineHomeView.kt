@@ -43,9 +43,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+internal object OnlineFeedCache {
+    var cachedSections: List<YouTubeSection>? = null
+    var cachedTimestamp: Long = 0L
+    const val TTL_MS: Long = 15 * 60 * 1000L
+
+    fun isValid(): Boolean =
+        cachedSections != null && (System.currentTimeMillis() - cachedTimestamp) < TTL_MS
+
+    fun clear() {
+        cachedSections = null
+        cachedTimestamp = 0L
+    }
+}
+
 /**
  * Online Home View displaying curated YouTube Music flow, recommendations, and trending shelves.
- * Loads live carousels via [InnerTubeClient.getHomeRecommendations].
+ * Loads live carousels via [InnerTubeClient.getCombinedHomeFeed].
  */
 @Composable
 fun OnlineHomeView(
@@ -67,11 +81,18 @@ fun OnlineHomeView(
         enabled = themeConfig.dockAutoHideEnabled
     )
 
-    var isLoading by remember { mutableStateOf(true) }
-    var sections by remember { mutableStateOf<List<YouTubeSection>>(emptyList()) }
+    var isLoading by remember { mutableStateOf(!OnlineFeedCache.isValid()) }
+    var sections by remember { mutableStateOf<List<YouTubeSection>>(OnlineFeedCache.cachedSections.orEmpty()) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    fun loadHomeFeed() {
+    fun loadHomeFeed(forceRefresh: Boolean = false) {
+        if (!forceRefresh && OnlineFeedCache.isValid()) {
+            sections = OnlineFeedCache.cachedSections.orEmpty()
+            isLoading = false
+            errorMessage = null
+            return
+        }
+
         scope.launch {
             isLoading = true
             errorMessage = null
@@ -82,7 +103,10 @@ fun OnlineHomeView(
                         val result = it.getCombinedHomeFeed()
                         withContext(Dispatchers.Main) {
                             if (result.isSuccess) {
-                                sections = result.getOrNull().orEmpty()
+                                val loaded = result.getOrNull().orEmpty()
+                                sections = loaded
+                                OnlineFeedCache.cachedSections = loaded
+                                OnlineFeedCache.cachedTimestamp = System.currentTimeMillis()
                                 errorMessage = null
                             } else {
                                 errorMessage = result.exceptionOrNull()?.message ?: "Failed to load recommendations"
@@ -101,7 +125,7 @@ fun OnlineHomeView(
     }
 
     LaunchedEffect(Unit) {
-        loadHomeFeed()
+        loadHomeFeed(forceRefresh = false)
     }
 
     LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
@@ -206,7 +230,7 @@ fun OnlineHomeView(
                 item {
                     ErrorRetryCard(
                         message = errorMessage ?: "Unable to connect to YouTube Music",
-                        onRetry = { loadHomeFeed() }
+                        onRetry = { loadHomeFeed(forceRefresh = true) }
                     )
                 }
             }
@@ -236,6 +260,14 @@ private fun OnlineSectionShelf(
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val normalizedTitle = section.title.lowercase()
+    val (sectionIcon, sectionTint) = when {
+        "quick" in normalizedTitle || "pick" in normalizedTitle -> Icons.Rounded.Headphones to accent
+        "trending" in normalizedTitle || "chart" in normalizedTitle -> Icons.Rounded.Whatshot to Color(0xFFFF5252)
+        "release" in normalizedTitle || "new" in normalizedTitle -> Icons.Rounded.NewReleases to Color(0xFF00E5FF)
+        "mood" in normalizedTitle || "genre" in normalizedTitle || "mix" in normalizedTitle -> Icons.Rounded.GraphicEq to Color(0xFFFFAB00)
+        else -> Icons.Rounded.PlayCircleOutline to accent
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -246,9 +278,9 @@ private fun OnlineSectionShelf(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(
-                imageVector = Icons.Rounded.PlayCircleOutline,
+                imageVector = sectionIcon,
                 contentDescription = null,
-                tint = accent,
+                tint = sectionTint,
                 modifier = Modifier.size(20.dp)
             )
             Text(

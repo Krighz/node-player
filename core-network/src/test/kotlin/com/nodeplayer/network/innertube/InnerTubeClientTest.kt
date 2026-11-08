@@ -330,4 +330,137 @@ class InnerTubeClientTest {
         assertNotNull(result.exceptionOrNull())
         client.close()
     }
+
+    @Test
+    fun testGetCombinedHomeFeedWithDeduplication() = runTest {
+        val mockEngine = MockEngine { request ->
+            val bodyString = (request.body as? io.ktor.http.content.TextContent)?.text ?: ""
+            val browseId = if (bodyString.contains("FEmusic_home")) "FEmusic_home" else "FEmusic_explore"
+            val responseBody = if (browseId == "FEmusic_home") {
+                """
+                {
+                  "contents": {
+                    "sectionListRenderer": {
+                      "contents": [
+                        {
+                          "musicCarouselShelfRenderer": {
+                            "header": {
+                              "musicCarouselShelfBasicHeaderRenderer": {
+                                "title": { "runs": [{"text": "Quick Picks"}] }
+                              }
+                            },
+                            "contents": [
+                              {
+                                "musicTwoRowItemRenderer": {
+                                  "title": { "runs": [{"text": "Track A"}] },
+                                  "subtitle": { "runs": [{"text": "Artist A"}] },
+                                  "navigationEndpoint": {
+                                    "watchEndpoint": { "videoId": "track_a" }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "musicCarouselShelfRenderer": {
+                            "header": {
+                              "musicCarouselShelfBasicHeaderRenderer": {
+                                "title": { "runs": [{"text": "Trending Now"}] }
+                              }
+                            },
+                            "contents": [
+                              {
+                                "musicTwoRowItemRenderer": {
+                                  "title": { "runs": [{"text": "Track B"}] },
+                                  "subtitle": { "runs": [{"text": "Artist B"}] },
+                                  "navigationEndpoint": {
+                                    "watchEndpoint": { "videoId": "track_b" }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+                """.trimIndent()
+            } else {
+                """
+                {
+                  "contents": {
+                    "sectionListRenderer": {
+                      "contents": [
+                        {
+                          "musicCarouselShelfRenderer": {
+                            "header": {
+                              "musicCarouselShelfBasicHeaderRenderer": {
+                                "title": { "runs": [{"text": "trending now"}] }
+                              }
+                            },
+                            "contents": [
+                              {
+                                "musicTwoRowItemRenderer": {
+                                  "title": { "runs": [{"text": "Track B Duplicate"}] },
+                                  "subtitle": { "runs": [{"text": "Artist B"}] },
+                                  "navigationEndpoint": {
+                                    "watchEndpoint": { "videoId": "track_b2" }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "musicCarouselShelfRenderer": {
+                            "header": {
+                              "musicCarouselShelfBasicHeaderRenderer": {
+                                "title": { "runs": [{"text": "New Releases"}] }
+                              }
+                            },
+                            "contents": [
+                              {
+                                "musicTwoRowItemRenderer": {
+                                  "title": { "runs": [{"text": "Track C"}] },
+                                  "subtitle": { "runs": [{"text": "Artist C"}] },
+                                  "navigationEndpoint": {
+                                    "watchEndpoint": { "videoId": "track_c" }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+                """.trimIndent()
+            }
+
+            respond(
+                content = responseBody,
+                status = HttpStatusCode.OK,
+                headers = headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+
+        val client = InnerTubeClient(engine = mockEngine)
+        val result = client.getCombinedHomeFeed()
+        assertTrue(result.isSuccess)
+
+        val sections = result.getOrThrow()
+        // Quick Picks + Trending Now (from home) + New Releases (from explore, with duplicate 'trending now' filtered out)
+        assertEquals(3, sections.size)
+        assertEquals("Quick Picks", sections[0].title)
+        assertEquals("Trending Now", sections[1].title)
+        assertEquals("New Releases", sections[2].title)
+        assertEquals("Track A", sections[0].items.first().title)
+        assertEquals("Track B", sections[1].items.first().title)
+        assertEquals("Track C", sections[2].items.first().title)
+
+        client.close()
+    }
 }
