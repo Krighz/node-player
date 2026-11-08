@@ -70,6 +70,7 @@ fun main() = application {
             println("[${level.name}] [$tag] $msg")
             tr?.printStackTrace()
         }
+        com.nodeplayer.common.media.CipherSolver.current = com.nodeplayer.desktop.cipher.DesktopCipherSolver()
     }
 
     val settingsStore = remember { DesktopSettingsStore() }
