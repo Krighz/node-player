@@ -149,6 +149,7 @@ object AudioCache {
      */
     fun createDataSourceFactory(context: Context): DataSource.Factory {
         val upstreamFactory = DefaultHttpDataSource.Factory()
+            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0")
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(15_000)
             .setReadTimeoutMs(20_000)
@@ -162,6 +163,56 @@ object AudioCache {
                 .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         } else {
             upstreamFactory
+        }
+    }
+
+    /**
+     * Builds a DataSource.Factory using Media3's ResolvingDataSource.Factory wrapping [createDataSourceFactory].
+     *
+     * Resolves synthetic YouTube URIs (`nodeplayer://youtube/{videoId}`) synchronously on ExoPlayer's
+     * background loader thread, checking disk cache and online mode, without stalling or deadlocking
+     * ExoPlayer's playback looper.
+     */
+    fun createResolvingDataSourceFactory(
+        context: Context,
+        streamResolver: com.nodeplayer.network.innertube.StreamResolver = com.nodeplayer.network.innertube.StreamResolver()
+    ): DataSource.Factory {
+        val baseFactory = createDataSourceFactory(context)
+        return androidx.media3.datasource.ResolvingDataSource.Factory(baseFactory) { dataSpec ->
+            val uri = dataSpec.uri
+            val videoId = extractVideoId(uri) ?: dataSpec.key?.removePrefix("nodeplayer_yt_")
+            val isSyntheticYt = uri.toString().startsWith("nodeplayer://youtube/", ignoreCase = true) ||
+                (uri.scheme.equals("nodeplayer", ignoreCase = true) && uri.host.equals("youtube", ignoreCase = true))
+
+            if (videoId == null || (!isSyntheticYt && dataSpec.key == null)) {
+                return@Factory dataSpec
+            }
+
+            val cacheKey = "nodeplayer_yt_$videoId"
+            if (isVideoIdCached(videoId)) {
+                NodeLog.d(TAG, "Serving cached YouTube stream for videoId=$videoId (key=$cacheKey)")
+                return@Factory dataSpec.buildUpon().setKey(cacheKey).build()
+            }
+
+            if (!com.nodeplayer.common.AppModeState.isOnlineMode.value) {
+                NodeLog.w(TAG, "Offline mode active: Cannot resolve online YouTube track for videoId=$videoId")
+                throw java.io.IOException("Track not available offline (videoId: $videoId)")
+            }
+
+            NodeLog.i(TAG, "Resolving stream synchronously on loader thread for videoId=$videoId")
+            val resolvedResult = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                streamResolver.resolveStream(videoId)
+            }
+
+            if (resolvedResult.isFailure) {
+                val err = resolvedResult.exceptionOrNull()
+                NodeLog.e(TAG, "Stream resolution failed for videoId=$videoId: ${err?.message}", err)
+                throw java.io.IOException("Stream resolution failed for videoId: $videoId", err)
+            }
+
+            val streamUrl = resolvedResult.getOrThrow().streamUrl
+            NodeLog.i(TAG, "Resolved live stream for videoId=$videoId successfully, applying CDN URL")
+            dataSpec.withUri(Uri.parse(streamUrl)).buildUpon().setKey(cacheKey).build()
         }
     }
 

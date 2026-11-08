@@ -575,7 +575,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun playTrack(track: Track, newQueue: List<Track> = listOf(track)) {
         val tapTime = System.currentTimeMillis()
-        val effectiveQueue = if (newQueue.size <= 1 && allTracks.value.isNotEmpty()) {
+        val isOnlineTrack = track.path.startsWith("nodeplayer://youtube/") || com.nodeplayer.common.AppModeState.isOnlineMode.value
+        val effectiveQueue = if (!isOnlineTrack && newQueue.size <= 1 && allTracks.value.isNotEmpty()) {
             allTracks.value
         } else {
             newQueue
@@ -605,11 +606,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             viewModelScope.launch(Dispatchers.Default) {
                 val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
                 val mediaItems = effectiveQueue.map {
-                    val contentUri = ContentUris.withAppendedId(
-                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        it.id
-                    )
-                    val artworkUri = ContentUris.withAppendedId(albumArtBaseUri, it.albumId)
+                    val contentUri = if (it.path.startsWith("nodeplayer://")) {
+                        Uri.parse(it.path)
+                    } else if (it.path.startsWith("content:")) {
+                        Uri.parse(it.path)
+                    } else if (it.path.isNotBlank() && (it.path.startsWith("/") || it.path.startsWith("file:"))) {
+                        val f = java.io.File(it.path)
+                        if (f.exists() && f.canRead()) Uri.fromFile(f)
+                        else ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it.id)
+                    } else {
+                        ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it.id)
+                    }
+                    val artworkUri = if (it.path.startsWith("nodeplayer://")) {
+                        Uri.parse(it.path)
+                    } else {
+                        ContentUris.withAppendedId(albumArtBaseUri, it.albumId)
+                    }
                     val metadata = androidx.media3.common.MediaMetadata.Builder()
                         .setTitle(it.title)
                         .setArtist(it.artist)
@@ -618,7 +630,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         .build()
 
                     MediaItem.Builder()
-                        .setMediaId(it.id.toString())
+                        .setMediaId(if (it.path.startsWith("nodeplayer://")) it.path else it.id.toString())
                         .setUri(contentUri)
                         .setMediaMetadata(metadata)
                         .build()

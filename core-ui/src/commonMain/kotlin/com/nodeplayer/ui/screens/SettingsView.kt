@@ -676,8 +676,38 @@ private fun AboutAndScrobblerCard(
     onLastFmToggle: (Boolean) -> Unit,
     accent: Color
 ) {
+    val isOnlineMode by com.nodeplayer.common.AppModeState.isOnlineMode.collectAsState()
+
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(18.dp)) {
+            // Online Mode (YouTube Music & Cloud Streaming)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Online Streaming & YouTube Music",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = if (isOnlineMode) "Enabled: Recommendations, radio & online streaming active" else "Disabled: 100% offline library silence (zero network requests)",
+                        fontSize = 11.sp,
+                        color = if (isOnlineMode) Color(0xFF00E5FF).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.55f)
+                    )
+                }
+                LiquidToggle(
+                    checked = isOnlineMode,
+                    onCheckedChange = { com.nodeplayer.common.AppModeState.toggleMode() }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Last.fm Scrobbler
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,

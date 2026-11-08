@@ -17,8 +17,8 @@ class InnerTubeClientTest {
     fun testGetHomeRecommendationsMapping() = runTest {
         val mockEngine = MockEngine { request ->
             assertEquals("https://music.youtube.com/youtubei/v1/browse", request.url.toString())
-            assertEquals("28", request.headers["X-YouTube-Client-Name"])
-            assertEquals("1.65.10", request.headers["X-YouTube-Client-Version"])
+            assertEquals("67", request.headers["X-YouTube-Client-Name"])
+            assertEquals("1.20260213.01.00", request.headers["X-YouTube-Client-Version"])
 
             val responseBody = """
             {

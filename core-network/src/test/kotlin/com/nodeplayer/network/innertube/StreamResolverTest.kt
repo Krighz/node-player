@@ -139,15 +139,15 @@ class StreamResolverTest {
             val clientName = request.headers["X-YouTube-Client-Name"] ?: "unknown"
             requestedClients.add(clientName)
 
-            // Primary client is ANDROID_VR (clientId = "28") -> Return 403 / error playability
-            if (clientName == "28") {
+            // Primary client is IOS (clientId = "5") -> Return 403 / error playability
+            if (clientName == "5") {
                 respond(
                     content = samplePlayerResponse(status = "ERROR"),
                     status = HttpStatusCode.OK,
                     headers = headersOf(HttpHeaders.ContentType, "application/json")
                 )
-            } else if (clientName == "5") {
-                // IOS (clientId = "5") -> Return valid player response with format 251
+            } else if (clientName == "28") {
+                // ANDROID_VR (clientId = "28") -> Return valid player response with format 251
                 respond(
                     content = samplePlayerResponse(status = "OK", formats = listOf(format251)),
                     status = HttpStatusCode.OK,
@@ -175,13 +175,13 @@ class StreamResolverTest {
         val result = resolver.resolveStream("test_video_123")
         assertTrue(result.isSuccess)
         val stream = result.getOrThrow()
-        assertEquals("IOS", stream.clientName)
+        assertEquals("ANDROID_VR", stream.clientName)
         assertEquals(251, stream.itag)
         assertEquals("https://googlevideo.com/playback?itag=251", stream.streamUrl)
         assertEquals(-5.5, stream.loudnessDb ?: 0.0, 0.01)
 
-        // Verify rotation sequence tried ANDROID_VR (28) first, then IOS (5)
-        assertEquals(listOf("28", "5"), requestedClients)
+        // Verify rotation sequence tried IOS (5) first, then ANDROID_VR (28)
+        assertEquals(listOf("5", "28"), requestedClients)
 
         innerTubeClient.close()
         resolver.close()

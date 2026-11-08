@@ -1656,6 +1656,50 @@ fun SettingsScreen(
                 }
 
         if (shouldShow("lastfm")) {
+        // Online Streaming & YouTube Music Cloud Section
+        val isOnlineMode by com.nodeplayer.common.AppModeState.isOnlineMode.collectAsState()
+
+        Text(
+            text = "ONLINE & STREAMING",
+            style = MaterialTheme.typography.labelSmall.copy(
+                letterSpacing = 1.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = accent
+            )
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "YouTube Music Online Mode",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                        )
+                        Text(
+                            text = if (isOnlineMode) "Active: Curated YouTube Music feeds, trending charts & high-res Opus streaming enabled"
+                            else "Inactive: 100% offline silence (zero network queries or background requests)",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = if (isOnlineMode) Color(0xFF00E5FF).copy(alpha = 0.9f) else Color.White.copy(alpha = 0.65f)
+                            )
+                        )
+                    }
+                    LiquidToggle(
+                        checked = isOnlineMode,
+                        onCheckedChange = { com.nodeplayer.common.AppModeState.toggleMode() },
+                        colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF00E5FF), checkedTrackColor = Color(0xFF00E5FF).copy(alpha = 0.5f))
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         // 6. Last.fm Scrobbling Section
         Text(
             text = "LAST.FM SCROBBLING",

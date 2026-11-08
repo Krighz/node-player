@@ -1,6 +1,13 @@
 package com.nodeplayer.music.ui.screens
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.nodeplayer.common.AppModeState
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.components.HazeState
@@ -41,10 +49,75 @@ import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.DeviceConnectPill
 import com.nodeplayer.ui.components.DeviceConnectStatus
 import com.nodeplayer.ui.components.LiquidIconButton
+import com.nodeplayer.ui.screens.OnlineHomeView
 import java.io.File
 
 @Composable
 fun HomeScreen(
+    allTracks: List<Track>,
+    currentTrack: Track?,
+    isPlaying: Boolean,
+    onTrackClick: (Track, List<Track>) -> Unit,
+    onPlayPauseClick: () -> Unit,
+    onOpenSmartPlaylists: () -> Unit,
+    onOpenStats: () -> Unit,
+    onOpenDuplicateFinder: () -> Unit,
+    onOpenNodeConnect: () -> Unit = {},
+    nodeConnectStatus: DeviceConnectStatus = DeviceConnectStatus.DISCONNECTED,
+    connectedDeviceCount: Int = 0,
+    onStartUpdate: (AppUpdateInfo) -> Unit = {},
+    onCancelUpdate: () -> Unit = {},
+    onInstallUpdate: () -> Unit = {},
+    hazeState: HazeState? = null,
+    modifier: Modifier = Modifier
+) {
+    val isOnline by AppModeState.isOnlineMode.collectAsState()
+
+    AnimatedContent(
+        targetState = isOnline,
+        transitionSpec = {
+            (fadeIn(animationSpec = tween(260)) + scaleIn(initialScale = 0.98f, animationSpec = tween(260))) togetherWith
+            (fadeOut(animationSpec = tween(260)) + scaleOut(targetScale = 0.98f, animationSpec = tween(260)))
+        },
+        label = "AndroidHomeModeTransition",
+        modifier = modifier.fillMaxSize()
+    ) { online ->
+        if (online) {
+            val recentTracks = remember(allTracks) {
+                allTracks.filter { it.lastPlayedTimestamp > 0L }.sortedByDescending { it.lastPlayedTimestamp }
+            }
+            OnlineHomeView(
+                currentTrack = currentTrack,
+                isPlaying = isPlaying,
+                onPlayTrack = onTrackClick,
+                onPlayPause = onPlayPauseClick,
+                recentTracks = recentTracks,
+                modifier = Modifier.fillMaxSize().statusBarsPadding()
+            )
+        } else {
+            OfflineHomeScreenContent(
+                allTracks = allTracks,
+                currentTrack = currentTrack,
+                isPlaying = isPlaying,
+                onTrackClick = onTrackClick,
+                onPlayPauseClick = onPlayPauseClick,
+                onOpenSmartPlaylists = onOpenSmartPlaylists,
+                onOpenStats = onOpenStats,
+                onOpenDuplicateFinder = onOpenDuplicateFinder,
+                onOpenNodeConnect = onOpenNodeConnect,
+                nodeConnectStatus = nodeConnectStatus,
+                connectedDeviceCount = connectedDeviceCount,
+                onStartUpdate = onStartUpdate,
+                onCancelUpdate = onCancelUpdate,
+                onInstallUpdate = onInstallUpdate,
+                hazeState = hazeState
+            )
+        }
+    }
+}
+
+@Composable
+private fun OfflineHomeScreenContent(
     allTracks: List<Track>,
     currentTrack: Track?,
     isPlaying: Boolean,

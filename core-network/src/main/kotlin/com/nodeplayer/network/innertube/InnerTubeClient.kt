@@ -103,21 +103,32 @@ class InnerTubeClient(
     }
 
     /**
-     * Fetches curated home recommendation sections and shelves from YouTube Music (`FEmusic_home`).
+     * Executes a raw InnerTube browse request for [browseId] using [YouTubeClient.WEB_REMIX].
      */
-    suspend fun getHomeRecommendations(): Result<List<YouTubeSection>> = runCatching {
-        NodeLog.d(TAG, "Fetching home recommendations (browseId=FEmusic_home)")
-        val response = withRetry {
+    suspend fun browse(browseId: String): Result<BrowseResponse> = runCatching {
+        val client = YouTubeClient.WEB_REMIX
+        NodeLog.d(TAG, "Fetching browse feed (browseId=$browseId, client=${client.clientName})")
+        withRetry {
             httpClient.post("browse") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
+                header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
                 setBody(
                     BrowseBody(
-                        context = clientContext.toContext(locale),
-                        browseId = "FEmusic_home"
+                        context = client.toContext(locale),
+                        browseId = browseId
                     )
                 )
             }.body<BrowseResponse>()
         }
+    }
 
+    /**
+     * Parses sections from [BrowseResponse] section list contents.
+     */
+    internal fun parseBrowseSections(response: BrowseResponse): List<YouTubeSection> {
         val sections = mutableListOf<YouTubeSection>()
 
         val sectionListContents = response.contents?.sectionListRenderer?.contents
@@ -153,11 +164,71 @@ class InnerTubeClient(
                 }
             }
         }
+        return sections
+    }
 
+    /**
+     * Fetches curated home recommendation sections and shelves from YouTube Music (`FEmusic_home`).
+     * Uses [YouTubeClient.WEB_REMIX] which is YouTube Music's native web client supporting browse feeds.
+     */
+    suspend fun getHomeRecommendations(): Result<List<YouTubeSection>> = runCatching {
+        val response = browse("FEmusic_home").getOrThrow()
+        val sections = parseBrowseSections(response)
         NodeLog.i(TAG, "Loaded ${sections.size} home recommendation sections")
         sections
     }.onFailure { e ->
         NodeLog.e(TAG, "Failed to load home recommendations", e)
+    }
+
+    /**
+     * Fetches explore sections (New releases, Trending, Moods & Genres) from YouTube Music (`FEmusic_explore`).
+     */
+    suspend fun getExploreSections(): Result<List<YouTubeSection>> = runCatching {
+        val response = browse("FEmusic_explore").getOrThrow()
+        val sections = parseBrowseSections(response)
+        NodeLog.i(TAG, "Loaded ${sections.size} explore sections")
+        sections
+    }.onFailure { e ->
+        NodeLog.e(TAG, "Failed to load explore sections", e)
+    }
+
+    /**
+     * Fetches top charts and trending tracks from YouTube Music (`FEmusic_charts`).
+     */
+    suspend fun getChartsSections(): Result<List<YouTubeSection>> = runCatching {
+        val response = browse("FEmusic_charts").getOrThrow()
+        val sections = parseBrowseSections(response)
+        NodeLog.i(TAG, "Loaded ${sections.size} charts sections")
+        sections
+    }.onFailure { e ->
+        NodeLog.e(TAG, "Failed to load charts sections", e)
+    }
+
+    /**
+     * Fetches a rich multi-shelf online home feed combining Quick Picks (from Home)
+     * and Trending / New Releases (from Explore).
+     */
+    suspend fun getCombinedHomeFeed(): Result<List<YouTubeSection>> = runCatching {
+        val homeResult = getHomeRecommendations().getOrDefault(emptyList())
+        val exploreResult = getExploreSections().getOrDefault(emptyList())
+
+        val combined = mutableListOf<YouTubeSection>()
+        combined.addAll(homeResult)
+
+        val existingTitles = homeResult.map { it.title.lowercase().trim() }.toSet()
+        for (section in exploreResult) {
+            if (section.title.lowercase().trim() !in existingTitles) {
+                combined.add(section)
+            }
+        }
+
+        if (combined.isEmpty()) {
+            throw IllegalStateException("No recommendation shelves available")
+        }
+        NodeLog.i(TAG, "Loaded ${combined.size} combined online shelves")
+        combined
+    }.onFailure { e ->
+        NodeLog.e(TAG, "Failed to load combined home feed", e)
     }
 
     /**

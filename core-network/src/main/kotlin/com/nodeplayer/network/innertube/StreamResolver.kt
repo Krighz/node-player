@@ -165,6 +165,16 @@ class StreamResolver(
                 }
             }
 
+            // Fallback: If direct candidate URL exists but network probe timed out or had a transient error,
+            // fall back to the top candidate rather than discarding the working client.
+            if (chosenCandidate == null && audioCandidates.isNotEmpty()) {
+                val directFallback = audioCandidates.firstOrNull { !it.url.isNullOrBlank() }
+                if (directFallback != null) {
+                    NodeLog.i(TAG, "Using direct audio format itag=${directFallback.itag} as fallback for ${client.clientName}")
+                    chosenCandidate = directFallback to directFallback.url!!
+                }
+            }
+
             if (chosenCandidate != null) {
                 val (format, validUrl) = chosenCandidate
                 val durationSeconds = response.videoDetails?.lengthSeconds?.toLongOrNull()
@@ -232,11 +242,11 @@ class StreamResolver(
 
     companion object {
         private const val TAG = "stream-resolver"
-        private const val PROBE_TIMEOUT_MS = 3_000L
+        private const val PROBE_TIMEOUT_MS = 5_000L
 
         val CLIENT_ROTATION = listOf(
-            YouTubeClient.ANDROID_VR,
             YouTubeClient.IOS,
+            YouTubeClient.ANDROID_VR,
             YouTubeClient.VISIONOS,
             YouTubeClient.WEB_REMIX,
         )

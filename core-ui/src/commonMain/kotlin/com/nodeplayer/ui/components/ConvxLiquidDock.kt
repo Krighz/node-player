@@ -150,11 +150,6 @@ fun ConvxLiquidDock(
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Online / Offline Mode Switcher Capsule
-        ModeToggleCapsule(
-            modifier = Modifier.padding(end = 8.dp)
-        )
-
         // Main tabs capsule container
         Box(
             modifier = Modifier

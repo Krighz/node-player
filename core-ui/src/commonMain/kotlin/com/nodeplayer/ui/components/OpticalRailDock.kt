@@ -194,11 +194,6 @@ fun OpticalRailDock(
             verticalArrangement = Arrangement.spacedBy(tabSpacingDp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Desktop Mode Switcher at top of rail
-            DesktopModeRailSwitcher(
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
             tabs.forEachIndexed { index, tab ->
                 val isSelected = currentNav == tab.destination
                 val interactionSource = remember { MutableInteractionSource() }

@@ -169,6 +169,10 @@ class CrossfadePlayerManager(
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (activeIndex == 0) handlePlayWhenReadyChanged(playWhenReady)
             }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                Log.e(TAG, "[PlayerA Error] code=${error.errorCode}, message=${error.message}", error)
+                com.nodeplayer.common.logging.NodeLog.e(TAG, "[PlayerA Error] code=${error.errorCode}: ${error.message}", error)
+            }
         }
         val listenerB = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -176,6 +180,10 @@ class CrossfadePlayerManager(
             }
             override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
                 if (activeIndex == 1) handlePlayWhenReadyChanged(playWhenReady)
+            }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                Log.e(TAG, "[PlayerB Error] code=${error.errorCode}, message=${error.message}", error)
+                com.nodeplayer.common.logging.NodeLog.e(TAG, "[PlayerB Error] code=${error.errorCode}: ${error.message}", error)
             }
         }
         playerA.addListener(listenerA)
@@ -700,8 +708,12 @@ class CrossfadePlayerManager(
             (uri != null && uri.scheme.equals("nodeplayer", ignoreCase = true) && uri.host.equals("youtube", ignoreCase = true))
 
         if (isSyntheticYouTube) {
-            val resolvingSource = com.nodeplayer.music.playback.ResolvingMediaSource(context, mediaItem)
-            player.setMediaSource(resolvingSource)
+            val resolvingDataSourceFactory = com.nodeplayer.music.playback.AudioCache.createResolvingDataSourceFactory(context)
+            val mediaSource = androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(
+                resolvingDataSourceFactory,
+                androidx.media3.extractor.DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
+            ).createMediaSource(mediaItem)
+            player.setMediaSource(mediaSource)
         } else {
             player.setMediaItem(mediaItem)
         }
