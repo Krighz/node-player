@@ -39,11 +39,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import com.nodeplayer.library.LrcParser
 import com.nodeplayer.model.AudioOutputInfo
 import com.nodeplayer.model.Lyrics
 import com.nodeplayer.model.Track
 import com.nodeplayer.model.GlassThemeConfig
+import com.nodeplayer.music.lyrics.LyricsManager
 import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.components.glassLensBubble
 import com.nodeplayer.ui.components.LiquidGlassIconButton
@@ -98,6 +100,7 @@ fun NowPlayingSheet(
     var isSeeking by remember { mutableStateOf(false) }
     var sliderPosition by remember { mutableFloatStateOf(0f) }
     var showLyrics by remember { mutableStateOf(false) }
+    var showLyricsOffsetDialog by remember { mutableStateOf(false) }
     var showSpectrogram by remember { mutableStateOf(false) }
     var showTrackDetailsSheet by remember { mutableStateOf(false) }
     var showQuickActionDialog by remember { mutableStateOf(false) }
@@ -124,18 +127,21 @@ fun NowPlayingSheet(
         0f
     }
 
-    // Load local LRC if exists in the same directory
-    val lyrics: Lyrics? = remember(track.path) {
-        try {
-            val lrcFile = File(track.path.substringBeforeLast(".") + ".lrc")
-            if (lrcFile.exists() && lrcFile.canRead()) {
-                LrcParser.parse(lrcFile.readText(), track.id, "local_lrc")
-            } else {
-                null
-            }
-        } catch (_: Exception) {
-            null
-        }
+    // Load lyrics via LyricsManager (local-first, disk cache, LRCLIB fallback)
+    var lyrics by remember(track.id) { mutableStateOf<Lyrics?>(null) }
+    var isLyricsLoading by remember(track.id) { mutableStateOf(false) }
+    var lyricsRefreshTrigger by remember { mutableStateOf(0) }
+
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(track.id, lyricsRefreshTrigger) {
+        isLyricsLoading = true
+        lyrics = LyricsManager.getLyrics(
+            context = context,
+            track = track,
+            forceRefresh = lyricsRefreshTrigger > 0
+        )
+        isLyricsLoading = false
     }
 
     val activeThemeConfig = themeConfig ?: LocalGlassThemeConfig.current
@@ -519,11 +525,17 @@ fun NowPlayingSheet(
                     } else {
                         Crossfade(targetState = showLyrics, label = "HeroCrossfade") { isLyrics ->
                             if (isLyrics) {
-                                SyncedLyricsGlassView(
+                                com.nodeplayer.ui.lyrics.AppleMusicLyricsView(
+                                    track = track,
                                     lyrics = lyrics,
                                     currentPositionMs = currentMs,
-                                    accentColor = accent,
-                                    onSeekTo = onSeekTo
+                                    isLoading = isLyricsLoading,
+                                    isOnlineMode = true,
+                                    onSeekTo = onSeekTo,
+                                    onClose = { showLyrics = false },
+                                    onSearchAgain = { lyricsRefreshTrigger++ },
+                                    onOpenOffsetControls = { showLyricsOffsetDialog = true },
+                                    modifier = Modifier.fillMaxSize()
                                 )
                             } else {
                                 HeroArtwork(
@@ -785,6 +797,35 @@ fun NowPlayingSheet(
                 Spacer(modifier = Modifier.height(18.dp))
             }
         }
+    }
+
+    // Lyrics Offset Dialog
+    if (showLyricsOffsetDialog) {
+        val currentTrackOffset = remember(track.id) {
+            mutableStateOf(0L)
+        }
+        LaunchedEffect(track.id) {
+            currentTrackOffset.value = LyricsManager.getTrackOffset(context, track.id)
+        }
+
+        com.nodeplayer.ui.lyrics.LyricsOffsetDialog(
+            currentOffsetMs = currentTrackOffset.value,
+            onOffsetChanged = { newOffset ->
+                currentTrackOffset.value = newOffset
+                coroutineScope.launch {
+                    LyricsManager.setTrackOffset(context, track.id, newOffset)
+                    lyricsRefreshTrigger++
+                }
+            },
+            onReset = {
+                currentTrackOffset.value = 0L
+                coroutineScope.launch {
+                    LyricsManager.setTrackOffset(context, track.id, 0L)
+                    lyricsRefreshTrigger++
+                }
+            },
+            onDismiss = { showLyricsOffsetDialog = false }
+        )
     }
 
     // Queue Modal Bottom Sheet

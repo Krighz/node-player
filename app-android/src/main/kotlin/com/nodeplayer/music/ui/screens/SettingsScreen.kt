@@ -1278,6 +1278,51 @@ fun SettingsScreen(
                     valueRange = 0.0f..10.0f,
                     colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
                 )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Lyrics Settings
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Online Lyrics Lookup", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Search LRCLIB for line & word synced lyrics", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    LiquidToggle(
+                        checked = lrclibOptIn,
+                        onCheckedChange = {
+                            lrclibOptIn = it
+                            sharedPrefs.edit().putBoolean("auto_fetch_lyrics", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Lyrics Cache", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Clear cached offline lyrics", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Text(
+                        text = "Clear Cache",
+                        style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFFF5252), fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier
+                            .clickable {
+                                com.nodeplayer.music.lyrics.LyricsManager.clearCache()
+                                Toast.makeText(context, "Lyrics cache cleared", Toast.LENGTH_SHORT).show()
+                            }
+                            .padding(vertical = 4.dp, horizontal = 8.dp)
+                    )
+                }
             }
         }
 
