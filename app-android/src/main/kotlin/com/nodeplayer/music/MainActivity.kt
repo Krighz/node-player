@@ -148,10 +148,20 @@ class MainActivity : ComponentActivity() {
                 val dailyStats by viewModel.dailyListeningStats.collectAsState()
                 val sessionSec by viewModel.sessionListeningSeconds.collectAsState()
 
-                val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder", "widgets", "widget_settings")
-                BackHandler(enabled = isNowPlayingExpanded || isSubRoute) {
+                val rawPlaylists by viewModel.playlists.collectAsState()
+                val domainPlaylists = remember(rawPlaylists) {
+                    rawPlaylists.map { it.toPlaylist() }
+                }
+                var selectedPlaylistForDetail by remember { mutableStateOf<com.nodeplayer.model.Playlist?>(null) }
+                var playlistDetailTracks by remember { mutableStateOf<List<com.nodeplayer.model.Track>>(emptyList()) }
+                var trackForAddToPlaylist by remember { mutableStateOf<com.nodeplayer.model.Track?>(null) }
+
+                val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder", "widgets", "widget_settings", "playlist_detail")
+                BackHandler(enabled = isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null) {
                     if (isNowPlayingExpanded) {
                         isNowPlayingExpanded = false
+                    } else if (selectedPlaylistForDetail != null) {
+                        selectedPlaylistForDetail = null
                     } else if (isSubRoute) {
                         currentRoute = "home"
                     }
@@ -187,6 +197,15 @@ class MainActivity : ComponentActivity() {
                 val analyzingTrackId by viewModel.analyzingTrackId.collectAsState()
                 val autoDeviceProfilesEnabled by viewModel.autoDeviceProfilesEnabled.collectAsState()
                 val selfTestResult by viewModel.shaderSelfTestResult.collectAsState()
+
+                LaunchedEffect(selectedPlaylistForDetail?.id) {
+                    val pid = selectedPlaylistForDetail?.id
+                    if (pid != null) {
+                        viewModel.getTracksForPlaylist(pid).collect { tList ->
+                            playlistDetailTracks = tList
+                        }
+                    }
+                }
 
                 var showDiagnosticsDialog by remember { mutableStateOf(false) }
                 var pendingAutoReportFile by remember { mutableStateOf<File?>(null) }
@@ -328,27 +347,69 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                             )
-                            "library" -> LibraryScreen(
-                                tracks = allTracks,
-                                albums = albums,
-                                artists = artists,
-                                folders = folders,
-                                currentTrack = currentTrack,
-                                isPlaying = isPlaying,
-                                onTrackClick = { track, queue ->
-                                    viewModel.playTrack(track, queue)
-                                },
-                                onRescanClick = {
-                                    checkAndRequestPermissions()
-                                    viewModel.refreshLibrary()
-                                },
-                                onPlayNext = { viewModel.playNext(it) },
-                                onAddToQueue = { viewModel.addToQueue(it) },
-                                qualityBadgeMode = appSettings.qualityBadgesMode,
-                                audioOutputInfo = audioOutputInfo,
-                                onAnalyzeTrack = { viewModel.analyzeTrack(it) },
-                                analyzingTrackId = analyzingTrackId
-                            )
+                            "library" -> {
+                                if (selectedPlaylistForDetail != null) {
+                                    com.nodeplayer.music.ui.screens.PlaylistDetailScreen(
+                                        playlist = selectedPlaylistForDetail!!,
+                                        tracks = playlistDetailTracks,
+                                        currentTrack = currentTrack,
+                                        isPlaying = isPlaying,
+                                        onBackClick = { selectedPlaylistForDetail = null },
+                                        onPlayTrack = { tr, q -> viewModel.playTrack(tr, q) },
+                                        onPlayAll = { q -> if (q.isNotEmpty()) viewModel.playTrack(q[0], q) },
+                                        onShuffleAll = { q ->
+                                            if (q.isNotEmpty()) {
+                                                val shuffled = q.shuffled()
+                                                viewModel.playTrack(shuffled[0], shuffled)
+                                            }
+                                        },
+                                        onReorderTracks = { pid, ids -> viewModel.reorderPlaylistTracks(pid, ids) },
+                                        onRemoveTrack = { pid, tid -> viewModel.removeTrackFromPlaylist(pid, tid) },
+                                        onRenamePlaylist = { pid, n ->
+                                            viewModel.renamePlaylist(pid, n)
+                                            selectedPlaylistForDetail = selectedPlaylistForDetail?.copy(name = n)
+                                        },
+                                        onDeletePlaylist = { pid ->
+                                            viewModel.deletePlaylistById(pid)
+                                            selectedPlaylistForDetail = null
+                                        },
+                                        onResyncPlaylist = { pid ->
+                                            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                val db = com.nodeplayer.music.NodePlayerApplication.instance.database
+                                                val ytClient = com.nodeplayer.music.auth.YouTubeAccountManager.innerTubeClient ?: com.nodeplayer.network.innertube.InnerTubeClient()
+                                                val importer = com.nodeplayer.music.library.YouTubePlaylistImporter(db, ytClient)
+                                                importer.resyncPlaylist(pid)
+                                            }
+                                        }
+                                    )
+                                } else {
+                                    LibraryScreen(
+                                        tracks = allTracks,
+                                        albums = albums,
+                                        artists = artists,
+                                        folders = folders,
+                                        currentTrack = currentTrack,
+                                        isPlaying = isPlaying,
+                                        onTrackClick = { track, queue ->
+                                            viewModel.playTrack(track, queue)
+                                        },
+                                        onRescanClick = {
+                                            checkAndRequestPermissions()
+                                            viewModel.refreshLibrary()
+                                        },
+                                        onPlayNext = { viewModel.playNext(it) },
+                                        onAddToQueue = { viewModel.addToQueue(it) },
+                                        qualityBadgeMode = appSettings.qualityBadgesMode,
+                                        audioOutputInfo = audioOutputInfo,
+                                        onAnalyzeTrack = { viewModel.analyzeTrack(it) },
+                                        analyzingTrackId = analyzingTrackId,
+                                        playlists = domainPlaylists,
+                                        onOpenPlaylist = { selectedPlaylistForDetail = it },
+                                        onCreatePlaylist = { name -> viewModel.createPlaylist(name) },
+                                        onAddToPlaylist = { trackForAddToPlaylist = it }
+                                    )
+                                }
+                            }
                             "equalizer" -> EqualizerScreen(
                                 config = effectConfig,
                                 onConfigChange = { viewModel.updateEffectConfig(it) },
@@ -551,6 +612,7 @@ class MainActivity : ComponentActivity() {
                                     // Open signal path dialog / inspector
                                 },
                                 themeConfig = themeConfig,
+                                onAddToPlaylistClick = { trackForAddToPlaylist = it },
                             )
                         }
                     }
@@ -564,6 +626,20 @@ class MainActivity : ComponentActivity() {
                                 prefs.edit().putBoolean("onboarding_completed", true).apply()
                                 showOnboarding = false
                             }
+                        )
+                    }
+
+                    if (trackForAddToPlaylist != null) {
+                        com.nodeplayer.ui.playlist.AddToPlaylistSheet(
+                            track = trackForAddToPlaylist!!,
+                            playlists = domainPlaylists,
+                            onAddToPlaylist = { pid, tr ->
+                                viewModel.addTrackToPlaylist(pid, tr)
+                            },
+                            onCreatePlaylist = { name, initial ->
+                                viewModel.createPlaylist(name, initial)
+                            },
+                            onDismiss = { trackForAddToPlaylist = null }
                         )
                     }
 

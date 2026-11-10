@@ -701,6 +701,209 @@ class InnerTubeClient(
         }
     }
 
+    /**
+     * Fetches user's saved/owned playlists from YouTube Music (`FEmusic_library_playlists`).
+     * Requires an authenticated sessionCookie.
+     */
+    suspend fun fetchUserPlaylists(): Result<List<YouTubePlaylistSummary>> = runCatching {
+        val client = YouTubeClient.WEB_REMIX
+        val response = withRetry {
+            httpClient.post("browse") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
+                header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
+                setBody(
+                    BrowseBody(
+                        context = client.toContext(locale),
+                        browseId = "FEmusic_library_playlists"
+                    )
+                )
+            }.bodyAsText()
+        }
+        parseUserPlaylists(response)
+    }.onFailure { e ->
+        NodeLog.e(TAG, "Failed to fetch user playlists", e)
+    }
+
+    private fun parseUserPlaylists(jsonText: String): List<YouTubePlaylistSummary> {
+        val list = mutableListOf<YouTubePlaylistSummary>()
+        try {
+            val root = json.parseToJsonElement(jsonText).jsonObject
+            val tabs = root["contents"]?.jsonObject
+                ?.get("singleColumnBrowseResultsRenderer")?.jsonObject
+                ?.get("tabs")?.jsonArray
+
+            val contents = tabs?.firstOrNull()?.jsonObject
+                ?.get("tabRenderer")?.jsonObject
+                ?.get("content")?.jsonObject
+                ?.get("sectionListRenderer")?.jsonObject
+                ?.get("contents")?.jsonArray
+                ?: root["contents"]?.jsonObject?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
+
+            contents?.forEach { sectionElement ->
+                val grid = sectionElement.jsonObject["gridRenderer"]?.jsonObject
+                val items = grid?.get("items")?.jsonArray
+                    ?: sectionElement.jsonObject["musicShelfRenderer"]?.jsonObject?.get("contents")?.jsonArray
+                    ?: sectionElement.jsonObject["musicCarouselShelfRenderer"]?.jsonObject?.get("contents")?.jsonArray
+
+                items?.forEach { itemElement ->
+                    val twoRow = itemElement.jsonObject["musicTwoRowItemRenderer"]?.jsonObject
+                        ?: itemElement.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject
+                    if (twoRow != null) {
+                        val navEndpoint = twoRow["navigationEndpoint"]?.jsonObject
+                        val browseEndpoint = navEndpoint?.get("browseEndpoint")?.jsonObject
+                        val playlistId = browseEndpoint?.get("browseId")?.jsonPrimitive?.content
+                            ?: twoRow["thumbnailOverlay"]?.jsonObject
+                                ?.get("musicItemThumbnailOverlayRenderer")?.jsonObject
+                                ?.get("content")?.jsonObject
+                                ?.get("musicPlayButtonRenderer")?.jsonObject
+                                ?.get("playNavigationEndpoint")?.jsonObject
+                                ?.get("watchEndpoint")?.jsonObject
+                                ?.get("playlistId")?.jsonPrimitive?.content
+
+                        if (!playlistId.isNullOrBlank()) {
+                            val title = twoRow["title"]?.jsonObject?.get("runs")?.jsonArray
+                                ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                                ?: twoRow["title"]?.jsonObject?.get("simpleText")?.jsonPrimitive?.content
+                                ?: "YouTube Playlist"
+
+                            val subtitleRuns = twoRow["subtitle"]?.jsonObject?.get("runs")?.jsonArray
+                            val author = subtitleRuns?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                            val countStr = subtitleRuns?.lastOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                            val trackCount = countStr?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+
+                            val thumbnails = twoRow["thumbnailRenderer"]?.jsonObject
+                                ?.get("musicThumbnailRenderer")?.jsonObject
+                                ?.get("thumbnail")?.jsonObject
+                                ?.get("thumbnails")?.jsonArray
+                                ?: twoRow["thumbnails"]?.jsonArray
+                            val thumbUrl = thumbnails?.lastOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
+
+                            val cleanId = if (playlistId.startsWith("VL")) playlistId.removePrefix("VL") else playlistId
+                            list.add(
+                                YouTubePlaylistSummary(
+                                    id = cleanId,
+                                    title = title,
+                                    author = author,
+                                    trackCount = trackCount,
+                                    thumbnailUrl = thumbUrl
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            NodeLog.w(TAG, "Error parsing user playlists JSON: ${e.message}")
+        }
+        return list
+    }
+
+    /**
+     * Fetches tracks from a YouTube Music playlist by playlist ID (`VL$playlistId` or browseId).
+     */
+    suspend fun fetchPlaylistTracks(playlistId: String): Result<List<Track>> = runCatching {
+        val cleanId = if (playlistId.startsWith("VL")) playlistId else "VL$playlistId"
+        val client = YouTubeClient.WEB_REMIX
+        val response = withRetry {
+            httpClient.post("browse") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
+                header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
+                setBody(
+                    BrowseBody(
+                        context = client.toContext(locale),
+                        browseId = cleanId
+                    )
+                )
+            }.bodyAsText()
+        }
+        parsePlaylistTracks(response)
+    }.onFailure { e ->
+        NodeLog.e(TAG, "Failed to fetch playlist tracks for $playlistId", e)
+    }
+
+    private fun parsePlaylistTracks(jsonText: String): List<Track> {
+        val tracks = mutableListOf<Track>()
+        try {
+            val root = json.parseToJsonElement(jsonText).jsonObject
+            val tabs = root["contents"]?.jsonObject
+                ?.get("singleColumnBrowseResultsRenderer")?.jsonObject
+                ?.get("tabs")?.jsonArray
+
+            val contents = tabs?.firstOrNull()?.jsonObject
+                ?.get("tabRenderer")?.jsonObject
+                ?.get("content")?.jsonObject
+                ?.get("sectionListRenderer")?.jsonObject
+                ?.get("contents")?.jsonArray
+                ?: root["contents"]?.jsonObject?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
+
+            contents?.forEach { sectionElement ->
+                val shelf = sectionElement.jsonObject["musicPlaylistShelfRenderer"]?.jsonObject
+                    ?: sectionElement.jsonObject["musicShelfRenderer"]?.jsonObject
+                val items = shelf?.get("contents")?.jsonArray
+                items?.forEach { itemElement ->
+                    val responsiveItem = itemElement.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject
+                    if (responsiveItem != null) {
+                        val videoId = responsiveItem["playlistItemData"]?.jsonObject?.get("videoId")?.jsonPrimitive?.content
+                            ?: responsiveItem["menu"]?.jsonObject
+                                ?.get("menuRenderer")?.jsonObject
+                                ?.get("topLevelButtons")?.jsonArray
+                                ?.firstOrNull()?.jsonObject
+                                ?.get("likeButtonRenderer")?.jsonObject
+                                ?.get("target")?.jsonObject
+                                ?.get("videoId")?.jsonPrimitive?.content
+
+                        val flexCols = responsiveItem["flexColumns"]?.jsonArray
+                        val title = flexCols?.getOrNull(0)?.jsonObject
+                            ?.get("musicResponsiveListItemFlexColumnRenderer")?.jsonObject
+                            ?.get("text")?.jsonObject
+                            ?.get("runs")?.jsonArray
+                            ?.firstOrNull()?.jsonObject
+                            ?.get("text")?.jsonPrimitive?.content ?: "Unknown Title"
+
+                        val subRuns = flexCols?.getOrNull(1)?.jsonObject
+                            ?.get("musicResponsiveListItemFlexColumnRenderer")?.jsonObject
+                            ?.get("text")?.jsonObject
+                            ?.get("runs")?.jsonArray
+
+                        val artist = subRuns?.getOrNull(0)?.jsonObject?.get("text")?.jsonPrimitive?.content ?: "Unknown Artist"
+                        val album = if ((subRuns?.size ?: 0) >= 3) subRuns?.getOrNull(2)?.jsonObject?.get("text")?.jsonPrimitive?.content ?: "YouTube Music" else "YouTube Music"
+
+                        val fixedCols = responsiveItem["fixedColumns"]?.jsonArray
+                        val durationStr = fixedCols?.getOrNull(0)?.jsonObject
+                            ?.get("musicResponsiveListItemFixedColumnRenderer")?.jsonObject
+                            ?.get("text")?.jsonObject
+                            ?.get("runs")?.jsonArray
+                            ?.firstOrNull()?.jsonObject
+                            ?.get("text")?.jsonPrimitive?.content
+
+                        if (!videoId.isNullOrBlank()) {
+                            tracks.add(
+                                Track(
+                                    id = generateSyntheticTrackId(videoId),
+                                    title = title,
+                                    artist = artist,
+                                    album = album,
+                                    durationMs = parseDurationMs(durationStr),
+                                    path = "nodeplayer://youtube/$videoId",
+                                    formatDescription = "YouTube Audio"
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            NodeLog.w(TAG, "Error parsing playlist tracks JSON: ${e.message}")
+        }
+        return tracks
+    }
+
     private fun generateSyntheticTrackId(videoId: String): Long {
         // Derive a stable positive 63-bit integer from the videoId string hash
         val hash = abs(videoId.hashCode().toLong())

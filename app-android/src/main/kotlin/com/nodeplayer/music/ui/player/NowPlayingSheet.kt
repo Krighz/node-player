@@ -89,6 +89,7 @@ fun NowPlayingSheet(
     onSetSleepTimer: (Int?) -> Unit = {},
     onOpenSignalPath: () -> Unit = {},
     themeConfig: GlassThemeConfig? = null,
+    onAddToPlaylistClick: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -421,6 +422,20 @@ fun NowPlayingSheet(
                                 onDismissRequest = { showTopMenu = false },
                                 modifier = Modifier.background(Color(0xFF1E2130))
                             ) {
+                                DropdownMenuItem(
+                                    text = { Text("Add to Playlist", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Rounded.PlaylistAdd,
+                                            contentDescription = null,
+                                            tint = accent
+                                        )
+                                    },
+                                    onClick = {
+                                        showTopMenu = false
+                                        onAddToPlaylistClick?.invoke(track)
+                                    }
+                                )
                                 DropdownMenuItem(
                                     text = { Text("Queue (${queue.size})", color = Color.White) },
                                     leadingIcon = {

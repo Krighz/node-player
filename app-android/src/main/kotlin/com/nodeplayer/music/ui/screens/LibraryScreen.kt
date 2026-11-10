@@ -57,11 +57,17 @@ fun LibraryScreen(
     audioOutputInfo: com.nodeplayer.model.AudioOutputInfo = com.nodeplayer.model.AudioOutputInfo(),
     onAnalyzeTrack: ((Track) -> Unit)? = null,
     analyzingTrackId: Long? = null,
+    playlists: List<com.nodeplayer.model.Playlist> = emptyList(),
+    onOpenPlaylist: ((com.nodeplayer.model.Playlist) -> Unit)? = null,
+    onCreatePlaylist: ((String) -> Unit)? = null,
+    onImportYouTubePlaylists: (() -> Unit)? = null,
+    onAddToPlaylist: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var isGridView by remember { mutableStateOf(true) }
-    val tabs = listOf("Songs", "Albums", "Artists", "Folders")
+    var playlistFilter by remember { mutableStateOf("All") } // "All", "Local", "YouTube"
+    val tabs = listOf("Songs", "Albums", "Artists", "Folders", "Playlists")
     val accent = LocalAccentColor.current
     var viewingFolder by remember { mutableStateOf<MusicFolder?>(null) }
     var inspectingTrack by remember { mutableStateOf<Track?>(null) }
@@ -183,14 +189,23 @@ fun LibraryScreen(
                     onAddToQueue = onAddToQueue,
                     qualityBadgeMode = qualityBadgeMode,
                     onInspectTrack = { inspectingTrack = it },
-                    
+                    onAddToPlaylist = onAddToPlaylist,
                 )
                 1 -> AlbumsGrid(albums = albums, isGridView = isGridView, onAlbumClick = {}, )
                 2 -> ArtistsList(artists = artists, isGridView = isGridView, onArtistClick = {}, )
                 3 -> FoldersList(
                     folders = folders,
                     onFolderClick = { viewingFolder = it },
-                    
+                )
+                4 -> PlaylistsTab(
+                    playlists = playlists,
+                    filter = playlistFilter,
+                    onFilterChange = { playlistFilter = it },
+                    onPlaylistClick = { onOpenPlaylist?.invoke(it) },
+                    onCreatePlaylistClick = {
+                        onCreatePlaylist?.invoke("New Playlist")
+                    },
+                    onImportYouTubeClick = onImportYouTubePlaylists
                 )
             }
         }
@@ -219,6 +234,7 @@ fun SongsList(
     onAddToQueue: (Track) -> Unit = {},
     qualityBadgeMode: String = "DETAILED",
     onInspectTrack: (Track) -> Unit = {},
+    onAddToPlaylist: ((Track) -> Unit)? = null,
     hazeState: HazeState? = null
 ) {
     val accent = LocalAccentColor.current
@@ -393,6 +409,22 @@ fun SongsList(
                                     onAddToQueue(track)
                                 }
                             )
+                            if (onAddToPlaylist != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Add to Playlist", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Rounded.PlaylistAdd,
+                                            contentDescription = null,
+                                            tint = accent
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onAddToPlaylist(track)
+                                    }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("Track Details & Analysis", color = Color.White) },
                                 leadingIcon = {
@@ -839,6 +871,187 @@ fun ArtistsList(
                                     color = Color.White.copy(alpha = 0.65f)
                                 )
                             )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PlaylistsTab(
+    playlists: List<com.nodeplayer.model.Playlist>,
+    filter: String,
+    onFilterChange: (String) -> Unit,
+    onPlaylistClick: (com.nodeplayer.model.Playlist) -> Unit,
+    onCreatePlaylistClick: () -> Unit,
+    onImportYouTubeClick: (() -> Unit)? = null
+) {
+    val accent = LocalAccentColor.current
+    val filterOptions = listOf("All", "Local", "YouTube")
+
+    val filtered = remember(playlists, filter) {
+        when (filter) {
+            "Local" -> playlists.filter { it.source == "local" }
+            "YouTube" -> playlists.filter { it.source == "youtube" }
+            else -> playlists
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Filter pills & Actions Row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                filterOptions.forEach { opt ->
+                    val isSel = filter == opt
+                    Box(
+                        modifier = Modifier
+                            .clip(ContinuousRoundedRectangle(GlassTokens.pillCornerRadius))
+                            .background(if (isSel) accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.05f))
+                            .clickable { onFilterChange(opt) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = opt,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSel) accent else Color.White.copy(alpha = 0.7f)
+                            )
+                        )
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (onImportYouTubeClick != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(ContinuousRoundedRectangle(GlassTokens.pillCornerRadius))
+                            .background(accent.copy(alpha = 0.2f))
+                            .clickable { onImportYouTubeClick() }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.Cloud,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Import YT",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = accent
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(ContinuousRoundedRectangle(GlassTokens.pillCornerRadius))
+                        .background(accent)
+                        .clickable { onCreatePlaylistClick() }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Rounded.Add,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "New",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (filtered.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 48.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (filter == "All") "No playlists created yet" else "No $filter playlists found",
+                    style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.5f))
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = 190.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(filtered, key = { it.id }) { playlist ->
+                    GlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onPlaylistClick(playlist) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(accent.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = when (playlist.source) {
+                                        "youtube" -> Icons.Rounded.Cloud
+                                        "spotify" -> Icons.Rounded.MusicNote
+                                        else -> Icons.Rounded.Folder
+                                    },
+                                    contentDescription = null,
+                                    tint = accent,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = playlist.name,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    ),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "${playlist.trackCount} tracks • ${playlist.source.capitalize()}",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = Color.White.copy(alpha = 0.6f)
+                                    )
+                                )
+                            }
                         }
                     }
                 }

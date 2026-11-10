@@ -48,8 +48,12 @@ class ControlAndLibraryTest {
         override suspend fun setTracksHiddenForFolder(folderPrefix: String, isHidden: Boolean) {}
         override fun getAllPlaylists(): Flow<List<Playlist>> = emptyFlow()
         override suspend fun insertPlaylist(playlist: Playlist): Long = 1L
+        override suspend fun renamePlaylist(playlistId: Long, newName: String) {}
         override suspend fun deletePlaylist(playlistId: Long) {}
         override fun getTracksForPlaylist(playlistId: Long): Flow<List<Track>> = emptyFlow()
+        override suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long) {}
+        override suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {}
+        override suspend fun reorderPlaylistTracks(playlistId: Long, orderedTrackIds: List<Long>) {}
         override suspend fun updateTrackAudioAnalysis(id: Long, status: String, confidence: Float, cutoffHz: Float, lufs: Float, drScore: Int, drLabel: String) {}
         override suspend fun recordTrackPlayed(id: Long, timestamp: Long) {}
     }

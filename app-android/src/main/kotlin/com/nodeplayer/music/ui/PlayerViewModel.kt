@@ -1431,6 +1431,45 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun deletePlaylistById(playlistId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val p = dao.getAllPlaylistsList().find { it.id == playlistId }
+            if (p != null) dao.deletePlaylist(p)
+        }
+    }
+
+    fun renamePlaylist(playlistId: Long, newName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.renamePlaylist(playlistId, newName)
+        }
+    }
+
+    fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.removeTrackFromPlaylist(playlistId, trackId)
+        }
+    }
+
+    fun reorderPlaylistTracks(playlistId: Long, orderedTrackIds: List<Long>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.clearPlaylistTracks(playlistId)
+            val refs = orderedTrackIds.mapIndexed { idx, tid ->
+                com.nodeplayer.music.data.PlaylistTrackCrossRef(
+                    playlistId = playlistId,
+                    trackId = tid,
+                    position = idx
+                )
+            }
+            dao.insertPlaylistTracks(refs)
+        }
+    }
+
+    fun getTracksForPlaylist(playlistId: Long): Flow<List<Track>> {
+        return dao.getTracksForPlaylist(playlistId).map { entities ->
+            entities.map { it.toTrack() }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         progressJob?.cancel()

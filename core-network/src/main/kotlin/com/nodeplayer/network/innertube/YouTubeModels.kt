@@ -929,6 +929,14 @@ data class YouTubeSection(
     val items: List<Track>,
 )
 
+data class YouTubePlaylistSummary(
+    val id: String, // e.g. "PLxyz..."
+    val title: String,
+    val author: String? = null,
+    val trackCount: Int = 0,
+    val thumbnailUrl: String? = null
+)
+
 enum class SearchFilter(val paramValue: String?) {
     ALL(null),
     SONGS("EgWKAQIIAWoKEAkQBRAKEAMQBA%3D%3D"),

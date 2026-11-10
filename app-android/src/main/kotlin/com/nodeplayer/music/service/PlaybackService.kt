@@ -784,10 +784,42 @@ class PlaybackService : MediaSessionService() {
             override suspend fun insertScannedFolders(folders: List<com.nodeplayer.model.MusicFolder>) {}
             override suspend fun setFolderEnabled(path: String, isEnabled: Boolean) {}
             override suspend fun setTracksHiddenForFolder(folderPrefix: String, isHidden: Boolean) {}
-            override fun getAllPlaylists(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Playlist>> = kotlinx.coroutines.flow.emptyFlow()
+            override fun getAllPlaylists(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Playlist>> =
+                db?.playerDao()?.getAllPlaylists()?.let { flow ->
+                    kotlinx.coroutines.flow.flow {
+                        flow.collect { entities ->
+                            emit(entities.map { it.toPlaylist() })
+                        }
+                    }
+                } ?: kotlinx.coroutines.flow.emptyFlow()
             override suspend fun insertPlaylist(playlist: com.nodeplayer.model.Playlist): Long = 0L
-            override suspend fun deletePlaylist(playlistId: Long) {}
-            override fun getTracksForPlaylist(playlistId: Long): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Track>> = kotlinx.coroutines.flow.emptyFlow()
+            override suspend fun renamePlaylist(playlistId: Long, newName: String) { db?.playerDao()?.renamePlaylist(playlistId, newName) }
+            override suspend fun deletePlaylist(playlistId: Long) {
+                val p = db?.playerDao()?.getAllPlaylistsList()?.find { it.id == playlistId }
+                if (p != null) db?.playerDao()?.deletePlaylist(p)
+            }
+            override fun getTracksForPlaylist(playlistId: Long): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Track>> =
+                db?.playerDao()?.getTracksForPlaylist(playlistId)?.let { flow ->
+                    kotlinx.coroutines.flow.flow {
+                        flow.collect { entities ->
+                            emit(entities.map { it.toTrack() })
+                        }
+                    }
+                } ?: kotlinx.coroutines.flow.emptyFlow()
+            override suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long) {
+                val maxPos = db?.playerDao()?.getMaxPlaylistPosition(playlistId) ?: -1
+                db?.playerDao()?.insertPlaylistTracks(listOf(com.nodeplayer.music.data.PlaylistTrackCrossRef(playlistId, trackId, maxPos + 1)))
+            }
+            override suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
+                db?.playerDao()?.removeTrackFromPlaylist(playlistId, trackId)
+            }
+            override suspend fun reorderPlaylistTracks(playlistId: Long, orderedTrackIds: List<Long>) {
+                db?.playerDao()?.clearPlaylistTracks(playlistId)
+                val refs = orderedTrackIds.mapIndexed { idx, tid ->
+                    com.nodeplayer.music.data.PlaylistTrackCrossRef(playlistId, tid, idx)
+                }
+                db?.playerDao()?.insertPlaylistTracks(refs)
+            }
             override suspend fun updateTrackAudioAnalysis(id: Long, status: String, confidence: Float, cutoffHz: Float, lufs: Float, drScore: Int, drLabel: String) {}
             override suspend fun recordTrackPlayed(id: Long, timestamp: Long) { db?.playerDao()?.recordTrackPlayed(id, timestamp) }
         }
