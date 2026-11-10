@@ -147,6 +147,9 @@ dependencies {
     implementation(project(":integration-api"))
     implementation(project(":core-ui"))
 
+    // Security / EncryptedSharedPreferences (Hardware Keystore backed AES-256-GCM)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Ktor client (required by core-network StreamResolver)
     val ktorVersion = "2.3.12"
     implementation("io.ktor:ktor-client-core:$ktorVersion")

@@ -14,13 +14,18 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.Closeable
 import kotlin.math.abs
@@ -37,6 +42,15 @@ class InnerTubeClient(
     val locale: YouTubeLocale = YouTubeLocale(gl = "US", hl = "en"),
     val clientContext: YouTubeClient = YouTubeClient.ANDROID_VR_1_65_10,
 ) : Closeable {
+
+    var sessionCookie: String? = null
+        set(value) {
+            field = value
+            cachedSapisid = YouTubeAuth.extractSapisid(value)
+            NodeLog.d(TAG, "Session cookie updated: ${YouTubeAuth.maskCookieForLog(value)}")
+        }
+
+    private var cachedSapisid: String? = null
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -78,6 +92,14 @@ class InnerTubeClient(
             header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
             header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
             contentType(ContentType.Application.Json)
+
+            sessionCookie?.let { cookie ->
+                header(HttpHeaders.Cookie, cookie)
+                cachedSapisid?.let { sapisid ->
+                    val authHeader = YouTubeAuth.generateSapisidHash(sapisid)
+                    header(HttpHeaders.Authorization, authHeader)
+                }
+            }
         }
     }
 
@@ -610,6 +632,72 @@ class InnerTubeClient(
             else -> {
                 songs.add(track)
             }
+        }
+    }
+
+    /**
+     * Fetches user profile info (name, handle, avatar) from account_menu.
+     * Requires an authenticated sessionCookie.
+     */
+    suspend fun fetchAccountInfo(): Result<com.nodeplayer.model.YouTubeAccount?> = runCatching {
+        val cookie = sessionCookie
+        if (cookie.isNullOrBlank()) return@runCatching null
+
+        withRetry {
+            val response = httpClient.post("account/account_menu") {
+                val reqBody = AccountMenuBody(
+                    context = clientContext.toContext(locale, visitorData = null)
+                )
+                setBody(reqBody)
+            }
+
+            if (response.status == HttpStatusCode.OK) {
+                val responseText = response.bodyAsText()
+                parseAccountMenuResponse(responseText)
+            } else if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
+                NodeLog.w(TAG, "Account menu request unauthorized (${response.status.value})")
+                null
+            } else {
+                NodeLog.w(TAG, "Account menu request failed with status: ${response.status}")
+                null
+            }
+        }
+    }
+
+    private fun parseAccountMenuResponse(jsonText: String): com.nodeplayer.model.YouTubeAccount? {
+        return try {
+            val element = json.parseToJsonElement(jsonText)
+            val actions = element.jsonObject["actions"]?.jsonArray
+            val openMenuAction = actions?.firstOrNull()?.jsonObject?.get("openPopupAction")?.jsonObject
+            val menuRenderer = openMenuAction?.get("popup")?.jsonObject?.get("multiPageMenuRenderer")?.jsonObject
+            val headerRenderer = menuRenderer?.get("header")?.jsonObject?.get("activeAccountHeaderRenderer")?.jsonObject
+
+            if (headerRenderer != null) {
+                val accountName = headerRenderer["accountName"]?.jsonObject?.get("runs")?.jsonArray
+                    ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                    ?: headerRenderer["accountName"]?.jsonObject?.get("simpleText")?.jsonPrimitive?.content
+                    ?: "YouTube User"
+
+                val handle = headerRenderer["email"]?.jsonObject?.get("runs")?.jsonArray
+                    ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                    ?: headerRenderer["email"]?.jsonObject?.get("simpleText")?.jsonPrimitive?.content
+
+                val thumbnails = headerRenderer["accountPhoto"]?.jsonObject?.get("thumbnails")?.jsonArray
+                val avatarUrl = thumbnails?.lastOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
+
+                com.nodeplayer.model.YouTubeAccount(
+                    id = handle ?: accountName,
+                    name = accountName,
+                    handle = handle,
+                    avatarUrl = avatarUrl,
+                    email = handle?.takeIf { it.contains("@") }
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            NodeLog.w(TAG, "Failed to parse account menu response: ${e.message}")
+            null
         }
     }
 

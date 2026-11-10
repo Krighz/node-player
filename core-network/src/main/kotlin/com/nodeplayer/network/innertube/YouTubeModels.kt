@@ -192,6 +192,11 @@ data class Context(
 }
 
 @Serializable
+data class AccountMenuBody(
+    val context: Context
+)
+
+@Serializable
 data class BrowseBody(
     val context: Context,
     val browseId: String? = null,

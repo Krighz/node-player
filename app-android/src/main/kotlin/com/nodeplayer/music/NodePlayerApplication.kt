@@ -59,6 +59,11 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
 
         com.nodeplayer.common.media.CipherSolver.current = com.nodeplayer.music.cipher.AndroidCipherSolver(this)
 
+        // Initialize YouTube Account Manager with the shared InnerTube client
+        val innerTubeClient = com.nodeplayer.music.playback.AudioCache.getStreamResolver().innerTubeClient
+        com.nodeplayer.music.auth.YouTubeAccountManager.initialize(this, innerTubeClient)
+        com.nodeplayer.music.lyrics.LyricsManager.initialize(this)
+
         if (BuildConfig.DEBUG) {
             android.os.StrictMode.setThreadPolicy(
                 android.os.StrictMode.ThreadPolicy.Builder()

@@ -42,7 +42,7 @@ data class ResolvedStream(
  * - Highest audio bitrate format fallback
  */
 class StreamResolver(
-    private val innerTubeClient: InnerTubeClient = InnerTubeClient(),
+    val innerTubeClient: InnerTubeClient = InnerTubeClient(),
     private val cipherSolver: CipherSolver? = CipherSolver.current,
     probeEngine: HttpClientEngine? = null,
 ) : Closeable {
