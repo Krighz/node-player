@@ -61,6 +61,7 @@ fun LibraryScreen(
     onOpenPlaylist: ((com.nodeplayer.model.Playlist) -> Unit)? = null,
     onCreatePlaylist: ((String) -> Unit)? = null,
     onImportYouTubePlaylists: (() -> Unit)? = null,
+    onImportSpotifyPlaylists: (() -> Unit)? = null,
     onAddToPlaylist: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -205,7 +206,8 @@ fun LibraryScreen(
                     onCreatePlaylistClick = {
                         onCreatePlaylist?.invoke("New Playlist")
                     },
-                    onImportYouTubeClick = onImportYouTubePlaylists
+                    onImportYouTubeClick = onImportYouTubePlaylists,
+                    onImportSpotifyClick = onImportSpotifyPlaylists
                 )
             }
         }
@@ -886,15 +888,17 @@ fun PlaylistsTab(
     onFilterChange: (String) -> Unit,
     onPlaylistClick: (com.nodeplayer.model.Playlist) -> Unit,
     onCreatePlaylistClick: () -> Unit,
-    onImportYouTubeClick: (() -> Unit)? = null
+    onImportYouTubeClick: (() -> Unit)? = null,
+    onImportSpotifyClick: (() -> Unit)? = null
 ) {
     val accent = LocalAccentColor.current
-    val filterOptions = listOf("All", "Local", "YouTube")
+    val filterOptions = listOf("All", "Local", "YouTube", "Spotify")
 
     val filtered = remember(playlists, filter) {
         when (filter) {
             "Local" -> playlists.filter { it.source == "local" }
             "YouTube" -> playlists.filter { it.source == "youtube" }
+            "Spotify" -> playlists.filter { it.source == "spotify" }
             else -> playlists
         }
     }
@@ -951,6 +955,33 @@ fun PlaylistsTab(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = accent
+                                )
+                            )
+                        }
+                    }
+                }
+
+                if (onImportSpotifyClick != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(ContinuousRoundedRectangle(GlassTokens.pillCornerRadius))
+                            .background(Color(0xFF1DB954).copy(alpha = 0.2f))
+                            .clickable { onImportSpotifyClick() }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.MusicNote,
+                                contentDescription = null,
+                                tint = Color(0xFF1DB954),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Spotify",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1DB954)
                                 )
                             )
                         }

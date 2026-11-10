@@ -87,6 +87,22 @@ class SecureSessionStore(private val context: Context) {
         prefs.edit().putBoolean(KEY_STAY_LOGGED_IN, stayLoggedIn).apply()
     }
 
+    fun putString(key: String, value: String?) {
+        if (value == null) {
+            prefs.edit().remove(key).apply()
+        } else {
+            prefs.edit().putString(key, value).apply()
+        }
+    }
+
+    fun getString(key: String, defaultValue: String? = null): String? {
+        return prefs.getString(key, defaultValue)
+    }
+
+    fun remove(key: String) {
+        prefs.edit().remove(key).apply()
+    }
+
     /**
      * Purges all credentials, cookies, and cached profile data (AUTH-03).
      */

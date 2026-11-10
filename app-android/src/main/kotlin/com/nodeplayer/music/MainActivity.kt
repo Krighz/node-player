@@ -2,6 +2,7 @@ package com.nodeplayer.music
 
 import android.Manifest
 import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -106,6 +107,8 @@ class MainActivity : ComponentActivity() {
 
         checkAndRequestPermissions()
 
+        handleSpotifyCallbackIntent(intent)
+
         setContent {
             val themeConfig by viewModel.themeConfig.collectAsState()
             val accentColor by viewModel.accentColor.collectAsState()
@@ -155,6 +158,22 @@ class MainActivity : ComponentActivity() {
                 var selectedPlaylistForDetail by remember { mutableStateOf<com.nodeplayer.model.Playlist?>(null) }
                 var playlistDetailTracks by remember { mutableStateOf<List<com.nodeplayer.model.Track>>(emptyList()) }
                 var trackForAddToPlaylist by remember { mutableStateOf<com.nodeplayer.model.Track?>(null) }
+
+                // Spotify Transfer State
+                var showSpotifyDialog by remember { mutableStateOf(false) }
+                val isSpotifyLoggedIn by com.nodeplayer.music.auth.SpotifyAccountManager.isLoggedIn.collectAsState()
+                val spotifyClientId by com.nodeplayer.music.auth.SpotifyAccountManager.configuredClientId.collectAsState()
+                var spotifyPlaylists by remember { mutableStateOf<List<com.nodeplayer.network.spotify.SpotifyPlaylistSummary>>(emptyList()) }
+                var isLoadingSpotifyPlaylists by remember { mutableStateOf(false) }
+
+                var reviewingSpotifyPlaylist by remember { mutableStateOf<com.nodeplayer.network.spotify.SpotifyPlaylistSummary?>(null) }
+                var spotifyMatchedTracks by remember { mutableStateOf<List<Pair<com.nodeplayer.network.spotify.SpotifyTrack, com.nodeplayer.model.Track>>>(emptyList()) }
+                var spotifyUncertainTracks by remember { mutableStateOf<List<Pair<com.nodeplayer.network.spotify.SpotifyTrack, List<com.nodeplayer.model.Track>>>>(emptyList()) }
+                var spotifyNotFoundTracks by remember { mutableStateOf<List<com.nodeplayer.network.spotify.SpotifyTrack>>(emptyList()) }
+                var isSpotifyMatching by remember { mutableStateOf(false) }
+                var spotifyMatchingProgress by remember { mutableStateOf(0f) }
+                var spotifyMatchingCurrentTitle by remember { mutableStateOf<String?>(null) }
+                var spotifyMatchingJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
                 val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder", "widgets", "widget_settings", "playlist_detail")
                 BackHandler(enabled = isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null) {
@@ -406,6 +425,21 @@ class MainActivity : ComponentActivity() {
                                         playlists = domainPlaylists,
                                         onOpenPlaylist = { selectedPlaylistForDetail = it },
                                         onCreatePlaylist = { name -> viewModel.createPlaylist(name) },
+                                        onImportSpotifyPlaylists = {
+                                            com.nodeplayer.music.auth.SpotifyAccountManager.initialize(this@MainActivity)
+                                            showSpotifyDialog = true
+                                            if (isSpotifyLoggedIn) {
+                                                val token = com.nodeplayer.music.auth.SpotifyAccountManager.getValidAccessToken(this@MainActivity)
+                                                if (token != null) {
+                                                    isLoadingSpotifyPlaylists = true
+                                                    lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                        val res = com.nodeplayer.music.auth.SpotifyAccountManager.client.getUserPlaylists(token)
+                                                        spotifyPlaylists = res.getOrDefault(emptyList())
+                                                        isLoadingSpotifyPlaylists = false
+                                                    }
+                                                }
+                                            }
+                                        },
                                         onAddToPlaylist = { trackForAddToPlaylist = it }
                                     )
                                 }
@@ -640,6 +674,94 @@ class MainActivity : ComponentActivity() {
                                 viewModel.createPlaylist(name, initial)
                             },
                             onDismiss = { trackForAddToPlaylist = null }
+                        )
+                    }
+
+                    if (showSpotifyDialog) {
+                        com.nodeplayer.ui.spotify.SpotifyImportDialog(
+                            isConfigured = !spotifyClientId.isNullOrBlank(),
+                            isLoggedIn = isSpotifyLoggedIn,
+                            playlists = spotifyPlaylists,
+                            isLoadingPlaylists = isLoadingSpotifyPlaylists,
+                            onLoginClick = {
+                                val authUrl = com.nodeplayer.music.auth.SpotifyAccountManager.createAuthorizationUrl()
+                                if (authUrl != null) {
+                                    try {
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))
+                                        startActivity(intent)
+                                    } catch (_: Exception) {}
+                                }
+                            },
+                            onSaveClientId = { id ->
+                                com.nodeplayer.music.auth.SpotifyAccountManager.setCustomClientId(this@MainActivity, id)
+                            },
+                            onSelectPlaylist = { pl ->
+                                showSpotifyDialog = false
+                                reviewingSpotifyPlaylist = pl
+                                val token = com.nodeplayer.music.auth.SpotifyAccountManager.getValidAccessToken(this@MainActivity)
+                                if (token != null) {
+                                    isSpotifyMatching = true
+                                    spotifyMatchingProgress = 0f
+                                    spotifyMatchingJob?.cancel()
+                                    spotifyMatchingJob = lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                        val tracks = com.nodeplayer.music.auth.SpotifyAccountManager.client.getPlaylistTracks(token, pl.id).getOrDefault(emptyList())
+                                        val ytClient = com.nodeplayer.music.auth.YouTubeAccountManager.innerTubeClient ?: com.nodeplayer.network.innertube.InnerTubeClient()
+                                        val matcher = com.nodeplayer.network.spotify.SpotifyTrackMatcher(ytClient)
+
+                                        val matched = mutableListOf<Pair<com.nodeplayer.network.spotify.SpotifyTrack, com.nodeplayer.model.Track>>()
+                                        val uncertain = mutableListOf<Pair<com.nodeplayer.network.spotify.SpotifyTrack, List<com.nodeplayer.model.Track>>>()
+                                        val notFound = mutableListOf<com.nodeplayer.network.spotify.SpotifyTrack>()
+
+                                        tracks.forEachIndexed { idx, spotTrack ->
+                                            spotifyMatchingCurrentTitle = spotTrack.title
+                                            spotifyMatchingProgress = (idx + 1).toFloat() / tracks.size.toFloat()
+                                            when (val res = matcher.matchTrack(spotTrack)) {
+                                                is com.nodeplayer.network.spotify.MatchResult.HighConfidence -> matched.add(spotTrack to res.candidate)
+                                                is com.nodeplayer.network.spotify.MatchResult.Uncertain -> uncertain.add(spotTrack to res.topCandidates)
+                                                is com.nodeplayer.network.spotify.MatchResult.NotFound -> notFound.add(spotTrack)
+                                            }
+                                        }
+
+                                        spotifyMatchedTracks = matched
+                                        spotifyUncertainTracks = uncertain
+                                        spotifyNotFoundTracks = notFound
+                                        isSpotifyMatching = false
+                                        spotifyMatchingCurrentTitle = null
+                                    }
+                                }
+                            },
+                            onDismiss = { showSpotifyDialog = false }
+                        )
+                    }
+
+                    if (reviewingSpotifyPlaylist != null) {
+                        com.nodeplayer.music.ui.screens.SpotifyTransferReviewScreen(
+                            playlist = reviewingSpotifyPlaylist!!,
+                            matchedTracks = spotifyMatchedTracks,
+                            uncertainTracks = spotifyUncertainTracks,
+                            notFoundTracks = spotifyNotFoundTracks,
+                            isMatchingActive = isSpotifyMatching,
+                            progressFraction = spotifyMatchingProgress,
+                            currentMatchingTitle = spotifyMatchingCurrentTitle,
+                            onCancelMatching = {
+                                spotifyMatchingJob?.cancel()
+                                isSpotifyMatching = false
+                                spotifyMatchingCurrentTitle = null
+                            },
+                            onResolveUncertain = { spot, chosen ->
+                                spotifyUncertainTracks = spotifyUncertainTracks.filter { it.first.id != spot.id }
+                            },
+                            onManualSearchForTrack = { _ -> },
+                            onFinishTransfer = { resolvedTracks ->
+                                val plName = reviewingSpotifyPlaylist?.name ?: "Spotify Playlist"
+                                viewModel.createPlaylist(plName, resolvedTracks)
+                                reviewingSpotifyPlaylist = null
+                                safeToast("Transferred ${resolvedTracks.size} tracks into playlist '$plName'", Toast.LENGTH_SHORT)
+                            },
+                            onBack = {
+                                spotifyMatchingJob?.cancel()
+                                reviewingSpotifyPlaylist = null
+                            }
                         )
                     }
 
@@ -1102,6 +1224,30 @@ class MainActivity : ComponentActivity() {
             }
         } catch (e: Exception) {
             Log.w("MainActivity", "Unable to set display refresh rate: ${e.message}")
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleSpotifyCallbackIntent(intent)
+    }
+
+    private fun handleSpotifyCallbackIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        if (uri.scheme == "nodeplayer" && uri.host == "spotify-callback") {
+            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.nodeplayer.music.auth.SpotifyAccountManager.handleAuthorizationResponse(this@MainActivity, uri)
+                    .onSuccess {
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "Spotify account connected!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    .onFailure { e ->
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "Spotify login failed: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+            }
         }
     }
 }
