@@ -127,4 +127,31 @@ class LyricsModelTest {
         assertEquals("(in the background)", leadLine.background?.text)
         assertEquals(LyricAlignment.End, leadLine.background?.alignment)
     }
+
+    @Test
+    fun testExploreModelsAndYouTubeAccountParity() {
+        val mood = MoodGenre(
+            title = "Chill",
+            stripeColor = 0xFF123456L,
+            browseId = "FEmusic_chill",
+            params = "test_params",
+            thumbnailUrl = "https://example.com/thumb.jpg"
+        )
+        val section = MoodGenreSection(
+            title = "Moods",
+            items = listOf(mood)
+        )
+        assertEquals("Chill", section.items.first().title)
+        assertEquals(0xFF123456L, section.items.first().stripeColor)
+
+        val account = YouTubeAccount(
+            id = "user123",
+            name = "Test User",
+            handle = "@testuser",
+            avatarUrl = "https://example.com/avatar.jpg"
+        )
+        assertEquals("@testuser", account.handle)
+        assertEquals("@testuser", account.channelHandle)
+        assertEquals("https://example.com/avatar.jpg", account.avatarUrl)
+    }
 }

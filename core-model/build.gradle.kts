@@ -1,5 +1,6 @@
 plugins {
     id("org.jetbrains.kotlin.jvm")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 java {
@@ -9,5 +10,7 @@ java {
 
 dependencies {
     // Pure Kotlin models, zero Android dependencies
+    api("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+    testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlin:kotlin-test")
 }

@@ -10,7 +10,9 @@ data class YouTubeAccount(
     val avatarUrl: String? = null,
     val email: String? = null,
     val isLoggedIn: Boolean = true
-)
+) {
+    val channelHandle: String? get() = handle
+}
 
 /**
  * Reactive state representing YouTube authentication status.
