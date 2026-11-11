@@ -953,14 +953,32 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val albumArtUri = Uri.parse("content://media/external/audio/albumart")
                 val artUri = ContentUris.withAppendedId(albumArtUri, track.albumId)
-                val inputStream = getApplication<Application>().contentResolver.openInputStream(artUri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
-                if (bitmap != null) {
-                    val palette = Palette.from(bitmap).generate()
-                    val swatch = palette.vibrantSwatch ?: palette.dominantSwatch
-                    if (swatch != null) {
-                        _accentColor.value = Color(swatch.rgb)
+                val bytes = getApplication<Application>().contentResolver.openInputStream(artUri)?.use { it.readBytes() }
+                if (bytes != null && bytes.isNotEmpty()) {
+                    val boundsOpts = BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                    }
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOpts)
+                    val sampleSize = com.nodeplayer.ui.components.computeBitmapSampleSize(
+                        boundsOpts.outWidth,
+                        boundsOpts.outHeight,
+                        192
+                    )
+                    val decodeOpts = BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+                    }
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
+                    if (bitmap != null) {
+                        try {
+                            val palette = Palette.from(bitmap).generate()
+                            val swatch = palette.vibrantSwatch ?: palette.dominantSwatch
+                            if (swatch != null) {
+                                _accentColor.value = Color(swatch.rgb)
+                            }
+                        } finally {
+                            bitmap.recycle()
+                        }
                     }
                 }
             } catch (_: Exception) {

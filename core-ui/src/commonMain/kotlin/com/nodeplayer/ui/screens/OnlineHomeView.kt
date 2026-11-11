@@ -35,7 +35,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import com.nodeplayer.common.AppModeState
 import com.nodeplayer.model.Track
 import com.nodeplayer.network.cache.HomeFeedDiskCache
-import com.nodeplayer.network.innertube.InnerTubeClient
+import com.nodeplayer.network.innertube.SharedInnerTubeProvider
 import com.nodeplayer.network.innertube.YouTubeSection
 import com.nodeplayer.network.recommender.HomeFeedRecommender
 import com.nodeplayer.ui.LocalBottomBarPadding
@@ -110,37 +110,35 @@ fun OnlineHomeView(
 
             withContext(Dispatchers.IO) {
                 try {
-                    val client = InnerTubeClient()
-                    client.use { innerClient ->
-                        val result = if (currentRoute == "new") {
-                            val exploreRes = innerClient.getExploreSections().getOrDefault(emptyList())
-                            val chartsRes = innerClient.getChartsSections().getOrDefault(emptyList())
-                            val combined = (exploreRes + chartsRes).distinctBy { it.title }
-                            if (combined.isNotEmpty()) Result.success(combined) else innerClient.getCombinedHomeFeed()
+                    val innerClient = SharedInnerTubeProvider.get()
+                    val result = if (currentRoute == "new") {
+                        val exploreRes = innerClient.getExploreSections().getOrDefault(emptyList())
+                        val chartsRes = innerClient.getChartsSections().getOrDefault(emptyList())
+                        val combined = (exploreRes + chartsRes).distinctBy { it.title }
+                        if (combined.isNotEmpty()) Result.success(combined) else innerClient.getCombinedHomeFeed()
+                    } else {
+                        innerClient.getCombinedHomeFeed()
+                    }
+                    withContext(Dispatchers.Main) {
+                        if (result.isSuccess) {
+                            val loaded = result.getOrNull().orEmpty()
+                            val clean = recommender.filterDismissedSections(loaded)
+                            sections = clean
+                            diskCache.save(clean, region = recommender.resolveRegion())
+                            isFallbackMode = false
+                            errorMessage = null
                         } else {
-                            innerClient.getCombinedHomeFeed()
-                        }
-                        withContext(Dispatchers.Main) {
-                            if (result.isSuccess) {
-                                val loaded = result.getOrNull().orEmpty()
-                                val clean = recommender.filterDismissedSections(loaded)
-                                sections = clean
-                                diskCache.save(clean, region = recommender.resolveRegion())
-                                isFallbackMode = false
-                                errorMessage = null
-                            } else {
-                                // Fallback mode using local history & cached charts
-                                val fallbackPicks = recommender.buildFallbackQuickPicks(recentTracks)
-                                if (sections.isEmpty() && fallbackPicks.isNotEmpty()) {
-                                    sections = listOf(
-                                        YouTubeSection(title = "Quick Picks", items = fallbackPicks)
-                                    )
-                                }
-                                isFallbackMode = true
-                                errorMessage = result.exceptionOrNull()?.message ?: "Using offline fallback"
+                            // Fallback mode using local history & cached charts
+                            val fallbackPicks = recommender.buildFallbackQuickPicks(recentTracks)
+                            if (sections.isEmpty() && fallbackPicks.isNotEmpty()) {
+                                sections = listOf(
+                                    YouTubeSection(title = "Quick Picks", items = fallbackPicks)
+                                )
                             }
-                            isRefreshing = false
+                            isFallbackMode = true
+                            errorMessage = result.exceptionOrNull()?.message ?: "Using offline fallback"
                         }
+                        isRefreshing = false
                     }
                 } catch (t: Throwable) {
                     withContext(Dispatchers.Main) {

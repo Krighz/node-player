@@ -26,13 +26,15 @@ import coil.compose.AsyncImage
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.common.AppModeState
-import com.nodeplayer.network.innertube.InnerTubeClient
 import com.nodeplayer.network.innertube.SearchFilter
+import com.nodeplayer.network.innertube.SharedInnerTubeProvider
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,13 +49,13 @@ fun GlobalSearchSheet(
     val isOnlineMode by AppModeState.isOnlineMode.collectAsState()
     var searchOnlineTab by remember(isOnlineMode) { mutableStateOf(isOnlineMode) }
 
-    val searchScope = rememberCoroutineScope()
     var remoteTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
     var onlineTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
     var isSearchingOnline by remember { mutableStateOf(false) }
     var onlineError by remember { mutableStateOf<String?>(null) }
     val hub = com.nodeplayer.music.service.PlaybackService.instance?.nodeConnectHub
-    val innerTubeClient = remember { InnerTubeClient() }
+    val innerTubeClient = remember { SharedInnerTubeProvider.get() }
+    val artworkSemaphore = remember { Semaphore(3) }
 
     // Search query debounced effect for YouTube / NodeConnect
     LaunchedEffect(query, searchOnlineTab, isOnlineMode) {
@@ -83,13 +85,24 @@ fun GlobalSearchSheet(
             }
         } else if (!searchOnlineTab && hub != null) {
             val list = mutableListOf<Track>()
+            val pendingArtwork = mutableListOf<Pair<com.nodeplayer.network.transport.NodeConnection, Track>>()
             hub.activeConnections.forEach { conn ->
                 try {
                     val res = hub.libraryService.queryRemoteLibrary(conn, query = query, limit = 30)
                     if (res != null) {
                         list.addAll(res.tracks)
                         for (remoteTrack in res.tracks) {
-                            searchScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            pendingArtwork.add(conn to remoteTrack)
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+            remoteTracks = list
+            if (pendingArtwork.isNotEmpty()) {
+                launch(Dispatchers.IO) {
+                    for ((conn, remoteTrack) in pendingArtwork) {
+                        launch {
+                            artworkSemaphore.withPermit {
                                 try {
                                     val artBytes = hub.libraryService.fetchRemoteArtwork(conn, remoteTrack.id)
                                     if (artBytes != null && artBytes.isNotEmpty()) {
@@ -101,9 +114,8 @@ fun GlobalSearchSheet(
                             }
                         }
                     }
-                } catch (_: Exception) {}
+                }
             }
-            remoteTracks = list
         } else {
             remoteTracks = emptyList()
         }

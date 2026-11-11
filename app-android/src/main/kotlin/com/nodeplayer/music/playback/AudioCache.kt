@@ -61,7 +61,9 @@ object AudioCache {
 
     fun getStreamResolver(): com.nodeplayer.network.innertube.StreamResolver {
         return globalStreamResolver ?: synchronized(this) {
-            globalStreamResolver ?: com.nodeplayer.network.innertube.StreamResolver().also { globalStreamResolver = it }
+            globalStreamResolver ?: com.nodeplayer.network.innertube.StreamResolver(
+                innerTubeClient = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+            ).also { globalStreamResolver = it }
         }
     }
 

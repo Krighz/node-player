@@ -32,7 +32,7 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
 import com.nodeplayer.model.Track
-import com.nodeplayer.network.innertube.InnerTubeClient
+import com.nodeplayer.network.innertube.SharedInnerTubeProvider
 import com.nodeplayer.network.innertube.YouTubeSearchResult
 import com.nodeplayer.network.search.CategorizedSearchResults
 import com.nodeplayer.network.search.SearchCategorizer
@@ -105,19 +105,17 @@ fun GlassSearchView(
 
         withContext(Dispatchers.IO) {
             try {
-                val client = InnerTubeClient()
-                client.use { innerClient ->
-                    val result = innerClient.search(trimmed)
-                    withContext(Dispatchers.Main) {
-                        if (result.isSuccess) {
-                            rawResult = result.getOrNull()
-                            historyManager.addQuery(trimmed)
-                            errorMessage = null
-                        } else {
-                            errorMessage = result.exceptionOrNull()?.message ?: "Search failed"
-                        }
-                        isLoading = false
+                val innerClient = SharedInnerTubeProvider.get()
+                val result = innerClient.search(trimmed)
+                withContext(Dispatchers.Main) {
+                    if (result.isSuccess) {
+                        rawResult = result.getOrNull()
+                        historyManager.addQuery(trimmed)
+                        errorMessage = null
+                    } else {
+                        errorMessage = result.exceptionOrNull()?.message ?: "Search failed"
                     }
+                    isLoading = false
                 }
             } catch (t: Throwable) {
                 withContext(Dispatchers.Main) {

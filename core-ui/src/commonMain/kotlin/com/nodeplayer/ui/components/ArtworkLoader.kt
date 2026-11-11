@@ -119,3 +119,14 @@ fun TrackArtwork(
         }
     }
 }
+
+fun computeBitmapSampleSize(srcW: Int, srcH: Int, maxDim: Int): Int {
+    if (srcW <= 0 || srcH <= 0 || maxDim <= 0) return 1
+    var sampleSize = 1
+    val halfW = srcW / 2
+    val halfH = srcH / 2
+    while (halfW / sampleSize >= maxDim && halfH / sampleSize >= maxDim) {
+        sampleSize *= 2
+    }
+    return sampleSize
+}

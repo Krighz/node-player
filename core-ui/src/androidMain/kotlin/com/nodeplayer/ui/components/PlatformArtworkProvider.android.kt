@@ -10,6 +10,17 @@ import java.io.File
 
 actual object PlatformArtworkProvider {
 
+    private const val MAX_VIBRANT_CACHE_ENTRIES = 128
+    private val vibrantColorCache = object : LinkedHashMap<String, androidx.compose.ui.graphics.Color>(
+        MAX_VIBRANT_CACHE_ENTRIES,
+        0.75f,
+        true
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, androidx.compose.ui.graphics.Color>?
+        ): Boolean = size > MAX_VIBRANT_CACHE_ENTRIES
+    }
+
     actual suspend fun loadArtwork(track: Track): ImageBitmap? {
         val path = track.path
         if (path.isBlank()) return null
@@ -84,6 +95,12 @@ actual object PlatformArtworkProvider {
     }
 
     actual suspend fun extractVibrantColor(track: Track): androidx.compose.ui.graphics.Color? {
+        val cacheKey = track.path.ifBlank { track.id.toString() }
+        synchronized(vibrantColorCache) {
+            vibrantColorCache[cacheKey]?.let { cached ->
+                return if (cached == androidx.compose.ui.graphics.Color.Unspecified) null else cached
+            }
+        }
         val path = track.path
         if (path.isBlank()) return null
         val bytes = ArtworkCache.getBytes(path)
@@ -100,20 +117,41 @@ actual object PlatformArtworkProvider {
             })
             ?: return null
         return try {
-            val bm = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
-            val w = bm.width
-            val h = bm.height
-            var maxSat = -1f
-            var bestColor: androidx.compose.ui.graphics.Color? = null
-            val points = listOf(w / 4 to h / 4, 3 * w / 4 to h / 4, w / 2 to h / 2, w / 4 to 3 * h / 4, 3 * w / 4 to 3 * h / 4)
-            for ((x, y) in points) {
-                val argb = bm.getPixel(x.coerceIn(0, w - 1), y.coerceIn(0, h - 1))
-                val c = androidx.compose.ui.graphics.Color(argb)
-                val hsv = com.nodeplayer.ui.theme.ColorUtils.colorToHsv(c)
-                if (hsv[1] > maxSat && hsv[2] > 0.25f && hsv[1] > 0.20f) {
-                    maxSat = hsv[1]
-                    bestColor = c
+            val boundsOpts = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOpts)
+            val sampleSize = computeBitmapSampleSize(boundsOpts.outWidth, boundsOpts.outHeight, 128)
+            val decodeOpts = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            val bm = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts) ?: return null
+            val bestColor = try {
+                val w = bm.width
+                val h = bm.height
+                if (w <= 0 || h <= 0) {
+                    null
+                } else {
+                    var maxSat = -1f
+                    var candidate: androidx.compose.ui.graphics.Color? = null
+                    val points = listOf(w / 4 to h / 4, 3 * w / 4 to h / 4, w / 2 to h / 2, w / 4 to 3 * h / 4, 3 * w / 4 to 3 * h / 4)
+                    for ((x, y) in points) {
+                        val argb = bm.getPixel(x.coerceIn(0, w - 1), y.coerceIn(0, h - 1))
+                        val c = androidx.compose.ui.graphics.Color(argb)
+                        val hsv = com.nodeplayer.ui.theme.ColorUtils.colorToHsv(c)
+                        if (hsv[1] > maxSat && hsv[2] > 0.25f && hsv[1] > 0.20f) {
+                            maxSat = hsv[1]
+                            candidate = c
+                        }
+                    }
+                    candidate
                 }
+            } finally {
+                bm.recycle()
+            }
+            synchronized(vibrantColorCache) {
+                vibrantColorCache[cacheKey] = bestColor ?: androidx.compose.ui.graphics.Color.Unspecified
             }
             bestColor
         } catch (_: Exception) {
