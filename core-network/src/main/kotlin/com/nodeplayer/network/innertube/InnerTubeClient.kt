@@ -787,7 +787,7 @@ class InnerTubeClient(
         )
     }
 
-    private fun mapResponsiveListItemToTrack(item: MusicResponsiveListItemRenderer): Track? {
+    internal fun mapResponsiveListItemToTrack(item: MusicResponsiveListItemRenderer): Track? {
         val videoId = item.videoId ?: return null
         val title = item.flexColumns.firstOrNull()?.musicResponsiveListItemFlexColumnRenderer?.text?.text()
             ?.ifBlank { null } ?: return null
