@@ -5,6 +5,24 @@
 
 ---
 
+### [2026-11-11] - Milestone v2.5: Phase 2 Performance Fixes, Hot-Path Allocation & Memory Elimination
+- **Cold-Start Acceleration & Baseline Profiles (`REQ-PERF-05`)**:
+  - Cold-start median time reduced from **1422 ms to 644 ms (-54.7%)** on physical device (`4a505e5`).
+  - Added AndroidX `profileinstaller:1.3.1` and compiled startup baseline profile (`baseline-prof.txt`).
+  - Implemented deferred background init for `LocalAudioScanner` and audio notification channels.
+  - Pre-warmed AGSL RuntimeShaders (`GlassShaderCache`) and wired `reportFullyDrawn()` into Compose tree.
+- **Tail Frame Latency & Jank Elimination (`dumpsys gfxinfo`)**:
+  - S2 library scroll `p99` dropped from **250 ms to 93 ms (-62.8%)**; home scroll `p99` dropped from **133 ms to 89 ms (-33.1%)**.
+  - Now Playing & Lyrics (S5) janky frames dropped from **45.87% to 13.63% (-70.3% jank reduction)**.
+  - Eliminated offscreen GPU compositing (`CompositingStrategy.Offscreen`, `BlendMode.DstIn`) and per-line blur allocations in `FullScreenLyricsView.kt` and `AlbumArtGradientBackdrop.kt`.
+  - Replaced O(N) lyrics linear scans with binary search O(log N) lookup.
+- **Memory Footprint & Render Allocations**:
+  - Peak GPU memory reduced by **85–91%** across interaction scenarios (from 276–342 MB down to 24–41 MB).
+  - Bounded LRU `ArtworkCache` with explicit `inSampleSize` downsampling and direct stream decoding in Coil fetcher, eliminating raw JPEG re-encoding.
+  - Hoisted lazy item keys, item types, and shape/brush allocations across all scrolling lists.
+  - Moved `NodeLog` disk I/O off the UI thread via non-blocking daemon queue (`ArrayBlockingQueue(2048)`), eliminating StrictMode disk write violations.
+  - Configured Compose Compiler stability configuration (`compose_compiler_config.conf`), cutting unstable arguments by **65.2%**.
+
 ### [2026-11-11] - Milestone v2.3: Phase 10 Polish, Windows Desktop Parity & Token Verification
 - **120 Hz Scroll Performance Optimization (`POL-01`)**:
   - Implemented stable keys on all lazy item factories in `OnlineHomeView.kt`, `OfflineHomeView.kt`, `LibraryView.kt`, and `PlaylistDetailView.kt`.

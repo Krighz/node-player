@@ -130,6 +130,7 @@ Added in Milestone v2.3 to manage navigation, home feed layout, and lyrics custo
 | **`LyricsViewConfig`** | `blurInactiveLines` | `Boolean` | `true` | Apply blur ladder to inactive lines | `LyricLineItem.kt` |
 | **`LyricsViewConfig`** | `autoHideDelaySec` | `Int` | `5` | Inactivity seconds before fading controls | `FullScreenLyricsView.kt` |
 | **`LyricsViewConfig`** | `keepScreenOn` | `Boolean` | `true` | Prevent screen sleep while in lyrics view | `FullScreenLyricsView.kt`, `NowPlayingSheet.kt` |
+| **`LiquidGlassBackgroundConfig`** | `animateOnlyWhilePlaying` | `Boolean` | `true` | When true, stops infinite gradient animation loop while audio is paused, preventing unnecessary full-screen invalidations | `PlayerViewModel.kt`, `LiquidGlassBackground.kt`, `AudioAndThemeConfig.kt` |
 
 
 

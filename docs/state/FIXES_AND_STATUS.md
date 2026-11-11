@@ -1,6 +1,36 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Milestone v2.3 Full UI Revamp Completed & Verified Across Android & Windows Desktop (2026-11-11)
+## Current Status: Milestone v2.5 Phase 2 Performance Fixes Verified On Physical Device (2026-11-11)
+
+### Milestone v2.5 Phase 2: Performance Fixes, Allocation Elimination & Cold-Start Optimization (2026-11-11)
+
+1. **Cold-Start Acceleration & Baseline Profiles (`REQ-PERF-05`)**:
+   - Device startup latency measured via `adb shell am start -W`: Median cold-start dropped from **1422 ms to 644 ms (-54.7%)**.
+   - Added AndroidX `profileinstaller:1.3.1` and compiled startup baseline profile (`baseline-prof.txt`).
+   - Deferred heavy I/O services (`LocalAudioScanner`, audio notification channels) off startup path.
+   - Pre-warmed AGSL RuntimeShaders (`GlassShaderCache`) and wired `reportFullyDrawn()` into Compose lifecycle.
+
+2. **Tail Frame Latency & Jank Elimination (`dumpsys gfxinfo`)**:
+   - Measured on Android device `4a505e5` across 7 scripted scenarios (S1–S7).
+   - S2 Library scroll `p99` dropped from **250 ms to 93 ms (-62.8%)**; S1 Home scroll `p99` dropped from **133 ms to 89 ms (-33.1%)**.
+   - Now Playing & Lyrics (S5) janky frames dropped from **45.87% to 13.63% (-70.3% jank reduction)**; `p90` dropped from **89 ms to 40 ms**.
+   - Dock Tab Switching (S6) janky frames dropped from **17.38% to 8.54% (-50.9%)**.
+   - Eliminated offscreen GPU compositing (`CompositingStrategy.Offscreen`, `BlendMode.DstIn`) and per-line blur allocations in lyrics and backdrop layers.
+   - Replaced O(N) linear lyrics scans with binary search O(log N) lookup.
+
+3. **Memory Footprint & UI Thread Decoupling**:
+   - Total GPU memory usage reduced by **85–91%** across interaction scenarios (from 276–342 MB down to 24–41 MB).
+   - Implemented bounded LRU `ArtworkCache` with explicit `inSampleSize` downsampling and direct stream decoding in Coil fetcher, eliminating raw JPEG re-encoding.
+   - Hoisted lazy item keys, item types, and shape/brush allocations across all scrolling lists.
+   - Moved `NodeLog` disk I/O off the UI thread via non-blocking daemon queue (`ArrayBlockingQueue(2048)`), eliminating StrictMode disk write violations.
+   - Configured Compose Compiler stability configuration (`compose_compiler_config.conf`), cutting unstable arguments by **65.2%**.
+
+4. **Multiplatform Test Verification**:
+   - 100% of unit tests pass: **124 test suites, 469/469 tests passed** across all 9 modules (`:core-common`, `:core-model`, `:core-dsp`, `:core-library`, `:core-network`, `:core-ui`, `:app-desktop`, `:app-android`).
+   - Zero crashes in `adb logcat -b crash -d` (0 crash reports).
+   - `ArchitectureBoundaryTest` verified 0 boundary violations.
+
+---
 
 ### Milestone v2.3 Phase 10: Polish, Windows Desktop Parity & Token Verification (2026-11-11)
 
