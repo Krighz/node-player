@@ -11,7 +11,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -48,6 +50,20 @@ import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.LiquidColors
+
+private val LIB_NAV_CONTAINER_SHAPE = ContinuousRoundedRectangle(20.dp)
+private val LIB_NAV_BORDER_BRUSH = Brush.verticalGradient(
+    listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f))
+)
+private val LIB_NAV_ICON_SHAPE = ContinuousRoundedRectangle(10.dp)
+private val LIB_RECENT_CARD_SHAPE = ContinuousRoundedRectangle(14.dp)
+private val LIB_EMPTY_CARD_SHAPE = ContinuousRoundedRectangle(24.dp)
+private val LIB_EMPTY_BORDER_BRUSH = Brush.verticalGradient(
+    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+)
+private val LIB_SONG_THUMB_SHAPE = ContinuousRoundedRectangle(10.dp)
+private val LIB_PLAYLIST_THUMB_SHAPE = ContinuousRoundedRectangle(12.dp)
+private val LIB_ALBUM_CARD_SHAPE = ContinuousRoundedRectangle(16.dp)
 
 /**
  * Sub-destinations within the Apple Music-style Library view.
@@ -222,7 +238,7 @@ private fun LibraryRootView(
         contentPadding = PaddingValues(top = 16.dp, bottom = bottomPadding)
     ) {
         // Top Title
-        item(key = "library_title") {
+        item(key = "library_title", contentType = "library_title") {
             Text(
                 text = "Library",
                 fontSize = 32.sp,
@@ -233,19 +249,17 @@ private fun LibraryRootView(
         }
 
         // Apple Music Navigation Rows (D-01, LBRY-01)
-        item(key = "nav_rows") {
+        item(key = "nav_rows", contentType = "library_nav_rows") {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(ContinuousRoundedRectangle(20.dp))
+                    .clip(LIB_NAV_CONTAINER_SHAPE)
                     .background(LiquidColors.SurfaceElevated.copy(alpha = 0.50f))
                     .border(
                         width = 0.5.dp,
-                        brush = Brush.verticalGradient(
-                            listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f))
-                        ),
-                        shape = ContinuousRoundedRectangle(20.dp)
+                        brush = LIB_NAV_BORDER_BRUSH,
+                        shape = LIB_NAV_CONTAINER_SHAPE
                     )
             ) {
                 LibraryNavRow(
@@ -291,7 +305,7 @@ private fun LibraryRootView(
         }
 
         // "Recently Added" Section Header (D-02)
-        item(key = "recently_added_header") {
+        item(key = "recently_added_header", contentType = "library_section_header") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -322,7 +336,10 @@ private fun LibraryRootView(
 
         // "Recently Added" 2-Row Carousel (D-02)
         if (libraryState.recentlyAdded.isNotEmpty()) {
-            item(key = "recently_added_grid") {
+            item(key = "recently_added_grid", contentType = "library_recent_grid") {
+                val recentKeys = remember(libraryState.recentlyAdded) {
+                    uniqueLazyKeys(libraryState.recentlyAdded) { "${it.type}_${it.id}" }
+                }
                 LazyHorizontalGrid(
                     rows = GridCells.Fixed(2),
                     modifier = Modifier
@@ -332,10 +349,11 @@ private fun LibraryRootView(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(
+                    gridItemsIndexed(
                         items = libraryState.recentlyAdded,
-                        key = { "${it.type}_${it.id}" }
-                    ) { item ->
+                        key = { index, _ -> recentKeys[index] },
+                        contentType = { _, _ -> "recently_added_card" }
+                    ) { _, item ->
                         RecentlyAddedCard(
                             item = item,
                             onClick = {
@@ -371,7 +389,7 @@ private fun LibraryRootView(
             }
         } else {
             // Polished Empty State Card (D-04)
-            item(key = "empty_library_card") {
+            item(key = "empty_library_card", contentType = "library_empty_card") {
                 LibraryEmptyCard(
                     title = "Your online library is empty",
                     description = "Songs you stream, like, or save will appear here in your personal library.",
@@ -477,12 +495,13 @@ private fun RecentlyAddedCard(
         Box(
             modifier = Modifier
                 .size(125.dp)
-                .clip(ContinuousRoundedRectangle(14.dp))
+                .clip(LIB_RECENT_CARD_SHAPE)
         ) {
             TrackArtwork(
                 track = itemTrack,
                 modifier = Modifier.fillMaxSize(),
-                cornerRadius = 14.dp
+                cornerRadius = 14.dp,
+                targetSizePx = 256
             )
         }
 
@@ -523,14 +542,12 @@ private fun LibraryEmptyCard(
 
     Column(
         modifier = modifier
-            .clip(ContinuousRoundedRectangle(24.dp))
+            .clip(LIB_EMPTY_CARD_SHAPE)
             .background(LiquidColors.SurfaceElevated.copy(alpha = 0.65f))
             .border(
                 width = 0.8.dp,
-                brush = Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
-                ),
-                shape = ContinuousRoundedRectangle(24.dp)
+                brush = LIB_EMPTY_BORDER_BRUSH,
+                shape = LIB_EMPTY_CARD_SHAPE
             )
             .padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -647,14 +664,16 @@ private fun OnlineSongsSubView(
                 modifier = Modifier.padding(20.dp)
             )
         } else {
+            val songKeys = remember(songs) { uniqueLazyTrackKeys(songs, "lib_song") }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
             ) {
-                items(
+                itemsIndexed(
                     items = songs,
-                    key = { it.id }
-                ) { track ->
+                    key = { index, _ -> songKeys[index] },
+                    contentType = { _, _ -> "online_song_row" }
+                ) { _, track ->
                     val isCurrent = currentTrack?.id == track.id
                     Row(
                         modifier = Modifier
@@ -666,12 +685,13 @@ private fun OnlineSongsSubView(
                         Box(
                             modifier = Modifier
                                 .size(48.dp)
-                                .clip(ContinuousRoundedRectangle(10.dp))
+                                .clip(LIB_SONG_THUMB_SHAPE)
                         ) {
                             TrackArtwork(
                                 track = track,
                                 modifier = Modifier.fillMaxSize(),
-                                cornerRadius = 10.dp
+                                cornerRadius = 10.dp,
+                                targetSizePx = 144
                             )
                         }
 
@@ -755,11 +775,16 @@ private fun OnlinePlaylistsSubView(
                 modifier = Modifier.padding(20.dp)
             )
         } else {
+            val playlistKeys = remember(playlists) { uniqueLazyKeys(playlists) { "lib_pl_${it.id}" } }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
             ) {
-                items(playlists, key = { it.id }) { pl ->
+                itemsIndexed(
+                    items = playlists,
+                    key = { index, _ -> playlistKeys[index] },
+                    contentType = { _, _ -> "online_playlist_row" }
+                ) { _, pl ->
                     val plTrack = remember(pl.id, pl.artworkUrl) {
                         Track(
                             id = pl.id.hashCode().toLong(),
@@ -781,12 +806,13 @@ private fun OnlinePlaylistsSubView(
                         Box(
                             modifier = Modifier
                                 .size(56.dp)
-                                .clip(ContinuousRoundedRectangle(12.dp))
+                                .clip(LIB_PLAYLIST_THUMB_SHAPE)
                         ) {
                             TrackArtwork(
                                 track = plTrack,
                                 modifier = Modifier.fillMaxSize(),
-                                cornerRadius = 12.dp
+                                cornerRadius = 12.dp,
+                                targetSizePx = 144
                             )
                         }
                         Spacer(modifier = Modifier.width(14.dp))
@@ -845,6 +871,7 @@ private fun OnlineAlbumsSubView(
                 modifier = Modifier.padding(20.dp)
             )
         } else {
+            val albumKeys = remember(albums) { uniqueLazyKeys(albums) { "lib_alb_${it.id}" } }
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 modifier = Modifier.fillMaxSize(),
@@ -852,7 +879,11 @@ private fun OnlineAlbumsSubView(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(albums, key = { it.id }) { album ->
+                gridItemsIndexed(
+                    items = albums,
+                    key = { index, _ -> albumKeys[index] },
+                    contentType = { _, _ -> "online_album_card" }
+                ) { _, album ->
                     val albumTrack = remember(album.id, album.artworkUrl) {
                         Track(
                             id = album.id.hashCode().toLong(),
@@ -873,12 +904,13 @@ private fun OnlineAlbumsSubView(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f)
-                                .clip(ContinuousRoundedRectangle(16.dp))
+                                .clip(LIB_ALBUM_CARD_SHAPE)
                         ) {
                             TrackArtwork(
                                 track = albumTrack,
                                 modifier = Modifier.fillMaxSize(),
-                                cornerRadius = 16.dp
+                                cornerRadius = 16.dp,
+                                targetSizePx = 256
                             )
                         }
                         Spacer(modifier = Modifier.height(8.dp))
@@ -933,11 +965,16 @@ private fun OnlineArtistsSubView(
                 modifier = Modifier.padding(20.dp)
             )
         } else {
+            val artistKeys = remember(artists) { uniqueLazyKeys(artists) { "lib_art_${it.id}" } }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
             ) {
-                items(artists, key = { it.id }) { artist ->
+                itemsIndexed(
+                    items = artists,
+                    key = { index, _ -> artistKeys[index] },
+                    contentType = { _, _ -> "online_artist_row" }
+                ) { _, artist ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

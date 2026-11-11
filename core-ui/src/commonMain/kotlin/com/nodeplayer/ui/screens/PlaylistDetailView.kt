@@ -40,6 +40,12 @@ import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.theme.ColorUtils
 import com.nodeplayer.ui.theme.LocalAccentColor
 
+private val PLAYLIST_HERO_SHAPE = ContinuousRoundedRectangle(20.dp)
+private val PLAYLIST_HERO_BORDER_BRUSH = Brush.verticalGradient(
+    listOf(Color.White.copy(alpha = 0.25f), Color.White.copy(alpha = 0.06f))
+)
+private val PLAYLIST_ROW_THUMB_SHAPE = ContinuousRoundedRectangle(10.dp)
+
 /**
  * Universal media header model for Playlist and Album detail screens (PLAY-01).
  */
@@ -144,13 +150,16 @@ fun PlaylistDetailView(
         )
 
         // Scrollable Body Content
+        val trackKeys = remember(tracks, header.id) {
+            uniqueLazyTrackKeys(tracks, "pl_${header.id}")
+        }
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = 64.dp, bottom = bottomPadding)
         ) {
             // Hero Section (PLAY-01)
-            item(key = "hero_section") {
+            item(key = "hero_section", contentType = "playlist_hero") {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -161,19 +170,18 @@ fun PlaylistDetailView(
                     Box(
                         modifier = Modifier
                             .size(210.dp)
-                            .clip(ContinuousRoundedRectangle(20.dp))
+                            .clip(PLAYLIST_HERO_SHAPE)
                             .border(
                                 width = 0.8.dp,
-                                brush = Brush.verticalGradient(
-                                    listOf(Color.White.copy(alpha = 0.25f), Color.White.copy(alpha = 0.06f))
-                                ),
-                                shape = ContinuousRoundedRectangle(20.dp)
+                                brush = PLAYLIST_HERO_BORDER_BRUSH,
+                                shape = PLAYLIST_HERO_SHAPE
                             )
                     ) {
                         TrackArtwork(
                             track = placeholderTrack,
                             modifier = Modifier.fillMaxSize(),
-                            cornerRadius = 20.dp
+                            cornerRadius = 20.dp,
+                            targetSizePx = 512
                         )
                     }
 
@@ -323,7 +331,7 @@ fun PlaylistDetailView(
             }
 
             // Divider between Hero and Tracks
-            item(key = "hero_divider") {
+            item(key = "hero_divider", contentType = "playlist_divider") {
                 HorizontalDivider(
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
                     color = Color.White.copy(alpha = 0.08f),
@@ -334,7 +342,8 @@ fun PlaylistDetailView(
             // Track List Items (PLAY-03)
             itemsIndexed(
                 items = tracks,
-                key = { _, track -> track.id }
+                key = { index, _ -> trackKeys[index] },
+                contentType = { _, _ -> "playlist_track_row" }
             ) { index, track ->
                 val isCurrent = currentTrack?.id == track.id
 
@@ -349,12 +358,13 @@ fun PlaylistDetailView(
                     Box(
                         modifier = Modifier
                             .size(44.dp)
-                            .clip(ContinuousRoundedRectangle(10.dp))
+                            .clip(PLAYLIST_ROW_THUMB_SHAPE)
                     ) {
                         TrackArtwork(
                             track = track,
                             modifier = Modifier.fillMaxSize(),
-                            cornerRadius = 10.dp
+                            cornerRadius = 10.dp,
+                            targetSizePx = 144
                         )
                     }
 

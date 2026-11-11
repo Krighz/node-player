@@ -52,6 +52,30 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private val HOME_CARD_SHAPE_14 = ContinuousRoundedRectangle(14.dp)
+private val HOME_CAPSULE_SHAPE = ContinuousCapsule()
+private val HOME_BANNER_SHAPE_16 = ContinuousRoundedRectangle(16.dp)
+private val HOME_BANNER_ICON_SHAPE_10 = ContinuousRoundedRectangle(10.dp)
+private val HOME_BTN_SHAPE_12 = ContinuousRoundedRectangle(12.dp)
+
+fun <T> uniqueLazyKeys(items: List<T>, baseKeySelector: (T) -> String): List<String> {
+    if (items.isEmpty()) return emptyList()
+    val seen = HashMap<String, Int>(items.size)
+    return items.map { item ->
+        val base = baseKeySelector(item)
+        val count = seen[base] ?: 0
+        seen[base] = count + 1
+        if (count == 0) base else "${base}_dup$count"
+    }
+}
+
+fun uniqueLazyTrackKeys(tracks: List<Track>, prefix: String = "track"): List<String> =
+    uniqueLazyKeys(tracks) { track -> "${prefix}_${track.id}_${track.path.hashCode()}" }
+
+fun filterAndSortRecentTracks(tracks: List<Track>): List<Track> =
+    tracks.filter { it.lastPlayedTimestamp > 0L }
+        .sortedByDescending { it.lastPlayedTimestamp }
+
 /**
  * Online Home View displaying 5 structured YouTube Music horizontal shelves:
  * 1. Quick Picks (1:1 squircle cards)
@@ -178,6 +202,14 @@ fun OnlineHomeView(
             }
     }
 
+    val orderedShelves = remember(sections) {
+        if (sections.isNotEmpty()) organizeShelves(sections) else emptyList()
+    }
+    val shelfKeys = remember(orderedShelves) {
+        uniqueLazyKeys(orderedShelves) { it.title }
+    }
+    val shelfListStates = remember { mutableMapOf<String, LazyListState>() }
+
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -193,7 +225,7 @@ fun OnlineHomeView(
             verticalArrangement = Arrangement.spacedBy(26.dp)
         ) {
             // Header: Flow title & Top-Right Profile Avatar button per D-02 / D-03
-            item {
+            item(key = "home_header", contentType = "home_header") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -250,13 +282,13 @@ fun OnlineHomeView(
 
             // YouTube Music Onboarding / Sign-in Banner (as seen in Convx reference video)
             if (!isLoggedIn && showOnboardingBanner) {
-                item {
+                item(key = "yt_onboarding_banner", contentType = "onboarding_banner") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(ContinuousRoundedRectangle(16.dp))
+                            .clip(HOME_BANNER_SHAPE_16)
                             .background(Color(0xFF1E212A))
-                            .border(1.dp, Color.White.copy(alpha = 0.08f), ContinuousRoundedRectangle(16.dp))
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), HOME_BANNER_SHAPE_16)
                             .padding(16.dp)
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
@@ -272,7 +304,7 @@ fun OnlineHomeView(
                                     Box(
                                         modifier = Modifier
                                             .size(40.dp)
-                                            .clip(ContinuousRoundedRectangle(10.dp))
+                                            .clip(HOME_BANNER_ICON_SHAPE_10)
                                             .background(Color(0xFFFF0033).copy(alpha = 0.15f)),
                                         contentAlignment = Alignment.Center
                                     ) {
@@ -308,7 +340,7 @@ fun OnlineHomeView(
                             Button(
                                 onClick = onSignInClick,
                                 modifier = Modifier.fillMaxWidth().height(42.dp),
-                                shape = ContinuousRoundedRectangle(12.dp),
+                                shape = HOME_BTN_SHAPE_12,
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = Color(0xFFFF0033).copy(alpha = 0.22f),
                                     contentColor = Color(0xFFFF4D6D)
@@ -327,13 +359,13 @@ fun OnlineHomeView(
 
             // Subtle Status / Scan local library banner when fallback mode is active
             if (isFallbackMode && recentTracks.isEmpty()) {
-                item {
+                item(key = "offline_fallback_banner", contentType = "fallback_banner") {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(ContinuousRoundedRectangle(12.dp))
+                            .clip(HOME_BTN_SHAPE_12)
                             .background(LiquidColors.SurfaceDark.copy(alpha = 0.85f))
-                            .border(1.dp, LiquidColors.AmberWarning.copy(alpha = 0.35f), ContinuousRoundedRectangle(12.dp))
+                            .border(1.dp, LiquidColors.AmberWarning.copy(alpha = 0.35f), HOME_BTN_SHAPE_12)
                             .padding(horizontal = 14.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
@@ -354,7 +386,7 @@ fun OnlineHomeView(
                                 color = LiquidColors.AmberWarning
                             ),
                             modifier = Modifier
-                                .clip(ContinuousCapsule())
+                                .clip(HOME_CAPSULE_SHAPE)
                                 .clickable { onRescanClick() }
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         )
@@ -363,12 +395,21 @@ fun OnlineHomeView(
             }
 
             // Ordered 5 Shelves: Quick Picks, New music videos, Trending in region, Playlists, Artists
-            if (sections.isNotEmpty()) {
-                val orderedShelves = organizeShelves(sections)
-
-                items(orderedShelves, key = { it.title }) { shelf ->
+            if (orderedShelves.isNotEmpty()) {
+                itemsIndexed(
+                    items = orderedShelves,
+                    key = { index, _ -> shelfKeys[index] },
+                    contentType = { _, shelf ->
+                        if ("video" in shelf.title.lowercase()) "video_shelf" else "audio_shelf"
+                    }
+                ) { index, shelf ->
+                    val shelfKey = shelfKeys[index]
+                    val rowState = remember(shelfKey) {
+                        shelfListStates.getOrPut(shelfKey) { LazyListState() }
+                    }
                     HomeShelfSection(
                         shelf = shelf,
+                        rowState = rowState,
                         currentTrack = currentTrack,
                         isPlaying = isPlaying,
                         onTrackClick = { clickedTrack ->
@@ -390,11 +431,17 @@ fun OnlineHomeView(
                 }
             } else if (isRefreshing) {
                 // Loading Shimmer Shelves
-                item { ShimmerShelfSection(title = "QUICK PICKS", isVideo = false) }
-                item { ShimmerShelfSection(title = "NEW MUSIC VIDEOS", isVideo = true) }
-                item { ShimmerShelfSection(title = "TRENDING CHARTS", isVideo = false) }
+                item(key = "shimmer_quick_picks", contentType = "shimmer_shelf") {
+                    ShimmerShelfSection(title = "QUICK PICKS", isVideo = false)
+                }
+                item(key = "shimmer_videos", contentType = "shimmer_shelf") {
+                    ShimmerShelfSection(title = "NEW MUSIC VIDEOS", isVideo = true)
+                }
+                item(key = "shimmer_trending", contentType = "shimmer_shelf") {
+                    ShimmerShelfSection(title = "TRENDING CHARTS", isVideo = false)
+                }
             } else if (errorMessage != null) {
-                item {
+                item(key = "home_error_retry", contentType = "error_card") {
                     ErrorRetryCard(
                         message = errorMessage ?: "Failed to load feed",
                         onRetry = { refreshFeed(forceNetwork = true) }
@@ -458,6 +505,7 @@ fun organizeShelves(sections: List<YouTubeSection>): List<YouTubeSection> {
 @Composable
 private fun HomeShelfSection(
     shelf: YouTubeSection,
+    rowState: LazyListState = rememberLazyListState(),
     currentTrack: Track?,
     isPlaying: Boolean,
     onTrackClick: (Track) -> Unit,
@@ -475,6 +523,10 @@ private fun HomeShelfSection(
         "trending" in normalizedTitle || "chart" in normalizedTitle -> Icons.Rounded.Whatshot to LiquidColors.OrangeBadge
         "playlist" in normalizedTitle || "mix" in normalizedTitle -> Icons.Rounded.LibraryMusic to LiquidColors.ElectricCyan
         else -> Icons.Rounded.PlayCircleOutline to accent
+    }
+
+    val itemKeys = remember(shelf.title, shelf.items) {
+        uniqueLazyTrackKeys(shelf.items, shelf.title)
     }
 
     Column(
@@ -503,12 +555,14 @@ private fun HomeShelfSection(
         }
 
         LazyRow(
+            state = rowState,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             itemsIndexed(
                 items = shelf.items,
-                key = { _, track -> "${shelf.title}_${track.id}" }
+                key = { idx, _ -> itemKeys[idx] },
+                contentType = { _, _ -> if (isVideoShelf) "video_card_16x9" else "audio_card_1x1" }
             ) { index, track ->
                 if (isVideoShelf) {
                     VideoCard16x9(
@@ -550,7 +604,7 @@ fun VideoCard16x9(
     val accent = LocalAccentColor.current
     var showMenu by remember { mutableStateOf(false) }
 
-    val cardShape = remember { ContinuousRoundedRectangle(14.dp) }
+    val cardShape = HOME_CARD_SHAPE_14
 
     Column(
         modifier = modifier
@@ -571,7 +625,8 @@ fun VideoCard16x9(
             TrackArtwork(
                 track = track,
                 modifier = Modifier.fillMaxSize(),
-                cornerRadius = 14.dp
+                cornerRadius = 14.dp,
+                targetSizePx = 320
             )
 
             // Duration badge at bottom-right
@@ -580,7 +635,7 @@ fun VideoCard16x9(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(6.dp)
-                        .clip(ContinuousCapsule())
+                        .clip(HOME_CAPSULE_SHAPE)
                         .background(Color.Black.copy(alpha = 0.75f))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
@@ -703,7 +758,7 @@ fun AudioSquircleCard1x1(
     val accent = LocalAccentColor.current
     var showMenu by remember { mutableStateOf(false) }
 
-    val cardShape = remember { ContinuousRoundedRectangle(14.dp) }
+    val cardShape = HOME_CARD_SHAPE_14
 
     Column(
         modifier = modifier
@@ -723,7 +778,8 @@ fun AudioSquircleCard1x1(
             TrackArtwork(
                 track = track,
                 modifier = Modifier.fillMaxSize(),
-                cornerRadius = 14.dp
+                cornerRadius = 14.dp,
+                targetSizePx = 256
             )
 
             // Optional Rank badge for trending shelf
@@ -732,7 +788,7 @@ fun AudioSquircleCard1x1(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(6.dp)
-                        .clip(ContinuousCapsule())
+                        .clip(HOME_CAPSULE_SHAPE)
                         .background(Color.Black.copy(alpha = 0.75f))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {

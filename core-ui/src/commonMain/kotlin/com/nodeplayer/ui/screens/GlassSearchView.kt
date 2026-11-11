@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -48,6 +49,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private val SEARCH_CAPSULE_SHAPE = ContinuousCapsule()
+private val SEARCH_ROW_SHAPE = ContinuousRoundedRectangle(12.dp)
+private val SEARCH_THUMB_SHAPE = ContinuousRoundedRectangle(10.dp)
+private val TRENDING_SEARCH_TAGS = listOf("Top Hits", "Lo-Fi Beats", "Rock Classics", "Synthwave", "Jazz Piano", "Acoustic Pop")
 
 /**
  * Full-bleed liquid-glass Search & Browse overlay screen.
@@ -155,6 +161,10 @@ fun GlassSearchView(
                     .padding(horizontal = 16.dp, vertical = 6.dp)
             )
 
+            val resultKeys = remember(categorized.displayItems, activeCategory) {
+                uniqueLazyTrackKeys(categorized.displayItems, "search_${activeCategory.name}")
+            }
+
             // Scrollable Search Body
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -169,7 +179,7 @@ fun GlassSearchView(
                 if (query.isBlank()) {
                     // Pre-Search State: Recent Search Queries
                     if (recentQueries.isNotEmpty()) {
-                        item {
+                        item(key = "recent_header", contentType = "search_section_header") {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -190,19 +200,26 @@ fun GlassSearchView(
                                         color = accent
                                     ),
                                     modifier = Modifier
-                                        .clip(ContinuousCapsule())
+                                        .clip(SEARCH_CAPSULE_SHAPE)
                                         .clickable { historyManager.clearAll() }
                                         .padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
                         }
 
-                        item {
+                        item(key = "recent_row", contentType = "search_recent_row") {
+                            val recentKeys = remember(recentQueries) {
+                                uniqueLazyKeys(recentQueries) { "recent_$it" }
+                            }
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                items(recentQueries) { recentQuery ->
+                                itemsIndexed(
+                                    items = recentQueries,
+                                    key = { index, _ -> recentKeys[index] },
+                                    contentType = { _, _ -> "recent_query_chip" }
+                                ) { _, recentQuery ->
                                     RecentQueryChip(
                                         query = recentQuery,
                                         onClick = { query = recentQuery },
@@ -214,7 +231,7 @@ fun GlassSearchView(
                     }
 
                     // Trending suggestions tags
-                    item {
+                    item(key = "trending_section", contentType = "search_trending_row") {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text(
                                 text = "TRENDING TOPICS",
@@ -224,14 +241,17 @@ fun GlassSearchView(
                                     color = Color.White.copy(alpha = 0.65f)
                                 )
                             )
-                            val trendingTags = listOf("Top Hits", "Lo-Fi Beats", "Rock Classics", "Synthwave", "Jazz Piano", "Acoustic Pop")
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                items(trendingTags) { tag ->
+                                items(
+                                    items = TRENDING_SEARCH_TAGS,
+                                    key = { "tag_$it" },
+                                    contentType = { "trending_tag" }
+                                ) { tag ->
                                     Box(
                                         modifier = Modifier
-                                            .clip(ContinuousCapsule())
+                                            .clip(SEARCH_CAPSULE_SHAPE)
                                             .background(Color.White.copy(alpha = 0.08f))
-                                            .border(1.dp, Color.White.copy(alpha = 0.12f), ContinuousCapsule())
+                                            .border(1.dp, Color.White.copy(alpha = 0.12f), SEARCH_CAPSULE_SHAPE)
                                             .clickable { query = tag }
                                             .padding(horizontal = 14.dp, vertical = 8.dp)
                                     ) {
@@ -243,12 +263,20 @@ fun GlassSearchView(
                     }
                 } else if (isLoading) {
                     // Shimmer skeleton results
-                    items(6) {
+                    items(
+                        count = 6,
+                        key = { index -> "search_shimmer_$index" },
+                        contentType = { "search_shimmer" }
+                    ) {
                         SearchItemShimmer()
                     }
                 } else if (!categorized.isEmpty) {
                     // Results list: categorized items
-                    items(categorized.displayItems) { track ->
+                    itemsIndexed(
+                        items = categorized.displayItems,
+                        key = { index, _ -> resultKeys[index] },
+                        contentType = { _, _ -> "search_result_row" }
+                    ) { _, track ->
                         SearchResultRow(
                             track = track,
                             onClick = {
@@ -274,7 +302,7 @@ fun GlassSearchView(
                     }
                 } else {
                     // Empty state: No results found
-                    item {
+                    item(key = "no_results", contentType = "search_no_results") {
                         NoResultsCard(query = query, onClear = { query = "" })
                     }
                 }
@@ -296,9 +324,13 @@ private fun SearchFilterChipsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
     ) {
-        items(categories) { category ->
+        items(
+            items = categories,
+            key = { "filter_${it.name}" },
+            contentType = { "search_filter_chip" }
+        ) { category ->
             val isSelected = selectedCategory == category
-            val chipShape = remember { ContinuousCapsule() }
+            val chipShape = SEARCH_CAPSULE_SHAPE
 
             Box(
                 modifier = Modifier
@@ -375,7 +407,7 @@ private fun SearchResultRow(
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val rowShape = remember { ContinuousRoundedRectangle(12.dp) }
+    val rowShape = SEARCH_ROW_SHAPE
 
     val accent = LocalAccentColor.current
     val badgeLabel = remember(track) {
@@ -398,12 +430,13 @@ private fun SearchResultRow(
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(ContinuousRoundedRectangle(10.dp))
+                .clip(SEARCH_THUMB_SHAPE)
         ) {
             TrackArtwork(
                 track = track,
                 modifier = Modifier.fillMaxSize(),
-                cornerRadius = 10.dp
+                cornerRadius = 10.dp,
+                targetSizePx = 144
             )
         }
 
@@ -426,9 +459,9 @@ private fun SearchResultRow(
                 if (badgeLabel != null) {
                     Box(
                         modifier = Modifier
-                            .clip(ContinuousCapsule())
+                            .clip(SEARCH_CAPSULE_SHAPE)
                             .background(accent.copy(alpha = 0.20f))
-                            .border(0.6.dp, accent.copy(alpha = 0.40f), ContinuousCapsule())
+                            .border(0.6.dp, accent.copy(alpha = 0.40f), SEARCH_CAPSULE_SHAPE)
                             .padding(horizontal = 6.dp, vertical = 1.dp)
                     ) {
                         Text(
@@ -516,7 +549,7 @@ private fun NoResultsCard(query: String, onClear: () -> Unit) {
 
 @Composable
 private fun SearchItemShimmer() {
-    val rowShape = remember { ContinuousRoundedRectangle(12.dp) }
+    val rowShape = SEARCH_ROW_SHAPE
     Row(
         modifier = Modifier
             .fillMaxWidth()

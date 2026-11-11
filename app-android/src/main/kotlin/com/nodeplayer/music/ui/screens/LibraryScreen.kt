@@ -9,7 +9,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,11 +25,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
 import com.nodeplayer.music.ui.components.HazeState
@@ -40,7 +44,20 @@ import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.music.ui.theme.pressScale
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.screens.uniqueLazyKeys
+import com.nodeplayer.ui.screens.uniqueLazyTrackKeys
 import java.io.File
+
+private val SONG_ART_SHAPE = ContinuousRoundedRectangle(12.dp)
+private val SONG_ART_BORDER_BRUSH = Brush.verticalGradient(
+    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+)
+private val FOLDER_ICON_SHAPE = RoundedCornerShape(12.dp)
+private val ALBUM_GRID_SHAPE = RoundedCornerShape(14.dp)
+private val ALBUM_LIST_SHAPE = RoundedCornerShape(12.dp)
+private val PLAYLIST_PILL_SHAPE = ContinuousRoundedRectangle(GlassTokens.pillCornerRadius)
+private val PLAYLIST_ICON_SHAPE = RoundedCornerShape(10.dp)
+private val PLAYLIST_FILTER_OPTIONS = listOf("All", "Local", "YouTube", "Spotify")
 
 @Composable
 fun LibraryScreen(
@@ -169,9 +186,12 @@ fun LibraryScreen(
 
         // Tab Content
         if (viewingFolder != null) {
-            val folderTracks = tracks.filter { File(it.path).parent == viewingFolder!!.path }
+            val activeFolder = viewingFolder!!
+            val folderTracks = remember(tracks, activeFolder.path) {
+                tracks.filter { File(it.path).parent == activeFolder.path }
+            }
             FolderDetailView(
-                folder = viewingFolder!!,
+                folder = activeFolder,
                 tracks = folderTracks,
                 currentTrack = currentTrack,
                 isPlaying = isPlaying,
@@ -249,13 +269,20 @@ fun SongsList(
         com.nodeplayer.music.library.AudioAnalysisManager.setUserScrolling(listState.isScrollInProgress)
     }
 
+    val context = LocalContext.current
+    val songKeys = remember(tracks) { uniqueLazyTrackKeys(tracks, "lib_song") }
+
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 190.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(tracks, key = { it.id }) { track ->
+        itemsIndexed(
+            items = tracks,
+            key = { index, _ -> songKeys[index] },
+            contentType = { _, _ -> "song_row" }
+        ) { _, track ->
             val isCurrent = track.id == currentTrack?.id
 
             GlassCard(
@@ -270,18 +297,21 @@ fun SongsList(
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val artShape = remember { ContinuousRoundedRectangle(12.dp) }
+                    val artworkRequest = remember(track.albumId, context) {
+                        ImageRequest.Builder(context)
+                            .data("content://media/external/audio/albumart/${track.albumId}")
+                            .size(144, 144)
+                            .build()
+                    }
                     // Artwork / Placeholder
                     Box(
                         modifier = Modifier
                             .size(48.dp)
-                            .clip(artShape)
+                            .clip(SONG_ART_SHAPE)
                             .border(
                                 1.dp,
-                                Brush.verticalGradient(
-                                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
-                                ),
-                                artShape
+                                SONG_ART_BORDER_BRUSH,
+                                SONG_ART_SHAPE
                             )
                             .background(Color(0xFF1E2130)),
                         contentAlignment = Alignment.Center
@@ -293,7 +323,7 @@ fun SongsList(
                             modifier = Modifier.size(24.dp)
                         )
                         AsyncImage(
-                            model = "content://media/external/audio/albumart/${track.albumId}",
+                            model = artworkRequest,
                             contentDescription = track.album,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
@@ -470,13 +500,19 @@ fun FoldersList(
         com.nodeplayer.music.library.AudioAnalysisManager.setUserScrolling(listState.isScrollInProgress)
     }
 
+    val folderKeys = remember(folders) { uniqueLazyKeys(folders) { "fld_${it.path}" } }
+
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 190.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(folders, key = { it.path }) { folder ->
+        itemsIndexed(
+            items = folders,
+            key = { index, _ -> folderKeys[index] },
+            contentType = { _, _ -> "folder_row" }
+        ) { _, folder ->
             GlassCard(
                 modifier = Modifier.fillMaxWidth(),
                 
@@ -491,7 +527,7 @@ fun FoldersList(
                     Box(
                         modifier = Modifier
                             .size(46.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(FOLDER_ICON_SHAPE)
                             .background(accent.copy(alpha = 0.2f)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -637,6 +673,9 @@ fun AlbumsGrid(
     hazeState: HazeState? = null
 ) {
     if (isGridView) {
+        val context = LocalContext.current
+        val albumKeys = remember(albums) { uniqueLazyKeys(albums) { "alb_${it.id}" } }
+
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier.fillMaxSize(),
@@ -644,7 +683,17 @@ fun AlbumsGrid(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(albums, key = { it.id }) { album ->
+            gridItemsIndexed(
+                items = albums,
+                key = { index, _ -> albumKeys[index] },
+                contentType = { _, _ -> "album_grid_card" }
+            ) { _, album ->
+                val artworkRequest = remember(album.artworkUri, context) {
+                    ImageRequest.Builder(context)
+                        .data(album.artworkUri)
+                        .size(256, 256)
+                        .build()
+                }
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     
@@ -655,7 +704,7 @@ fun AlbumsGrid(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .aspectRatio(1f)
-                                .clip(RoundedCornerShape(14.dp))
+                                .clip(ALBUM_GRID_SHAPE)
                                 .background(Color(0xFF222433)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -666,7 +715,7 @@ fun AlbumsGrid(
                                 modifier = Modifier.size(36.dp)
                             )
                             AsyncImage(
-                                model = album.artworkUri,
+                                model = artworkRequest,
                                 contentDescription = album.title,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
@@ -695,12 +744,25 @@ fun AlbumsGrid(
             }
         }
     } else {
+        val context = LocalContext.current
+        val albumKeys = remember(albums) { uniqueLazyKeys(albums) { "alb_${it.id}" } }
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 190.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(albums, key = { it.id }) { album ->
+            itemsIndexed(
+                items = albums,
+                key = { index, _ -> albumKeys[index] },
+                contentType = { _, _ -> "album_list_row" }
+            ) { _, album ->
+                val artworkRequest = remember(album.artworkUri, context) {
+                    ImageRequest.Builder(context)
+                        .data(album.artworkUri)
+                        .size(144, 144)
+                        .build()
+                }
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     
@@ -715,7 +777,7 @@ fun AlbumsGrid(
                         Box(
                             modifier = Modifier
                                 .size(54.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(ALBUM_LIST_SHAPE)
                                 .background(Color(0xFF222433)),
                             contentAlignment = Alignment.Center
                         ) {
@@ -726,7 +788,7 @@ fun AlbumsGrid(
                                 modifier = Modifier.size(24.dp)
                             )
                             AsyncImage(
-                                model = album.artworkUri,
+                                model = artworkRequest,
                                 contentDescription = album.title,
                                 contentScale = ContentScale.Crop,
                                 modifier = Modifier.fillMaxSize()
@@ -774,6 +836,8 @@ fun ArtistsList(
 ) {
     val accent = LocalAccentColor.current
     if (isGridView) {
+        val artistKeys = remember(artists) { uniqueLazyKeys(artists) { "art_${it.id}" } }
+
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
             modifier = Modifier.fillMaxSize(),
@@ -781,7 +845,11 @@ fun ArtistsList(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(artists, key = { it.id }) { artist ->
+            gridItemsIndexed(
+                items = artists,
+                key = { index, _ -> artistKeys[index] },
+                contentType = { _, _ -> "artist_grid_card" }
+            ) { _, artist ->
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     
@@ -831,12 +899,18 @@ fun ArtistsList(
             }
         }
     } else {
+        val artistKeys = remember(artists) { uniqueLazyKeys(artists) { "art_${it.id}" } }
+
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = 190.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(artists, key = { it.id }) { artist ->
+            itemsIndexed(
+                items = artists,
+                key = { index, _ -> artistKeys[index] },
+                contentType = { _, _ -> "artist_list_row" }
+            ) { _, artist ->
                 GlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     
@@ -895,7 +969,7 @@ fun PlaylistsTab(
     onImportSpotifyClick: (() -> Unit)? = null
 ) {
     val accent = LocalAccentColor.current
-    val filterOptions = listOf("All", "Local", "YouTube", "Spotify")
+    val filterOptions = PLAYLIST_FILTER_OPTIONS
 
     val filtered = remember(playlists, filter) {
         when (filter) {
@@ -920,7 +994,7 @@ fun PlaylistsTab(
                     val isSel = filter == opt
                     Box(
                         modifier = Modifier
-                            .clip(ContinuousRoundedRectangle(GlassTokens.pillCornerRadius))
+                            .clip(PLAYLIST_PILL_SHAPE)
                             .background(if (isSel) accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.05f))
                             .clickable { onFilterChange(opt) }
                             .padding(horizontal = 12.dp, vertical = 6.dp)
@@ -1033,12 +1107,19 @@ fun PlaylistsTab(
                 )
             }
         } else {
+            val playlistKeys = remember(filtered) {
+                uniqueLazyKeys(filtered) { "pl_${it.source}_${it.id}" }
+            }
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = 190.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(filtered, key = { it.id }) { playlist ->
+                itemsIndexed(
+                    items = filtered,
+                    key = { index, _ -> playlistKeys[index] },
+                    contentType = { _, _ -> "playlist_row" }
+                ) { _, playlist ->
                     GlassCard(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = { onPlaylistClick(playlist) }
@@ -1052,7 +1133,7 @@ fun PlaylistsTab(
                             Box(
                                 modifier = Modifier
                                     .size(44.dp)
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(PLAYLIST_ICON_SHAPE)
                                     .background(accent.copy(alpha = 0.2f)),
                                 contentAlignment = Alignment.Center
                             ) {
