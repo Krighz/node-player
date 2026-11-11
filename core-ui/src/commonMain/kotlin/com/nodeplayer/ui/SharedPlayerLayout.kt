@@ -395,8 +395,7 @@ fun SharedPlayerLayout(
                                 .padding(end = 20.dp)
                         ) {
                             when (currentNav) {
-                                PlayerNavDestination.HOME,
-                                PlayerNavDestination.NEW -> HomeView(
+                                PlayerNavDestination.HOME -> HomeView(
                                     tracks = tracks,
                                     currentTrack = currentTrack,
                                     isPlaying = isPlaying,
@@ -422,6 +421,47 @@ fun SharedPlayerLayout(
                                         )
                                         activeDetailTracks = items
                                     }
+                                )
+                                PlayerNavDestination.NEW -> ExploreView(
+                                    onCategoryClick = { category ->
+                                        coroutineScope.launch {
+                                            runCatching {
+                                                val client = com.nodeplayer.network.innertube.InnerTubeClient()
+                                                val shelves = client.browseCategoryShelves(category.browseId, category.params).getOrDefault(emptyList())
+                                                val categoryTracks = shelves.map { pl ->
+                                                    Track(
+                                                        id = pl.id,
+                                                        title = pl.name,
+                                                        artist = "YouTube Music",
+                                                        album = category.title,
+                                                        durationMs = 0L,
+                                                        path = "nodeplayer://youtube/playlist/${pl.externalId ?: pl.id}"
+                                                    )
+                                                }
+                                                activeDetailHeader = DetailMediaHeader(
+                                                    id = category.browseId,
+                                                    title = category.title,
+                                                    subtitle = "YouTube Music Explore",
+                                                    artworkUrl = category.thumbnailUrl,
+                                                    description = "YouTube Music Moods & Genres",
+                                                    isAlbum = false
+                                                )
+                                                activeDetailTracks = categoryTracks
+                                            }.onFailure { e ->
+                                                com.nodeplayer.common.logging.NodeLog.e("SharedPlayerLayout", "Failed to browse category shelves", e)
+                                                activeDetailHeader = DetailMediaHeader(
+                                                    id = category.browseId,
+                                                    title = category.title,
+                                                    subtitle = "YouTube Music Explore",
+                                                    artworkUrl = category.thumbnailUrl,
+                                                    description = "YouTube Music Moods & Genres",
+                                                    isAlbum = false
+                                                )
+                                                activeDetailTracks = emptyList()
+                                            }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxSize()
                                 )
                                 PlayerNavDestination.LIBRARY -> LibraryView(
                                     tracks = tracks,
@@ -582,8 +622,7 @@ fun SharedPlayerLayout(
                             label = "NavTransition"
                         ) { targetNav ->
                             when (targetNav) {
-                            PlayerNavDestination.HOME,
-                            PlayerNavDestination.NEW -> HomeView(
+                            PlayerNavDestination.HOME -> HomeView(
                                 tracks = tracks,
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
@@ -621,6 +660,48 @@ fun SharedPlayerLayout(
                                     )
                                     activeDetailTracks = items
                                 }
+                            )
+                            PlayerNavDestination.NEW -> ExploreView(
+                                onCategoryClick = { category ->
+                                    coroutineScope.launch {
+                                        runCatching {
+                                            val client = com.nodeplayer.network.innertube.InnerTubeClient()
+                                            val shelves = client.browseCategoryShelves(category.browseId, category.params).getOrDefault(emptyList())
+                                            val categoryTracks = shelves.map { pl ->
+                                                Track(
+                                                    id = pl.id,
+                                                    title = pl.name,
+                                                    artist = "YouTube Music",
+                                                    album = category.title,
+                                                    durationMs = 0L,
+                                                    path = "nodeplayer://youtube/playlist/${pl.externalId ?: pl.id}"
+                                                )
+                                            }
+                                            activeDetailHeader = DetailMediaHeader(
+                                                id = category.browseId,
+                                                title = category.title,
+                                                subtitle = "YouTube Music Explore",
+                                                artworkUrl = category.thumbnailUrl,
+                                                description = "YouTube Music Moods & Genres",
+                                                isAlbum = false
+                                            )
+                                            activeDetailTracks = categoryTracks
+                                        }.onFailure { e ->
+                                            com.nodeplayer.common.logging.NodeLog.e("SharedPlayerLayout", "Failed to browse category shelves", e)
+                                            activeDetailHeader = DetailMediaHeader(
+                                                id = category.browseId,
+                                                title = category.title,
+                                                subtitle = "YouTube Music Explore",
+                                                artworkUrl = category.thumbnailUrl,
+                                                description = "YouTube Music Moods & Genres",
+                                                isAlbum = false
+                                            )
+                                            activeDetailTracks = emptyList()
+                                        }
+                                    }
+                                },
+                                dockScrollController = dockScrollController,
+                                modifier = Modifier.fillMaxSize()
                             )
                             PlayerNavDestination.LIBRARY -> LibraryView(
                                 tracks = tracks,
