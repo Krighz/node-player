@@ -51,6 +51,7 @@ import com.nodeplayer.ui.theme.LocalGlassControlsConfig
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.LocalGlassTokens
 import com.nodeplayer.ui.theme.LocalMotionConfig
+import com.nodeplayer.ui.theme.ScreenTransitions
 
 val LocalBottomBarPadding = compositionLocalOf { 80.dp }
 
@@ -561,7 +562,13 @@ fun SharedPlayerLayout(
                         }
 
                         // Active Destination View (full-bleed, scrolling underneath floating chrome)
-                        when (currentNav) {
+                        AnimatedContent(
+                            targetState = currentNav,
+                            transitionSpec = { ScreenTransitions.fadeThrough(themeConfig) },
+                            modifier = Modifier.fillMaxSize(),
+                            label = "NavTransition"
+                        ) { targetNav ->
+                            when (targetNav) {
                             PlayerNavDestination.HOME,
                             PlayerNavDestination.NEW -> HomeView(
                                 tracks = tracks,
@@ -685,6 +692,7 @@ fun SharedPlayerLayout(
                                 onBack = { currentNav = PlayerNavDestination.SETTINGS },
                                 themeConfig = themeConfig
                             )
+                        }
                         }
                     }
                     }
