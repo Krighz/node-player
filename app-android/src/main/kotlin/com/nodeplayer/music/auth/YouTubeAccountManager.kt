@@ -38,18 +38,32 @@ object YouTubeAccountManager {
         innerTubeClient = client
 
         // Restore cached session if present and stay logged in is true
-        val savedCookie = sessionStore?.getCookie()
-        val cachedAccount = sessionStore?.getCachedAccount()
+        val store = sessionStore
+        val savedCookie = store?.getCookie()
 
-        if (!savedCookie.isNullOrBlank()) {
+        if (store != null && store.hasValidSession() && !savedCookie.isNullOrBlank()) {
             client.sessionCookie = savedCookie
-            if (cachedAccount != null) {
-                _authState.value = AuthState.LoggedIn(cachedAccount)
-            } else {
-                _authState.value = AuthState.Loading
-            }
 
-            // Asynchronously validate session & refresh account profile
+            val rawAvatar = store.getAccountAvatar()
+            val normalizedAvatarUrl = InnerTubeClient.normalizeAvatarUrl(rawAvatar)
+            val handle = store.getAccountHandle()
+            val accountId = store.getAccountId() ?: handle ?: "youtube_user"
+            val accountName = store.getAccountName() ?: "YouTube User"
+            val accountEmail = store.getAccountEmail()
+
+            val account = YouTubeAccount(
+                id = accountId,
+                name = accountName,
+                handle = handle,
+                avatarUrl = normalizedAvatarUrl,
+                email = accountEmail,
+                isLoggedIn = true
+            )
+
+            // Immediately emit LoggedIn so UI is hydrated without waiting for a network roundtrip (D-14)
+            _authState.value = AuthState.LoggedIn(account)
+
+            // Asynchronously validate session & refresh account profile in background
             validationJob?.cancel()
             validationJob = scope.launch {
                 validateSession(savedCookie)
@@ -70,9 +84,11 @@ object YouTubeAccountManager {
         val account = accountResult.getOrNull()
 
         if (account != null) {
-            store.saveSession(cookie, account, stayLoggedIn = true)
-            _authState.value = AuthState.LoggedIn(account)
-            NodeLog.i(TAG, "Login successful for user: ${account.name} (${account.handle})")
+            val normalizedAvatar = InnerTubeClient.normalizeAvatarUrl(account.avatarUrl)
+            val updatedAccount = account.copy(avatarUrl = normalizedAvatar)
+            store.saveSession(cookie, updatedAccount, stayLoggedIn = true)
+            _authState.value = AuthState.LoggedIn(updatedAccount)
+            NodeLog.i(TAG, "Login successful for user: ${updatedAccount.name} (${updatedAccount.handle})")
         } else {
             // Even if profile parsing fails, if cookies are valid keep logged in state
             val fallbackAccount = YouTubeAccount(
@@ -111,9 +127,11 @@ object YouTubeAccountManager {
             val accountResult = client.fetchAccountInfo()
             accountResult.onSuccess { account ->
                 if (account != null) {
-                    store.saveSession(cookie, account, stayLoggedIn = store.isStayLoggedIn())
-                    _authState.value = AuthState.LoggedIn(account)
-                    NodeLog.d(TAG, "Session validated successfully: ${account.name}")
+                    val normalizedAvatar = InnerTubeClient.normalizeAvatarUrl(account.avatarUrl)
+                    val updatedAccount = account.copy(avatarUrl = normalizedAvatar)
+                    store.saveSession(cookie, updatedAccount, stayLoggedIn = store.isStayLoggedIn())
+                    _authState.value = AuthState.LoggedIn(updatedAccount)
+                    NodeLog.d(TAG, "Session validated successfully: ${updatedAccount.name}")
                 } else {
                     // Unauthorized or empty menu -> Session expired (AUTH-06)
                     NodeLog.w(TAG, "Session expired during background verification")

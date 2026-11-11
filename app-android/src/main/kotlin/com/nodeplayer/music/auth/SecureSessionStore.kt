@@ -6,6 +6,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.model.YouTubeAccount
+import com.nodeplayer.network.innertube.InnerTubeClient
 import com.nodeplayer.network.innertube.YouTubeAuth
 
 /**
@@ -47,18 +48,33 @@ class SecureSessionStore(private val context: Context) {
         account: YouTubeAccount?,
         stayLoggedIn: Boolean = true
     ) {
+        val normalizedAvatar = InnerTubeClient.normalizeAvatarUrl(account?.avatarUrl)
         prefs.edit()
             .putString(KEY_COOKIE, cookie)
             .putBoolean(KEY_STAY_LOGGED_IN, stayLoggedIn)
             .putString(KEY_ACCOUNT_ID, account?.id)
             .putString(KEY_ACCOUNT_NAME, account?.name)
             .putString(KEY_ACCOUNT_HANDLE, account?.handle)
-            .putString(KEY_ACCOUNT_AVATAR, account?.avatarUrl)
+            .putString(KEY_ACCOUNT_AVATAR, normalizedAvatar)
             .putString(KEY_ACCOUNT_EMAIL, account?.email)
             .apply()
 
         NodeLog.d(TAG, "Saved session in hardware-backed storage: ${YouTubeAuth.maskCookieForLog(cookie)}")
     }
+
+    fun hasValidSession(): Boolean {
+        return !getCookie().isNullOrBlank()
+    }
+
+    fun getAccountAvatar(): String? {
+        val raw = prefs.getString(KEY_ACCOUNT_AVATAR, null)
+        return InnerTubeClient.normalizeAvatarUrl(raw)
+    }
+
+    fun getAccountHandle(): String? = prefs.getString(KEY_ACCOUNT_HANDLE, null)
+    fun getAccountId(): String? = prefs.getString(KEY_ACCOUNT_ID, null)
+    fun getAccountName(): String? = prefs.getString(KEY_ACCOUNT_NAME, null)
+    fun getAccountEmail(): String? = prefs.getString(KEY_ACCOUNT_EMAIL, null)
 
     fun getCookie(): String? {
         val stayLoggedIn = prefs.getBoolean(KEY_STAY_LOGGED_IN, true)
@@ -73,7 +89,7 @@ class SecureSessionStore(private val context: Context) {
             id = id,
             name = name,
             handle = prefs.getString(KEY_ACCOUNT_HANDLE, null),
-            avatarUrl = prefs.getString(KEY_ACCOUNT_AVATAR, null),
+            avatarUrl = getAccountAvatar(),
             email = prefs.getString(KEY_ACCOUNT_EMAIL, null),
             isLoggedIn = true
         )
