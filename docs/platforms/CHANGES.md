@@ -5,6 +5,27 @@
 
 ---
 
+### [2026-11-11] - Milestone v2.5: Phase 3 Motion System, Fluid Spring Physics & Zero-Allocation Transitions
+- **Centralized Motion Tokens & Dynamic Spring Resolvers (`REQ-MOT-01`)**:
+  - Centralized physics constants into `:core-ui` `MotionTokens.kt`: `Snappy` (damping 0.75, stiffness 600), `Smooth` (0.82, 380), `Bouncy` (0.65, 420), `Gentle` (0.90, 220), `ConvxPuck` (0.82, 380), `DragTracking` (0.95, 900), and `Instant` (1.0, 50000).
+  - Duration tokens: `DurationShort` (150ms), `DurationMedium` (300ms), `DurationLong` (500ms), and standardized easings (`EmphasizedEasing`, `DecelerateEasing`, `AccelerateEasing`).
+  - Dynamic physics resolvers `MotionTokens.resolveSpringSpec()` and `MotionTokens.resolveDuration()` responding deterministically to `motionLevel` (`FULL`, `REDUCED`, `OFF`), `reduceMotion` (OS accessibility), `animationPreset`, and `isPerformanceMode`.
+  - Zero-allocation touch interaction modifiers in `MotionModifiers.kt`: `pressScale`, `interactiveScale`, `fadeInOnLoad`, and `staggeredEntrance` deferring updates directly to `Modifier.graphicsLayer` to eliminate recomposition loops.
+  - Multiplatform composition local `LocalMotionConfig` wired into `SharedPlayerLayout.kt` (desktop/common) and `Theme.kt` (Android).
+- **Universal Screen & Sheet Transitions (`REQ-MOT-02`)**:
+  - Implemented `ScreenTransitions.kt` providing `fadeThrough()`, `sharedAxisX()`, `sharedAxisY()`, `sheetSpring()`, `sheetEnter()`, and `sheetExit()`.
+  - Wrapped top-level tab switches in `SharedPlayerLayout.kt` in `AnimatedContent` with `ScreenTransitions.fadeThrough(themeConfig)` and `SizeTransform(clip = false)`, eliminating abrupt screen cuts.
+  - Unified bottom sheet springs in `GlassContextMenuSheet.kt` and `HomeProfileSheet.kt` using `ScreenTransitions.sheetEnter(themeConfig)` and `sheetExit(themeConfig)`.
+  - Automatic fallback to snap specs and 0ms duration when motion is disabled or reduced.
+- **Container Transform & Shared Element Miniplayer Morphing (`REQ-MOT-03`)**:
+  - Implemented mathematical container morphing in `ContainerTransform.kt` (`ContainerTransformMath`) interpolating rect bounds, squircle corner radius ($20\text{dp} \to 0\text{dp}$), and asymmetric alpha ladders (mini-player controls fade out in $t \in [0.0, 0.25]$, fullscreen player controls fade in in $t \in [0.20, 1.0]$).
+  - Multiplatform Composable `ProgressContainerTransform` clipping dynamically with `ContinuousRoundedRectangle` on draw-phase GPU layers.
+  - Replaced modal overlay in `SharedPlayerLayout.kt` with continuous container morphing driven by `Animatable(0f)` `playerExpansionProgress` with `MotionTokens.Smooth`.
+  - Added 1:1 touch-tracking downward drag gesture on `NowPlayingView.kt` with velocity-sensitive fling snap back to fullscreen or collapse to miniplayer capsule.
+- **Motion Verification & Multiplatform Test Suites**:
+  - Added comprehensive test suites: `MotionTokensTest`, `MotionModifiersTest`, `ScreenTransitionTest`, `ContainerTransformMathTest`, `MotionSystemSuiteTest` in `:core-ui`, and `MotionSettingsSyncTest` in `:app-android`.
+  - 100% test pass rate across `:core-ui:desktopTest`, `:app-android:testDebugUnitTest`, `:app-desktop:test`, `:core-dsp:test`, `:core-model:test`, and `:core-common:test`.
+
 ### [2026-11-11] - Milestone v2.5: Phase 2 Performance Fixes, Hot-Path Allocation & Memory Elimination
 - **Cold-Start Acceleration & Baseline Profiles (`REQ-PERF-05`)**:
   - Cold-start median time reduced from **1422 ms to 644 ms (-54.7%)** on physical device (`4a505e5`).

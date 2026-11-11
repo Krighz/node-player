@@ -132,6 +132,26 @@ Added in Milestone v2.3 to manage navigation, home feed layout, and lyrics custo
 | **`LyricsViewConfig`** | `keepScreenOn` | `Boolean` | `true` | Prevent screen sleep while in lyrics view | `FullScreenLyricsView.kt`, `NowPlayingSheet.kt` |
 | **`LiquidGlassBackgroundConfig`** | `animateOnlyWhilePlaying` | `Boolean` | `true` | When true, stops infinite gradient animation loop while audio is paused, preventing unnecessary full-screen invalidations | `PlayerViewModel.kt`, `LiquidGlassBackground.kt`, `AudioAndThemeConfig.kt` |
 
+---
+
+## 9. Motion System & Physics Tokens (`GlassThemeConfig`)
+
+Added in Milestone v2.5 (Phase 3) to provide centralized physics tokens, interactive spring animations, container morphing, and system accessibility integration across Android and Windows Desktop:
+
+| Setting Key | Data Type | Range / Options | Default Value | GPU Cost Impact | Description | Consuming Source File & Line Number(s) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`motionLevel`** | `MotionLevel` | `FULL`, `REDUCED`, `OFF` | `FULL` | Zero | Top-level motion mode. `FULL` enables physics springs; `REDUCED` switches to gentle damping and clamps durations; `OFF` immediately returns `Instant` snap specs (0ms). | • `MotionTokens.kt`<br>• `ScreenTransitions.kt`<br>• `SharedPlayerLayout.kt`<br>• `MotionModifiers.kt` |
+| **`reduceMotion`** | Boolean | `true`, `false` | `false` | Zero | When true (or when OS accessibility "Remove animations" / "Reduce motion" is detected), overrides motion level and forces `MotionTokens.Instant` and 0ms duration. | • `MotionTokens.kt`<br>• `ScreenTransitions.kt`<br>• `PlayerViewModel.kt`<br>• `Theme.kt` |
+| **`motionSpeed`** | Float | 0.5 .. 2.0 | `1.0f` | Zero | Global speed multiplier for motion durations and spring stiffnesses. (Higher value produces faster transitions). | • `MotionTokens.kt`<br>• `ScreenTransitions.kt` |
+| **`animationPreset`** | String | `"SMOOTH"`, `"SNAPPY"`, `"BOUNCY"`, `"GENTLE"`, `"MINIMAL"`, `"CUSTOM"`, `"OFF"` | `"SMOOTH"` | Zero | Spring physics profile preset governing damping ratio and stiffness across UI interactions. | • `MotionTokens.kt`<br>• `AudioAndThemeConfig.kt`<br>• `CustomizeUiView.kt` |
+| **`springStiffness`** | Float | 150.0 .. 1000.0 | `380.0f` | Zero | Custom spring stiffness tension when `animationPreset == "CUSTOM"`. | • `MotionTokens.kt`<br>• `CustomizeUiView.kt` |
+| **`springBounciness`** | Float | 0.30 .. 1.00 | `0.82f` | Zero | Custom spring damping ratio when `animationPreset == "CUSTOM"` (lower value produces more overshoot/bounce). | • `MotionTokens.kt`<br>• `CustomizeUiView.kt` |
+| **`pressScaleEnabled`** | Boolean | `true`, `false` | `true` | Zero | Enables tactile scale contraction on button down / touch presses. Automatically skipped when motion is reduced/off. | • `MotionModifiers.kt`<br>• `MotionTokens.kt` |
+| **`pressScaleStrength`** | Float | 0.85 .. 1.00 | `0.96f` | Zero | Target scale factor during touch down when press scaling is enabled. | • `MotionModifiers.kt`<br>• `CustomizeUiView.kt` |
+| **`staggeredListAnimation`**| Boolean | `true`, `false` | `true` | Zero | Applies staggered entrance cascade to lazy list items, deferred strictly to `Modifier.graphicsLayer`. | • `MotionModifiers.kt`<br>• `OnlineHomeView.kt` |
+| **`screenTransitionStyle`** | String | `"FADE_THROUGH"`, `"SHARED_AXIS_X"`, `"SHARED_AXIS_Y"`, `"SLIDE"` | `"FADE_THROUGH"` | Zero | Transition style for top-level screen and destination changes in `SharedPlayerLayout`. | • `ScreenTransitions.kt`<br>• `SharedPlayerLayout.kt` |
+
+
 
 
 

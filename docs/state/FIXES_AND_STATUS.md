@@ -1,6 +1,37 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Milestone v2.5 Phase 2 Performance Fixes Verified On Physical Device (2026-11-11)
+## Current Status: Milestone v2.5 Phase 3 Motion System & Universal Animation Verified (2026-11-11)
+
+### Milestone v2.5 Phase 3: Motion System, Spring Physics & Container Transform (2026-11-11)
+
+1. **Centralized Motion Tokens & Dynamic Physics Resolvers (`REQ-MOT-01`)**:
+   - Centralized spring physics tokens (`Snappy`, `Smooth`, `Bouncy`, `Gentle`, `ConvxPuck`, `DragTracking`, `Instant`) and duration constants (`DurationShort` 150ms, `DurationMedium` 300ms, `DurationLong` 500ms) in `:core-ui` `MotionTokens.kt`.
+   - Built dynamic resolvers `resolveSpringSpec()` and `resolveDuration()` responding deterministically to `motionLevel` (`FULL`, `REDUCED`, `OFF`), `reduceMotion` (OS accessibility scale), `animationPreset`, and `isPerformanceMode`.
+   - Developed reusable zero-allocation interaction modifiers in `MotionModifiers.kt`: `pressScale`, `interactiveScale`, `fadeInOnLoad`, and `staggeredEntrance` with changes applied strictly in `graphicsLayer` blocks.
+   - Ambient token propagation via `LocalMotionConfig` across Desktop/Common (`SharedPlayerLayout.kt`) and Android (`Theme.kt`).
+
+2. **Universal Screen Transitions & Sheet Springs (`REQ-MOT-02`)**:
+   - Standardized `ScreenTransitions.kt` providing fade-through, shared-axis ($X/Y$), and sheet transitions.
+   - Replaced instant tab switching in `SharedPlayerLayout.kt` with `AnimatedContent` utilizing `ScreenTransitions.fadeThrough(themeConfig)` and `SizeTransform(clip = false)`.
+   - Converted bottom sheets (`GlassContextMenuSheet.kt`, `HomeProfileSheet.kt`) from ad-hoc spring values to unified `ScreenTransitions.sheetEnter(themeConfig)` and `sheetExit(themeConfig)`.
+
+3. **Container Transform & Shared Element Miniplayer Morphing (`REQ-MOT-03`)**:
+   - Built `ContainerTransform.kt` featuring zero-allocation math engine (`ContainerTransformMath`) for bounding box interpolation, squircle radius transitions ($20\text{dp} \to 0\text{dp}$), and alpha crossfade ladders.
+   - Multiplatform `ProgressContainerTransform` clipping smoothly with `ContinuousRoundedRectangle` on GPU layers.
+   - Connected `SharedPlayerLayout.kt` miniplayer to `NowPlayingView` with `playerExpansionProgress` Animatable and interactive 1:1 touch downward drag gestures with velocity-sensitive fling snap.
+
+4. **Multiplatform Test Verification**:
+   - Added `MotionSystemSuiteTest.kt` in `:core-ui` and `MotionSettingsSyncTest.kt` in `:app-android`.
+   - Verified 100% test pass rate across multiplatform and Android suites:
+     - `:core-ui:desktopTest` passed
+     - `:app-android:testDebugUnitTest` passed
+     - `:app-desktop:test` passed
+     - `:core-dsp:test` passed
+     - `:core-model:test` passed
+     - `:core-common:test` passed
+   - Zero compilation warnings or boundary regressions.
+
+---
 
 ### Milestone v2.5 Phase 2: Performance Fixes, Allocation Elimination & Cold-Start Optimization (2026-11-11)
 
