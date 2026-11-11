@@ -34,7 +34,7 @@ expect object PlatformArtworkProvider {
 
 expect fun imageBitmapOf(pixels: IntArray, width: Int, height: Int): ImageBitmap
 
-internal class BoundedLruCache<K : Any, V : Any>(
+class BoundedLruCache<K : Any, V : Any>(
     private val maxEntries: Int
 ) {
     private val map = LinkedHashMap<K, V>(maxEntries, 0.75f, true)
