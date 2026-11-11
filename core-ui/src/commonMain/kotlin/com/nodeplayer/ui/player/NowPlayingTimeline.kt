@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,14 +41,16 @@ import kotlin.math.max
  */
 @Composable
 fun NowPlayingTimeline(
-    positionMs: Long,
+    positionMs: Long = 0L,
     durationMs: Long,
     accentColor: Color,
     onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    positionProvider: () -> Long = { positionMs }
 ) {
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }
+    val currentPositionProvider by rememberUpdatedState(positionProvider)
 
     val trackHeight by animateDpAsState(
         targetValue = if (isDragging) 8.dp else 4.dp,
@@ -55,14 +59,6 @@ fun NowPlayingTimeline(
     )
 
     val safeDuration = max(durationMs, 1L)
-    val currentFraction = if (isDragging) {
-        dragFraction
-    } else {
-        (positionMs.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
-    }
-
-    val displayPositionMs = if (isDragging) (dragFraction * safeDuration).toLong() else positionMs
-    val remainingMs = max(0L, safeDuration - displayPositionMs)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Canvas(
@@ -101,7 +97,12 @@ fun NowPlayingTimeline(
             val yOffset = (canvasHeight - barHeightPx) / 2f
             val cornerRadius = CornerRadius(barHeightPx / 2f, barHeightPx / 2f)
 
-            // Background inactive bar
+            val currentFraction = if (isDragging) {
+                dragFraction
+            } else {
+                (currentPositionProvider().toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
+            }
+
             drawRoundRect(
                 color = Color.White.copy(alpha = 0.22f),
                 topLeft = Offset(0f, yOffset),
@@ -109,7 +110,6 @@ fun NowPlayingTimeline(
                 cornerRadius = cornerRadius
             )
 
-            // Active progress fill
             val activeWidth = canvasWidth * currentFraction
             if (activeWidth > 0f) {
                 drawRoundRect(
@@ -123,27 +123,55 @@ fun NowPlayingTimeline(
 
         Spacer(modifier = Modifier.height(2.dp))
 
-        // Elapsed and Remaining times row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 2.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = formatDuration(displayPositionMs),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.65f)
-            )
-            Text(
-                text = "-${formatDuration(remainingMs)}",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.65f)
-            )
+        TimelineTimeLabels(
+            safeDuration = safeDuration,
+            isDraggingProvider = { isDragging },
+            dragFractionProvider = { dragFraction },
+            positionProvider = currentPositionProvider
+        )
+    }
+}
+
+@Composable
+private fun TimelineTimeLabels(
+    safeDuration: Long,
+    isDraggingProvider: () -> Boolean,
+    dragFractionProvider: () -> Float,
+    positionProvider: () -> Long
+) {
+    val displaySecond by remember(safeDuration) {
+        derivedStateOf {
+            val posMs = if (isDraggingProvider()) {
+                (dragFractionProvider() * safeDuration).toLong()
+            } else {
+                positionProvider()
+            }
+            (posMs.coerceIn(0L, safeDuration) / 1000L)
         }
+    }
+
+    val displayPositionMs = displaySecond * 1000L
+    val remainingMs = max(0L, safeDuration - displayPositionMs)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = formatDuration(displayPositionMs),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White.copy(alpha = 0.65f)
+        )
+        Text(
+            text = "-${formatDuration(remainingMs)}",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White.copy(alpha = 0.65f)
+        )
     }
 }
 

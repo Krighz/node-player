@@ -7,16 +7,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -44,7 +41,6 @@ object KaraokeProgressMath {
     ): Float {
         if (currentPositionMs < timestampMs) return 0f
 
-        // If enhanced word timings exist, calculate progress according to words
         if (words.isNotEmpty()) {
             val lastWord = words.last()
             val totalStart = words.first().startMs.coerceAtMost(timestampMs)
@@ -55,7 +51,6 @@ object KaraokeProgressMath {
             return ((currentPositionMs - totalStart).toFloat() / lineDuration.toFloat()).coerceIn(0f, 1f)
         }
 
-        // Linear sweep across entire line from timestampMs to endTimeMs
         val end = endTimeMs ?: (timestampMs + 3500L)
         val duration = (end - timestampMs).coerceAtLeast(1L)
         if (currentPositionMs < timestampMs) return 0f
@@ -96,46 +91,41 @@ object KaraokeProgressMath {
 
 /**
  * Karaoke line item rendering large bold typography with high-contrast active line
- * and word-by-word / smooth gradient sweep fill (LYR-02, LYR-03).
+ * and word-by-word / smooth clip sweep fill without offscreen GPU RenderTargets or per-line blur.
  */
 @Composable
 fun WordByWordKaraokeText(
     line: LyricsLine,
     index: Int,
     activeIndex: Int,
-    currentPositionMs: Long,
+    currentPositionMs: Long = 0L,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
     activeColor: Color = Color.White,
     inactiveColor: Color = Color(0xFFC0C0C0),
-    fontSize: TextUnit = 34.sp
+    fontSize: TextUnit = 34.sp,
+    positionProvider: () -> Long = { currentPositionMs }
 ) {
     val distance = abs(index - activeIndex)
     val isActive = distance == 0
 
     val targetAlpha = KaraokeProgressMath.alphaForDistance(distance)
     val targetScale = KaraokeProgressMath.scaleForDistance(distance)
-    val blurRadius = KaraokeProgressMath.blurForDistance(distance)
-
-    val sweepProgress = if (isActive) {
-        KaraokeProgressMath.calculateLineSweepProgress(
-            currentPositionMs = currentPositionMs,
-            timestampMs = line.timestampMs,
-            endTimeMs = line.endTimeMs,
-            words = line.words
-        )
-    } else {
-        0f
-    }
 
     val interactionSource = remember { MutableInteractionSource() }
+    val currentPositionProvider by rememberUpdatedState(positionProvider)
 
-    val textStyle = TextStyle(
-        fontSize = fontSize,
-        fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold,
-        lineHeight = (fontSize.value * 1.25f).sp,
-        textAlign = TextAlign.Start
-    )
+    val textStyle = remember(fontSize, isActive) {
+        TextStyle(
+            fontSize = fontSize,
+            fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold,
+            lineHeight = (fontSize.value * 1.25f).sp,
+            textAlign = TextAlign.Start
+        )
+    }
+
+    val activeBaseColor = remember(activeColor) { activeColor.copy(alpha = 0.45f) }
+    val dimmedInactiveColor = remember(inactiveColor) { inactiveColor.copy(alpha = 0.70f) }
 
     Box(
         modifier = modifier
@@ -145,7 +135,6 @@ fun WordByWordKaraokeText(
                 scaleY = targetScale
                 this.alpha = targetAlpha
             }
-            .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null
@@ -155,59 +144,43 @@ fun WordByWordKaraokeText(
             .padding(vertical = 10.dp)
     ) {
         if (isActive) {
-            // Active line is always prominently in foreground (1.0f alpha, bold, no blur)
-            // It sweeps smoothly from 0% (start timestamp) to 100% (end timestamp) across all characters/words!
             Box(modifier = Modifier.fillMaxWidth()) {
-                // 1. Base active line text: Semi-bright white (never fades to background)
                 Text(
                     text = line.text,
                     style = textStyle,
-                    color = Color.White.copy(alpha = 0.45f),
+                    color = activeBaseColor,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // 2. Sung portion overlay: Solid 100% bright white sliding smoothly left-to-right
-                if (sweepProgress > 0f) {
-                    Text(
-                        text = line.text,
-                        style = textStyle,
-                        color = Color.White,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .graphicsLayer {
-                                compositingStrategy = CompositingStrategy.Offscreen
-                            }
-                            .drawWithContent {
+                Text(
+                    text = line.text,
+                    style = textStyle,
+                    color = activeColor,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .drawWithContent {
+                            val pos = currentPositionProvider()
+                            val sweepProgress = KaraokeProgressMath.calculateLineSweepProgress(
+                                currentPositionMs = pos,
+                                timestampMs = line.timestampMs,
+                                endTimeMs = line.endTimeMs,
+                                words = line.words
+                            )
+                            if (sweepProgress >= 1f) {
                                 drawContent()
-
-                                val textWidth = size.width
-                                val cursorX = textWidth * sweepProgress
-                                val glowWidth = 32f
-
-                                // Cut off everything beyond the current sweep progress with a soft leading edge glow
-                                drawRect(
-                                    brush = Brush.horizontalGradient(
-                                        colors = listOf(
-                                            Color.White,
-                                            Color.White,
-                                            Color.Transparent
-                                        ),
-                                        startX = 0f,
-                                        endX = cursorX + glowWidth
-                                    ),
-                                    blendMode = BlendMode.DstIn,
-                                    size = Size(cursorX + glowWidth, size.height)
-                                )
+                            } else if (sweepProgress > 0f) {
+                                clipRect(right = size.width * sweepProgress) {
+                                    this@drawWithContent.drawContent()
+                                }
                             }
-                    )
-                }
+                        }
+                )
             }
         } else {
-            // Inactive lines are dimmed and blurred based on distance
             Text(
                 text = line.text,
                 style = textStyle,
-                color = inactiveColor.copy(alpha = 0.70f),
+                color = dimmedInactiveColor,
                 modifier = Modifier.fillMaxWidth()
             )
         }

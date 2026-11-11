@@ -17,7 +17,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -134,23 +133,23 @@ fun AlbumArtGradientBackdrop(
                     modifier = Modifier
                         .fillMaxSize()
                         .drawWithCache {
-                            // Bleed gradient mask: full opacity at top, smooth fade towards bottom & sides
+                            // Direct backdrop-colored fade overlays eliminate BlendMode.DstIn offscreen RenderTargets
                             val verticalFadeBrush = Brush.verticalGradient(
-                                0.0f to Color.White,
-                                0.40f to Color.White,
-                                0.70f to Color.White.copy(alpha = 0.50f),
-                                1.0f to Color.Transparent
+                                0.0f to Color.Transparent,
+                                0.40f to Color.Transparent,
+                                0.70f to animatedDarkMuted.copy(alpha = 0.50f),
+                                1.0f to animatedDarkMuted
                             )
                             val horizontalFadeBrush = Brush.horizontalGradient(
-                                0.0f to Color.Transparent,
-                                0.05f to Color.White,
-                                0.95f to Color.White,
-                                1.0f to Color.Transparent
+                                0.0f to animatedDarkMuted,
+                                0.05f to Color.Transparent,
+                                0.95f to Color.Transparent,
+                                1.0f to animatedDarkMuted
                             )
                             onDrawWithContent {
                                 drawContent()
-                                drawRect(brush = verticalFadeBrush, blendMode = BlendMode.DstIn)
-                                drawRect(brush = horizontalFadeBrush, blendMode = BlendMode.DstIn)
+                                drawRect(brush = verticalFadeBrush)
+                                drawRect(brush = horizontalFadeBrush)
                             }
                         }
                 )

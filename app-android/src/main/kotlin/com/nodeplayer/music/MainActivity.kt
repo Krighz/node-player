@@ -164,7 +164,6 @@ class MainActivity : ComponentActivity() {
                     returnDelayMs = themeConfig.dockReturnDelayMs
                 )
             }
-            val dockScrollFraction by dockScrollController.offsetFraction.collectAsState()
 
             val systemInDark = androidx.compose.foundation.isSystemInDarkTheme()
             val isDark = when (themeConfig.themeMode) {
@@ -239,8 +238,8 @@ class MainActivity : ComponentActivity() {
 
                 val currentTrack by viewModel.currentTrack.collectAsState()
                 val isPlaying by viewModel.isPlaying.collectAsState()
-                val currentPositionMs by viewModel.currentPositionMs.collectAsState()
-                val currentRms by viewModel.currentRms.collectAsState()
+                val currentPositionState = viewModel.currentPositionMs.collectAsState()
+                val currentRmsState = viewModel.currentRms.collectAsState()
                 val audioOutputInfo by viewModel.audioOutputInfo.collectAsState()
                 val effectConfig by viewModel.effectConfig.collectAsState()
                 val systemEqEnabled by viewModel.systemEqEnabled.collectAsState()
@@ -546,7 +545,7 @@ class MainActivity : ComponentActivity() {
                                 onSaveAlbumPreset = { currentTrack?.let { viewModel.saveAsAlbumPreset(it) } },
                                 onClearPreset = { currentTrack?.let { viewModel.clearTrackOrAlbumPreset(it) } },
                                 onLoadConvolverPreset = { viewModel.setConvolverPreset(it) },
-                                rmsLevel = currentRms,
+                                rmsProvider = { currentRmsState.value },
                                 isPerformanceMode = themeConfig.isPerformanceMode,
                                 onBack = { currentRoute = "home" },
                             )
@@ -639,124 +638,28 @@ class MainActivity : ComponentActivity() {
                     }
 
                     // 3. Floating Mini-Player & Bottom Navigation (Convx Liquid Glass Dock)
-                    val activeTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
-                    val isCollapsedDock = (themeConfig.dockAutoHideEnabled && dockScrollFraction > 0.3f && activeTrack != null) || (activePlaylistDetail != null && activeTrack != null)
-
                     if (currentRoute !in listOf("widget_settings", "widgets", "optical_diagnostics", "settings", "equalizer")) {
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .navigationBarsPadding()
-                        ) {
-                            val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
-                            val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
-                            val effectiveDuration = if (srvDur > 0L) srvDur else (activeTrack?.durationMs ?: 0L)
-                            val duration = effectiveDuration.coerceAtLeast(1L)
-                            val progress = (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
-
-                            if (isCollapsedDock && activeTrack != null) {
-                                // Convx Collapsed Single-Row Island: [Home] [MiniPlayer] [Search]
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.10f))
-                                            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
-                                            .clickable {
-                                                if (activePlaylistDetail != null) {
-                                                    activePlaylistDetail = null
-                                                } else {
-                                                    currentRoute = "home"
-                                                }
-                                            },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (activePlaylistDetail != null) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.Home,
-                                            contentDescription = if (activePlaylistDetail != null) "Back" else "Home",
-                                            tint = if (currentRoute == "home" && activePlaylistDetail == null) accentColor else Color.White,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-
-                                    ConvxMiniPlayer(
-                                        currentTrack = activeTrack,
-                                        isPlaying = isPlaying,
-                                        progressFraction = progress,
-                                        onPlayPauseClick = { viewModel.togglePlayPause() },
-                                        onSkipNextClick = { viewModel.skipNext() },
-                                        onSkipPreviousClick = { viewModel.skipPrevious() },
-                                        onClick = { isNowPlayingExpanded = true },
-                                        gesturesEnabled = false,
-                                        rmsLevel = currentRms,
-                                        isPerformanceMode = themeConfig.isPerformanceMode,
-                                        shaderEnabled = isShaderActive,
-                                        chromaticFringe = themeConfig.chromaticFringeValue(),
-                                        backdrop = pageBackdrop,
-                                        isCollapsed = true,
-                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                                    )
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(48.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.White.copy(alpha = 0.10f))
-                                            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
-                                            .clickable { showSearchSheet = true },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Search,
-                                            contentDescription = "Search",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                }
-                            } else if (activePlaylistDetail == null) {
-                                // Convx Full 2-Tier Dock: MiniPlayer above, ConvxLiquidDock below
-                                if (activeTrack != null) {
-                                    ConvxMiniPlayer(
-                                        currentTrack = activeTrack,
-                                        isPlaying = isPlaying,
-                                        progressFraction = progress,
-                                        onPlayPauseClick = { viewModel.togglePlayPause() },
-                                        onSkipNextClick = { viewModel.skipNext() },
-                                        onSkipPreviousClick = { viewModel.skipPrevious() },
-                                        onClick = { isNowPlayingExpanded = true },
-                                        gesturesEnabled = false,
-                                        rmsLevel = currentRms,
-                                        isPerformanceMode = themeConfig.isPerformanceMode,
-                                        shaderEnabled = isShaderActive,
-                                        chromaticFringe = themeConfig.chromaticFringeValue(),
-                                        backdrop = pageBackdrop,
-                                        isCollapsed = false
-                                    )
-                                }
-
-                                ConvxLiquidDock(
-                                    selectedRoute = currentRoute,
-                                    onRouteChange = { currentRoute = it },
-                                    onSearchClick = { showSearchSheet = true },
-                                    isPerformanceMode = themeConfig.isPerformanceMode,
-                                    shaderEnabled = isShaderActive,
-                                    chromaticFringe = themeConfig.chromaticFringeValue(),
-                                    searchButtonVisible = themeConfig.showDockSearchButton,
-                                    lensStrength = themeConfig.lensRefractionStrength,
-                                    rimSpecular = themeConfig.lensRimSpecular,
-                                    backdrop = pageBackdrop
-                                )
-                            }
-                        }
+                        val activeTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
+                        MainBottomDockOverlay(
+                            activeTrack = activeTrack,
+                            isPlaying = isPlaying,
+                            themeConfig = effectiveThemeConfig,
+                            shaderActive = effectiveThemeConfig.isShaderActive(selfTestResult.passed),
+                            dockScrollController = dockScrollController,
+                            hasActivePlaylistDetail = activePlaylistDetail != null,
+                            currentRoute = currentRoute,
+                            accentColor = accentColor,
+                            pageBackdrop = pageBackdrop,
+                            positionProvider = { currentPositionState.value },
+                            rmsProvider = { currentRmsState.value },
+                            onRouteChange = { currentRoute = it },
+                            onClearPlaylistDetail = { activePlaylistDetail = null },
+                            onOpenSearch = { showSearchSheet = true },
+                            onExpandNowPlaying = { isNowPlayingExpanded = true },
+                            onPlayPause = { viewModel.togglePlayPause() },
+                            onSkipNext = { viewModel.skipNext() },
+                            onSkipPrevious = { viewModel.skipPrevious() }
+                        )
                     }
 
                     // 4. Full Now Playing Screen (State 1: Full-bleed edge-to-edge)
@@ -774,7 +677,8 @@ class MainActivity : ComponentActivity() {
                                 com.nodeplayer.ui.player.NowPlayingView(
                                     currentTrack = track,
                                     isPlaying = isPlaying,
-                                    positionMs = currentPositionMs,
+                                    positionMs = 0L,
+                                    positionProvider = { currentPositionState.value },
                                     durationMs = track.durationMs,
                                     queue = queue,
                                     currentQueueIndex = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0),
@@ -854,7 +758,8 @@ class MainActivity : ComponentActivity() {
                                         track = track,
                                         lyrics = trackLyrics,
                                         isPlaying = isPlaying,
-                                        currentPositionMs = currentPositionMs,
+                                        currentPositionMs = 0L,
+                                        positionProvider = { currentPositionState.value },
                                         durationMs = track.durationMs,
                                         isLoading = isLyricsLoading,
                                         audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
@@ -1551,6 +1456,154 @@ class MainActivity : ComponentActivity() {
                         }
                     }
             }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.MainBottomDockOverlay(
+    activeTrack: com.nodeplayer.model.Track?,
+    isPlaying: Boolean,
+    themeConfig: com.nodeplayer.model.GlassThemeConfig,
+    shaderActive: Boolean,
+    dockScrollController: com.nodeplayer.ui.components.DockScrollController,
+    hasActivePlaylistDetail: Boolean,
+    currentRoute: String,
+    accentColor: Color,
+    pageBackdrop: com.kyant.backdrop.Backdrop,
+    positionProvider: () -> Long,
+    rmsProvider: () -> Float,
+    onRouteChange: (String) -> Unit,
+    onClearPlaylistDetail: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onExpandNowPlaying: () -> Unit,
+    onPlayPause: () -> Unit,
+    onSkipNext: () -> Unit,
+    onSkipPrevious: () -> Unit
+) {
+    val dockScrollFractionState = dockScrollController.offsetFraction.collectAsState()
+    val isCollapsedDock by remember(themeConfig.dockAutoHideEnabled, activeTrack, hasActivePlaylistDetail) {
+        derivedStateOf {
+            (themeConfig.dockAutoHideEnabled && dockScrollFractionState.value > 0.3f && activeTrack != null) ||
+                (hasActivePlaylistDetail && activeTrack != null)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth()
+            .navigationBarsPadding()
+    ) {
+        val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
+        val effectiveDuration = if (srvDur > 0L) srvDur else (activeTrack?.durationMs ?: 0L)
+        val duration = effectiveDuration.coerceAtLeast(1L)
+        val progressProvider = remember(positionProvider, duration) {
+            { (positionProvider().toFloat() / duration.toFloat()).coerceIn(0f, 1f) }
+        }
+
+        if (isCollapsedDock && activeTrack != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.10f))
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                        .clickable {
+                            if (hasActivePlaylistDetail) {
+                                onClearPlaylistDetail()
+                            } else {
+                                onRouteChange("home")
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (hasActivePlaylistDetail) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.Home,
+                        contentDescription = if (hasActivePlaylistDetail) "Back" else "Home",
+                        tint = if (currentRoute == "home" && !hasActivePlaylistDetail) accentColor else Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                ConvxMiniPlayer(
+                    currentTrack = activeTrack,
+                    isPlaying = isPlaying,
+                    progressFraction = 0f,
+                    progressProvider = progressProvider,
+                    onPlayPauseClick = onPlayPause,
+                    onSkipNextClick = onSkipNext,
+                    onSkipPreviousClick = onSkipPrevious,
+                    onClick = onExpandNowPlaying,
+                    gesturesEnabled = false,
+                    rmsLevel = 0f,
+                    rmsProvider = rmsProvider,
+                    isPerformanceMode = themeConfig.isPerformanceMode,
+                    shaderEnabled = shaderActive,
+                    chromaticFringe = themeConfig.chromaticFringeValue(),
+                    backdrop = pageBackdrop,
+                    isCollapsed = true,
+                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.10f))
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                        .clickable(onClick = onOpenSearch),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Search,
+                        contentDescription = "Search",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        } else if (!hasActivePlaylistDetail) {
+            if (activeTrack != null) {
+                ConvxMiniPlayer(
+                    currentTrack = activeTrack,
+                    isPlaying = isPlaying,
+                    progressFraction = 0f,
+                    progressProvider = progressProvider,
+                    onPlayPauseClick = onPlayPause,
+                    onSkipNextClick = onSkipNext,
+                    onSkipPreviousClick = onSkipPrevious,
+                    onClick = onExpandNowPlaying,
+                    gesturesEnabled = false,
+                    rmsLevel = 0f,
+                    rmsProvider = rmsProvider,
+                    isPerformanceMode = themeConfig.isPerformanceMode,
+                    shaderEnabled = shaderActive,
+                    chromaticFringe = themeConfig.chromaticFringeValue(),
+                    backdrop = pageBackdrop,
+                    isCollapsed = false
+                )
+            }
+
+            ConvxLiquidDock(
+                selectedRoute = currentRoute,
+                onRouteChange = onRouteChange,
+                onSearchClick = onOpenSearch,
+                isPerformanceMode = themeConfig.isPerformanceMode,
+                shaderEnabled = shaderActive,
+                chromaticFringe = themeConfig.chromaticFringeValue(),
+                searchButtonVisible = themeConfig.showDockSearchButton,
+                lensStrength = themeConfig.lensRefractionStrength,
+                rimSpecular = themeConfig.lensRimSpecular,
+                backdrop = pageBackdrop
+            )
         }
     }
 }

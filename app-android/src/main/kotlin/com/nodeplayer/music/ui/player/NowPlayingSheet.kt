@@ -545,6 +545,7 @@ fun NowPlayingSheet(
                                     lyrics = lyrics,
                                     isPlaying = isPlaying,
                                     currentPositionMs = currentMs,
+                                    positionProvider = { currentMs },
                                     durationMs = track.durationMs,
                                     isLoading = isLyricsLoading,
                                     isOnlineMode = true,

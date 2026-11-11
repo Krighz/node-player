@@ -182,20 +182,11 @@ fun SharedPlayerLayout(
         dockScrollController.enabled = themeConfig.dockAutoHideEnabled
     }
 
-    val offsetFraction by dockScrollController.offsetFraction.collectAsState()
-    val isCollapsed by dockScrollController.isCollapsed.collectAsState()
     var showSearchBar by remember { mutableStateOf(false) }
     var searchBarQuery by remember { mutableStateOf("") }
     var activeDetailHeader by remember { mutableStateOf<DetailMediaHeader?>(null) }
     var activeDetailTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
     val onlineLibraryManager = remember { OnlineLibraryManager() }
-    val animatedOffsetFraction by animateFloatAsState(
-        targetValue = if (themeConfig.dockAutoHideEnabled) offsetFraction else 0f,
-        animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
-        label = "dockOffsetFraction"
-    )
-    val miniPlayerOffsetFraction = if (themeConfig.dockAutoHideMiniPlayer) animatedOffsetFraction else 0f
-    val dockOffsetFraction = animatedOffsetFraction
 
     CompositionLocalProvider(
         LocalAccentColor provides accent,
@@ -698,6 +689,7 @@ fun SharedPlayerLayout(
 
                     // Floating Chrome Sibling Overlays above page layer in z-order (hidden when Now Playing or Full Screen Lyrics is active)
                     if (playerPresentationState is com.nodeplayer.model.PlayerPresentationState.Closed) {
+                    val isCollapsed by dockScrollController.isCollapsed.collectAsState()
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -924,6 +916,7 @@ fun SharedPlayerLayout(
                         currentTrack = currentTrack,
                         isPlaying = isPlaying,
                         positionMs = positionMs,
+                        positionProvider = { positionMs },
                         durationMs = durationMs,
                         queue = queue,
                         currentQueueIndex = currentQueueIndex,
@@ -997,6 +990,7 @@ fun SharedPlayerLayout(
                     lyrics = parsedLyrics,
                     isPlaying = isPlaying,
                     currentPositionMs = positionMs,
+                    positionProvider = { positionMs },
                     durationMs = durationMs,
                     onPlayPause = onPlayPause,
                     onNext = onNext,

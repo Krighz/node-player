@@ -19,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -70,9 +72,14 @@ fun ConvxMiniPlayer(
     chromaticFringe: Float = 0.25f,
     backdrop: Backdrop = remember { emptyBackdrop() },
     isCollapsed: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    progressProvider: () -> Float = { progressFraction },
+    rmsProvider: () -> Float = { rmsLevel }
 ) {
     if (currentTrack == null) return
+
+    val currentProgressProvider by rememberUpdatedState(progressProvider)
+    val currentRmsProvider by rememberUpdatedState(rmsProvider)
 
     val accent = LocalAccentColor.current
     val themeConfig = LocalGlassThemeConfig.current
@@ -177,13 +184,21 @@ fun ConvxMiniPlayer(
             )
             .clickable(onClick = onClick)
     ) {
-        // Subtle progress track along the bottom edge
-        Box(
+        // Subtle progress track along the bottom edge (draw-phase only, zero recomposition)
+        Spacer(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                .fillMaxWidth()
                 .height(2.dp)
-                .background(accent.copy(alpha = 0.85f))
+                .drawBehind {
+                    val fraction = currentProgressProvider().coerceIn(0f, 1f)
+                    if (fraction > 0f) {
+                        drawRect(
+                            color = accent.copy(alpha = 0.85f),
+                            size = Size(size.width * fraction, size.height)
+                        )
+                    }
+                }
         )
 
         // Foreground content (un-refracted, crisp)
@@ -251,6 +266,7 @@ fun ConvxMiniPlayer(
                 SoundWaveVisualizer(
                     isPlaying = isPlaying,
                     rmsLevel = rmsLevel,
+                    rmsProvider = currentRmsProvider,
                     barColor = accent,
                     maxHeight = 16.dp,
                     isPerformanceMode = isPerformanceMode,

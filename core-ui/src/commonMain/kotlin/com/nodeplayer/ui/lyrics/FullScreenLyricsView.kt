@@ -2,7 +2,7 @@ package com.nodeplayer.ui.lyrics
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -58,20 +58,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.AlbumArtPalette
 import com.nodeplayer.model.Lyrics
+import com.nodeplayer.model.LyricsLine
 import com.nodeplayer.model.Track
 import com.nodeplayer.ui.components.PlatformArtworkProvider
 import com.nodeplayer.ui.components.GlassControlSurface
@@ -88,6 +88,27 @@ import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.PaletteExtractor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/**
+ * Binary-search upper-bound lookup matching `lines.indexOfLast { it.timestampMs <= positionMs }`
+ * in O(log N) for sorted LRC lines.
+ */
+fun findActiveLyricIndex(lines: List<LyricsLine>, positionMs: Long): Int {
+    if (lines.isEmpty()) return -1
+    var low = 0
+    var high = lines.size - 1
+    var result = -1
+    while (low <= high) {
+        val mid = (low + high) ushr 1
+        if (lines[mid].timestampMs <= positionMs) {
+            result = mid
+            low = mid + 1
+        } else {
+            high = mid - 1
+        }
+    }
+    return result
+}
 
 /**
  * Full-screen synchronized lyrics view (State 2 & State 3).
@@ -107,7 +128,7 @@ fun FullScreenLyricsView(
     track: Track?,
     lyrics: Lyrics?,
     isPlaying: Boolean,
-    currentPositionMs: Long,
+    currentPositionMs: Long = 0L,
     durationMs: Long,
     isLoading: Boolean = false,
     isOnlineMode: Boolean = true,
@@ -125,11 +146,13 @@ fun FullScreenLyricsView(
     onOpenOffsetControls: () -> Unit = {},
     lyricsConfig: com.nodeplayer.model.LyricsViewConfig = com.nodeplayer.model.LyricsViewConfig(),
     onKeepScreenOn: (Boolean) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    positionProvider: () -> Long = { currentPositionMs }
 ) {
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val defaultAccent = LocalAccentColor.current
+    val currentPositionProvider by rememberUpdatedState(positionProvider)
 
     // Keep screen on while lyrics view is active
     DisposableEffect(Unit) {
@@ -163,12 +186,12 @@ fun FullScreenLyricsView(
         lastInteractionTime = System.currentTimeMillis()
     }
 
-    // Active line detection
+    // Active line detection — O(log N) binary search via derivedStateOf reading currentPositionProvider
     val lines = lyrics?.lines ?: emptyList()
-    val activeIndex by remember(lines, currentPositionMs) {
+    val activeIndex by remember(lines) {
         derivedStateOf {
             if (lines.isEmpty()) -1
-            else lines.indexOfLast { it.timestampMs <= currentPositionMs }.coerceAtLeast(0)
+            else findActiveLyricIndex(lines, currentPositionProvider()).coerceAtLeast(0)
         }
     }
 
@@ -407,11 +430,19 @@ fun FullScreenLyricsView(
                             }
                         }
                     } else {
-                        // Synced Immersive Lyrics View (with dynamic padding and soft bottom fade in State 3 - COL-02)
-                        val animatedBottomPadding by animateDpAsState(
-                            targetValue = if (showControls) 200.dp else 32.dp,
+                        // Synced Immersive Lyrics View — fixed contentPadding + lightweight scrim overlay (P03)
+                        val scrimColor = remember(palette.darkMuted) {
+                            Color(palette.darkMuted)
+                        }
+                        val scrimBrush = remember(scrimColor) {
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, scrimColor.copy(alpha = 0.85f))
+                            )
+                        }
+                        val jumpPillOffsetPx by animateFloatAsState(
+                            targetValue = if (showControls) 0f else with(LocalDensity.current) { 94.dp.toPx() },
                             animationSpec = spring(stiffness = 380f),
-                            label = "LyricsBottomPadding"
+                            label = "JumpPillOffset"
                         )
 
                         Box(
@@ -419,32 +450,12 @@ fun FullScreenLyricsView(
                                 .widthIn(max = columnWidth)
                                 .fillMaxHeight()
                                 .padding(horizontal = 24.dp)
-                                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                                .drawWithContent {
-                                    drawContent()
-                                    // Soft bottom edge gradient fade (scrim) in collapsed state (COL-02)
-                                    val fadeHeight = 120.dp.toPx()
-                                    if (size.height > fadeHeight) {
-                                        drawRect(
-                                            brush = Brush.verticalGradient(
-                                                colorStops = arrayOf(
-                                                    0.0f to Color.White,
-                                                    0.85f to Color.White,
-                                                    1.0f to Color.Transparent
-                                                ),
-                                                startY = 0f,
-                                                endY = size.height
-                                            ),
-                                            blendMode = BlendMode.DstIn
-                                        )
-                                    }
-                                }
                         ) {
                             LazyColumn(
                                 state = listState,
                                 contentPadding = PaddingValues(
                                     top = 32.dp,
-                                    bottom = animatedBottomPadding
+                                    bottom = 200.dp
                                 ),
                                 modifier = Modifier.fillMaxSize()
                             ) {
@@ -457,6 +468,7 @@ fun FullScreenLyricsView(
                                         index = index,
                                         activeIndex = activeIndex,
                                         currentPositionMs = currentPositionMs,
+                                        positionProvider = currentPositionProvider,
                                         onSeek = { ts ->
                                             registerInteraction()
                                             onSeekTo(ts)
@@ -496,12 +508,22 @@ fun FullScreenLyricsView(
                                 }
                             }
 
+                            // Lightweight bottom edge gradient overlay instead of offscreen DstIn layer
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
+                                    .height(100.dp)
+                                    .background(scrimBrush)
+                            )
+
                             // Floating "Jump to current" pill
                             if (userScrolledManually) {
                                 Box(
                                     modifier = Modifier
                                         .align(Alignment.BottomCenter)
-                                        .padding(bottom = if (showControls) 130.dp else 36.dp)
+                                        .padding(bottom = 130.dp)
+                                        .graphicsLayer { translationY = jumpPillOffsetPx }
                                 ) {
                                     GlassControlSurface(
                                         modifier = Modifier
@@ -557,6 +579,7 @@ fun FullScreenLyricsView(
                         // 1. Timeline Scrubber
                         NowPlayingTimeline(
                             positionMs = currentPositionMs,
+                            positionProvider = currentPositionProvider,
                             durationMs = durationMs,
                             accentColor = accentTint,
                             onSeek = { targetMs ->

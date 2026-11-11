@@ -55,6 +55,7 @@ fun EqualizerScreen(
     onClearPreset: () -> Unit = {},
     onLoadConvolverPreset: (String) -> Unit = {},
     rmsLevel: Float = 0.0f,
+    rmsProvider: () -> Float = { rmsLevel },
     isPerformanceMode: Boolean = false,
     onBack: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -345,6 +346,7 @@ fun EqualizerScreen(
                     eqEnabled = config.eqEnabled,
                     accentColor = accent,
                     rmsLevel = rmsLevel,
+                    rmsProvider = rmsProvider,
                     showSpectrum = !isPerformanceMode
                 )
 

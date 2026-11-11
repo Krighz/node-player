@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,10 +46,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.library.LrcParser
 import com.nodeplayer.model.Lyrics
+import com.nodeplayer.model.LyricsLine
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.lyrics.findActiveLyricIndex
 import com.nodeplayer.ui.theme.PaletteExtractor
 import com.nodeplayer.ui.theme.PaletteExtractor.toComposeColor
 import kotlin.math.abs
+
+fun findActiveLyricText(lines: List<LyricsLine>, positionMs: Long): String? {
+    val idx = findActiveLyricIndex(lines, positionMs)
+    return if (idx in lines.indices) lines[idx].text else null
+}
 
 /**
  * State 1: Now Playing Screen (full-screen, edge-to-edge, matching reference `nowplaying-1.png`).
@@ -66,7 +74,7 @@ import kotlin.math.abs
 fun NowPlayingView(
     currentTrack: Track?,
     isPlaying: Boolean,
-    positionMs: Long,
+    positionMs: Long = 0L,
     durationMs: Long,
     queue: List<Track> = emptyList(),
     currentQueueIndex: Int = 0,
@@ -82,7 +90,8 @@ fun NowPlayingView(
     onOpenPlaybackOptions: () -> Unit,
     onOpenThreeDotsMenu: () -> Unit,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    positionProvider: () -> Long = { positionMs }
 ) {
     if (currentTrack == null) return
 
@@ -95,14 +104,6 @@ fun NowPlayingView(
 
     val lyrics = remember(lrcContent, currentTrack.id) {
         if (!lrcContent.isNullOrBlank()) LrcParser.parse(lrcContent, currentTrack.id) else Lyrics(trackId = currentTrack.id)
-    }
-
-    val activeLyricLine = remember(positionMs, lyrics) {
-        if (lyrics.lines.isEmpty()) null
-        else {
-            val idx = lyrics.lines.indexOfLast { it.timestampMs <= positionMs }
-            if (idx in lyrics.lines.indices) lyrics.lines[idx].text else null
-        }
     }
 
     Box(
@@ -213,31 +214,18 @@ fun NowPlayingView(
                 Spacer(modifier = Modifier.height(20.dp))
 
                 // Single preview line of current lyric (taps into full lyrics)
-                if (!activeLyricLine.isNullOrBlank()) {
-                    Text(
-                        text = activeLyricLine,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.White.copy(alpha = 0.60f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpenLyrics() }
-                            .padding(vertical = 4.dp),
-                        textAlign = TextAlign.Start
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                } else {
-                    Spacer(modifier = Modifier.height(20.dp))
-                }
+                NowPlayingLyricPreview(
+                    lyrics = lyrics,
+                    positionProvider = positionProvider,
+                    onOpenLyrics = onOpenLyrics
+                )
 
                 // Custom non-M3 Timeline
                 NowPlayingTimeline(
-                    positionMs = positionMs,
                     durationMs = durationMs,
                     accentColor = accentTint,
-                    onSeek = onSeek
+                    onSeek = onSeek,
+                    positionProvider = positionProvider
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -370,5 +358,39 @@ fun NowPlayingView(
                 Spacer(modifier = Modifier.height(6.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun NowPlayingLyricPreview(
+    lyrics: Lyrics,
+    positionProvider: () -> Long,
+    onOpenLyrics: () -> Unit
+) {
+    val currentPositionProvider = androidx.compose.runtime.rememberUpdatedState(positionProvider)
+    val activeLyricLine by remember(lyrics) {
+        derivedStateOf {
+            if (lyrics.lines.isEmpty()) null
+            else findActiveLyricText(lyrics.lines, currentPositionProvider.value())
+        }
+    }
+
+    if (!activeLyricLine.isNullOrBlank()) {
+        Text(
+            text = activeLyricLine!!,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White.copy(alpha = 0.60f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onOpenLyrics() }
+                .padding(vertical = 4.dp),
+            textAlign = TextAlign.Start
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+    } else {
+        Spacer(modifier = Modifier.height(20.dp))
     }
 }
