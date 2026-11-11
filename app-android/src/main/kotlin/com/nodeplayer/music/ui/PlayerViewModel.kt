@@ -47,7 +47,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val app = application as NodePlayerApplication
     private val dao = app.database.playerDao()
     private val scanner = app.libraryScanner
-    private val prefs: SharedPreferences = app.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences by lazy {
+        app.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+    }
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     var mediaController: MediaController? = null
@@ -173,8 +175,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _activePresetLabel = MutableStateFlow<String?>(null)
     val activePresetLabel: StateFlow<String?> = _activePresetLabel.asStateFlow()
 
-    // Graphics Self-Test Result & Fallback State
-    private val _shaderSelfTestResult = MutableStateFlow(GlassShaderSelfTest.getLastResult(app))
+    // Graphics Self-Test Result & Fallback State (hydrated asynchronously in init)
+    private val _shaderSelfTestResult = MutableStateFlow(ShaderSelfTestResult(passed = true, reason = "Not executed yet"))
     val shaderSelfTestResult: StateFlow<ShaderSelfTestResult> = _shaderSelfTestResult.asStateFlow()
 
     private var audioDeviceCallback: AudioDeviceCallback? = null
@@ -192,17 +194,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     init {
-        val audioParserVersion = prefs.getInt("audio_parser_version", 0)
-        if (audioParserVersion < 2) {
-            prefs.edit().putInt("audio_parser_version", 2).apply()
+        viewModelScope.launch(Dispatchers.IO) {
+            val audioParserVersion = prefs.getInt("audio_parser_version", 0)
+            if (audioParserVersion < 2) {
+                prefs.edit().putInt("audio_parser_version", 2).apply()
+            }
+            GraphicsEventTracker.init(app)
+            loadFilterPreferences()
+            detectAudioOutput()
         }
-        GraphicsEventTracker.init(app)
         runGraphicsSelfTest()
-        loadFilterPreferences()
         initMediaController()
         refreshLibrary()
         registerAudioDeviceCallback()
-        detectAudioOutput()
         restoreLastPlaybackSession()
 
         // Sync and observe AppModeState with persistent settings
@@ -219,9 +223,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             _shaderSelfTestResult.value = result
             if (!result.passed) {
                 // Refresh theme config so safe fallback is applied
-                withContext(Dispatchers.Main) {
-                    _themeConfig.value = loadThemeConfig()
-                }
+                _themeConfig.value = loadThemeConfig()
             }
         }
     }
@@ -231,13 +233,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             GlassShaderSelfTest.setForceFail(app, forceFail)
             val updated = GlassShaderSelfTest.getLastResult(app)
             _shaderSelfTestResult.value = updated
-            withContext(Dispatchers.Main) {
-                _themeConfig.value = loadThemeConfig()
-            }
+            _themeConfig.value = loadThemeConfig()
         }
     }
 
-    private fun loadFilterPreferences() {
+    private suspend fun loadFilterPreferences() {
         val whitelistStrings = prefs.getStringSet("whitelisted_track_ids", emptySet()) ?: emptySet()
         _whitelistedTrackIds.value = whitelistStrings.mapNotNull { it.toLongOrNull() }.toSet()
         val custom = prefs.getStringSet("custom_folders", emptySet()) ?: emptySet()
@@ -262,7 +262,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val sysEq = prefs.getBoolean("system_eq_enabled", false)
         _systemEqEnabled.value = sysEq
         if (sysEq) {
-            com.nodeplayer.music.service.SystemWideEqService.start(getApplication(), _effectConfig.value)
+            withContext(Dispatchers.Main) {
+                com.nodeplayer.music.service.SystemWideEqService.start(getApplication(), _effectConfig.value)
+            }
         }
 
         _resumeOnHeadsetConnect.value = prefs.getBoolean("resume_on_headset_connect", true)
@@ -273,8 +275,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun loadThemeConfig(): GlassThemeConfig {
         val selfTestPassed = GlassShaderSelfTest.getLastResult(app).passed
-        val refractionEnabled = prefs.getBoolean("refraction_shader_enabled", true) && selfTestPassed
-        return GlassThemeConfig(
+        return buildThemeConfigFromValues(
             glassStrength = prefs.getString("glass_strength", "BALANCED") ?: "BALANCED",
             themeMode = prefs.getString("theme_mode", "SYSTEM") ?: "SYSTEM",
             accentSource = prefs.getString("accent_source", "ARTWORK") ?: "ARTWORK",
@@ -289,7 +290,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             fixedAccentColorArgb = prefs.getLong("fixed_accent_color", 0xFF6366F1),
             cornerRadiusDp = prefs.getFloat("corner_radius_dp", 16.0f),
             isPerformanceMode = prefs.getBoolean("is_performance_mode", false),
-            refractionShaderEnabled = refractionEnabled,
+            refractionShaderEnabledPref = prefs.getBoolean("refraction_shader_enabled", true),
+            selfTestPassed = selfTestPassed,
             hapticsEnabled = prefs.getBoolean("haptics_enabled", true),
             shaderMode = prefs.getString("glass_shader_mode", "AUTO") ?: "AUTO",
             glassOpacity = prefs.getFloat("glass_opacity", 0.65f),
@@ -330,10 +332,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             dockAutoHideMiniPlayer = prefs.getBoolean("dock_auto_hide_mini_player", true),
             dockScrollSensitivity = prefs.getFloat("dock_scroll_sensitivity", 1.0f),
             dockReturnDelayMs = prefs.getLong("dock_return_delay_ms", 1200L),
-            lyricsViewConfig = com.nodeplayer.model.LyricsViewConfig(
-                fontSizeSp = prefs.getFloat("lyrics_font_size_sp", 28.0f),
-                autoHideDelaySec = prefs.getInt("lyrics_auto_hide_delay_sec", 5)
-            ),
+            lyricsFontSizeSp = prefs.getFloat("lyrics_font_size_sp", 28.0f),
+            lyricsAutoHideDelaySec = prefs.getInt("lyrics_auto_hide_delay_sec", 5),
             controlsGlassEnabled = prefs.getBoolean("controls_glass_enabled", true)
         )
     }
@@ -343,10 +343,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val audioManager = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
             audioDeviceCallback = object : AudioDeviceCallback() {
                 override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
-                    detectAudioOutput()
+                    viewModelScope.launch(Dispatchers.IO) { detectAudioOutput() }
                 }
                 override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
-                    detectAudioOutput()
+                    viewModelScope.launch(Dispatchers.IO) { detectAudioOutput() }
                 }
             }
             audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
@@ -1547,6 +1547,132 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         fun shouldUpdateTrackDuration(currentMs: Long, newMs: Long): Boolean {
             return newMs > 0L && (currentMs <= 0L || kotlin.math.abs(currentMs - newMs) > 1000L)
+        }
+
+        fun buildThemeConfigFromValues(
+            glassStrength: String = "BALANCED",
+            themeMode: String = "SYSTEM",
+            accentSource: String = "ARTWORK",
+            spacingDensity: String = "COMFORTABLE",
+            cornerRoundness: String = "ROUNDED",
+            animatedBackdrop: Boolean = true,
+            blurRadiusDp: Float = 28.0f,
+            tintAlpha: Float = 0.65f,
+            borderAlpha: Float = 0.30f,
+            isOledBlack: Boolean = false,
+            useDynamicAccent: Boolean = true,
+            fixedAccentColorArgb: Long = 0xFF6366F1,
+            cornerRadiusDp: Float = 16.0f,
+            isPerformanceMode: Boolean = false,
+            refractionShaderEnabledPref: Boolean = true,
+            selfTestPassed: Boolean = true,
+            hapticsEnabled: Boolean = true,
+            shaderMode: String = "AUTO",
+            glassOpacity: Float = 0.65f,
+            blurStrength: Float = 0.70f,
+            glassTexture: Float = 0.40f,
+            edgeHighlightStrength: Float = 0.60f,
+            isFullyTransparent: Boolean = false,
+            keepTextReadable: Boolean = true,
+            backgroundAnimationStyle: String = "LIQUID_BLOBS",
+            backgroundAnimationSpeed: Float = 1.0f,
+            backgroundAnimationIntensity: Float = 0.8f,
+            backgroundColorSource: String = "ARTWORK",
+            animateOnlyWhilePlaying: Boolean = false,
+            frameRateCap: String = "AUTO",
+            renderQuality: String = "MAX_NATIVE",
+            antiBandingDithering: Boolean = true,
+            fontFamily: String = "SYSTEM",
+            showDockSearchButton: Boolean = true,
+            showMiniPlayerWave: Boolean = true,
+            formatBadgeVisible: Boolean = true,
+            lensRefractionStrength: Float = 0.85f,
+            lensRimSpecular: Float = 0.85f,
+            animationPreset: String = "SMOOTH",
+            motionSpeed: Float = 1.0f,
+            springBounciness: Float = 0.82f,
+            springStiffness: Float = 380f,
+            switchOvershootEnabled: Boolean = true,
+            pressScaleEnabled: Boolean = true,
+            pressScaleStrength: Float = 0.96f,
+            staggeredListAnimation: Boolean = true,
+            lyricsAnimationEnabled: Boolean = true,
+            screenTransitionStyle: String = "SLIDE",
+            reduceMotion: Boolean = false,
+            dockGlassLensEnabled: Boolean = true,
+            dockGlassRimEnabled: Boolean = true,
+            dockGlassPuckEnabled: Boolean = true,
+            dockAutoHideEnabled: Boolean = true,
+            dockAutoHideMiniPlayer: Boolean = true,
+            dockScrollSensitivity: Float = 1.0f,
+            dockReturnDelayMs: Long = 1200L,
+            lyricsFontSizeSp: Float = 28.0f,
+            lyricsAutoHideDelaySec: Int = 5,
+            controlsGlassEnabled: Boolean = true
+        ): GlassThemeConfig {
+            val refractionEnabled = refractionShaderEnabledPref && selfTestPassed
+            return GlassThemeConfig(
+                glassStrength = glassStrength,
+                themeMode = themeMode,
+                accentSource = accentSource,
+                spacingDensity = spacingDensity,
+                cornerRoundness = cornerRoundness,
+                animatedBackdrop = animatedBackdrop,
+                blurRadiusDp = blurRadiusDp,
+                tintAlpha = tintAlpha,
+                borderAlpha = borderAlpha,
+                isOledBlack = isOledBlack,
+                useDynamicAccent = useDynamicAccent,
+                fixedAccentColorArgb = fixedAccentColorArgb,
+                cornerRadiusDp = cornerRadiusDp,
+                isPerformanceMode = isPerformanceMode,
+                refractionShaderEnabled = refractionEnabled,
+                hapticsEnabled = hapticsEnabled,
+                shaderMode = shaderMode,
+                glassOpacity = glassOpacity,
+                blurStrength = blurStrength,
+                glassTexture = glassTexture,
+                edgeHighlightStrength = edgeHighlightStrength,
+                isFullyTransparent = isFullyTransparent,
+                keepTextReadable = keepTextReadable,
+                backgroundAnimationStyle = backgroundAnimationStyle,
+                backgroundAnimationSpeed = backgroundAnimationSpeed,
+                backgroundAnimationIntensity = backgroundAnimationIntensity,
+                backgroundColorSource = backgroundColorSource,
+                animateOnlyWhilePlaying = animateOnlyWhilePlaying,
+                frameRateCap = frameRateCap,
+                renderQuality = renderQuality,
+                antiBandingDithering = antiBandingDithering,
+                fontFamily = fontFamily,
+                showDockSearchButton = showDockSearchButton,
+                showMiniPlayerWave = showMiniPlayerWave,
+                formatBadgeVisible = formatBadgeVisible,
+                lensRefractionStrength = lensRefractionStrength,
+                lensRimSpecular = lensRimSpecular,
+                animationPreset = animationPreset,
+                motionSpeed = motionSpeed,
+                springBounciness = springBounciness,
+                springStiffness = springStiffness,
+                switchOvershootEnabled = switchOvershootEnabled,
+                pressScaleEnabled = pressScaleEnabled,
+                pressScaleStrength = pressScaleStrength,
+                staggeredListAnimation = staggeredListAnimation,
+                lyricsAnimationEnabled = lyricsAnimationEnabled,
+                screenTransitionStyle = screenTransitionStyle,
+                reduceMotion = reduceMotion,
+                dockGlassLensEnabled = dockGlassLensEnabled,
+                dockGlassRimEnabled = dockGlassRimEnabled,
+                dockGlassPuckEnabled = dockGlassPuckEnabled,
+                dockAutoHideEnabled = dockAutoHideEnabled,
+                dockAutoHideMiniPlayer = dockAutoHideMiniPlayer,
+                dockScrollSensitivity = dockScrollSensitivity,
+                dockReturnDelayMs = dockReturnDelayMs,
+                lyricsViewConfig = com.nodeplayer.model.LyricsViewConfig(
+                    fontSizeSp = lyricsFontSizeSp,
+                    autoHideDelaySec = lyricsAutoHideDelaySec
+                ),
+                controlsGlassEnabled = controlsGlassEnabled
+            )
         }
     }
 }

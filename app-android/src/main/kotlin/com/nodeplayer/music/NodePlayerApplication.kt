@@ -10,6 +10,10 @@ import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.music.data.NodeDatabase
 import com.nodeplayer.music.library.AudioArtworkFetcher
 import com.nodeplayer.music.library.LibraryScanner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class NodePlayerApplication : Application(), ImageLoaderFactory {
 
@@ -28,6 +32,11 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
 
     lateinit var libraryScanner: LibraryScanner
         private set
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Volatile
+    private var asyncBootstrapStarted = false
 
     override fun onCreate() {
         super.onCreate()
@@ -49,23 +58,9 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
         }
         NodeLog.isVerbose = BuildConfig.DEBUG
         com.nodeplayer.ui.debug.GlassDebug.isEnabled = BuildConfig.DEBUG
-        if (BuildConfig.DEBUG) {
-            Thread { ensureFileLoggingInitialized(this) }.start()
-        }
         NodeLog.i("app/lifecycle", "NodePlayerApplication initialized")
 
-        com.nodeplayer.music.diagnostics.LocalCrashLogger.init(this)
-
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            com.kyant.backdrop.RuntimeShaderCache.warmUp()
-        }
-
         com.nodeplayer.common.media.CipherSolver.current = com.nodeplayer.music.cipher.AndroidCipherSolver(this)
-
-        // Initialize YouTube Account Manager with the shared InnerTube client
-        val innerTubeClient = com.nodeplayer.music.playback.AudioCache.getStreamResolver().innerTubeClient
-        com.nodeplayer.music.auth.YouTubeAccountManager.initialize(this, innerTubeClient)
-        com.nodeplayer.music.lyrics.LyricsManager.initialize(this)
 
         if (BuildConfig.DEBUG) {
             android.os.StrictMode.setThreadPolicy(
@@ -85,11 +80,6 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             )
         }
 
-        // Pre-warm SharedPreferences on a background thread to prevent disk read stall on main thread
-        Thread {
-            getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
-        }.start()
-
         database = Room.databaseBuilder(
             applicationContext,
             NodeDatabase::class.java,
@@ -100,6 +90,30 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             .build()
 
         libraryScanner = LibraryScanner(applicationContext)
+
+        startAsyncBootstrap()
+    }
+
+    private fun startAsyncBootstrap() {
+        if (asyncBootstrapStarted) return
+        synchronized(this) {
+            if (asyncBootstrapStarted) return
+            asyncBootstrapStarted = true
+        }
+        applicationScope.launch {
+            try {
+                if (BuildConfig.DEBUG) {
+                    ensureFileLoggingInitialized(this@NodePlayerApplication)
+                }
+                com.nodeplayer.music.diagnostics.LocalCrashLogger.init(this@NodePlayerApplication)
+                getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+                val sharedInnerTube = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+                com.nodeplayer.music.auth.YouTubeAccountManager.initialize(this@NodePlayerApplication, sharedInnerTube)
+                com.nodeplayer.music.lyrics.LyricsManager.initialize(this@NodePlayerApplication)
+            } catch (t: Throwable) {
+                NodeLog.w("app/lifecycle", "Async bootstrap partial failure: ${t.message}")
+            }
+        }
     }
 
     companion object {

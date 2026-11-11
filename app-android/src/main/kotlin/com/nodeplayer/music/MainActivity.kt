@@ -108,23 +108,52 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        try {
-            val serviceIntent = Intent(this, com.nodeplayer.music.service.PlaybackService::class.java)
-            startService(serviceIntent)
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Failed to eagerly start PlaybackService", e)
+        val serviceIntent = Intent(this, com.nodeplayer.music.service.PlaybackService::class.java)
+        val requiresImmediatePlaybackService =
+            intent?.getBooleanExtra("start_playback", false) == true ||
+            (intent?.action != null && intent?.action != Intent.ACTION_MAIN)
+
+        if (requiresImmediatePlaybackService) {
+            try {
+                startService(serviceIntent)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to start PlaybackService", e)
+            }
         }
 
-        // Apply configured or highest supported refresh rate (e.g. 120Hz)
-        val refreshMode = getSharedPreferences("node_player_prefs", android.content.Context.MODE_PRIVATE)
-            .getString("display_refresh_rate", "AUTO") ?: "AUTO"
-        applyDisplayRefreshRate(refreshMode)
+        // Defer non-critical service start and AGSL shader warm-up past the first rendered frame
+        window.decorView.post {
+            if (!requiresImmediatePlaybackService) {
+                try {
+                    startService(serviceIntent)
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Failed to start deferred PlaybackService", e)
+                }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                com.kyant.backdrop.RuntimeShaderCache.warmUp()
+            }
+        }
+
+        // Apply configured or highest supported refresh rate (e.g. 120Hz) off the critical startup path
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val refreshMode = getSharedPreferences("node_player_prefs", android.content.Context.MODE_PRIVATE)
+                .getString("display_refresh_rate", "AUTO") ?: "AUTO"
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                applyDisplayRefreshRate(refreshMode)
+            }
+        }
 
         checkAndRequestPermissions()
 
         handleSpotifyCallbackIntent(intent)
 
         setContent {
+            LaunchedEffect(Unit) {
+                try {
+                    reportFullyDrawn()
+                } catch (_: Throwable) {}
+            }
             val themeConfig by viewModel.themeConfig.collectAsState()
             val accentColor by viewModel.accentColor.collectAsState()
             val coroutineScope = rememberCoroutineScope()
@@ -528,7 +557,10 @@ class MainActivity : ComponentActivity() {
                                 onOpenRecap = { currentRoute = "recap" },
                                 onOpenSmartPlaylists = { currentRoute = "smart_playlists" },
                                 onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
-                                onOpenDiagnostics = { currentRoute = "graphics_diagnostics" },
+                                onOpenDiagnostics = {
+                                    NodePlayerApplication.ensureFileLoggingInitialized(this@MainActivity)
+                                    currentRoute = "graphics_diagnostics"
+                                },
                             )
                             "graphics_diagnostics" -> com.nodeplayer.music.ui.screens.GraphicsDiagnosticsScreen(
                                 themeConfig = themeConfig,
@@ -1250,12 +1282,14 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onCopyLogClicked = {
+                                NodePlayerApplication.ensureFileLoggingInitialized(this@MainActivity)
                                 val log = com.nodeplayer.common.logging.NodeLog.exportFormattedLog()
                                 val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
                                 cm?.setPrimaryClip(android.content.ClipData.newPlainText("NodeLog", log))
                                 safeToast("Debug log copied to clipboard (${log.length} chars)", Toast.LENGTH_SHORT)
                             },
                             onExportLogClicked = {
+                                NodePlayerApplication.ensureFileLoggingInitialized(this@MainActivity)
                                 val log = com.nodeplayer.common.logging.NodeLog.exportFormattedLog()
                                 val out = java.io.File(filesDir, "logs/node_connect_export.txt")
                                 out.parentFile?.mkdirs()
