@@ -46,7 +46,7 @@ class StartupThemeConfigCharacterizationTest {
                 themeMode = "SYSTEM",
                 isOledBlack = false,
                 fixedAccentColorArgb = 0xFF6366F1,
-                animateOnlyWhilePlaying = false,
+                animateOnlyWhilePlaying = true,
                 controlsGlassEnabled = true
             ),
             fromPrefFallbacks

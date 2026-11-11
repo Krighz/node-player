@@ -128,6 +128,9 @@ android {
         compose = true
         buildConfig = true
     }
+    composeCompiler {
+        stabilityConfigurationFile.set(rootProject.layout.projectDirectory.file("compose_compiler_config.conf"))
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

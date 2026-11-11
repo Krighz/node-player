@@ -304,7 +304,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             backgroundAnimationSpeed = prefs.getFloat("background_animation_speed", 1.0f),
             backgroundAnimationIntensity = prefs.getFloat("background_animation_intensity", 0.8f),
             backgroundColorSource = prefs.getString("background_color_source", "ARTWORK") ?: "ARTWORK",
-            animateOnlyWhilePlaying = prefs.getBoolean("animate_only_while_playing", false),
+            animateOnlyWhilePlaying = prefs.getBoolean("animate_only_while_playing", true),
             frameRateCap = prefs.getString("frame_rate_cap", "AUTO") ?: "AUTO",
             renderQuality = prefs.getString("render_quality", "MAX_NATIVE") ?: "MAX_NATIVE",
             antiBandingDithering = prefs.getBoolean("anti_banding_dithering", true),
@@ -759,7 +759,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.setShuffle(newShuffle)
-            _queue.value = service.crossfadeManager.currentQueue
+            _queue.value = service.crossfadeManager.currentQueue.toList()
             _currentTrack.value?.let { com.nodeplayer.music.widget.WidgetUpdateManager.saveLastKnownTrack(getApplication(), it) }
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
         }
@@ -769,7 +769,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.playNext(track)
-            _queue.value = service.crossfadeManager.currentQueue
+            _queue.value = service.crossfadeManager.currentQueue.toList()
         } else {
             val q = _queue.value.toMutableList()
             val cur = _currentTrack.value
@@ -779,7 +779,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             } else {
                 q.add(track)
             }
-            _queue.value = q
+            _queue.value = q.toList()
         }
     }
 
@@ -787,11 +787,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.addToQueue(track)
-            _queue.value = service.crossfadeManager.currentQueue
+            _queue.value = service.crossfadeManager.currentQueue.toList()
         } else {
             val q = _queue.value.toMutableList()
             q.add(track)
-            _queue.value = q
+            _queue.value = q.toList()
         }
     }
 
@@ -799,13 +799,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.removeFromQueue(index)
-            _queue.value = service.crossfadeManager.currentQueue
+            _queue.value = service.crossfadeManager.currentQueue.toList()
             _currentTrack.value = service.crossfadeManager.currentPlayingTrack
         } else {
             val q = _queue.value.toMutableList()
             if (index in q.indices) {
                 q.removeAt(index)
-                _queue.value = q
+                _queue.value = q.toList()
             }
         }
     }
@@ -814,13 +814,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.moveQueueItem(fromIndex, toIndex)
-            _queue.value = service.crossfadeManager.currentQueue
+            _queue.value = service.crossfadeManager.currentQueue.toList()
         } else {
             val q = _queue.value.toMutableList()
             if (fromIndex in q.indices && toIndex in q.indices && fromIndex != toIndex) {
                 val item = q.removeAt(fromIndex)
                 q.add(toIndex, item)
-                _queue.value = q
+                _queue.value = q.toList()
             }
         }
     }
@@ -1578,7 +1578,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             backgroundAnimationSpeed: Float = 1.0f,
             backgroundAnimationIntensity: Float = 0.8f,
             backgroundColorSource: String = "ARTWORK",
-            animateOnlyWhilePlaying: Boolean = false,
+            animateOnlyWhilePlaying: Boolean = true,
             frameRateCap: String = "AUTO",
             renderQuality: String = "MAX_NATIVE",
             antiBandingDithering: Boolean = true,
