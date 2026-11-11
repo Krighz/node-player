@@ -716,19 +716,30 @@ class InnerTubeClient(
                     ?: headerRenderer["accountName"]?.jsonObject?.get("simpleText")?.jsonPrimitive?.content
                     ?: "YouTube User"
 
-                val handle = headerRenderer["email"]?.jsonObject?.get("runs")?.jsonArray
+                val handle = headerRenderer["handleText"]?.jsonObject?.get("runs")?.jsonArray
+                    ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                    ?: headerRenderer["channelHandle"]?.jsonObject?.get("runs")?.jsonArray
+                        ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+
+                val email = headerRenderer["email"]?.jsonObject?.get("runs")?.jsonArray
                     ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
                     ?: headerRenderer["email"]?.jsonObject?.get("simpleText")?.jsonPrimitive?.content
 
+                val effectiveHandle = handle ?: email?.takeIf { it.startsWith("@") }
+                val effectiveEmail = email?.takeIf { it.contains("@") && !it.startsWith("@") }
+
                 val thumbnails = headerRenderer["accountPhoto"]?.jsonObject?.get("thumbnails")?.jsonArray
-                val avatarUrl = thumbnails?.lastOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
+                    ?: headerRenderer["avatar"]?.jsonObject?.get("thumbnails")?.jsonArray
+                val rawAvatarUrl = thumbnails?.lastOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
+                val avatarUrl = normalizeAvatarUrl(rawAvatarUrl)
 
                 com.nodeplayer.model.YouTubeAccount(
-                    id = handle ?: accountName,
+                    id = effectiveHandle ?: effectiveEmail ?: accountName,
                     name = accountName,
-                    handle = handle,
+                    handle = effectiveHandle,
                     avatarUrl = avatarUrl,
-                    email = handle?.takeIf { it.contains("@") }
+                    email = effectiveEmail,
+                    isLoggedIn = true
                 )
             } else {
                 null
@@ -988,5 +999,30 @@ class InnerTubeClient(
 
     companion object {
         private const val TAG = "innertube"
+        private const val AVATAR_SIZE_PARAM = "=s256-c-k-c0x00ffffff-no-rj"
+
+        /**
+         * Normalizes YouTube/Google account avatar URLs per D-13:
+         * 1. Auto-prefixes "https:" if protocol-relative ("//...").
+         * 2. Replaces size parameters (=s... or =w...) with crisp =s256-c-k-c0x00ffffff-no-rj.
+         */
+        fun normalizeAvatarUrl(url: String?): String? {
+            if (url.isNullOrBlank()) return null
+            val prefixed = if (url.startsWith("//")) "https:$url" else url
+            val regex = Regex("(=[sw]\\d+[^?#]*)$")
+            return if (regex.containsMatchIn(prefixed)) {
+                prefixed.replace(regex, AVATAR_SIZE_PARAM)
+            } else if (!prefixed.contains(AVATAR_SIZE_PARAM)) {
+                if (prefixed.contains("?")) {
+                    val base = prefixed.substringBefore("?")
+                    val query = prefixed.substringAfter("?")
+                    "$base$AVATAR_SIZE_PARAM?$query"
+                } else {
+                    "$prefixed$AVATAR_SIZE_PARAM"
+                }
+            } else {
+                prefixed
+            }
+        }
     }
 }

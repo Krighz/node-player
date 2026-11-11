@@ -106,7 +106,7 @@ class YouTubeAuthTest {
         assertNotNull(account)
         assertEquals("Audiophile User", account?.name)
         assertEquals("@audiophile", account?.handle)
-        assertEquals("https://lh3.googleusercontent.com/avatar.jpg", account?.avatarUrl)
+        assertEquals("https://lh3.googleusercontent.com/avatar.jpg=s256-c-k-c0x00ffffff-no-rj", account?.avatarUrl)
 
         assertNotNull(capturedAuthHeader)
         assertTrue(capturedAuthHeader!!.startsWith("SAPISIDHASH "))
