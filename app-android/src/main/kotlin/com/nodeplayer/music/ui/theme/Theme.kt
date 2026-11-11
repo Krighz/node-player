@@ -153,6 +153,7 @@ fun NodePlayerTheme(
         LocalAccentColor provides animatedAccent,
         LocalGlassThemeConfig provides themeConfig,
         com.nodeplayer.ui.theme.LocalGlassThemeConfig provides themeConfig,
+        com.nodeplayer.ui.theme.LocalMotionConfig provides themeConfig,
         LocalGlassControlsConfig provides themeConfig.controlsConfig,
         LocalDensityPadding provides densityPadding,
         LocalCornerRadius provides cornerRadius,

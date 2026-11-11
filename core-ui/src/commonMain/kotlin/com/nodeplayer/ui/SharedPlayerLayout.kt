@@ -50,6 +50,7 @@ import com.nodeplayer.ui.theme.LocalControlBackdrop
 import com.nodeplayer.ui.theme.LocalGlassControlsConfig
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.LocalGlassTokens
+import com.nodeplayer.ui.theme.LocalMotionConfig
 
 val LocalBottomBarPadding = compositionLocalOf { 80.dp }
 
@@ -192,6 +193,7 @@ fun SharedPlayerLayout(
         LocalAccentColor provides accent,
         LocalGlassTokens provides glassTokens,
         LocalGlassThemeConfig provides themeConfig,
+        LocalMotionConfig provides themeConfig,
         LocalGlassControlsConfig provides themeConfig.controlsConfig,
         LocalBottomBarPadding provides dynamicBottomPadding,
         LocalControlBackdrop provides pageBackdrop
