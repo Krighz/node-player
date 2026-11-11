@@ -540,16 +540,30 @@ fun NowPlayingSheet(
                     } else {
                         Crossfade(targetState = showLyrics, label = "HeroCrossfade") { isLyrics ->
                             if (isLyrics) {
-                                com.nodeplayer.ui.lyrics.AppleMusicLyricsView(
+                                com.nodeplayer.ui.lyrics.FullScreenLyricsView(
                                     track = track,
                                     lyrics = lyrics,
+                                    isPlaying = isPlaying,
                                     currentPositionMs = currentMs,
+                                    durationMs = track.durationMs,
                                     isLoading = isLyricsLoading,
                                     isOnlineMode = true,
+                                    onPlayPause = onPlayPauseClick,
+                                    onNext = onSkipNextClick,
+                                    onPrevious = onSkipPreviousClick,
                                     onSeekTo = onSeekTo,
                                     onClose = { showLyrics = false },
                                     onSearchAgain = { lyricsRefreshTrigger++ },
                                     onOpenOffsetControls = { showLyricsOffsetDialog = true },
+                                    onKeepScreenOn = { keep ->
+                                        (context as? android.app.Activity)?.let { act ->
+                                            if (keep) {
+                                                act.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                                            } else {
+                                                act.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                                            }
+                                        }
+                                    },
                                     modifier = Modifier.fillMaxSize()
                                 )
                             } else {

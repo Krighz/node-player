@@ -35,6 +35,7 @@ import com.nodeplayer.ui.components.LiquidDock
 import com.nodeplayer.ui.components.LiquidSlider
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
+import com.nodeplayer.ui.theme.LiquidColors
 
 /**
  * Unforgiving Optical Diagnostics Test Screen (D-01, D-02, D-03, D-04).
@@ -79,7 +80,7 @@ fun OpticalDiagnosticsView(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0A0C12))
+            .background(LiquidColors.OledBlack)
     ) {
         // 1. Scrollable Test Pattern Layer (Recorded into pageBackdrop)
         Column(
@@ -93,7 +94,7 @@ fun OpticalDiagnosticsView(
 
             // Test Pattern Introduction Card
             Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF141824).copy(alpha = 0.85f)),
+                colors = CardDefaults.cardColors(containerColor = LiquidColors.SurfaceElevated.copy(alpha = 0.85f)),
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -192,7 +193,7 @@ fun OpticalDiagnosticsView(
             // INTERACTIVE TEST SLIDER OVER PATTERN (Wrapped in GlassControlSurface to prevent self-sampling recursion)
             GlassControlSurface(modifier = Modifier.fillMaxWidth()) {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF141824).copy(alpha = 0.85f)),
+                    colors = CardDefaults.cardColors(containerColor = LiquidColors.SurfaceElevated.copy(alpha = 0.85f)),
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -246,7 +247,7 @@ fun OpticalDiagnosticsView(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF11141E))
+                    .background(LiquidColors.SurfaceMuted)
                     .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
                     .padding(16.dp)
             ) {
@@ -287,7 +288,7 @@ fun OpticalDiagnosticsView(
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Light,
                     fontFamily = FontFamily.Monospace,
-                    color = Color(0xFF00F0FF),
+                    color = LiquidColors.CyanGlow,
                     lineHeight = 14.sp
                 )
             }
@@ -309,7 +310,7 @@ fun OpticalDiagnosticsView(
                     .fillMaxWidth()
                     .height(280.dp)
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF0F111A))
+                    .background(LiquidColors.SurfaceDark)
                     .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -344,7 +345,7 @@ fun OpticalDiagnosticsView(
                     val circleRadii = listOf(32.dp.toPx(), 64.dp.toPx(), 96.dp.toPx(), 128.dp.toPx())
                     for (radius in circleRadii) {
                         drawCircle(
-                            color = Color(0xFF00F0FF).copy(alpha = 0.5f),
+                            color = LiquidColors.CyanGlow.copy(alpha = 0.5f),
                             radius = radius,
                             center = Offset(centerX, centerY),
                             style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5.dp.toPx())
@@ -361,7 +362,7 @@ fun OpticalDiagnosticsView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFF0A0C12).copy(alpha = 0.92f))
+                .background(LiquidColors.OledBlack.copy(alpha = 0.92f))
                 .statusBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically

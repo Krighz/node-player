@@ -1,5 +1,6 @@
 package com.nodeplayer.ui.screens
 
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -23,43 +25,43 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.distinctUntilChanged
+import com.nodeplayer.common.AppModeState
 import com.nodeplayer.model.Track
+import com.nodeplayer.network.cache.HomeFeedDiskCache
 import com.nodeplayer.network.innertube.InnerTubeClient
 import com.nodeplayer.network.innertube.YouTubeSection
+import com.nodeplayer.network.recommender.HomeFeedRecommender
 import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.DockScrollController
+import com.nodeplayer.ui.components.HomeProfileSheet
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
+import com.nodeplayer.ui.theme.LiquidColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-internal object OnlineFeedCache {
-    var cachedSections: List<YouTubeSection>? = null
-    var cachedTimestamp: Long = 0L
-    const val TTL_MS: Long = 15 * 60 * 1000L
-
-    fun isValid(): Boolean =
-        cachedSections != null && (System.currentTimeMillis() - cachedTimestamp) < TTL_MS
-
-    fun clear() {
-        cachedSections = null
-        cachedTimestamp = 0L
-    }
-}
-
 /**
- * Online Home View displaying curated YouTube Music flow, recommendations, and trending shelves.
- * Loads live carousels via [InnerTubeClient.getCombinedHomeFeed].
+ * Online Home View displaying 5 structured YouTube Music horizontal shelves:
+ * 1. Quick Picks (1:1 squircle cards)
+ * 2. New music videos (16:9 widescreen cards)
+ * 3. Trending in region (1:1 squircle cards with rank)
+ * 4. Playlists (1:1 squircle cards with curator)
+ * 5. From artists you follow (1:1 squircle/circle cards)
+ *
+ * Backed by [HomeFeedDiskCache] for instant sub-50ms cold-start display,
+ * and [HomeFeedRecommender] for local history fallback and "Not interested" dismissals.
  */
 @Composable
 fun OnlineHomeView(
@@ -68,56 +70,89 @@ fun OnlineHomeView(
     onPlayTrack: (Track, List<Track>) -> Unit,
     onPlayPause: () -> Unit,
     recentTracks: List<Track> = emptyList(),
+    currentRoute: String = "home",
     dockScrollController: DockScrollController? = null,
+    isLoggedIn: Boolean = false,
+    onSearchClick: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    onOpenOfflineMusic: () -> Unit = {},
+    onOpenDeviceConnect: () -> Unit = {},
+    onSignInClick: () -> Unit = {},
+    onRescanClick: () -> Unit = {},
+    onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
     listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
     val themeConfig = LocalGlassThemeConfig.current
     val scope = rememberCoroutineScope()
+    var showOnboardingBanner by remember { mutableStateOf(true) }
+
+    val diskCache = remember { HomeFeedDiskCache() }
+    val recommender = remember { HomeFeedRecommender() }
 
     val dockConnection = rememberDockScrollConnection(
         controller = dockScrollController,
         enabled = themeConfig.dockAutoHideEnabled
     )
 
-    var isLoading by remember { mutableStateOf(!OnlineFeedCache.isValid()) }
-    var sections by remember { mutableStateOf<List<YouTubeSection>>(OnlineFeedCache.cachedSections.orEmpty()) }
+    var showProfileSheet by remember { mutableStateOf(false) }
+    var sections by remember { mutableStateOf<List<YouTubeSection>>(diskCache.sectionsState.value) }
+    var isRefreshing by remember { mutableStateOf(false) }
+    var isFallbackMode by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    fun loadHomeFeed(forceRefresh: Boolean = false) {
-        if (!forceRefresh && OnlineFeedCache.isValid()) {
-            sections = OnlineFeedCache.cachedSections.orEmpty()
-            isLoading = false
-            errorMessage = null
-            return
-        }
-
+    fun refreshFeed(forceNetwork: Boolean = false) {
         scope.launch {
-            isLoading = true
+            isRefreshing = true
             errorMessage = null
+
             withContext(Dispatchers.IO) {
                 try {
                     val client = InnerTubeClient()
-                    client.use {
-                        val result = it.getCombinedHomeFeed()
+                    client.use { innerClient ->
+                        val result = if (currentRoute == "new") {
+                            val exploreRes = innerClient.getExploreSections().getOrDefault(emptyList())
+                            val chartsRes = innerClient.getChartsSections().getOrDefault(emptyList())
+                            val combined = (exploreRes + chartsRes).distinctBy { it.title }
+                            if (combined.isNotEmpty()) Result.success(combined) else innerClient.getCombinedHomeFeed()
+                        } else {
+                            innerClient.getCombinedHomeFeed()
+                        }
                         withContext(Dispatchers.Main) {
                             if (result.isSuccess) {
                                 val loaded = result.getOrNull().orEmpty()
-                                sections = loaded
-                                OnlineFeedCache.cachedSections = loaded
-                                OnlineFeedCache.cachedTimestamp = System.currentTimeMillis()
+                                val clean = recommender.filterDismissedSections(loaded)
+                                sections = clean
+                                diskCache.save(clean, region = recommender.resolveRegion())
+                                isFallbackMode = false
                                 errorMessage = null
                             } else {
-                                errorMessage = result.exceptionOrNull()?.message ?: "Failed to load recommendations"
+                                // Fallback mode using local history & cached charts
+                                val fallbackPicks = recommender.buildFallbackQuickPicks(recentTracks)
+                                if (sections.isEmpty() && fallbackPicks.isNotEmpty()) {
+                                    sections = listOf(
+                                        YouTubeSection(title = "Quick Picks", items = fallbackPicks)
+                                    )
+                                }
+                                isFallbackMode = true
+                                errorMessage = result.exceptionOrNull()?.message ?: "Using offline fallback"
                             }
-                            isLoading = false
+                            isRefreshing = false
                         }
                     }
                 } catch (t: Throwable) {
                     withContext(Dispatchers.Main) {
-                        errorMessage = t.message ?: "Network error"
-                        isLoading = false
+                        val fallbackPicks = recommender.buildFallbackQuickPicks(recentTracks)
+                        if (sections.isEmpty() && fallbackPicks.isNotEmpty()) {
+                            sections = listOf(
+                                YouTubeSection(title = "Quick Picks", items = fallbackPicks)
+                            )
+                        }
+                        isFallbackMode = true
+                        errorMessage = t.message ?: "Network error - using offline fallback"
+                        isRefreshing = false
                     }
                 }
             }
@@ -125,166 +160,342 @@ fun OnlineHomeView(
     }
 
     LaunchedEffect(Unit) {
-        loadHomeFeed(forceRefresh = false)
-    }
-
-    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
-        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
-            dockScrollController?.onListScrolledToTop(0, 0)
+        // Cold-start display from cache if present; refresh in background
+        if (sections.isEmpty()) {
+            val cached = diskCache.loadFromDisk()
+            if (cached.isNotEmpty()) {
+                sections = recommender.filterDismissedSections(cached)
+            }
         }
+        refreshFeed(forceNetwork = false)
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = modifier
-            .fillMaxSize()
-            .nestedScroll(dockConnection),
-        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = LocalBottomBarPadding.current + 16.dp),
-        verticalArrangement = Arrangement.spacedBy(28.dp)
-    ) {
-        // Online Curated Header
-        item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+            .distinctUntilChanged()
+            .collect { atTop ->
+                if (atTop) {
+                    dockScrollController?.onListScrolledToTop(0, 0)
+                }
+            }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .nestedScroll(dockConnection),
+            contentPadding = PaddingValues(
+                start = 20.dp,
+                end = 20.dp,
+                top = 16.dp,
+                bottom = LocalBottomBarPadding.current + 20.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(26.dp)
+        ) {
+            // Header: Flow title & Top-Right Profile Avatar button per D-02 / D-03
+            item {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isFallbackMode) LiquidColors.AmberWarning else LiquidColors.ElectricCyan)
+                            )
+                            Text(
+                                text = if (currentRoute == "new") "NEW RELEASES & CHARTS" else if (isFallbackMode) "OFFLINE / LOCAL FALLBACK" else "ONLINE FLOW",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 1.3.sp,
+                                    color = if (isFallbackMode) LiquidColors.AmberWarning else LiquidColors.ElectricCyan
+                                )
+                            )
+                        }
+                        Text(
+                            text = if (currentRoute == "new") "Explore & Charts" else "YouTube Music",
+                            style = MaterialTheme.typography.headlineMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                color = Color.White
+                            )
+                        )
+                    }
+
+                    // Top-Right Profile Avatar Button
                     Box(
                         modifier = Modifier
-                            .size(10.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF00E5FF))
-                    )
-                    Text(
-                        text = "ONLINE FLOW",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.4.sp,
-                            color = Color(0xFF00E5FF)
+                            .background(if (isLoggedIn) accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.08f))
+                            .border(1.dp, if (isLoggedIn) accent else Color.White.copy(alpha = 0.20f), CircleShape)
+                            .clickable { showProfileSheet = true },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isLoggedIn) Icons.Rounded.AccountCircle else Icons.Rounded.Person,
+                            contentDescription = "Profile & Settings",
+                            tint = if (isLoggedIn) accent else Color.White,
+                            modifier = Modifier.size(24.dp)
                         )
-                    )
-                }
-                Text(
-                    text = "YouTube Music",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White
-                    )
-                )
-                Text(
-                    text = "Curated recommendations, trending hits & endless radio",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = Color.White.copy(alpha = 0.65f)
-                    )
-                )
-            }
-        }
-
-        // Section: 4-Item Mobile Home Shortcuts Grid
-        item {
-            com.nodeplayer.ui.components.HomeShortcutsGrid(
-                onOfflineMusicClick = {
-                    com.nodeplayer.common.AppModeState.setOnlineMode(false)
-                },
-                onDeviceConnectClick = {
-                    // Open device connect dialog or node connect
-                },
-                onHiResCollectionClick = {
-                    com.nodeplayer.common.AppModeState.setOnlineMode(false)
-                },
-                onMyPlaylistsClick = {
-                    com.nodeplayer.common.AppModeState.setOnlineMode(false)
-                }
-            )
-        }
-
-        // Section: RECENTLY PLAYED
-        if (recentTracks.isNotEmpty()) {
-            item {
-                com.nodeplayer.ui.components.RecentlyPlayedShelf(
-                    recentTracks = recentTracks,
-                    onTrackClick = { track -> onPlayTrack(track, recentTracks) }
-                )
-            }
-        }
-
-        // Live Recommendations or Loading / Error State
-        when {
-            isLoading -> {
-                // Section 1: QUICK PICKS (Shimmer Shelves)
-                item {
-                    ShimmerShelfSection(title = "QUICK PICKS", icon = Icons.Rounded.Headphones, tint = accent)
-                }
-
-                // Section 2: TRENDING NOW (Shimmer Shelves)
-                item {
-                    ShimmerShelfSection(title = "TRENDING CHARTS", icon = Icons.Rounded.Whatshot, tint = Color(0xFFFF5252))
-                }
-
-                // Section 3: MOODS & GENRES (Shimmer Mixes)
-                item {
-                    ShimmerShelfSection(title = "MOOD MIXES", icon = Icons.Rounded.GraphicEq, tint = Color(0xFFFFAB00))
+                    }
                 }
             }
-            errorMessage != null && sections.isEmpty() -> {
+
+            // YouTube Music Onboarding / Sign-in Banner (as seen in Convx reference video)
+            if (!isLoggedIn && showOnboardingBanner) {
                 item {
-                    ErrorRetryCard(
-                        message = errorMessage ?: "Unable to connect to YouTube Music",
-                        onRetry = { loadHomeFeed(forceRefresh = true) }
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ContinuousRoundedRectangle(16.dp))
+                            .background(Color(0xFF1E212A))
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), ContinuousRoundedRectangle(16.dp))
+                            .padding(16.dp)
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.Top,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(ContinuousRoundedRectangle(10.dp))
+                                            .background(Color(0xFFFF0033).copy(alpha = 0.15f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.MusicNote,
+                                            contentDescription = null,
+                                            tint = Color(0xFFFF0033),
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = "Bring your YouTube Music library, playlists and mixes here.",
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            lineHeight = 20.sp
+                                        )
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { showOnboardingBanner = false },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Close,
+                                        contentDescription = "Dismiss",
+                                        tint = Color.White.copy(alpha = 0.5f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Button(
+                                onClick = onSignInClick,
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
+                                shape = ContinuousRoundedRectangle(12.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Color(0xFFFF0033).copy(alpha = 0.22f),
+                                    contentColor = Color(0xFFFF4D6D)
+                                )
+                            ) {
+                                Text(
+                                    text = "Get Started",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
                 }
             }
-            else -> {
-                // Render live shelves returned from YouTube Music InnerTube
-                items(sections) { section ->
-                    OnlineSectionShelf(
-                        section = section,
+
+            // Subtle Status / Scan local library banner when fallback mode is active
+            if (isFallbackMode && recentTracks.isEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(ContinuousRoundedRectangle(12.dp))
+                            .background(LiquidColors.SurfaceDark.copy(alpha = 0.85f))
+                            .border(1.dp, LiquidColors.AmberWarning.copy(alpha = 0.35f), ContinuousRoundedRectangle(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Offline fallback active — scan local files to boost recommendations",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = LiquidColors.AmberLight,
+                                fontSize = 11.5.sp
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Scan",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = LiquidColors.AmberWarning
+                            ),
+                            modifier = Modifier
+                                .clip(ContinuousCapsule())
+                                .clickable { onRescanClick() }
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
+            // Ordered 5 Shelves: Quick Picks, New music videos, Trending in region, Playlists, Artists
+            if (sections.isNotEmpty()) {
+                val orderedShelves = organizeShelves(sections)
+
+                items(orderedShelves, key = { it.title }) { shelf ->
+                    HomeShelfSection(
+                        shelf = shelf,
                         currentTrack = currentTrack,
                         isPlaying = isPlaying,
                         onTrackClick = { clickedTrack ->
-                            onPlayTrack(clickedTrack, section.items)
+                            onPlayTrack(clickedTrack, shelf.items)
+                        },
+                        onShelfClick = { clickedShelf ->
+                            onOpenPlaylistDetail?.invoke(
+                                clickedShelf.title,
+                                "YouTube Music",
+                                clickedShelf.items.firstOrNull()?.path,
+                                clickedShelf.items
+                            )
+                        },
+                        onDismissTrack = { dismissedTrack ->
+                            recommender.dismissTrack(dismissedTrack)
+                            sections = recommender.filterDismissedSections(sections)
                         }
+                    )
+                }
+            } else if (isRefreshing) {
+                // Loading Shimmer Shelves
+                item { ShimmerShelfSection(title = "QUICK PICKS", isVideo = false) }
+                item { ShimmerShelfSection(title = "NEW MUSIC VIDEOS", isVideo = true) }
+                item { ShimmerShelfSection(title = "TRENDING CHARTS", isVideo = false) }
+            } else if (errorMessage != null) {
+                item {
+                    ErrorRetryCard(
+                        message = errorMessage ?: "Failed to load feed",
+                        onRetry = { refreshFeed(forceNetwork = true) }
                     )
                 }
             }
         }
+
+        // Sliding Liquid-Glass Profile Sheet
+        HomeProfileSheet(
+            visible = showProfileSheet,
+            onDismiss = { showProfileSheet = false },
+            onSignInClick = onSignInClick,
+            onEqualizerClick = onOpenEqualizer,
+            onSettingsClick = onOpenSettings,
+            onOfflineMusicClick = onOpenOfflineMusic,
+            onDeviceConnectClick = onOpenDeviceConnect
+        )
     }
 }
 
+/**
+ * Organizes raw sections into the 5 mandated shelves:
+ * 1. Quick Picks
+ * 2. New music videos
+ * 3. Trending in region
+ * 4. Playlists
+ * 5. From artists you follow
+ */
+fun organizeShelves(sections: List<YouTubeSection>): List<YouTubeSection> {
+    val consumed = HashSet<YouTubeSection>()
+
+    val quickPicks = sections.find { "quick" in it.title.lowercase() || "pick" in it.title.lowercase() }
+        ?.also { consumed.add(it) }
+    val newVideos = sections.find { it !in consumed && ("video" in it.title.lowercase() || "new" in it.title.lowercase() || "release" in it.title.lowercase()) }
+        ?.also { consumed.add(it) }
+    val trending = sections.find { it !in consumed && ("trending" in it.title.lowercase() || "chart" in it.title.lowercase()) }
+        ?.also { consumed.add(it) }
+    val playlists = sections.find { it !in consumed && ("playlist" in it.title.lowercase() || "mix" in it.title.lowercase() || "mood" in it.title.lowercase()) }
+        ?.also { consumed.add(it) }
+    val artists = sections.find { it !in consumed && ("artist" in it.title.lowercase() || "follow" in it.title.lowercase()) }
+        ?.also { consumed.add(it) }
+
+    val result = ArrayList<YouTubeSection>(5)
+    if (quickPicks != null) result.add(quickPicks.copy(title = "Quick Picks"))
+    if (newVideos != null) result.add(newVideos.copy(title = "New Music Videos"))
+    if (trending != null) result.add(trending.copy(title = "Trending in Region"))
+    if (playlists != null) result.add(playlists.copy(title = "Playlists & Mixes"))
+    if (artists != null) result.add(artists.copy(title = "From Artists You Follow"))
+
+    // Append any remaining sections that weren't categorized
+    for (sec in sections) {
+        if (sec !in consumed) {
+            result.add(sec)
+        }
+    }
+
+    return if (result.isNotEmpty()) result else sections
+}
+
 @Composable
-private fun OnlineSectionShelf(
-    section: YouTubeSection,
+private fun HomeShelfSection(
+    shelf: YouTubeSection,
     currentTrack: Track?,
     isPlaying: Boolean,
     onTrackClick: (Track) -> Unit,
+    onShelfClick: ((YouTubeSection) -> Unit)? = null,
+    onDismissTrack: (Track) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
-    val normalizedTitle = section.title.lowercase()
-    val (sectionIcon, sectionTint) = when {
+    val normalizedTitle = shelf.title.lowercase()
+    val isVideoShelf = "video" in normalizedTitle
+
+    val (shelfIcon, shelfTint) = when {
         "quick" in normalizedTitle || "pick" in normalizedTitle -> Icons.Rounded.Headphones to accent
-        "trending" in normalizedTitle || "chart" in normalizedTitle -> Icons.Rounded.Whatshot to Color(0xFFFF5252)
-        "release" in normalizedTitle || "new" in normalizedTitle -> Icons.Rounded.NewReleases to Color(0xFF00E5FF)
-        "mood" in normalizedTitle || "genre" in normalizedTitle || "mix" in normalizedTitle -> Icons.Rounded.GraphicEq to Color(0xFFFFAB00)
+        "video" in normalizedTitle -> Icons.Rounded.SmartDisplay to LiquidColors.CoralRed
+        "trending" in normalizedTitle || "chart" in normalizedTitle -> Icons.Rounded.Whatshot to LiquidColors.OrangeBadge
+        "playlist" in normalizedTitle || "mix" in normalizedTitle -> Icons.Rounded.LibraryMusic to LiquidColors.ElectricCyan
         else -> Icons.Rounded.PlayCircleOutline to accent
     }
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.clickable { onShelfClick?.invoke(shelf) }
         ) {
             Icon(
-                imageVector = sectionIcon,
+                imageVector = shelfIcon,
                 contentDescription = null,
-                tint = sectionTint,
+                tint = shelfTint,
                 modifier = Modifier.size(20.dp)
             )
             Text(
-                text = section.title.uppercase(),
+                text = shelf.title.uppercase(),
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.ExtraBold,
                     letterSpacing = 1.2.sp,
@@ -297,57 +508,65 @@ private fun OnlineSectionShelf(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            items(section.items) { track ->
-                OnlineTrackCard(
-                    track = track,
-                    isCurrent = currentTrack?.id == track.id,
-                    isPlaying = isPlaying && currentTrack?.id == track.id,
-                    onClick = { onTrackClick(track) }
-                )
+            itemsIndexed(
+                items = shelf.items,
+                key = { _, track -> "${shelf.title}_${track.id}" }
+            ) { index, track ->
+                if (isVideoShelf) {
+                    VideoCard16x9(
+                        track = track,
+                        isCurrent = currentTrack?.id == track.id,
+                        isPlaying = isPlaying && currentTrack?.id == track.id,
+                        onClick = { onTrackClick(track) },
+                        onDismiss = { onDismissTrack(track) }
+                    )
+                } else {
+                    AudioSquircleCard1x1(
+                        track = track,
+                        rank = if ("trending" in normalizedTitle) index + 1 else null,
+                        isCurrent = currentTrack?.id == track.id,
+                        isPlaying = isPlaying && currentTrack?.id == track.id,
+                        onClick = { onTrackClick(track) },
+                        onDismiss = { onDismissTrack(track) }
+                    )
+                }
             }
         }
     }
 }
 
+/**
+ * 16:9 Widescreen Card for Music Videos (D-01: 220dp width x 124dp height).
+ */
 @Composable
-private fun OnlineTrackCard(
+fun VideoCard16x9(
     track: Track,
     isCurrent: Boolean,
     isPlaying: Boolean,
     onClick: () -> Unit,
+    onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isHovered by interactionSource.collectIsHoveredAsState()
     val accent = LocalAccentColor.current
-
-    val scale by animateFloatAsState(
-        targetValue = if (isHovered) 1.04f else 1.0f,
-        animationSpec = tween(180),
-        label = "OnlineTrackScale"
-    )
+    var showMenu by remember { mutableStateOf(false) }
 
     val cardShape = remember { ContinuousRoundedRectangle(14.dp) }
 
     Column(
         modifier = modifier
-            .width(136.dp)
-            .scale(scale)
+            .width(220.dp)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
     ) {
         Box(
             modifier = Modifier
-                .size(136.dp)
+                .width(220.dp)
+                .height(124.dp)
                 .clip(cardShape)
                 .border(
                     width = if (isCurrent) 1.5.dp else 1.dp,
-                    brush = if (isCurrent) Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.5f)))
-                    else Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = if (isHovered) 0.35f else 0.14f),
-                            Color.White.copy(alpha = if (isHovered) 0.15f else 0.04f)
-                        )
-                    ),
+                    color = if (isCurrent) accent else Color.White.copy(alpha = if (isHovered) 0.35f else 0.12f),
                     shape = cardShape
                 )
         ) {
@@ -357,25 +576,26 @@ private fun OnlineTrackCard(
                 cornerRadius = 14.dp
             )
 
-            // Online Badge at top-end
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .clip(ContinuousRoundedRectangle(6.dp))
-                    .background(Color(0xFF0A1218).copy(alpha = 0.78f))
-                    .border(0.5.dp, Color(0xFF00E5FF).copy(alpha = 0.35f), ContinuousRoundedRectangle(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = "OPUS",
-                    fontSize = 9.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color(0xFF00E5FF)
-                )
+            // Duration badge at bottom-right
+            if (track.durationMs > 0L) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .clip(ContinuousCapsule())
+                        .background(Color.Black.copy(alpha = 0.75f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = track.durationFormatted,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
             }
 
-            // Hover or active play indicator
+            // Video Play overlay on hover or current
             if (isHovered || isCurrent) {
                 Box(
                     modifier = Modifier
@@ -385,19 +605,60 @@ private fun OnlineTrackCard(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.65f))
-                            .border(1.dp, Color.White.copy(alpha = 0.40f), CircleShape),
+                            .background(Color.Black.copy(alpha = 0.70f))
+                            .border(1.dp, Color.White.copy(alpha = 0.50f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             contentDescription = null,
                             tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
+                }
+            }
+
+            // 3-dot dismiss menu button at top-right
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+            ) {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "Options",
+                        tint = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier.background(LiquidColors.SurfaceCard)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Not interested / hide this", color = Color.White, fontSize = 12.sp) },
+                        onClick = {
+                            showMenu = false
+                            onDismiss()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.VisibilityOff,
+                                contentDescription = null,
+                                tint = LiquidColors.CoralRed,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    )
                 }
             }
         }
@@ -426,39 +687,180 @@ private fun OnlineTrackCard(
     }
 }
 
+/**
+ * 1:1 Squircle Card for Quick Picks, Trending, and Playlists (D-01: 136dp x 136dp).
+ */
 @Composable
-private fun ShimmerShelfSection(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    tint: Color
+fun AudioSquircleCard1x1(
+    track: Track,
+    rank: Int? = null,
+    isCurrent: Boolean,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = tint,
-                modifier = Modifier.size(18.dp)
-            )
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = 1.2.sp,
-                    color = Color.White
+    val interactionSource = remember { MutableInteractionSource() }
+    val isHovered by interactionSource.collectIsHoveredAsState()
+    val accent = LocalAccentColor.current
+    var showMenu by remember { mutableStateOf(false) }
+
+    val cardShape = remember { ContinuousRoundedRectangle(14.dp) }
+
+    Column(
+        modifier = modifier
+            .width(136.dp)
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .size(136.dp)
+                .clip(cardShape)
+                .border(
+                    width = if (isCurrent) 1.5.dp else 1.dp,
+                    color = if (isCurrent) accent else Color.White.copy(alpha = if (isHovered) 0.35f else 0.12f),
+                    shape = cardShape
                 )
+        ) {
+            TrackArtwork(
+                track = track,
+                modifier = Modifier.fillMaxSize(),
+                cornerRadius = 14.dp
             )
+
+            // Optional Rank badge for trending shelf
+            if (rank != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .clip(ContinuousCapsule())
+                        .background(Color.Black.copy(alpha = 0.75f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = "#$rank",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFFFFB300)
+                    )
+                }
+            }
+
+            // Hover / Playing indicator
+            if (isHovered || isCurrent) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.70f))
+                            .border(1.dp, Color.White.copy(alpha = 0.50f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            // 3-dot dismiss menu button at top-end
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(4.dp)
+            ) {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.MoreVert,
+                        contentDescription = "Options",
+                        tint = Color.White.copy(alpha = 0.80f),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier.background(LiquidColors.SurfaceCard)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Not interested / hide this", color = Color.White, fontSize = 12.sp) },
+                        onClick = {
+                            showMenu = false
+                            onDismiss()
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Rounded.VisibilityOff,
+                                contentDescription = null,
+                                tint = LiquidColors.CoralRed,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    )
+                }
+            }
         }
 
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = track.title,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = if (isCurrent) accent else Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        Text(
+            text = track.artist,
+            fontSize = 10.5.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color.White.copy(alpha = 0.60f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun ShimmerShelfSection(title: String, isVideo: Boolean) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 1.2.sp,
+                color = Color.White.copy(alpha = 0.70f)
+            )
+        )
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             items(5) {
-                OnlineTrackShimmerCard()
+                val cardShape = remember { ContinuousRoundedRectangle(14.dp) }
+                Box(
+                    modifier = Modifier
+                        .size(width = if (isVideo) 220.dp else 136.dp, height = if (isVideo) 124.dp else 136.dp)
+                        .clip(cardShape)
+                        .background(Color.White.copy(alpha = 0.05f))
+                        .border(1.dp, Color.White.copy(alpha = 0.08f), cardShape)
+                )
             }
         }
     }
@@ -474,8 +876,8 @@ private fun ErrorRetryCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(cardShape)
-            .background(Color(0xFF1E1416).copy(alpha = 0.70f))
-            .border(1.dp, Color(0xFFFF5252).copy(alpha = 0.35f), cardShape)
+            .background(LiquidColors.SurfaceDark.copy(alpha = 0.70f))
+            .border(1.dp, LiquidColors.CoralRed.copy(alpha = 0.35f), cardShape)
             .padding(20.dp)
     ) {
         Column(
@@ -486,7 +888,7 @@ private fun ErrorRetryCard(
             Icon(
                 imageVector = Icons.Rounded.CloudOff,
                 contentDescription = null,
-                tint = Color(0xFFFF5252),
+                tint = LiquidColors.CoralRed,
                 modifier = Modifier.size(36.dp)
             )
             Text(
@@ -500,62 +902,12 @@ private fun ErrorRetryCard(
                 fontSize = 12.sp,
                 color = Color.White.copy(alpha = 0.65f)
             )
-            com.nodeplayer.ui.components.LiquidButton(
-                onClick = onRetry
+            Button(
+                onClick = onRetry,
+                colors = ButtonDefaults.buttonColors(containerColor = LiquidColors.CoralRed.copy(alpha = 0.75f))
             ) {
-                Text(
-                    text = "Retry Feed",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Text("Retry Feed", color = Color.White, fontWeight = FontWeight.Bold)
             }
         }
-    }
-}
-
-@Composable
-private fun OnlineTrackShimmerCard() {
-    val infiniteTransition = rememberInfiniteTransition(label = "ShimmerTransition")
-    val alpha = infiniteTransition.animateFloat(
-        initialValue = 0.25f,
-        targetValue = 0.65f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1100, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "ShimmerAlpha"
-    )
-
-    val cardShape = remember { ContinuousRoundedRectangle(14.dp) }
-    val lineShape = remember { ContinuousCapsule() }
-
-    Column(
-        modifier = Modifier.width(132.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(132.dp)
-                .clip(cardShape)
-                .background(Color.White.copy(alpha = alpha.value * 0.12f))
-                .border(1.dp, Color.White.copy(alpha = 0.10f), cardShape)
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.85f)
-                .height(12.dp)
-                .clip(lineShape)
-                .background(Color.White.copy(alpha = alpha.value * 0.15f))
-        )
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.55f)
-                .height(10.dp)
-                .clip(lineShape)
-                .background(Color.White.copy(alpha = alpha.value * 0.10f))
-        )
     }
 }

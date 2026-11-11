@@ -25,9 +25,12 @@ object YouTubeAccountManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var sessionStore: SecureSessionStore? = null
     var innerTubeClient: InnerTubeClient? = null
+    private var validationJob: kotlinx.coroutines.Job? = null
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.LoggedOut)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
+
+    fun isLoggedIn(): Boolean = _authState.value is AuthState.LoggedIn
 
     fun initialize(context: Context, client: InnerTubeClient) {
         val appContext = context.applicationContext
@@ -47,7 +50,8 @@ object YouTubeAccountManager {
             }
 
             // Asynchronously validate session & refresh account profile
-            scope.launch {
+            validationJob?.cancel()
+            validationJob = scope.launch {
                 validateSession(savedCookie)
             }
         } else {
@@ -83,6 +87,8 @@ object YouTubeAccountManager {
     }
 
     fun logout() {
+        validationJob?.cancel()
+        validationJob = null
         sessionStore?.clearSession()
         innerTubeClient?.sessionCookie = null
         _authState.value = AuthState.LoggedOut

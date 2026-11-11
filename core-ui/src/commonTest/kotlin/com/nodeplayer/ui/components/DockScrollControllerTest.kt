@@ -1,93 +1,98 @@
 package com.nodeplayer.ui.components
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DockScrollControllerTest {
 
     @Test
-    fun testScrollDownHidesDock() = runTest {
-        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 2000L)
-        assertEquals(0f, controller.offsetFraction.value)
+    fun testScrollDownPast32dpCollapsesDock() = runTest {
+        val controller = DockScrollController(this, sensitivity = 1.0f, collapseThresholdDp = 32f)
+        assertEquals(0f, controller.collapseProgress.value)
+        assertFalse(controller.isCollapsed.value)
 
-        // Scroll down (negative delta)
-        controller.onScroll(-100f)
-        assertTrue(controller.offsetFraction.value > 0f)
-
-        // Strong downward scroll
-        controller.onScroll(-500f)
-        assertEquals(1f, controller.offsetFraction.value)
-    }
-
-    @Test
-    fun testScrollUpRestoresDock() = runTest {
-        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 2000L)
-        controller.hideDock()
-        assertEquals(1f, controller.offsetFraction.value)
-
-        // Scroll up (positive delta)
-        controller.onScroll(100f)
-        assertTrue(controller.offsetFraction.value < 1f)
-
-        controller.restoreDock()
-        assertEquals(0f, controller.offsetFraction.value)
-    }
-
-    @Test
-    fun testTwoSecondTimeoutRestoresDock() = runTest {
-        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 2000L)
-        controller.hideDock()
-        assertEquals(1f, controller.offsetFraction.value)
-
-        // Trigger scroll event which starts timer
+        // Scroll down 20dp (under threshold) -> not collapsed
         controller.onScroll(-20f)
-        advanceTimeBy(1000L)
-        // Still hidden at 1s
-        assertTrue(controller.offsetFraction.value > 0f)
+        assertFalse(controller.isCollapsed.value)
+        assertEquals(0f, controller.collapseProgress.value)
 
-        // After 2s timeout passes, dock should return to 0f
-        advanceTimeBy(1100L)
-        assertEquals(0f, controller.offsetFraction.value)
+        // Scroll down another 15dp (total 35dp >= 32dp) -> collapses
+        controller.onScroll(-15f)
+        assertTrue(controller.isCollapsed.value)
+        assertEquals(1f, controller.collapseProgress.value)
+    }
+
+    @Test
+    fun testScrollUpImmediatelyRestoresDock() = runTest {
+        val controller = DockScrollController(this, sensitivity = 1.0f, collapseThresholdDp = 32f)
+        controller.collapseDock()
+        assertTrue(controller.isCollapsed.value)
+        assertEquals(1f, controller.collapseProgress.value)
+
+        // Scroll up (positive delta > 4f) -> immediately restores dock
+        controller.onScroll(10f)
+        assertFalse(controller.isCollapsed.value)
+        assertEquals(0f, controller.collapseProgress.value)
+    }
+
+    @Test
+    fun testExpandAndCollapseMethods() = runTest {
+        val controller = DockScrollController(this)
+        assertFalse(controller.isCollapsed.value)
+
+        controller.collapse()
+        assertTrue(controller.isCollapsed.value)
+        assertEquals(1f, controller.collapseProgress.value)
+
+        controller.expand()
+        assertFalse(controller.isCollapsed.value)
+        assertEquals(0f, controller.collapseProgress.value)
+
+        controller.toggle()
+        assertTrue(controller.isCollapsed.value)
+
+        controller.toggle()
+        assertFalse(controller.isCollapsed.value)
     }
 
     @Test
     fun testTopOfListRestoresDock() = runTest {
-        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 2000L)
-        controller.hideDock()
-        assertEquals(1f, controller.offsetFraction.value)
+        val controller = DockScrollController(this, sensitivity = 1.0f)
+        controller.collapseDock()
+        assertTrue(controller.isCollapsed.value)
 
         // Reaching non-top item should NOT restore dock
         controller.onListScrolledToTop(1, 10)
-        assertEquals(1f, controller.offsetFraction.value)
+        assertTrue(controller.isCollapsed.value)
 
         // Reaching exact top should immediately restore dock
         controller.onListScrolledToTop(0, 0)
-        assertEquals(0f, controller.offsetFraction.value)
+        assertFalse(controller.isCollapsed.value)
+        assertEquals(0f, controller.collapseProgress.value)
     }
 
     @Test
     fun testDisabledStateMaintainsZeroOffset() = runTest {
-        val controller = DockScrollController(this, sensitivity = 1.0f, returnDelayMs = 2000L, enabled = false)
-        assertEquals(0f, controller.offsetFraction.value)
+        val controller = DockScrollController(this, sensitivity = 1.0f, enabled = false)
+        assertFalse(controller.isCollapsed.value)
 
-        // Scrolling when disabled should not change offset
-        controller.onScroll(-300f)
-        assertEquals(0f, controller.offsetFraction.value)
+        // Scrolling when disabled should not collapse
+        controller.onScroll(-100f)
+        assertFalse(controller.isCollapsed.value)
 
-        // Enabling allows scrolling
+        // Enabling allows collapsing
         controller.enabled = true
-        controller.onScroll(-300f)
-        assertTrue(controller.offsetFraction.value > 0f)
+        controller.onScroll(-100f)
+        assertTrue(controller.isCollapsed.value)
 
         // Disabling immediately restores dock
         controller.enabled = false
-        assertEquals(0f, controller.offsetFraction.value)
+        assertFalse(controller.isCollapsed.value)
+        assertEquals(0f, controller.collapseProgress.value)
     }
 }

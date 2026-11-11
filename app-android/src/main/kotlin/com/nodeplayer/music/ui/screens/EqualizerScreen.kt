@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,6 +31,7 @@ import com.nodeplayer.music.ui.components.ParametricEqCurveGraph
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.components.LiquidChip
 import com.nodeplayer.ui.components.LiquidSlider
+import com.nodeplayer.ui.components.LiquidVerticalSlider
 import com.nodeplayer.ui.components.LiquidToggle
 import kotlinx.coroutines.launch
 
@@ -54,8 +56,10 @@ fun EqualizerScreen(
     onLoadConvolverPreset: (String) -> Unit = {},
     rmsLevel: Float = 0.0f,
     isPerformanceMode: Boolean = false,
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    androidx.activity.compose.BackHandler { onBack() }
     val accent = LocalAccentColor.current
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -86,20 +90,35 @@ fun EqualizerScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "Equalizer & DSP",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        color = MaterialTheme.colorScheme.onBackground
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onBackground
                     )
-                )
-                Text(
-                    text = "Profile: ${currentDeviceType.displayName} • 32-bit float",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Column {
+                    Text(
+                        text = "Equalizer & DSP",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
                     )
-                )
+                    Text(
+                        text = "Profile: ${currentDeviceType.displayName} • 32-bit float",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f)
+                        )
+                    )
+                }
             }
 
             // Master EQ toggle
@@ -284,40 +303,9 @@ fun EqualizerScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Preamp Card
+        // 10-Band EQ & Master Preamp Card
         GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "Preamp Gain",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                    )
-                    Text(
-                        text = "%+.1f dB".format(config.preampGainDb),
-                        style = MaterialTheme.typography.bodyMedium.copy(color = accent, fontWeight = FontWeight.Bold)
-                    )
-                }
-                LiquidSlider(
-                    value = config.preampGainDb,
-                    onValueChange = { onConfigChange(config.copy(preampGainDb = it)) },
-                    valueRange = -12f..12f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-
-        // 10-Band EQ Card
-        GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            
+            modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -329,10 +317,22 @@ fun EqualizerScreen(
                         text = "10-Band Parametric EQ",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
                     )
-                    Text(
-                        text = config.presetName,
-                        style = MaterialTheme.typography.labelSmall.copy(color = accent, fontWeight = FontWeight.Bold)
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = config.presetName,
+                            style = MaterialTheme.typography.labelSmall.copy(color = accent, fontWeight = FontWeight.Bold)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        TextButton(
+                            onClick = {
+                                val flatBands = config.bands.map { it.copy(gainDb = 0f) }
+                                onConfigChange(config.copy(presetName = "Flat", preampGainDb = 0f, bands = flatBands))
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("Reset", color = accent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -348,38 +348,101 @@ fun EqualizerScreen(
                     showSpectrum = !isPerformanceMode
                 )
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                config.bands.forEachIndexed { index, band ->
-                    val freqLabel = if (band.centerFreq >= 1000f) "${(band.centerFreq / 1000).toInt()} kHz" else "${band.centerFreq.toInt()} Hz"
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                // Horizontally scrollable frequency spectrum with vertical liquid-glass faders
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Pinned Master / Preamp Vertical Fader
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.width(52.dp)
                     ) {
                         Text(
-                            text = freqLabel,
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
-                            modifier = Modifier.width(55.dp)
+                            text = "%+.1f".format(config.preampGainDb),
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                color = if (config.preampGainDb != 0f) accent else Color.White.copy(alpha = 0.6f),
+                                fontWeight = FontWeight.Bold
+                            )
                         )
-                        LiquidSlider(
-                            value = band.gainDb,
+                        Spacer(modifier = Modifier.height(6.dp))
+                        LiquidVerticalSlider(
+                            value = config.preampGainDb,
                             onValueChange = { newGain ->
-                                val updatedBands = config.bands.toMutableList()
-                                updatedBands[index] = band.copy(gainDb = newGain)
-                                onConfigChange(config.copy(presetName = "Custom", bands = updatedBands))
+                                onConfigChange(config.copy(preampGainDb = newGain))
                             },
                             valueRange = -12f..12f,
                             enabled = config.eqEnabled,
-                            colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent),
-                            modifier = Modifier.weight(1f)
+                            height = 200.dp,
+                            accentColor = accent,
+                            onDoubleTap = {
+                                onConfigChange(config.copy(preampGainDb = 0f))
+                            }
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "%+.1f".format(band.gainDb),
-                            style = MaterialTheme.typography.bodySmall.copy(color = accent),
-                            modifier = Modifier.width(45.dp)
+                            text = "Preamp",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
                         )
+                    }
+
+                    // Vertical Glass Divider
+                    Box(
+                        modifier = Modifier
+                            .height(210.dp)
+                            .width(1.dp)
+                            .background(Color.White.copy(alpha = 0.15f))
+                    )
+
+                    // 10 Frequency Band Columns (Hz to kHz)
+                    config.bands.forEachIndexed { index, band ->
+                        val freqLabel = when {
+                            band.centerFreq >= 1000f -> "${(band.centerFreq / 1000f).toInt()}k"
+                            else -> "${band.centerFreq.toInt()}"
+                        }
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(52.dp)
+                        ) {
+                            Text(
+                                text = "%+.1f".format(band.gainDb),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = if (band.gainDb != 0f) accent else Color.White.copy(alpha = 0.6f),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            LiquidVerticalSlider(
+                                value = band.gainDb,
+                                onValueChange = { newGain ->
+                                    val updatedBands = config.bands.toMutableList()
+                                    updatedBands[index] = band.copy(gainDb = newGain)
+                                    onConfigChange(config.copy(presetName = "Custom", bands = updatedBands))
+                                },
+                                valueRange = -12f..12f,
+                                enabled = config.eqEnabled,
+                                height = 200.dp,
+                                accentColor = accent,
+                                onDoubleTap = {
+                                    val updatedBands = config.bands.toMutableList()
+                                    updatedBands[index] = band.copy(gainDb = 0f)
+                                    onConfigChange(config.copy(presetName = "Custom", bands = updatedBands))
+                                }
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = freqLabel,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            )
+                        }
                     }
                 }
             }

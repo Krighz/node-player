@@ -320,6 +320,7 @@ class InnerTubeClient(
         val songs = mutableListOf<Track>()
         val albums = mutableListOf<Track>()
         val artists = mutableListOf<Track>()
+        val playlists = mutableListOf<Track>()
 
         // 1. Process tabbed search results
         val tabs = response.contents?.tabbedSearchResultsRenderer?.tabs.orEmpty()
@@ -328,16 +329,16 @@ class InnerTubeClient(
             for (section in sectionList) {
                 section.musicShelfRenderer?.contents?.forEach { shelfContent ->
                     shelfContent.musicResponsiveListItemRenderer?.let { renderer ->
-                        categorizeAndAddSearchItem(renderer, songs, albums, artists)
+                        categorizeAndAddSearchItem(renderer, songs, albums, artists, playlists)
                     }
                 }
                 section.itemSectionRenderer?.contents?.forEach { itemContent ->
                     itemContent.musicResponsiveListItemRenderer?.let { renderer ->
-                        categorizeAndAddSearchItem(renderer, songs, albums, artists)
+                        categorizeAndAddSearchItem(renderer, songs, albums, artists, playlists)
                     }
                     itemContent.musicShelfRenderer?.contents?.forEach { shelfContent ->
                         shelfContent.musicResponsiveListItemRenderer?.let { renderer ->
-                            categorizeAndAddSearchItem(renderer, songs, albums, artists)
+                            categorizeAndAddSearchItem(renderer, songs, albums, artists, playlists)
                         }
                     }
                 }
@@ -347,15 +348,16 @@ class InnerTubeClient(
         // 2. Process continuation contents if present
         response.continuationContents?.musicShelfContinuation?.contents?.forEach { shelfContent ->
             shelfContent.musicResponsiveListItemRenderer?.let { renderer ->
-                categorizeAndAddSearchItem(renderer, songs, albums, artists)
+                categorizeAndAddSearchItem(renderer, songs, albums, artists, playlists)
             }
         }
 
-        NodeLog.i(TAG, "Search completed for \"$query\": songs=${songs.size}, albums=${albums.size}, artists=${artists.size}")
+        NodeLog.i(TAG, "Search completed for \"$query\": songs=${songs.size}, albums=${albums.size}, artists=${artists.size}, playlists=${playlists.size}")
         YouTubeSearchResult(
             songs = songs.distinctBy { it.id },
             albums = albums.distinctBy { it.id },
-            artists = artists.distinctBy { it.id }
+            artists = artists.distinctBy { it.id },
+            playlists = playlists.distinctBy { it.id }
         )
     }.onFailure { e ->
         NodeLog.e(TAG, "Search failed for query=\"$query\"", e)
@@ -615,12 +617,48 @@ class InnerTubeClient(
         renderer: MusicResponsiveListItemRenderer,
         songs: MutableList<Track>,
         albums: MutableList<Track>,
-        artists: MutableList<Track>
+        artists: MutableList<Track>,
+        playlists: MutableList<Track>
     ) {
-        val track = mapResponsiveListItemToTrack(renderer) ?: return
-        val secondColText = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.text().orEmpty()
+        val secondColRuns = renderer.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()
+        val secondColText = secondColRuns.joinToString("") { it.text.orEmpty() }
         val pageType = renderer.navigationEndpoint?.browseEndpoint?.browseEndpointContextSupportedConfigs
             ?.browseEndpointContextMusicConfig?.pageType.orEmpty()
+        val browseId = renderer.navigationEndpoint?.browseEndpoint?.browseId.orEmpty()
+
+        val playlistIdFromOverlay = renderer.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer
+            ?.playNavigationEndpoint?.watchPlaylistEndpoint?.playlistId
+
+        val isPlaylist = pageType.contains("PLAYLIST", ignoreCase = true) ||
+            browseId.startsWith("VL") ||
+            browseId.startsWith("PL") ||
+            playlistIdFromOverlay != null ||
+            secondColText.trim().startsWith("Playlist", ignoreCase = true)
+
+        if (isPlaylist) {
+            val effectiveId = playlistIdFromOverlay ?: if (browseId.startsWith("VL")) browseId else if (browseId.isNotEmpty()) "VL$browseId" else ""
+            val title = renderer.flexColumns.firstOrNull()?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.firstOrNull()?.text.orEmpty()
+            if (effectiveId.isNotBlank() && title.isNotBlank()) {
+                val author = secondColRuns.getOrNull(2)?.text?.trim()?.ifBlank { null }
+                    ?: secondColRuns.firstOrNull()?.text?.trim()?.takeIf { !it.equals("Playlist", ignoreCase = true) }
+                    ?: "YouTube Music"
+                val thumbUrl = renderer.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.lastOrNull()?.url.orEmpty()
+                val playlistTrack = Track(
+                    id = generateSyntheticTrackId(effectiveId),
+                    title = title,
+                    artist = author,
+                    album = effectiveId,
+                    durationMs = 0L,
+                    path = thumbUrl.ifBlank { "nodeplayer://youtube/playlist/$effectiveId" },
+                    formatDescription = "YouTube Playlist",
+                    mimeType = "playlist"
+                )
+                playlists.add(playlistTrack)
+                return
+            }
+        }
+
+        val track = mapResponsiveListItemToTrack(renderer) ?: return
 
         when {
             pageType.contains("ARTIST", ignoreCase = true) || secondColText.startsWith("Artist", ignoreCase = true) -> {
@@ -831,15 +869,35 @@ class InnerTubeClient(
         val tracks = mutableListOf<Track>()
         try {
             val root = json.parseToJsonElement(jsonText).jsonObject
-            val tabs = root["contents"]?.jsonObject
-                ?.get("singleColumnBrowseResultsRenderer")?.jsonObject
-                ?.get("tabs")?.jsonArray
 
-            val contents = tabs?.firstOrNull()?.jsonObject
+            // Support both twoColumnBrowseResultsRenderer (web remix playlists) and singleColumnBrowseResultsRenderer
+            val twoColSecondary = root["contents"]?.jsonObject
+                ?.get("twoColumnBrowseResultsRenderer")?.jsonObject
+                ?.get("secondaryContents")?.jsonObject
+                ?.get("sectionListRenderer")?.jsonObject
+                ?.get("contents")?.jsonArray
+
+            val twoColTabs = root["contents"]?.jsonObject
+                ?.get("twoColumnBrowseResultsRenderer")?.jsonObject
+                ?.get("tabs")?.jsonArray
+                ?.firstOrNull()?.jsonObject
                 ?.get("tabRenderer")?.jsonObject
                 ?.get("content")?.jsonObject
                 ?.get("sectionListRenderer")?.jsonObject
                 ?.get("contents")?.jsonArray
+
+            val singleColTabs = root["contents"]?.jsonObject
+                ?.get("singleColumnBrowseResultsRenderer")?.jsonObject
+                ?.get("tabs")?.jsonArray
+                ?.firstOrNull()?.jsonObject
+                ?.get("tabRenderer")?.jsonObject
+                ?.get("content")?.jsonObject
+                ?.get("sectionListRenderer")?.jsonObject
+                ?.get("contents")?.jsonArray
+
+            val contents = twoColSecondary
+                ?: twoColTabs
+                ?: singleColTabs
                 ?: root["contents"]?.jsonObject?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
 
             contents?.forEach { sectionElement ->
@@ -856,6 +914,13 @@ class InnerTubeClient(
                                 ?.firstOrNull()?.jsonObject
                                 ?.get("likeButtonRenderer")?.jsonObject
                                 ?.get("target")?.jsonObject
+                                ?.get("videoId")?.jsonPrimitive?.content
+                            ?: responsiveItem["overlay"]?.jsonObject
+                                ?.get("musicItemThumbnailOverlayRenderer")?.jsonObject
+                                ?.get("content")?.jsonObject
+                                ?.get("musicPlayButtonRenderer")?.jsonObject
+                                ?.get("playNavigationEndpoint")?.jsonObject
+                                ?.get("watchEndpoint")?.jsonObject
                                 ?.get("videoId")?.jsonPrimitive?.content
 
                         val flexCols = responsiveItem["flexColumns"]?.jsonArray
@@ -881,6 +946,7 @@ class InnerTubeClient(
                             ?.get("runs")?.jsonArray
                             ?.firstOrNull()?.jsonObject
                             ?.get("text")?.jsonPrimitive?.content
+                            ?: subRuns?.lastOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
 
                         if (!videoId.isNullOrBlank()) {
                             tracks.add(

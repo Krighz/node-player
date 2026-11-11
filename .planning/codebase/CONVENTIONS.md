@@ -1,6 +1,7 @@
+<!-- refreshed: 2026-11-11 -->
 # Coding Conventions
 
-**Analysis Date:** 2026-11-05
+**Analysis Date:** 2026-11-11
 
 ## Naming Patterns
 

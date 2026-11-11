@@ -1,6 +1,28 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Liquid Glass Native Rendering & Screen Stability Locked (Android 16 / realme)
+## Current Status: Milestone v2.3 Full UI Revamp Completed & Verified Across Android & Windows Desktop (2026-11-11)
+
+### Milestone v2.3 Phase 10: Polish, Windows Desktop Parity & Token Verification (2026-11-11)
+
+1. **120 Hz Scroll Performance & Allocation Invariants (`POL-01`)**:
+   - Fixed item keys across all lazy lists in `OnlineHomeView.kt`, `OfflineHomeView.kt`, `LibraryView.kt`, `PlaylistDetailView.kt`, and `FullScreenLyricsView.kt`.
+   - Prevented unnecessary coroutine churn by replacing `LaunchedEffect(listState.firstVisibleItemScrollOffset)` with `snapshotFlow { ... }.distinctUntilChanged()`.
+   - Pre-allocated `StartCenterOrigin` and `BaseLyricTextStyle` in `LyricLineItem.kt` to eliminate allocations in the lyrics draw/composition pass.
+
+2. **Windows Desktop Layout Parity (`POL-02`)**:
+   - Fixed `OpticalRailDock.kt` puck position: `targetY = selectedIndex * (tabHeightDp.value + tabSpacingDp.value)`, eliminating the 62dp offset bug when `DesktopModeRailSwitcher` was extracted from inside the dock.
+   - Positioned `DesktopModeRailSwitcher` neatly below `OpticalRailDock` in `SharedPlayerLayout.kt` for responsive Online/Offline toggling on desktop.
+
+3. **Zero Hardcoded Colors & Token Centralization (`POL-03`)**:
+   - Centralized all semantic surfaces, accents, and borders in `LiquidColors` in `GlassTokens.kt`.
+   - Replaced inline `Color(0x...)` literals in `OpticalRailDock.kt`, `ConvxLiquidDock.kt`, `ConvxMiniPlayer.kt`, `DeviceConnectPill.kt`, and `AudioFormatBadge.kt`.
+   - All design tokens validated with `DesignTokensTest.kt`.
+
+4. **Multiplatform Test Verification**:
+   - 100% of unit tests pass across `:core-ui:desktopTest`, `:core-dsp:test`, `:core-network:test`, `:core-common:test`, `:app-desktop:test`, and `:app-android:testDebugUnitTest`.
+   - `ArchitectureBoundaryTest` verified 0 boundary violations.
+
+---
 
 ### Post-Port Hardware Bug Fix 4: Equalizer & Settings Stack Overflow (SIGSEGV libhwui) Root Cause Fix & Stability Test (2026-11-08)
 

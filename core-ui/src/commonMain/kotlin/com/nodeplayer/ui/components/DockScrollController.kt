@@ -1,13 +1,10 @@
 package com.nodeplayer.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.unit.Velocity
-import com.nodeplayer.model.GlassThemeConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -17,12 +14,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Controller managing dock auto-hide and slide-down animations during list scrolling.
+ * Controller managing dock auto-hide and collapse-on-scroll animations.
+ * When scrolling down past 32dp threshold, collapses dock and mini-player into a unified single bottom row.
+ * Scrolling up or tapping restores full dock.
  */
 class DockScrollController(
     private val scope: CoroutineScope,
     var sensitivity: Float = 1.0f,
-    var returnDelayMs: Long = 2000L,
+    var collapseThresholdDp: Float = 32.0f,
+    var returnDelayMs: Long = 4000L,
     enabled: Boolean = true
 ) {
     var enabled: Boolean = enabled
@@ -32,31 +32,38 @@ class DockScrollController(
                 restoreDock()
             }
         }
-    private val _offsetFraction = MutableStateFlow(0f)
-    val offsetFraction: StateFlow<Float> = _offsetFraction.asStateFlow()
 
+    // 0f = fully expanded (2-tier), 1f = fully collapsed into single row
+    private val _collapseProgress = MutableStateFlow(0f)
+    val collapseProgress: StateFlow<Float> = _collapseProgress.asStateFlow()
+
+    // Backward-compatible offsetFraction
+    val offsetFraction: StateFlow<Float> get() = _collapseProgress
+
+    private val _isCollapsed = MutableStateFlow(false)
+    val isCollapsed: StateFlow<Boolean> = _isCollapsed.asStateFlow()
+
+    private var downwardScrollAccumulator: Float = 0f
     private var returnTimerJob: Job? = null
 
     fun onScroll(deltaY: Float) {
         if (!enabled) {
-            if (_offsetFraction.value != 0f) restoreDock()
+            if (_collapseProgress.value != 0f) restoreDock()
             return
         }
 
         val scaledDelta = deltaY * sensitivity
 
-        if (scaledDelta < -6f) {
-            // Scrolling down -> hide dock (offset towards 1f)
-            _offsetFraction.value = (_offsetFraction.value + (-scaledDelta) / 250f).coerceIn(0f, 1f)
-            scheduleReturn()
-        } else if (scaledDelta > 6f) {
-            // Scrolling up -> restore dock (offset towards 0f)
-            _offsetFraction.value = (_offsetFraction.value - scaledDelta / 180f).coerceIn(0f, 1f)
-            if (_offsetFraction.value <= 0.05f) {
-                restoreDock()
-            } else {
-                scheduleReturn()
+        if (scaledDelta < -4f) {
+            // Scrolling down
+            downwardScrollAccumulator += (-scaledDelta)
+            if (downwardScrollAccumulator >= collapseThresholdDp) {
+                collapseDock()
             }
+        } else if (scaledDelta > 4f) {
+            // Scrolling up -> expand immediately
+            downwardScrollAccumulator = 0f
+            restoreDock()
         }
     }
 
@@ -70,21 +77,40 @@ class DockScrollController(
         restoreDock()
     }
 
+    fun collapseDock() {
+        returnTimerJob?.cancel()
+        _isCollapsed.value = true
+        _collapseProgress.value = 1f
+    }
+
     fun restoreDock() {
         returnTimerJob?.cancel()
-        _offsetFraction.value = 0f
+        downwardScrollAccumulator = 0f
+        _isCollapsed.value = false
+        _collapseProgress.value = 0f
     }
 
     fun hideDock() {
-        returnTimerJob?.cancel()
-        _offsetFraction.value = 1f
+        collapseDock()
     }
 
-    private fun scheduleReturn() {
-        returnTimerJob?.cancel()
-        returnTimerJob = scope.launch {
-            delay(returnDelayMs)
-            _offsetFraction.value = 0f
+    fun collapse() {
+        collapseDock()
+    }
+
+    fun expand() {
+        restoreDock()
+    }
+
+    fun toggle() {
+        toggleCollapse()
+    }
+
+    fun toggleCollapse() {
+        if (_isCollapsed.value) {
+            restoreDock()
+        } else {
+            collapseDock()
         }
     }
 }

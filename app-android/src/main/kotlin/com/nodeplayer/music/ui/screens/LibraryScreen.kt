@@ -3,12 +3,14 @@ package com.nodeplayer.music.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -68,10 +70,11 @@ fun LibraryScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     var isGridView by remember { mutableStateOf(true) }
     var playlistFilter by remember { mutableStateOf("All") } // "All", "Local", "YouTube"
-    val tabs = listOf("Songs", "Albums", "Artists", "Folders", "Playlists")
+    val tabs = listOf("Songs", "Artists", "Folders", "Playlists")
     val accent = LocalAccentColor.current
     var viewingFolder by remember { mutableStateOf<MusicFolder?>(null) }
     var inspectingTrack by remember { mutableStateOf<Track?>(null) }
+    val tabScrollState = rememberScrollState()
 
     Column(
         modifier = modifier
@@ -106,7 +109,7 @@ fun LibraryScreen(
             }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (selectedTab == 1 || selectedTab == 2) {
+                if (selectedTab == 1) {
                     IconButton(onClick = { isGridView = !isGridView }) {
                         Icon(
                             imageVector = if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView,
@@ -125,10 +128,11 @@ fun LibraryScreen(
             }
         }
 
-        // Tab Selector Pills (Liquid Glass look)
+        // Tab Selector Pills (Liquid Glass look, horizontally scrollable)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .horizontalScroll(tabScrollState)
                 .padding(vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -192,13 +196,12 @@ fun LibraryScreen(
                     onInspectTrack = { inspectingTrack = it },
                     onAddToPlaylist = onAddToPlaylist,
                 )
-                1 -> AlbumsGrid(albums = albums, isGridView = isGridView, onAlbumClick = {}, )
-                2 -> ArtistsList(artists = artists, isGridView = isGridView, onArtistClick = {}, )
-                3 -> FoldersList(
+                1 -> ArtistsList(artists = artists, isGridView = isGridView, onArtistClick = {}, )
+                2 -> FoldersList(
                     folders = folders,
                     onFolderClick = { viewingFolder = it },
                 )
-                4 -> PlaylistsTab(
+                3 -> PlaylistsTab(
                     playlists = playlists,
                     filter = playlistFilter,
                     onFilterChange = { playlistFilter = it },

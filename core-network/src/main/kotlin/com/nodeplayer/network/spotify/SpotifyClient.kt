@@ -18,6 +18,10 @@ import io.ktor.http.Parameters
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -165,19 +169,19 @@ class SpotifyClient(
     }
 
     private fun parseUserPlaylists(jsonText: String): List<SpotifyPlaylistSummary> {
-        val root = json.parseToJsonElement(jsonText).jsonObject
-        val items = root["items"]?.jsonArray ?: return emptyList()
+        val root = (json.parseToJsonElement(jsonText) as? JsonObject) ?: return emptyList()
+        val items = (root["items"] as? JsonArray) ?: return emptyList()
 
         return items.mapNotNull { itemElem ->
             try {
-                val obj = itemElem.jsonObject
-                val id = obj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                val name = obj["name"]?.jsonPrimitive?.content ?: "Untitled Playlist"
-                val desc = obj["description"]?.jsonPrimitive?.content
-                val trackCount = obj["tracks"]?.jsonObject?.get("total")?.jsonPrimitive?.content?.toIntOrNull() ?: 0
-                val owner = obj["owner"]?.jsonObject?.get("display_name")?.jsonPrimitive?.content
-                val images = obj["images"]?.jsonArray
-                val coverUrl = images?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
+                val obj = itemElem as? JsonObject ?: return@mapNotNull null
+                val id = (obj["id"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+                val name = (obj["name"] as? JsonPrimitive)?.contentOrNull ?: "Untitled Playlist"
+                val desc = (obj["description"] as? JsonPrimitive)?.contentOrNull
+                val trackCount = (obj["tracks"] as? JsonObject)?.get("total")?.let { (it as? JsonPrimitive)?.contentOrNull?.toIntOrNull() } ?: 0
+                val owner = (obj["owner"] as? JsonObject)?.get("display_name")?.let { (it as? JsonPrimitive)?.contentOrNull }
+                val images = obj["images"] as? JsonArray
+                val coverUrl = (images?.firstOrNull() as? JsonObject)?.get("url")?.let { (it as? JsonPrimitive)?.contentOrNull }
 
                 SpotifyPlaylistSummary(
                     id = id,
@@ -194,24 +198,22 @@ class SpotifyClient(
     }
 
     private fun parsePlaylistTracksPage(jsonText: String): Pair<List<SpotifyTrack>, String?> {
-        val root = json.parseToJsonElement(jsonText).jsonObject
-        val items = root["items"]?.jsonArray ?: return emptyList<SpotifyTrack>() to null
+        val root = (json.parseToJsonElement(jsonText) as? JsonObject) ?: return emptyList<SpotifyTrack>() to null
+        val items = (root["items"] as? JsonArray) ?: return emptyList<SpotifyTrack>() to null
         val nextElement = root["next"]
-        val next = if (nextElement != null && nextElement !is kotlinx.serialization.json.JsonNull) {
-            nextElement.jsonPrimitive.content.takeIf { it.isNotBlank() && it != "null" }
-        } else null
+        val next = (nextElement as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() && it != "null" }
 
         val tracks = items.mapNotNull { itemElem ->
             try {
-                val trackObj = itemElem.jsonObject["track"]?.jsonObject ?: return@mapNotNull null
-                val id = trackObj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                val title = trackObj["name"]?.jsonPrimitive?.content ?: "Unknown Title"
-                val artists = trackObj["artists"]?.jsonArray?.mapNotNull {
-                    it.jsonObject["name"]?.jsonPrimitive?.content
+                val trackObj = ((itemElem as? JsonObject)?.get("track") as? JsonObject) ?: return@mapNotNull null
+                val id = (trackObj["id"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+                val title = (trackObj["name"] as? JsonPrimitive)?.contentOrNull ?: "Unknown Title"
+                val artists = (trackObj["artists"] as? JsonArray)?.mapNotNull {
+                    ((it as? JsonObject)?.get("name") as? JsonPrimitive)?.contentOrNull
                 } ?: emptyList()
-                val album = trackObj["album"]?.jsonObject?.get("name")?.jsonPrimitive?.content ?: "Spotify Album"
-                val durationMs = trackObj["duration_ms"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-                val isrc = trackObj["external_ids"]?.jsonObject?.get("isrc")?.jsonPrimitive?.content
+                val album = ((trackObj["album"] as? JsonObject)?.get("name") as? JsonPrimitive)?.contentOrNull ?: "Spotify Album"
+                val durationMs = (trackObj["duration_ms"] as? JsonPrimitive)?.contentOrNull?.toLongOrNull() ?: 0L
+                val isrc = ((trackObj["external_ids"] as? JsonObject)?.get("isrc") as? JsonPrimitive)?.contentOrNull
 
                 SpotifyTrack(
                     id = id,

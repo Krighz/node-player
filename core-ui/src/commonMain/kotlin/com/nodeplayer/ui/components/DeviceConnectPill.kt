@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.theme.LiquidColors
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.pressScale
 
@@ -101,14 +102,14 @@ fun DeviceConnectPill(
     )
 
     val dotColor = when (status) {
-        DeviceConnectStatus.CONNECTED -> Color(0xFF00F0FF) // Cyan glow
-        DeviceConnectStatus.DISCOVERING -> Color(0xFFF59E0B).copy(alpha = pulseAlpha) // Amber pulse
+        DeviceConnectStatus.CONNECTED -> LiquidColors.CyanGlow
+        DeviceConnectStatus.DISCOVERING -> LiquidColors.AmberWarm.copy(alpha = pulseAlpha)
         DeviceConnectStatus.DISCONNECTED -> Color.White.copy(alpha = 0.35f)
     }
 
     val glowColor = when (status) {
-        DeviceConnectStatus.CONNECTED -> Color(0xFF00F0FF).copy(alpha = 0.35f)
-        DeviceConnectStatus.DISCOVERING -> Color(0xFFF59E0B).copy(alpha = 0.25f * pulseAlpha)
+        DeviceConnectStatus.CONNECTED -> LiquidColors.CyanGlow.copy(alpha = 0.35f)
+        DeviceConnectStatus.DISCOVERING -> LiquidColors.AmberWarm.copy(alpha = 0.25f * pulseAlpha)
         DeviceConnectStatus.DISCONNECTED -> Color.Transparent
     }
 
@@ -121,7 +122,7 @@ fun DeviceConnectPill(
             modifier = Modifier
                 .height(38.dp)
                 .clip(pillShape)
-                .background(Color(0xFF131722).copy(alpha = 0.78f))
+                .background(LiquidColors.SurfaceElevated.copy(alpha = 0.78f))
                 .border(
                     width = 1.dp,
                     brush = Brush.verticalGradient(
@@ -214,7 +215,7 @@ fun DeviceConnectPill(
                     .padding(top = 46.dp)
                     .width(320.dp)
                     .clip(dropdownShape)
-                    .background(Color(0xFF13161F).copy(alpha = 0.96f))
+                    .background(LiquidColors.SurfaceDark.copy(alpha = 0.96f))
                     .border(
                         1.dp,
                         Brush.verticalGradient(
@@ -277,7 +278,7 @@ fun DeviceConnectPill(
                             modifier = Modifier
                                 .size(8.dp)
                                 .clip(CircleShape)
-                                .background(Color(0xFF10B981))
+                                .background(LiquidColors.EmeraldGreen)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
@@ -343,7 +344,7 @@ fun DeviceConnectPill(
                                     Icon(
                                         if (peer.platform == "Android") Icons.Rounded.PhoneAndroid else Icons.Rounded.Laptop,
                                         contentDescription = null,
-                                        tint = if (peer.isConnected) Color(0xFF00F0FF) else Color.Gray,
+                                        tint = if (peer.isConnected) LiquidColors.CyanGlow else Color.Gray,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))

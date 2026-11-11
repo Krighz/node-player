@@ -312,7 +312,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             reduceMotion = prefs.getBoolean("reduce_motion", false),
             dockGlassLensEnabled = prefs.getBoolean("dock_glass_lens_enabled", true),
             dockGlassRimEnabled = prefs.getBoolean("dock_glass_rim_enabled", true),
-            dockGlassPuckEnabled = prefs.getBoolean("dock_glass_puck_enabled", true)
+            dockGlassPuckEnabled = prefs.getBoolean("dock_glass_puck_enabled", true),
+            dockAutoHideEnabled = prefs.getBoolean("dock_auto_hide_enabled", true),
+            dockAutoHideMiniPlayer = prefs.getBoolean("dock_auto_hide_mini_player", true),
+            dockScrollSensitivity = prefs.getFloat("dock_scroll_sensitivity", 1.0f),
+            dockReturnDelayMs = prefs.getLong("dock_return_delay_ms", 1200L),
+            lyricsViewConfig = com.nodeplayer.model.LyricsViewConfig(
+                fontSizeSp = prefs.getFloat("lyrics_font_size_sp", 28.0f),
+                autoHideDelaySec = prefs.getInt("lyrics_auto_hide_delay_sec", 5)
+            ),
+            controlsGlassEnabled = prefs.getBoolean("controls_glass_enabled", true)
         )
     }
 
@@ -1275,6 +1284,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .putBoolean("dock_glass_lens_enabled", newConfig.dockGlassLensEnabled)
             .putBoolean("dock_glass_rim_enabled", newConfig.dockGlassRimEnabled)
             .putBoolean("dock_glass_puck_enabled", newConfig.dockGlassPuckEnabled)
+            .putBoolean("dock_auto_hide_enabled", newConfig.dockAutoHideEnabled)
+            .putBoolean("dock_auto_hide_mini_player", newConfig.dockAutoHideMiniPlayer)
+            .putFloat("dock_scroll_sensitivity", newConfig.dockScrollSensitivity)
+            .putLong("dock_return_delay_ms", newConfig.dockReturnDelayMs)
+            .putBoolean("lyrics_animation_enabled", newConfig.lyricsAnimationEnabled)
+            .putFloat("lyrics_font_size_sp", newConfig.lyricsViewConfig.fontSizeSp)
+            .putInt("lyrics_auto_hide_delay_sec", newConfig.lyricsViewConfig.autoHideDelaySec)
+            .putBoolean("controls_glass_enabled", newConfig.controlsGlassEnabled)
             .apply()
 
         // Sync widgets with current glass settings and re-render
@@ -1399,6 +1416,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             val playlistId = dao.insertPlaylist(com.nodeplayer.music.data.PlaylistEntity(name = name.trim()))
             if (initialTracks.isNotEmpty()) {
+                dao.insertTracks(initialTracks.map { com.nodeplayer.music.data.TrackEntity.fromTrack(it) })
                 val refs = initialTracks.mapIndexed { index, t ->
                     com.nodeplayer.music.data.PlaylistTrackCrossRef(
                         playlistId = playlistId,
@@ -1413,6 +1431,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun addTrackToPlaylist(playlistId: Long, track: Track) {
         viewModelScope.launch(Dispatchers.IO) {
+            dao.insertTracks(listOf(com.nodeplayer.music.data.TrackEntity.fromTrack(track)))
             val existingIds = dao.getPlaylistTrackIds(playlistId)
             if (!existingIds.contains(track.id)) {
                 val ref = com.nodeplayer.music.data.PlaylistTrackCrossRef(

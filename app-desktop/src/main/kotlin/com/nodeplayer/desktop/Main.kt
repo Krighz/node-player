@@ -426,6 +426,8 @@ fun main() = application {
                     }
                 },
                 onPlayPause = { engine.playPause() },
+                onPlayNext = { engine.playNext(it) },
+                onAddToQueue = { engine.addToQueue(it) },
                 onNext = { engine.next() },
                 onPrevious = { engine.previous() },
                 onSeek = { engine.seekTo(it) },

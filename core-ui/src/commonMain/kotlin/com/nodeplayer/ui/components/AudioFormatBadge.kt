@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.Track
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.theme.LiquidColors
 
 private enum class BadgeStyle {
     YOUTUBE_STREAM,
@@ -129,11 +130,11 @@ fun AudioFormatBadge(
 
     when (badgeData.style) {
         BadgeStyle.YOUTUBE_STREAM -> {
-            val cyanColor = Color(0xFF00E5FF)
+            val cyanColor = LiquidColors.ElectricCyan
             Box(
                 modifier = modifier
                     .clip(shape)
-                    .background(Color(0xFF003840).copy(alpha = 0.55f))
+                    .background(LiquidColors.CyanDeep.copy(alpha = 0.55f))
                     .border(
                         width = 1.dp,
                         brush = Brush.verticalGradient(
@@ -160,18 +161,18 @@ fun AudioFormatBadge(
             }
         }
         BadgeStyle.HI_RES_LOSSLESS -> {
-            val goldColor = Color(0xFFFFD700)
+            val goldColor = LiquidColors.GoldHiRes
             Box(
                 modifier = modifier
                     .clip(shape)
-                    .background(Color(0xFF261D00).copy(alpha = 0.65f))
+                    .background(LiquidColors.GoldDark.copy(alpha = 0.65f))
                     .border(
                         width = 1.dp,
                         brush = Brush.verticalGradient(
                             listOf(
-                                Color(0xFFFFECB3),
+                                LiquidColors.GoldLight,
                                 goldColor,
-                                Color(0xFFB8860B).copy(alpha = 0.7f)
+                                LiquidColors.GoldMuted.copy(alpha = 0.7f)
                             )
                         ),
                         shape = shape
@@ -198,7 +199,7 @@ fun AudioFormatBadge(
                             text = badgeData.subText,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFFFFE082).copy(alpha = 0.9f),
+                            color = LiquidColors.AmberLight.copy(alpha = 0.9f),
                             maxLines = 1
                         )
                     }
@@ -209,7 +210,7 @@ fun AudioFormatBadge(
             Box(
                 modifier = modifier
                     .clip(shape)
-                    .background(Color(0xFF1E2333).copy(alpha = 0.55f))
+                    .background(LiquidColors.SlateNavy.copy(alpha = 0.55f))
                     .border(
                         width = 1.dp,
                         brush = Brush.verticalGradient(

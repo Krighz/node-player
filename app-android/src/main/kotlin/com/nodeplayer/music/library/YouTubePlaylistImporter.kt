@@ -127,13 +127,17 @@ class YouTubePlaylistImporter(
             val normLocalArtist = normalize(local.artist)
 
             // Exact or substring match on title and artist, plus reasonable duration proximity (+/- 5 seconds)
-            val titleMatches = normLocalTitle == normOnlineTitle ||
-                    (normLocalTitle.isNotBlank() && normOnlineTitle.contains(normLocalTitle)) ||
-                    (normOnlineTitle.isNotBlank() && normLocalTitle.contains(normOnlineTitle))
+            val titleMatches = if (normLocalTitle.isNotBlank() && normOnlineTitle.isNotBlank()) {
+                normLocalTitle == normOnlineTitle ||
+                        normOnlineTitle.contains(normLocalTitle) ||
+                        normLocalTitle.contains(normOnlineTitle)
+            } else false
 
-            val artistMatches = normLocalArtist == normOnlineArtist ||
-                    normOnlineArtist.contains(normLocalArtist) ||
-                    normLocalArtist.contains(normOnlineArtist)
+            val artistMatches = if (normLocalArtist.isNotBlank() && normOnlineArtist.isNotBlank()) {
+                normLocalArtist == normOnlineArtist ||
+                        normOnlineArtist.contains(normLocalArtist) ||
+                        normLocalArtist.contains(normOnlineArtist)
+            } else normLocalArtist.isBlank() && normOnlineArtist.isBlank()
 
             val durationMatches = if (online.durationMs > 0 && local.durationMs > 0) {
                 abs(online.durationMs - local.durationMs) < 5000L
@@ -150,7 +154,7 @@ class YouTubePlaylistImporter(
             .replace(Regex("""\s*\(audio\)\s*""", RegexOption.IGNORE_CASE), "")
             .replace(Regex("""\s*\[audio\]\s*""", RegexOption.IGNORE_CASE), "")
             .replace(Regex("""\s*\(lyrics?\)\s*""", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("""[^a-z0-9]"""), "")
+            .replace(Regex("""[^\p{L}\p{N}]"""), "")
     }
 
     companion object {

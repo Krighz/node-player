@@ -48,6 +48,7 @@ import com.nodeplayer.ui.components.onHorizontalScrollWheel
 import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
 
@@ -90,10 +91,14 @@ fun OfflineHomeView(
         enabled = themeConfig.dockAutoHideEnabled
     )
 
-    LaunchedEffect(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset) {
-        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) {
-            dockScrollController?.onListScrolledToTop(0, 0)
-        }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+            .distinctUntilChanged()
+            .collect { atTop ->
+                if (atTop) {
+                    dockScrollController?.onListScrolledToTop(0, 0)
+                }
+            }
     }
 
     if (tracks.isEmpty()) {
@@ -287,7 +292,7 @@ fun OfflineHomeView(
                                 }
                             }
                     ) {
-                        items(mixes) { mix ->
+                        items(mixes, key = { it.title }) { mix ->
                             MixCard(
                                 mix = mix,
                                 onClick = {
@@ -339,7 +344,7 @@ fun OfflineHomeView(
                                 }
                             }
                     ) {
-                        items(rediscoverTracks) { track ->
+                        items(rediscoverTracks, key = { it.id }) { track ->
                             RediscoverTrackCard(
                                 track = track,
                                 onClick = { onPlayTrack(track, rediscoverTracks) }

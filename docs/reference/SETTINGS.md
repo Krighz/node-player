@@ -112,4 +112,25 @@ Accessible via **Settings > Diagnostics & Graphics > Liquid Glass Optical Test**
 | **Active Chrome Overlay** | Renders 64dp capsule dock, 56dp sliding puck with chromatic dispersion, 56dp mini player, search button, and live interactive `LiquidSlider`. | `OpticalDiagnosticsView.kt` (L222-228, L384-428) |
 | **Settings Route Wiring** | Navigation entries in shared and Android settings screens. | • `SettingsView.kt` (L110)<br>• `SettingsScreen.kt` (L85)<br>• `MainActivity.kt` (L146) |
 
+---
+
+## 8. Appearance & Sub-System Configuration Models (`GlassThemeConfig`)
+
+Added in Milestone v2.3 to manage navigation, home feed layout, and lyrics customization:
+
+| Configuration Sub-Model | Setting Key | Data Type | Default Value | Description | Consuming Source File |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`DockConfig`** | `visibleTabs` | `List<PlayerNavDestination>` | `[HOME, NEW, LIBRARY]` | Visible tabs on the floating liquid dock | `AudioAndThemeConfig.kt`, `ConvxLiquidDock.kt` |
+| **`DockConfig`** | `autoHide` | `Boolean` | `true` | Collapses dock on scroll down | `SharedPlayerLayout.kt`, `ConvxLiquidDock.kt` |
+| **`DockConfig`** | `autoHideSensitivity` | `Float` | `0.75f` | Velocity/offset sensitivity for scroll-collapse | `DockScrollController.kt` |
+| **`HomeLayoutConfig`** | `shelfOrder` | `List<String>` | `[Quick Picks, Videos, Trending, Playlists, Artists]` | Order of dynamic home feed shelves | `OnlineHomeView.kt` |
+| **`HomeLayoutConfig`** | `hiddenShelves` | `Set<String>` | `emptySet()` | Shelves hidden from home feed | `OnlineHomeView.kt` |
+| **`HomeLayoutConfig`** | `regionOverride` | `String?` | `null` | Manual YouTube Music region ISO override | `OnlineHomeView.kt` |
+| **`LyricsViewConfig`** | `fontSizeSp` | `Float` | `28.0f` | Font size for active and inactive lyrics | `LyricLineItem.kt`, `FullScreenLyricsView.kt` |
+| **`LyricsViewConfig`** | `blurInactiveLines` | `Boolean` | `true` | Apply blur ladder to inactive lines | `LyricLineItem.kt` |
+| **`LyricsViewConfig`** | `autoHideDelaySec` | `Int` | `5` | Inactivity seconds before fading controls | `FullScreenLyricsView.kt` |
+| **`LyricsViewConfig`** | `keepScreenOn` | `Boolean` | `true` | Prevent screen sleep while in lyrics view | `FullScreenLyricsView.kt`, `NowPlayingSheet.kt` |
+
+
+
 

@@ -37,6 +37,7 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.theme.LiquidColors
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.pressScale
@@ -68,6 +69,7 @@ fun ConvxMiniPlayer(
     shaderEnabled: Boolean = true,
     chromaticFringe: Float = 0.25f,
     backdrop: Backdrop = remember { emptyBackdrop() },
+    isCollapsed: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (currentTrack == null) return
@@ -109,9 +111,18 @@ fun ConvxMiniPlayer(
 
     Box(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 2.dp)
-            .height(56.dp)
+            .then(
+                if (isCollapsed) {
+                    Modifier
+                        .widthIn(min = 200.dp, max = 260.dp)
+                        .height(54.dp)
+                } else {
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 2.dp)
+                        .height(56.dp)
+                }
+            )
             .then(gestureModifier)
             .then(
                 if (lensActive) {
@@ -141,14 +152,14 @@ fun ConvxMiniPlayer(
                         onDrawSurface = {
                             val isDark = themeConfig.themeMode != "LIGHT"
                             val surfaceAlpha = (resolvedMiniPlayer.tintOpacity * (if (isDark) 0.55f else 0.40f)).coerceIn(0.15f, 0.75f)
-                            val surfaceColor = if (isDark) Color(0xFF141923) else Color.White
+                            val surfaceColor = if (isDark) LiquidColors.SurfaceElevated else Color.White
                             drawRect(surfaceColor.copy(alpha = surfaceAlpha))
                         }
                     )
                 } else {
                     val isDark = themeConfig.themeMode != "LIGHT"
                     val fallbackAlpha = (resolvedMiniPlayer.tintOpacity * (if (isDark) 0.75f else 0.60f)).coerceIn(0.25f, 0.85f)
-                    val fallbackColor = if (isDark) Color(0xFF141923) else Color.White
+                    val fallbackColor = if (isDark) LiquidColors.SurfaceElevated else Color.White
                     Modifier
                         .clip(containerShape)
                         .background(fallbackColor.copy(alpha = fallbackAlpha))
@@ -235,15 +246,17 @@ fun ConvxMiniPlayer(
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Audio-reactive Equalizer Bars
-            SoundWaveVisualizer(
-                isPlaying = isPlaying,
-                rmsLevel = rmsLevel,
-                barColor = accent,
-                maxHeight = 16.dp,
-                isPerformanceMode = isPerformanceMode,
-                modifier = Modifier.padding(end = 6.dp)
-            )
+            if (!isCollapsed) {
+                // Audio-reactive Equalizer Bars
+                SoundWaveVisualizer(
+                    isPlaying = isPlaying,
+                    rmsLevel = rmsLevel,
+                    barColor = accent,
+                    maxHeight = 16.dp,
+                    isPerformanceMode = isPerformanceMode,
+                    modifier = Modifier.padding(end = 6.dp)
+                )
+            }
 
             // Play/Pause Button
             Box(
@@ -262,23 +275,25 @@ fun ConvxMiniPlayer(
                 )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            if (!isCollapsed) {
+                Spacer(modifier = Modifier.width(8.dp))
 
-            // Next Track Button
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.08f))
-                    .pressScale(onClick = onSkipNextClick),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.SkipNext,
-                    contentDescription = "Next Track",
-                    tint = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.size(20.dp)
-                )
+                // Next Track Button
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.08f))
+                        .pressScale(onClick = onSkipNextClick),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.SkipNext,
+                        contentDescription = "Next Track",
+                        tint = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

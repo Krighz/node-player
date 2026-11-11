@@ -115,13 +115,13 @@ class SpotifyTrackMatcher(
         // 2. Artist match
         val normSpotArtist = normalize(spotify.primaryArtist)
         val normCandArtist = normalize(candidate.artist)
-        if (normSpotArtist == normCandArtist) {
+        if (normSpotArtist.isNotBlank() && normCandArtist.isNotBlank() && normSpotArtist == normCandArtist) {
             score += 0.30f
-        } else if (normSpotArtist.isNotBlank() && (normCandArtist.contains(normSpotArtist) || normSpotArtist.contains(normCandArtist))) {
+        } else if (normSpotArtist.isNotBlank() && normCandArtist.isNotBlank() && (normCandArtist.contains(normSpotArtist) || normSpotArtist.contains(normCandArtist))) {
             score += 0.20f
         } else {
             val allSpotArtists = spotify.artists.map { normalize(it) }
-            if (allSpotArtists.any { it.isNotBlank() && normCandArtist.contains(it) }) {
+            if (normCandArtist.isNotBlank() && allSpotArtists.any { it.isNotBlank() && normCandArtist.contains(it) }) {
                 score += 0.20f
             }
         }
@@ -160,12 +160,12 @@ class SpotifyTrackMatcher(
     }
 
     private fun normalize(str: String): String {
-        return str.lowercase().replace(Regex("""[^a-z0-9]"""), "")
+        return str.lowercase().replace(Regex("""[^\p{L}\p{N}]"""), "")
     }
 
     private fun tokenize(str: String): Set<String> {
         return str.lowercase()
-            .split(Regex("""[^a-z0-9]+"""))
+            .split(Regex("""[^\p{L}\p{N}]+"""))
             .filter { it.isNotBlank() && it !in STOP_WORDS }
             .toSet()
     }

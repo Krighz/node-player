@@ -105,6 +105,7 @@ fun SettingsScreen(
     onNavigateToOpticalDiagnostics: () -> Unit = {},
     onPairNewDevice: () -> Unit = {},
     onRescanLibrary: () -> Unit,
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -154,8 +155,14 @@ fun SettingsScreen(
     var isExcludedTracksExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var activeSection by rememberSaveable { mutableStateOf<String?>(null) }
-    BackHandler(enabled = activeSection != null) {
-        activeSection = if (activeSection == "motion_playground") "customize_ui" else null
+    BackHandler(enabled = true) {
+        if (activeSection == "motion_playground") {
+            activeSection = "customize_ui"
+        } else if (activeSection != null) {
+            activeSection = null
+        } else {
+            onBack()
+        }
     }
     var showTopMenu by remember { mutableStateOf(false) }
     var showAdvancedSettings by remember { mutableStateOf(sharedPrefs.getBoolean("show_advanced_settings", false)) }
@@ -187,6 +194,32 @@ fun SettingsScreen(
         return
     }
 
+    if (activeSection == "customize_ui") {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+        ) {
+            CustomizeUiScreen(
+                themeConfig = themeConfig,
+                onThemeConfigChange = onThemeConfigChange,
+                onApplySafeGraphicsMode = {
+                    onThemeConfigChange(
+                        themeConfig.copy(
+                            shaderMode = "OFF",
+                            blurRadiusDp = 0.0f,
+                            noiseGrainAlpha = 0f
+                        )
+                    )
+                },
+                onOpenMotionPlayground = { activeSection = "motion_playground" },
+                onBack = { activeSection = null },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -204,20 +237,36 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Settings",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White
                     )
-                )
-                Text(
-                    text = "Audio output, aesthetics & folder engine",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = Color.White.copy(alpha = 0.65f)
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Column {
+                    Text(
+                        text = "Settings",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
                     )
-                )
+                    Text(
+                        text = "Audio output, aesthetics & folder engine",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = Color.White.copy(alpha = 0.65f)
+                        )
+                    )
+                }
             }
 
             Box {
@@ -1334,13 +1383,10 @@ fun SettingsScreen(
                 }
 
         if (shouldShow("customize_ui")) {
-            CustomizeUiScreen(
+            com.nodeplayer.ui.screens.CustomizeUiView(
                 themeConfig = themeConfig,
                 onThemeConfigChange = onThemeConfigChange,
-                onApplySafeGraphicsMode = onApplySafeGraphicsMode,
-                onReportProblem = onReportProblem,
-                onOpenMotionPlayground = { activeSection = "motion_playground" },
-                
+                modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(20.dp))
         }

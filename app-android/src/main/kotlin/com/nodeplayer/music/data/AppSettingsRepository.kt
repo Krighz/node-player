@@ -70,7 +70,7 @@ object AppSettingsRepository {
         val lastFmSessionKey: String = "",
         val lastFmUsername: String = "",
         val glassControlsConfig: GlassControlsConfig = GlassControlsConfig.PRESET_BALANCED,
-        val isOnlineMode: Boolean = false,
+        val isOnlineMode: Boolean = true,
         val globalLyricsOffsetMs: Long = 0L,
         val autoFetchLyrics: Boolean = true
     )
@@ -106,7 +106,7 @@ object AppSettingsRepository {
                 lastFmSessionKey = prefs[KEY_LASTFM_SESSION_KEY] ?: "",
                 lastFmUsername = prefs[KEY_LASTFM_USERNAME] ?: "",
                 glassControlsConfig = glassControlsConfig,
-                isOnlineMode = prefs[KEY_IS_ONLINE_MODE] ?: false,
+                isOnlineMode = prefs[KEY_IS_ONLINE_MODE] ?: true,
                 globalLyricsOffsetMs = prefs[KEY_GLOBAL_LYRICS_OFFSET_MS] ?: 0L,
                 autoFetchLyrics = prefs[KEY_AUTO_FETCH_LYRICS] ?: true
             )

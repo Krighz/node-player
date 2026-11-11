@@ -1,6 +1,7 @@
+<!-- refreshed: 2026-11-11 -->
 # External Integrations
 
-**Analysis Date:** 2026-11-05
+**Analysis Date:** 2026-11-11
 
 ## APIs & External Services
 
@@ -15,6 +16,19 @@
   - SDK/Client: Direct `HttpURLConnection` JSON parsing (`app-android/src/main/kotlin/com/nodeplayer/music/update/UpdateChecker.kt`).
   - Download & Verification: `app-android/src/main/kotlin/com/nodeplayer/music/update/UpdateDownloadManager.kt` downloads APK assets over HTTPS (strictly verified against `https://github.com/Krighz/node-player/releases/download/` and `https://objects.githubusercontent.com/`) and enforces SHA-256 checksum verification before triggering Android package installation.
   - Auth: None (public read-only GitHub API).
+
+**YouTube Music / InnerTube Streaming API:**
+- **InnerTube API & YouTube Stream Extraction** - Real-time YouTube Music streaming resolution, recommendations, home feeds, explore shelves, and playlist sync (core-network/src/main/kotlin/com/nodeplayer/network/recommender/, core-network/src/main/kotlin/com/nodeplayer/network/search/, pp-android/src/main/kotlin/com/nodeplayer/music/library/YouTubePlaylistImporter.kt).
+  - Auth: Optional user SAPISID cookie login managed via YouTubeAccountManager.kt (pp-android/src/main/kotlin/com/nodeplayer/music/auth/YouTubeAccountManager.kt) and YouTubeLoginSheet.kt.
+  - Stream Resolution: VisionOS & iOS client clientSpoofing with visitorData to prevent 403 playback cutoff.
+
+**Spotify Music Migration:**
+- **Spotify Web API & PKCE OAuth** - Playlist import, user playlist retrieval, and library migration (core-network/src/main/kotlin/com/nodeplayer/network/spotify/SpotifyClient.kt).
+  - Matching Engine: ISRC-first matching with fuzzy Levenshtein and duration-distance fallbacks (SpotifyTrackMatcher.kt).
+  - Auth: Pure PKCE OAuth flow with SHA-256 code challenge (SpotifyAuthManager.kt).
+
+**Synchronized Lyrics:**
+- **LRCLIB API** (https://lrclib.net) - Online synchronized and plain lyrics fetching (core-network/src/main/kotlin/com/nodeplayer/network/lyrics/LrcLibClient.kt), integrated seamlessly into AppleMusicLyricsView.kt and FullScreenLyricsView.kt.
 
 **Synchronized Lyrics (Deferred/Opt-in Spec):**
 - **LRCLIB API** (`https://lrclib.net`) - Public lyrics database specification for timed `.lrc` lines.

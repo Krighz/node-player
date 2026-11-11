@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.Dp
 import com.nodeplayer.music.ui.components.UpdateBanner
 import com.nodeplayer.music.update.UpdateManager
 import com.nodeplayer.music.update.AppUpdateInfo
+import com.nodeplayer.model.AuthState
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -68,10 +69,19 @@ fun HomeScreen(
     onStartUpdate: (AppUpdateInfo) -> Unit = {},
     onCancelUpdate: () -> Unit = {},
     onInstallUpdate: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    onOpenOfflineMusic: () -> Unit = {},
+    onSignInClick: () -> Unit = {},
+    onSearchClick: () -> Unit = {},
+    currentRoute: String = "home",
+    dockScrollController: com.nodeplayer.ui.components.DockScrollController? = null,
+    onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val isOnline by AppModeState.isOnlineMode.collectAsState()
+    val ytAuthState by com.nodeplayer.music.auth.YouTubeAccountManager.authState.collectAsState()
 
     AnimatedContent(
         targetState = isOnline,
@@ -92,6 +102,16 @@ fun HomeScreen(
                 onPlayTrack = onTrackClick,
                 onPlayPause = onPlayPauseClick,
                 recentTracks = recentTracks,
+                currentRoute = currentRoute,
+                dockScrollController = dockScrollController,
+                isLoggedIn = ytAuthState is com.nodeplayer.model.AuthState.LoggedIn,
+                onSearchClick = onSearchClick,
+                onOpenEqualizer = onOpenEqualizer,
+                onOpenSettings = onOpenSettings,
+                onOpenOfflineMusic = onOpenOfflineMusic,
+                onOpenDeviceConnect = onOpenNodeConnect,
+                onSignInClick = onSignInClick,
+                onOpenPlaylistDetail = onOpenPlaylistDetail,
                 modifier = Modifier.fillMaxSize().statusBarsPadding()
             )
         } else {

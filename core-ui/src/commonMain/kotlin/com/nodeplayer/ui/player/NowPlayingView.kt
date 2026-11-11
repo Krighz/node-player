@@ -57,6 +57,7 @@ fun NowPlayingView(
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
     onSelectQueueItem: (Int) -> Unit = {},
+    onToggleFullScreenLyrics: () -> Unit = {},
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -86,7 +87,7 @@ fun NowPlayingView(
             .background(Color(0xFF070912).copy(alpha = 0.94f))
             .padding(24.dp)
     ) {
-        // Top Header: Close button, Now Playing title, Queue toggle
+        // Top Header: Close button, Now Playing title, Lyrics and Queue toggles
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -116,13 +117,23 @@ fun NowPlayingView(
                 )
             }
 
-            LiquidIconButton(
-                icon = Icons.Rounded.QueueMusic,
-                onClick = { showQueue = !showQueue },
-                contentDescription = "Queue",
-                tint = if (showQueue) accent else Color.White,
-                size = 48.dp
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LiquidIconButton(
+                    icon = Icons.Rounded.Lyrics,
+                    onClick = onToggleFullScreenLyrics,
+                    contentDescription = "Full-Screen Lyrics",
+                    tint = accent,
+                    size = 48.dp
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                LiquidIconButton(
+                    icon = Icons.Rounded.QueueMusic,
+                    onClick = { showQueue = !showQueue },
+                    contentDescription = "Queue",
+                    tint = if (showQueue) accent else Color.White,
+                    size = 48.dp
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(24.dp))

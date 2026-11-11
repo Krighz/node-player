@@ -5,6 +5,23 @@
 
 ---
 
+### [2026-11-11] - Milestone v2.3: Phase 10 Polish, Windows Desktop Parity & Token Verification
+- **120 Hz Scroll Performance Optimization (`POL-01`)**:
+  - Implemented stable keys on all lazy item factories in `OnlineHomeView.kt`, `OfflineHomeView.kt`, `LibraryView.kt`, and `PlaylistDetailView.kt`.
+  - Replaced high-frequency per-pixel `LaunchedEffect(listState.firstVisibleItemScrollOffset)` scroll observers with `snapshotFlow { ... }.distinctUntilChanged()`.
+  - Pre-allocated `StartCenterOrigin = TransformOrigin(0f, 0.5f)` and `BaseLyricTextStyle` in `LyricLineItem.kt`, eliminating allocation overhead inside draw and graphicsLayer passes.
+- **Windows Desktop Parity (`POL-02`)**:
+  - Fixed `OpticalRailDock` puck vertical alignment by eliminating the hardcoded 62dp offset, restoring exact alignment: `selectedIndex * (tabHeightDp.value + tabSpacingDp.value)`.
+  - Embedded `DesktopModeRailSwitcher` directly below `OpticalRailDock` in `SharedPlayerLayout.kt` for instant Online/Offline switching in expanded desktop mode.
+- **Token Centralization & Zero Hardcoded Hex Elimination (`POL-03`)**:
+  - Centralized semantic color tokens into `LiquidColors` in `GlassTokens.kt` (`SlateDark`, `SlateDeep`, `SlateNavy`, `CyanDeep`, `GoldHiRes`, `SkyIce`, etc.).
+  - Replaced remaining hardcoded hex values across `OpticalRailDock.kt`, `ConvxLiquidDock.kt`, `ConvxMiniPlayer.kt`, `DeviceConnectPill.kt`, and `AudioFormatBadge.kt`.
+  - Verified all tokens with automated unit tests in `DesignTokensTest.kt`.
+- **Milestone Regression & Verification**:
+  - 100% tests passing across `:core-ui:desktopTest`, `:core-dsp:test`, `:core-network:test`, `:core-common:test`, `:app-android:testDebugUnitTest`, and `:app-desktop:test`.
+  - Zero architectural boundary violations (`ArchitectureBoundaryTest` passed).
+
+
 ### [2026-11-08] - Post-Port Hardware Fix 4: Equalizer & Settings Stack Overflow (SIGSEGV libhwui) Root Cause Fix & Stability Test
 - **Root Cause Discovered via adb logcat on Physical Device (Android 16 / realme RMX3853)**:
   - Opening Equalizer or Settings crashed with `Fatal signal 11 (SIGSEGV), code 2 (SEGV_ACCERR) ... Cause: stack pointer is not in a rw map; likely due to stack overflow. 512 total frames in libhwui.so (prepareTreeImpl -> prepareListAndChildren)`.

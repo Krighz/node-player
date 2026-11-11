@@ -1,10 +1,14 @@
 package com.nodeplayer.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -28,8 +32,14 @@ import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.catalog.components.LiquidButton
 import com.nodeplayer.model.*
+import com.nodeplayer.network.library.OnlineAlbum
+import com.nodeplayer.network.library.OnlineLibraryManager
+import com.nodeplayer.network.library.OnlinePlaylist
 import com.nodeplayer.ui.components.*
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.nodeplayer.ui.player.BottomPlayerDeck
 import com.nodeplayer.ui.player.BottomPlayerDock
 import com.nodeplayer.ui.player.NowPlayingView
@@ -45,6 +55,7 @@ val LocalBottomBarPadding = compositionLocalOf { 80.dp }
 
 enum class PlayerNavDestination(val title: String, val icon: ImageVector) {
     HOME("For You", Icons.Rounded.Home),
+    NEW("New", Icons.Rounded.Explore),
     LIBRARY("Library", Icons.Rounded.LibraryMusic),
     EQUALIZER("Equalizer", Icons.Rounded.GraphicEq),
     CUSTOMIZE("Customize UI", Icons.Rounded.Palette),
@@ -82,6 +93,8 @@ fun SharedPlayerLayout(
     connectedDeviceCount: Int = 0,
     onPlayTrack: (Track, List<Track>) -> Unit,
     onPlayPause: () -> Unit,
+    onPlayNext: ((Track) -> Unit)? = null,
+    onAddToQueue: ((Track) -> Unit)? = null,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
@@ -108,11 +121,14 @@ fun SharedPlayerLayout(
     onSearchQueryChanged: ((String) -> Unit)? = null,
     sleepTimerRemainingSec: Long? = null,
     onSetSleepTimer: (Int?) -> Unit = {},
+    onKeepScreenOn: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var currentNav by remember { mutableStateOf(PlayerNavDestination.HOME) }
     var searchQuery by remember { mutableStateOf("") }
     var showNowPlayingOverlay by remember { mutableStateOf(false) }
+    var showFullScreenLyrics by remember { mutableStateOf(false) }
+    var activeContextMenuTrack by remember { mutableStateOf<Track?>(null) }
     var isMuted by remember { mutableStateOf(false) }
     var previousVolume by remember { mutableFloatStateOf(volume) }
 
@@ -168,6 +184,12 @@ fun SharedPlayerLayout(
     }
 
     val offsetFraction by dockScrollController.offsetFraction.collectAsState()
+    val isCollapsed by dockScrollController.isCollapsed.collectAsState()
+    var showSearchBar by remember { mutableStateOf(false) }
+    var searchBarQuery by remember { mutableStateOf("") }
+    var activeDetailHeader by remember { mutableStateOf<DetailMediaHeader?>(null) }
+    var activeDetailTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
+    val onlineLibraryManager = remember { OnlineLibraryManager() }
     val animatedOffsetFraction by animateFloatAsState(
         targetValue = if (themeConfig.dockAutoHideEnabled) offsetFraction else 0f,
         animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
@@ -329,20 +351,27 @@ fun SharedPlayerLayout(
                             .fillMaxWidth()
                             .padding(bottom = if (currentTrack != null) 88.dp else 12.dp)
                     ) {
-                        // Left: Optical Rail Dock with Spring Convex Bubble
+                        // Left: Optical Rail Dock with Spring Convex Bubble & Mode Switcher
                         Box(
                             modifier = Modifier
                                 .padding(start = 20.dp, end = 12.dp, top = 8.dp),
                             contentAlignment = Alignment.TopCenter
                         ) {
-                            OpticalRailDock(
-                                currentNav = currentNav,
-                                onNavSelect = { destination ->
-                                    currentNav = destination
-                                },
-                                backdrop = pageBackdrop,
-                                themeConfig = themeConfig
-                            )
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                OpticalRailDock(
+                                    currentNav = currentNav,
+                                    onNavSelect = { destination ->
+                                        currentNav = destination
+                                    },
+                                    backdrop = pageBackdrop,
+                                    themeConfig = themeConfig
+                                )
+
+                                DesktopModeRailSwitcher()
+                            }
                         }
 
                         // Center: Active Screen Area
@@ -353,7 +382,8 @@ fun SharedPlayerLayout(
                                 .padding(end = 20.dp)
                         ) {
                             when (currentNav) {
-                                PlayerNavDestination.HOME -> HomeView(
+                                PlayerNavDestination.HOME,
+                                PlayerNavDestination.NEW -> HomeView(
                                     tracks = tracks,
                                     currentTrack = currentTrack,
                                     isPlaying = isPlaying,
@@ -368,7 +398,17 @@ fun SharedPlayerLayout(
                                     onRescanClick = onRescanLibrary,
                                     onSelectMusicFolder = onSelectMusicFolder,
                                     onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
-                                    onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER }
+                                    onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
+                                    onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
+                                        activeDetailHeader = DetailMediaHeader(
+                                            id = "home_pl_${title.hashCode()}",
+                                            title = title,
+                                            subtitle = subtitle,
+                                            artworkUrl = artworkUrl,
+                                            isAlbum = false
+                                        )
+                                        activeDetailTracks = items
+                                    }
                                 )
                                 PlayerNavDestination.LIBRARY -> LibraryView(
                                     tracks = tracks,
@@ -384,7 +424,36 @@ fun SharedPlayerLayout(
                                         searchQuery = it
                                         onSearchQueryChanged?.invoke(it)
                                     },
-                                    remoteTracks = remoteTracks
+                                    remoteTracks = remoteTracks,
+                                onlineLibraryManager = onlineLibraryManager,
+                                onOpenPlaylistDetail = { pl ->
+                                    activeDetailHeader = DetailMediaHeader(
+                                        id = pl.id,
+                                        title = pl.title,
+                                        subtitle = pl.author.ifBlank { "Playlist" },
+                                        artworkUrl = pl.artworkUrl,
+                                        isAlbum = false
+                                    )
+                                    activeDetailTracks = tracks.filter { it.album.equals(pl.title, ignoreCase = true) }
+                                        .ifEmpty { onlineLibraryManager.state.value.songs.filter { it.album.equals(pl.title, ignoreCase = true) } }
+                                        .ifEmpty { onlineLibraryManager.state.value.songs }
+                                },
+                                onOpenAlbumDetail = { album ->
+                                    activeDetailHeader = DetailMediaHeader(
+                                        id = album.id,
+                                        title = album.title,
+                                        subtitle = album.artist,
+                                        artworkUrl = album.artworkUrl,
+                                        year = album.year,
+                                        isAlbum = true
+                                    )
+                                    activeDetailTracks = onlineLibraryManager.state.value.songs.filter {
+                                        it.album.equals(album.title, ignoreCase = true)
+                                    }
+                                },
+                                    onNavigateToHome = { currentNav = PlayerNavDestination.HOME },
+                                    onNavigateToSearch = { showSearchBar = true },
+                                    backdrop = pageBackdrop
                                 )
                                 PlayerNavDestination.EQUALIZER -> EqualizerView(
                                     config = audioEffectConfig,
@@ -487,7 +556,8 @@ fun SharedPlayerLayout(
 
                         // Active Destination View (full-bleed, scrolling underneath floating chrome)
                         when (currentNav) {
-                            PlayerNavDestination.HOME -> HomeView(
+                            PlayerNavDestination.HOME,
+                            PlayerNavDestination.NEW -> HomeView(
                                 tracks = tracks,
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
@@ -503,6 +573,7 @@ fun SharedPlayerLayout(
                                 onSelectMusicFolder = onSelectMusicFolder,
                                 onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
                                 onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
+                                onNavigateToSettings = { currentNav = PlayerNavDestination.SETTINGS },
                                 dockScrollController = dockScrollController,
                                 showDevicePill = true,
                                 nodeConnectEnabled = nodeConnectEnabled,
@@ -513,7 +584,17 @@ fun SharedPlayerLayout(
                                 },
                                 onPairNewDevice = onPairNewDevice,
                                 onCastToPeer = onCastToPeer,
-                                onToggleNodeConnect = onToggleNodeConnect
+                                onToggleNodeConnect = onToggleNodeConnect,
+                                onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
+                                    activeDetailHeader = DetailMediaHeader(
+                                        id = "home_pl_${title.hashCode()}",
+                                        title = title,
+                                        subtitle = subtitle,
+                                        artworkUrl = artworkUrl,
+                                        isAlbum = false
+                                    )
+                                    activeDetailTracks = items
+                                }
                             )
                             PlayerNavDestination.LIBRARY -> LibraryView(
                                 tracks = tracks,
@@ -526,7 +607,37 @@ fun SharedPlayerLayout(
                                 onRescanClick = onRescanLibrary,
                                 searchQuery = searchQuery,
                                 onSearchChange = { searchQuery = it },
-                                dockScrollController = dockScrollController
+                                remoteTracks = remoteTracks,
+                                onlineLibraryManager = onlineLibraryManager,
+                                onOpenPlaylistDetail = { pl ->
+                                    activeDetailHeader = DetailMediaHeader(
+                                        id = pl.id,
+                                        title = pl.title,
+                                        subtitle = pl.author.ifBlank { "Playlist" },
+                                        artworkUrl = pl.artworkUrl,
+                                        isAlbum = false
+                                    )
+                                    activeDetailTracks = tracks.filter { it.album.equals(pl.title, ignoreCase = true) }
+                                        .ifEmpty { onlineLibraryManager.state.value.songs.filter { it.album.equals(pl.title, ignoreCase = true) } }
+                                        .ifEmpty { onlineLibraryManager.state.value.songs }
+                                },
+                                onOpenAlbumDetail = { album ->
+                                    activeDetailHeader = DetailMediaHeader(
+                                        id = album.id,
+                                        title = album.title,
+                                        subtitle = album.artist,
+                                        artworkUrl = album.artworkUrl,
+                                        year = album.year,
+                                        isAlbum = true
+                                    )
+                                    activeDetailTracks = onlineLibraryManager.state.value.songs.filter {
+                                        it.album.equals(album.title, ignoreCase = true)
+                                    }
+                                },
+                                onNavigateToHome = { currentNav = PlayerNavDestination.HOME },
+                                onNavigateToSearch = { showSearchBar = true },
+                                dockScrollController = dockScrollController,
+                                backdrop = pageBackdrop
                             )
                             PlayerNavDestination.EQUALIZER -> EqualizerView(
                                 config = audioEffectConfig,
@@ -572,68 +683,223 @@ fun SharedPlayerLayout(
                     }
                     }
 
-                    // Floating Chrome Sibling Overlays above page layer in z-order
-                    val density = LocalDensity.current
-                    Column(
+                    // Floating Chrome Sibling Overlays above page layer in z-order (hidden when full screen lyrics is active)
+                    if (!showFullScreenLyrics) {
+                    Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        contentAlignment = Alignment.BottomCenter
                     ) {
-                        if (currentTrack != null) {
-                            ConvxMiniPlayer(
-                                currentTrack = currentTrack,
-                                isPlaying = isPlaying,
-                                progressFraction = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f,
-                                onPlayPauseClick = onPlayPause,
-                                onSkipNextClick = onNext,
-                                onSkipPreviousClick = onPrevious,
-                                onClick = { showNowPlayingOverlay = true },
-                                backdrop = pageBackdrop,
-                                modifier = Modifier
-                                    .padding(bottom = 6.dp)
-                                    .graphicsLayer {
-                                        translationY = with(density) { (120.dp * miniPlayerOffsetFraction).toPx() }
-                                        alpha = (1f - miniPlayerOffsetFraction).coerceIn(0f, 1f)
-                                    }
-                            )
-                        }
-
-                        LiquidDock(
-                            currentNav = currentNav,
-                            onNavSelect = { currentNav = it },
-                            backdrop = pageBackdrop,
-                            onSearchClick = {
-                                currentNav = PlayerNavDestination.LIBRARY
+                        AnimatedContent(
+                            targetState = isCollapsed && currentTrack != null,
+                            transitionSpec = {
+                                fadeIn(spring(stiffness = 380f, dampingRatio = 0.82f)) togetherWith
+                                    fadeOut(spring(stiffness = 380f, dampingRatio = 0.82f))
                             },
-                            modifier = Modifier.graphicsLayer {
-                                translationY = with(density) { (120.dp * dockOffsetFraction).toPx() }
-                                alpha = (1f - dockOffsetFraction).coerceIn(0f, 1f)
-                            }
-                        )
-                    }
-
-                    // Bottom-edge tap target to restore dock when hidden per D-03
-                    if (dockOffsetFraction > 0.5f) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .height(40.dp)
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
+                            label = "DockCollapseTransition"
+                        ) { collapsed ->
+                            if (collapsed && currentTrack != null) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    dockScrollController.onBottomEdgeTap()
+                                    val currentTab = LIQUID_DOCK_TABS.find { it.destination == currentNav } ?: LIQUID_DOCK_TABS.first()
+                                    LiquidButton(
+                                        onClick = { dockScrollController.expand() },
+                                        backdrop = pageBackdrop,
+                                        contentPadding = PaddingValues(0.dp),
+                                        modifier = Modifier.size(54.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = currentTab.icon,
+                                            contentDescription = currentTab.title,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    ConvxMiniPlayer(
+                                        currentTrack = currentTrack,
+                                        isPlaying = isPlaying,
+                                        progressFraction = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f,
+                                        onPlayPauseClick = onPlayPause,
+                                        onSkipNextClick = onNext,
+                                        onSkipPreviousClick = onPrevious,
+                                        onClick = { dockScrollController.expand() },
+                                        backdrop = pageBackdrop,
+                                        isCollapsed = true,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+
+                                    Spacer(modifier = Modifier.width(8.dp))
+
+                                    LiquidButton(
+                                        onClick = { showSearchBar = true },
+                                        backdrop = pageBackdrop,
+                                        contentPadding = PaddingValues(0.dp),
+                                        modifier = Modifier.size(54.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Search,
+                                            contentDescription = "Search",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
                                 }
-                        )
+                            } else {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    if (currentTrack != null) {
+                                        ConvxMiniPlayer(
+                                            currentTrack = currentTrack,
+                                            isPlaying = isPlaying,
+                                            progressFraction = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f,
+                                            onPlayPauseClick = onPlayPause,
+                                            onSkipNextClick = onNext,
+                                            onSkipPreviousClick = onPrevious,
+                                            onClick = { showNowPlayingOverlay = true },
+                                            backdrop = pageBackdrop,
+                                            isCollapsed = false,
+                                            modifier = Modifier.padding(bottom = 6.dp)
+                                        )
+                                    }
+
+                                    LiquidDock(
+                                        currentNav = currentNav,
+                                        onNavSelect = { currentNav = it },
+                                        backdrop = pageBackdrop,
+                                        onSearchClick = { showSearchBar = true }
+                                    )
+                                }
+                            }
+                        }
                     }
+                    }
+                }
+            }
+
+            // Full-Bleed Liquid-Glass Search Overlay Screen (SRCH-01, SRCH-02, SRCH-03)
+            AnimatedVisibility(
+                visible = showSearchBar,
+                enter = fadeIn(spring(stiffness = 400f)) + slideInVertically(spring(stiffness = 400f)) { -it / 4 },
+                exit = fadeOut(spring(stiffness = 400f)) + slideOutVertically(spring(stiffness = 400f)) { -it / 4 }
+            ) {
+                GlassSearchView(
+                    initialQuery = searchBarQuery,
+                    onDismiss = { showSearchBar = false },
+                    onPlayTrack = { track, searchQueue ->
+                        onPlayTrack(track, searchQueue)
+                    },
+                    onAlbumClick = { track ->
+                        activeDetailHeader = DetailMediaHeader(
+                            id = "album_${track.album.lowercase().replace(" ", "_")}",
+                            title = track.album.ifBlank { track.title },
+                            subtitle = track.artist,
+                            artworkUrl = track.path,
+                            isAlbum = true,
+                            isLossless = track.isLossless,
+                            isHiRes = track.isHiRes
+                        )
+                        activeDetailTracks = listOf(track)
+                        showSearchBar = false
+                    },
+                    onPlaylistClick = { track ->
+                        val cleanId = if (track.album.isNotBlank()) track.album else track.path.substringAfter("nodeplayer://youtube/playlist/", "")
+                        activeDetailHeader = DetailMediaHeader(
+                            id = cleanId,
+                            title = track.title,
+                            subtitle = track.artist,
+                            artworkUrl = if (track.path.startsWith("http")) track.path else null,
+                            description = "YouTube Music Playlist",
+                            isAlbum = false
+                        )
+                        activeDetailTracks = emptyList()
+                        showSearchBar = false
+                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                            val result = com.nodeplayer.network.innertube.InnerTubeClient().use { client ->
+                                client.fetchPlaylistTracks(cleanId)
+                            }
+                            val loaded = result.getOrDefault(emptyList())
+                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                activeDetailTracks = loaded
+                            }
+                        }
+                    },
+                    backdrop = pageBackdrop
+                )
+            }
+
+            // Apple Music-Style Playlist & Album Detail Page Overlay (PLAY-01, PLAY-02, PLAY-03)
+            AnimatedVisibility(
+                visible = activeDetailHeader != null,
+                enter = fadeIn(spring(stiffness = 400f)) + slideInVertically(spring(stiffness = 400f)) { it },
+                exit = fadeOut(spring(stiffness = 400f)) + slideOutVertically(spring(stiffness = 400f)) { it }
+            ) {
+                activeDetailHeader?.let { header ->
+                    val isSaved = if (header.isAlbum) {
+                        onlineLibraryManager.state.value.albums.any { it.title.equals(header.title, ignoreCase = true) || it.id == header.id }
+                    } else {
+                        onlineLibraryManager.isPlaylistSaved(header.id)
+                    }
+                    PlaylistDetailView(
+                        header = header,
+                        tracks = activeDetailTracks,
+                        currentTrack = currentTrack,
+                        isPlaying = isPlaying,
+                        isSavedInLibrary = isSaved,
+                        onBack = { activeDetailHeader = null },
+                        onPlayTrack = { tr, q -> onPlayTrack(tr, q) },
+                        onPlayAll = { q ->
+                            if (q.isNotEmpty()) onPlayTrack(q.first(), q)
+                        },
+                        onShuffleAll = { q ->
+                            if (q.isNotEmpty()) {
+                                val shuffled = q.shuffled()
+                                onPlayTrack(shuffled.first(), shuffled)
+                            }
+                        },
+                        onToggleSaveLibrary = { h ->
+                            if (h.isAlbum) {
+                                if (isSaved) {
+                                    activeDetailTracks.forEach { onlineLibraryManager.removeTrack(it.id) }
+                                } else {
+                                    activeDetailTracks.forEach { onlineLibraryManager.saveTrack(it) }
+                                }
+                            } else {
+                                if (isSaved) {
+                                    onlineLibraryManager.removePlaylist(h.id)
+                                } else {
+                                    onlineLibraryManager.addPlaylist(
+                                        OnlinePlaylist(
+                                            id = h.id,
+                                            title = h.title,
+                                            author = h.subtitle,
+                                            trackCount = activeDetailTracks.size,
+                                            artworkUrl = h.artworkUrl
+                                        )
+                                    )
+                                }
+                            }
+                        },
+                        onTrackOptionsClick = { track ->
+                            activeContextMenuTrack = track
+                        },
+                        backdrop = pageBackdrop
+                    )
                 }
             }
 
             // 4. Expanded Now Playing Fullscreen Overlay (Lyrics, Queue, Artwork)
             AnimatedVisibility(
-                visible = showNowPlayingOverlay,
+                visible = showNowPlayingOverlay && !showFullScreenLyrics,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
@@ -650,7 +916,119 @@ fun SharedPlayerLayout(
                     onPrevious = onPrevious,
                     onSeek = onSeek,
                     onSelectQueueItem = onSelectQueueItem,
+                    onToggleFullScreenLyrics = {
+                        showFullScreenLyrics = true
+                    },
                     onClose = { showNowPlayingOverlay = false }
+                )
+            }
+
+            // 5. Full-Screen Synced Lyrics Immersive Overlay (LYR-01, LYR-02, LYR-03, LYR-04, LYR-05)
+            AnimatedVisibility(
+                visible = showFullScreenLyrics,
+                enter = fadeIn(spring(stiffness = 400f)) + slideInVertically(spring(stiffness = 400f)) { it },
+                exit = fadeOut(spring(stiffness = 400f)) + slideOutVertically(spring(stiffness = 400f)) { it }
+            ) {
+                val parsedLyrics = remember(lrcContent, currentTrack?.id) {
+                    if (!lrcContent.isNullOrBlank()) {
+                        com.nodeplayer.library.LrcParser.parse(lrcContent, currentTrack?.id ?: 0L)
+                    } else {
+                        com.nodeplayer.model.Lyrics(trackId = currentTrack?.id ?: 0L)
+                    }
+                }
+
+                com.nodeplayer.ui.lyrics.FullScreenLyricsView(
+                    track = currentTrack,
+                    lyrics = parsedLyrics,
+                    isPlaying = isPlaying,
+                    currentPositionMs = positionMs,
+                    durationMs = durationMs,
+                    dominantColor = dynamicArtAccent ?: baseAccent,
+                    onPlayPause = onPlayPause,
+                    onNext = onNext,
+                    onPrevious = onPrevious,
+                    onSeekTo = onSeek,
+                    onClose = { showFullScreenLyrics = false },
+                    onKeepScreenOn = onKeepScreenOn
+                )
+            }
+
+            // 6. Universal Glass Context Menu Bottom Sheet (MENU-01, MENU-03)
+            activeContextMenuTrack?.let { targetTrack ->
+                val isSaved = onlineLibraryManager.isSaved(targetTrack.id)
+                com.nodeplayer.ui.components.GlassContextMenuSheet(
+                    track = targetTrack,
+                    visible = activeContextMenuTrack != null,
+                    isSavedInLibrary = isSaved,
+                    onDismiss = { activeContextMenuTrack = null },
+                    onActionClick = { actionId, tr ->
+                        when (actionId) {
+                            com.nodeplayer.model.TrackActionId.PLAY_NEXT -> {
+                                if (onPlayNext != null) {
+                                    onPlayNext(tr)
+                                } else {
+                                    val currentQ = queue.toMutableList()
+                                    val insertIdx = (currentQueueIndex + 1).coerceAtMost(currentQ.size)
+                                    currentQ.add(insertIdx, tr)
+                                    if (!isPlaying || currentTrack == null) {
+                                        onPlayTrack(tr, currentQ)
+                                    }
+                                }
+                            }
+                            com.nodeplayer.model.TrackActionId.ADD_TO_QUEUE -> {
+                                if (onAddToQueue != null) {
+                                    onAddToQueue(tr)
+                                } else {
+                                    val currentQ = queue.toMutableList()
+                                    currentQ.add(tr)
+                                    if (!isPlaying || currentTrack == null) {
+                                        onPlayTrack(tr, currentQ)
+                                    }
+                                }
+                            }
+                            com.nodeplayer.model.TrackActionId.ADD_TO_PLAYLIST -> {
+                                onlineLibraryManager.saveTrack(tr)
+                            }
+                            com.nodeplayer.model.TrackActionId.LIKE_SAVE -> {
+                                if (isSaved) {
+                                    onlineLibraryManager.removeTrack(tr.id)
+                                } else {
+                                    onlineLibraryManager.saveTrack(tr)
+                                }
+                            }
+                            com.nodeplayer.model.TrackActionId.START_RADIO -> {
+                                onPlayTrack(tr, listOf(tr) + queue.shuffled().take(15))
+                            }
+                            com.nodeplayer.model.TrackActionId.GO_TO_ARTIST -> {
+                                currentNav = PlayerNavDestination.LIBRARY
+                            }
+                            com.nodeplayer.model.TrackActionId.GO_TO_ALBUM -> {
+                                activeDetailHeader = DetailMediaHeader(
+                                    id = "album_${tr.album.lowercase().replace(" ", "_")}",
+                                    title = tr.album.ifBlank { tr.title },
+                                    subtitle = tr.artist,
+                                    artworkUrl = tr.path,
+                                    isAlbum = true,
+                                    isLossless = tr.isLossless,
+                                    isHiRes = tr.isHiRes
+                                )
+                                activeDetailTracks = listOf(tr)
+                            }
+                            com.nodeplayer.model.TrackActionId.VIEW_LYRICS -> {
+                                showFullScreenLyrics = true
+                            }
+                            com.nodeplayer.model.TrackActionId.SHARE -> {
+                                // Platform share or toast
+                            }
+                            com.nodeplayer.model.TrackActionId.SONG_INFO -> {
+                                // Info sheet
+                            }
+                            com.nodeplayer.model.TrackActionId.NOT_INTERESTED -> {
+                                onlineLibraryManager.removeTrack(tr.id)
+                            }
+                        }
+                    },
+                    backdrop = pageBackdrop
                 )
             }
         }

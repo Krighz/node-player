@@ -36,6 +36,7 @@ import com.nodeplayer.ui.components.LiquidSlider
 import com.nodeplayer.ui.components.LiquidToggle
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
+import com.nodeplayer.ui.theme.LiquidColors
 
 @Composable
 fun SettingsView(
@@ -103,7 +104,7 @@ fun SettingsView(
             Row(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF1E2230).copy(alpha = 0.8f))
+                    .background(LiquidColors.SurfaceCard.copy(alpha = 0.8f))
                     .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(16.dp))
                     .clickable { showHotkeysDialog = true }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -123,7 +124,7 @@ fun SettingsView(
                 .fillMaxWidth()
                 .height(42.dp)
                 .clip(RoundedCornerShape(21.dp))
-                .background(Color(0xFF141722).copy(alpha = 0.78f))
+                .background(LiquidColors.SurfaceElevated.copy(alpha = 0.78f))
                 .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(21.dp))
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -335,7 +336,7 @@ private fun AudioRoutingCard(
                 }
                 GlassBadge(
                     text = if (isExclusiveMode) "WASAPI EXCLUSIVE" else "WASAPI SHARED",
-                    color = if (isExclusiveMode) Color(0xFFF59E0B) else accent
+                    color = if (isExclusiveMode) LiquidColors.AmberWarm else accent
                 )
             }
 
@@ -557,7 +558,7 @@ private fun NodeConnectCard(
             Text(
                 text = if (nodeConnectEnabled) "Local network active (mTLS EC-256 + mDNS discovery)" else "Disabled (Zero network sockets open)",
                 fontSize = 11.5.sp,
-                color = if (nodeConnectEnabled) Color(0xFF00F0FF) else Color.White.copy(alpha = 0.5f)
+                color = if (nodeConnectEnabled) LiquidColors.CyanGlow else Color.White.copy(alpha = 0.5f)
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -694,7 +695,7 @@ private fun AboutAndScrobblerCard(
                     Text(
                         text = if (isOnlineMode) "Enabled: Recommendations, radio & online streaming active" else "Disabled: 100% offline library silence (zero network requests)",
                         fontSize = 11.sp,
-                        color = if (isOnlineMode) Color(0xFF00E5FF).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.55f)
+                        color = if (isOnlineMode) LiquidColors.ElectricCyan.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.55f)
                     )
                 }
                 LiquidToggle(

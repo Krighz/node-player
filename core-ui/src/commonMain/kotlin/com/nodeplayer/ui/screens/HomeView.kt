@@ -35,6 +35,7 @@ fun HomeView(
     onSelectMusicFolder: () -> Unit = {},
     onNavigateToLibrary: () -> Unit = {},
     onNavigateToEqualizer: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     dockScrollController: DockScrollController? = null,
     showDevicePill: Boolean = false,
     nodeConnectEnabled: Boolean = true,
@@ -43,6 +44,7 @@ fun HomeView(
     onPairNewDevice: () -> Unit = {},
     onCastToPeer: (DiscoveredPeerInfo) -> Unit = {},
     onToggleNodeConnect: (Boolean) -> Unit = {},
+    onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isOnline by AppModeState.isOnlineMode.collectAsState()
@@ -69,6 +71,12 @@ fun HomeView(
                 onPlayPause = onPlayPause,
                 recentTracks = recentTracks,
                 dockScrollController = dockScrollController,
+                onOpenEqualizer = onNavigateToEqualizer,
+                onOpenSettings = onNavigateToSettings,
+                onOpenOfflineMusic = { AppModeState.setOnlineMode(false) },
+                onOpenDeviceConnect = onOpenSyncCenter,
+                onRescanClick = onRescanClick,
+                onOpenPlaylistDetail = onOpenPlaylistDetail,
                 listState = onlineListState
             )
         } else {

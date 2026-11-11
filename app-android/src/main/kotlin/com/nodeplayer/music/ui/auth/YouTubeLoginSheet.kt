@@ -177,16 +177,22 @@ fun YouTubeLoginSheet(
 
                                     private fun checkAndCaptureCookies(url: String?) {
                                         if (url == null || isCapturing) return
-                                        if (url.contains("music.youtube.com") || url.contains("youtube.com")) {
+                                        val host = try { android.net.Uri.parse(url).host } catch (_: Exception) { null }
+                                        if (host != null && (host == "youtube.com" || host.endsWith(".youtube.com"))) {
                                             val cookies = CookieManager.getInstance().getCookie(url)
                                             val sapisid = YouTubeAuth.extractSapisid(cookies)
                                             if (!sapisid.isNullOrBlank() || (cookies != null && cookies.contains("LOGIN_INFO"))) {
                                                 isCapturing = true
                                                 NodeLog.i(TAG, "Captured authenticated session cookie: ${YouTubeAuth.maskCookieForLog(cookies)}")
                                                 coroutineScope.launch {
-                                                    YouTubeAccountManager.onLoginSuccess(cookies)
-                                                    onLoginSuccess()
-                                                    onDismiss()
+                                                    try {
+                                                        YouTubeAccountManager.onLoginSuccess(cookies)
+                                                        onLoginSuccess()
+                                                        onDismiss()
+                                                    } catch (t: Throwable) {
+                                                        NodeLog.e(TAG, "Error finalizing YouTube login", t)
+                                                        isCapturing = false
+                                                    }
                                                 }
                                             }
                                         }

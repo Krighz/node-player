@@ -196,11 +196,32 @@ enum class MotionLevel(val displayName: String) {
     OFF("Off (Instant / No Animations)")
 }
 
+data class DockConfig(
+    val tabOrder: List<String> = listOf("HOME", "EXPLORE", "LIBRARY"),
+    val showSearchButton: Boolean = true,
+    val collapseSensitivity: Float = 1.0f,
+    val autoHideMiniPlayer: Boolean = false
+)
+
+data class HomeLayoutConfig(
+    val shelfOrder: List<String> = listOf("QUICK_PICKS", "NEW_RELEASES", "TRENDING", "PLAYLISTS", "FOLLOWED_ARTISTS"),
+    val hiddenShelves: Set<String> = emptySet(),
+    val cardAspectWide: Boolean = true,
+    val regionOverride: String? = null
+)
+
+data class LyricsViewConfig(
+    val fontSizeSp: Float = 28.0f,
+    val blurRadiusDp: Float = 4.0f,
+    val autoHideDelaySec: Int = 5,
+    val keepScreenOn: Boolean = true
+)
+
 data class GlassThemeConfig(
     val glassQuality: GlassQuality = GlassQuality.BALANCED,
     val motionLevel: MotionLevel = MotionLevel.FULL,
     val glassStrength: String = "BALANCED", // SUBTLE, BALANCED, DRAMATIC, OFF
-    val themeMode: String = "SYSTEM",       // SYSTEM, DARK, LIGHT, OLED
+    val themeMode: String = "OLED",       // SYSTEM, DARK, LIGHT, OLED
     val accentSource: String = "ARTWORK",   // ARTWORK, MATERIAL_YOU, PRESET
     val spacingDensity: String = "COMFORTABLE", // COMPACT, COMFORTABLE, ROOMY
     val cornerRoundness: String = "ROUNDED",   // SHARP (8dp), ROUNDED (16dp), PILL (24dp)
@@ -209,7 +230,7 @@ data class GlassThemeConfig(
     val tintAlpha: Float = 0.65f,
     val borderAlpha: Float = 0.30f,
     val noiseGrainAlpha: Float = 0.04f,
-    val isOledBlack: Boolean = false,
+    val isOledBlack: Boolean = true,
     val useDynamicAccent: Boolean = true,
     val fixedAccentColorArgb: Long = 0xFFE8D5B7L, // Cashmere Cream / Warm Beige default
     val cornerRadiusDp: Float = 16.0f,
@@ -251,8 +272,8 @@ data class GlassThemeConfig(
     val dockGlassLensEnabled: Boolean = true,
     val dockGlassRimEnabled: Boolean = true,
     val dockGlassPuckEnabled: Boolean = true,
-    val dockAutoHideEnabled: Boolean = false,
-    val dockAutoHideMiniPlayer: Boolean = false,
+    val dockAutoHideEnabled: Boolean = true,
+    val dockAutoHideMiniPlayer: Boolean = true,
     val dockScrollSensitivity: Float = 1.0f,
     val dockReturnDelayMs: Long = 1200L,
     val miniPlayerGlassEnabled: Boolean = true,
@@ -263,6 +284,9 @@ data class GlassThemeConfig(
     val glassRefractionAmountDp: Float = 16.0f,
     val glassChromaticFringe: Float = 0.25f,
     val glassBackdropScale: Float = 0.50f,
+    val dockConfig: DockConfig = DockConfig(),
+    val homeLayoutConfig: HomeLayoutConfig = HomeLayoutConfig(),
+    val lyricsViewConfig: LyricsViewConfig = LyricsViewConfig(),
     val controlsConfig: GlassControlsConfig = GlassControlsConfig(masterEnabled = controlsGlassEnabled)
 ) {
     companion object {

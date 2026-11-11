@@ -12,9 +12,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -24,9 +25,19 @@ import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.LyricsLine
 import kotlin.math.abs
 
+private val StartCenterOrigin = TransformOrigin(0f, 0.5f)
+
+private val BaseLyricTextStyle = TextStyle(
+    fontSize = 28.sp,
+    fontWeight = FontWeight.SemiBold,
+    lineHeight = 35.sp,
+    textAlign = TextAlign.Start
+)
+
 /**
  * Single lyric line item.
- * Preserves Display typography (28sp, weight 600, lineHeight 1.25) across all lines without recomposing.
+ * Preserves Display typography (28sp, weight 600, lineHeight 35sp) across all lines without recomposing.
+ * Supports active word-by-word horizontal gradient sweep fill (Apple Music style) when distance == 0.
  * Modulates alpha, scale, and subtle blur via graphicsLayer based on line distance from active.
  */
 @Composable
@@ -37,7 +48,8 @@ fun LyricLineItem(
     currentPositionMs: Long,
     baseColor: Color,
     onSeek: (Long) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    activeHighlightColor: Color = Color.White
 ) {
     val distance = abs(index - activeIndex)
     val isActive = distance == 0
@@ -86,6 +98,22 @@ fun LyricLineItem(
 
     val interactionSource = remember { MutableInteractionSource() }
 
+    // Line progress for gradient sweep
+    val lineEndTime = line.endTimeMs
+    val lineDuration = if (lineEndTime != null && lineEndTime > line.timestampMs) {
+        lineEndTime - line.timestampMs
+    } else {
+        3500L
+    }
+
+    val lineProgress = if (isActive && currentPositionMs >= line.timestampMs) {
+        ((currentPositionMs - line.timestampMs).toFloat() / lineDuration.toFloat()).coerceIn(0f, 1f)
+    } else if (isActive && currentPositionMs < line.timestampMs) {
+        0f
+    } else {
+        1f
+    }
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -93,7 +121,7 @@ fun LyricLineItem(
                 scaleX = animatedScale.value
                 scaleY = animatedScale.value
                 this.alpha = animatedAlpha.value
-                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+                transformOrigin = StartCenterOrigin
             }
             .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
             .clickable(
@@ -104,15 +132,25 @@ fun LyricLineItem(
             }
             .padding(vertical = 6.dp)
     ) {
-        Text(
-            text = line.text,
-            style = TextStyle(
-                fontSize = 28.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = 35.sp,
-                color = baseColor,
-                textAlign = TextAlign.Start
+        if (isActive && lineProgress in 0.001f..0.999f) {
+            // Active line horizontal sweep gradient brush
+            val sweepBrush = Brush.horizontalGradient(
+                0.0f to activeHighlightColor,
+                (lineProgress - 0.04f).coerceAtLeast(0f) to activeHighlightColor,
+                (lineProgress + 0.04f).coerceAtMost(1f) to baseColor.copy(alpha = 0.40f),
+                1.0f to baseColor.copy(alpha = 0.40f)
             )
-        )
+
+            Text(
+                text = line.text,
+                style = BaseLyricTextStyle.copy(brush = sweepBrush)
+            )
+        } else {
+            val textColor = if (isActive) activeHighlightColor else baseColor
+            Text(
+                text = line.text,
+                style = BaseLyricTextStyle.copy(color = textColor)
+            )
+        }
     }
 }

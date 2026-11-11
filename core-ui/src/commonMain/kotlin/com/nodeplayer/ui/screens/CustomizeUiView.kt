@@ -1,14 +1,16 @@
 package com.nodeplayer.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
@@ -17,8 +19,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -26,13 +26,18 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
+import com.kyant.backdrop.highlight.Highlight
+import com.kyant.backdrop.shadow.Shadow
 import com.nodeplayer.model.*
 import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.*
 import com.nodeplayer.ui.theme.LocalAccentColor
-import kotlin.math.roundToInt
+import com.nodeplayer.ui.theme.LiquidColors
 
 @Composable
 fun CustomizeUiView(
@@ -56,381 +61,127 @@ fun CustomizeUiView(
     // Dialog state
     var pendingPresetChange by remember { mutableStateOf<GlassControlsPreset?>(null) }
     var showResetAllConfirm by remember { mutableStateOf(false) }
-    var showExportDialog by remember { mutableStateOf(false) }
-    var showImportDialog by remember { mutableStateOf(false) }
 
-    // Accordion expansion state
+    // Accordions expansion state
+    var expandedDock by remember { mutableStateOf(false) }
+    var expandedHome by remember { mutableStateOf(false) }
+    var expandedLyrics by remember { mutableStateOf(false) }
+    var expandedMotion by remember { mutableStateOf(false) }
     var expandedAccordions by remember { mutableStateOf(setOf<GlassComponentType>()) }
-
-    // 1. Preset Change Confirmation Dialog (D-03)
-    pendingPresetChange?.let { targetPreset ->
-        LiquidDialog(
-            onDismissRequest = { pendingPresetChange = null },
-            title = {
-                Text(
-                    text = "Apply ${targetPreset.displayName}?",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            },
-            text = {
-                Text(
-                    text = "Do you want to reset all 9 per-component overrides to preset defaults, or keep your existing custom adjustments?",
-                    fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.85f)
-                )
-            },
-            confirmButton = {
-                LiquidButton(
-                    onClick = {
-                        val presetConfig = when (targetPreset) {
-                            GlassControlsPreset.FULL -> GlassControlsConfig.PRESET_FULL
-                            GlassControlsPreset.BALANCED -> GlassControlsConfig.PRESET_BALANCED
-                            GlassControlsPreset.LIGHT -> GlassControlsConfig.PRESET_LIGHT
-                        }
-                        updateControls(presetConfig)
-                        pendingPresetChange = null
-                    }
-                ) {
-                    Text("Reset All to Preset")
-                }
-            },
-            dismissButton = {
-                LiquidButton(
-                    onClick = {
-                        val presetConfig = when (targetPreset) {
-                            GlassControlsPreset.FULL -> GlassControlsConfig.PRESET_FULL
-                            GlassControlsPreset.BALANCED -> GlassControlsConfig.PRESET_BALANCED
-                            GlassControlsPreset.LIGHT -> GlassControlsConfig.PRESET_LIGHT
-                        }
-                        updateControls(
-                            controlsConfig.copy(
-                                masterEnabled = presetConfig.masterEnabled,
-                                preset = targetPreset,
-                                global = presetConfig.global
-                            )
-                        )
-                        pendingPresetChange = null
-                    }
-                ) {
-                    Text("Keep Overrides")
-                }
-            }
-        )
-    }
-
-    // 2. Reset All Confirmation Dialog (D-15)
-    if (showResetAllConfirm) {
-        LiquidDialog(
-            onDismissRequest = { showResetAllConfirm = false },
-            title = {
-                Text(
-                    text = "Reset All Controls?",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            },
-            text = {
-                Text(
-                    text = "This will reset all master sliders and all 9 per-component overrides back to factory defaults (Balanced Preset).",
-                    fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.85f)
-                )
-            },
-            confirmButton = {
-                LiquidButton(
-                    onClick = {
-                        updateControls(GlassControlsConfig.PRESET_BALANCED)
-                        showResetAllConfirm = false
-                    }
-                ) {
-                    Text("Reset All")
-                }
-            },
-            dismissButton = {
-                LiquidButton(onClick = { showResetAllConfirm = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    // 3. Export JSON Dialog (D-14)
-    if (showExportDialog) {
-        val jsonPayload = remember(controlsConfig) { GlassControlsSerializer.toJson(controlsConfig) }
-        var copied by remember { mutableStateOf(false) }
-        val clipboardManager = LocalClipboardManager.current
-
-        LiquidDialog(
-            onDismissRequest = { showExportDialog = false },
-            title = {
-                Text(
-                    text = "Export Glass Controls Theme",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Versioned JSON Configuration (${GlassControlsSerializer.FORMAT_NAME} v${GlassControlsSerializer.CURRENT_VERSION}):",
-                        fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.70f)
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(max = 180.dp)
-                            .clip(ContinuousRoundedRectangle(8.dp))
-                            .background(Color.Black.copy(alpha = 0.55f))
-                            .border(1.dp, Color.White.copy(alpha = 0.12f), ContinuousRoundedRectangle(8.dp))
-                            .verticalScroll(rememberScrollState())
-                            .padding(8.dp)
-                    ) {
-                        Text(
-                            text = jsonPayload,
-                            fontSize = 10.sp,
-                            color = Color(0xFF67E8F9),
-                            fontFamily = FontFamily.Monospace
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                LiquidButton(
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(jsonPayload))
-                        copied = true
-                    }
-                ) {
-                    Icon(
-                        imageVector = if (copied) Icons.Rounded.Check else Icons.Rounded.ContentCopy,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(if (copied) "Copied!" else "Copy JSON")
-                }
-            },
-            dismissButton = {
-                LiquidButton(onClick = { showExportDialog = false }) {
-                    Text("Close")
-                }
-            }
-        )
-    }
-
-    // 4. Import JSON Dialog (D-14)
-    if (showImportDialog) {
-        var importInput by remember { mutableStateOf("") }
-        var importError by remember { mutableStateOf<String?>(null) }
-        val clipboardManager = LocalClipboardManager.current
-
-        LiquidDialog(
-            onDismissRequest = { showImportDialog = false },
-            title = {
-                Text(
-                    text = "Import Glass Controls Theme",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-                )
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Paste a exported theme JSON payload to restore custom settings:",
-                        fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.70f)
-                    )
-                    OutlinedTextField(
-                        value = importInput,
-                        onValueChange = {
-                            importInput = it
-                            importError = null
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(130.dp),
-                        textStyle = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp, fontFamily = FontFamily.Monospace),
-                        placeholder = {
-                            Text("Paste JSON here...", fontSize = 11.sp, color = Color.White.copy(alpha = 0.35f))
-                        }
-                    )
-                    if (importError != null) {
-                        Text(
-                            text = importError!!,
-                            color = Color(0xFFF43F5E),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        TextButton(
-                            onClick = {
-                                val text = clipboardManager.getText()?.text
-                                if (!text.isNullOrBlank()) {
-                                    importInput = text
-                                    importError = null
-                                }
-                            }
-                        ) {
-                            Icon(Icons.Rounded.ContentPaste, null, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Paste from Clipboard", fontSize = 11.sp)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                LiquidButton(
-                    onClick = {
-                        if (importInput.isBlank()) {
-                            importError = "Please enter or paste JSON payload"
-                            return@LiquidButton
-                        }
-                        try {
-                            val parsed = GlassControlsSerializer.fromJson(importInput)
-                            updateControls(parsed)
-                            showImportDialog = false
-                        } catch (e: Exception) {
-                            importError = "Invalid JSON payload: ${e.message ?: "Format error"}"
-                        }
-                    }
-                ) {
-                    Text("Apply Theme")
-                }
-            },
-            dismissButton = {
-                LiquidButton(onClick = { showImportDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val isDesktopSplit = maxWidth > 840.dp
 
-        if (isDesktopSplit) {
-            // Desktop / 16:9 Landscape Split Layout: Left 45% Sticky Preview, Right 55% Controls (D-09)
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Left Column: Sticky Live Preview Canvas & Visual Atmosphere
-                Column(
-                    modifier = Modifier
-                        .weight(0.45f)
-                        .fillMaxHeight()
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    ScreenHeader()
-                    LivePreviewCanvas(
-                        config = controlsConfig,
-                        accent = accent
-                    )
-                    PaletteAndBackgroundSection(
-                        themeConfig = themeConfig,
-                        onThemeConfigChange = onThemeConfigChange,
-                        accent = accent
-                    )
-                }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            ScreenHeader()
+            Spacer(modifier = Modifier.height(10.dp))
 
-                // Right Column: Master Glass Controls & 9 Overrides Accordions
-                Column(
-                    modifier = Modifier
-                        .weight(0.55f)
-                        .fillMaxHeight()
-                        .verticalScroll(scrollState),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    MasterControlsCard(
-                        controlsConfig = controlsConfig,
-                        onUpdateControls = ::updateControls,
-                        onRequestPresetChange = { pendingPresetChange = it },
-                        onResetAll = { showResetAllConfirm = true },
-                        onExport = { showExportDialog = true },
-                        onImport = { showImportDialog = true },
-                        accent = accent
-                    )
+            // 1. Pinned Interactive Live Preview Card (D-03)
+            LiveInteractiveGlassPreviewCard(
+                themeConfig = themeConfig,
+                accent = accent
+            )
 
-                    PerItemOverridesSection(
-                        controlsConfig = controlsConfig,
-                        onUpdateControls = ::updateControls,
-                        expandedAccordions = expandedAccordions,
-                        onToggleAccordion = { type ->
-                            expandedAccordions = if (expandedAccordions.contains(type)) {
-                                expandedAccordions - type
-                            } else {
-                                expandedAccordions + type
-                            }
-                        },
-                        accent = accent
-                    )
+            Spacer(modifier = Modifier.height(14.dp))
 
-                    Spacer(modifier = Modifier.height(LocalBottomBarPadding.current + 24.dp))
-                }
-            }
-        } else {
-            // Mobile Portrait Layout: Sticky Live Preview Canvas at Top, Scrollable Controls Below (D-09)
+            // 2. Scrollable Accordion Sections
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .verticalScroll(scrollState),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                ScreenHeader()
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Sticky Live Preview Canvas (D-09)
-                LivePreviewCanvas(
-                    config = controlsConfig,
+                // Master Glass Shaders & Presets Card
+                MasterControlsCard(
+                    controlsConfig = controlsConfig,
+                    onUpdateControls = ::updateControls,
+                    onRequestPresetChange = { preset ->
+                        val newConfig = when (preset) {
+                            GlassControlsPreset.FULL -> com.nodeplayer.model.GlassControlsConfig.PRESET_FULL
+                            GlassControlsPreset.BALANCED -> com.nodeplayer.model.GlassControlsConfig.PRESET_BALANCED
+                            GlassControlsPreset.LIGHT -> com.nodeplayer.model.GlassControlsConfig.PRESET_LIGHT
+                        }
+                        updateControls(newConfig)
+                    },
+                    onResetAll = { showResetAllConfirm = true },
+                    onExport = {},
+                    onImport = {},
                     accent = accent
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Scrollable Controls List Below
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(scrollState),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                // Accordion 1: Dock & Mini Player Settings (CONF-02)
+                CustomizationAccordion(
+                    title = "Dock & Navigation Shell",
+                    subtitle = "Tab ordering, search button, collapse-on-scroll sensitivity",
+                    isExpanded = expandedDock,
+                    onToggle = { expandedDock = !expandedDock },
+                    accent = accent
                 ) {
-                    MasterControlsCard(
-                        controlsConfig = controlsConfig,
-                        onUpdateControls = ::updateControls,
-                        onRequestPresetChange = { pendingPresetChange = it },
-                        onResetAll = { showResetAllConfirm = true },
-                        onExport = { showExportDialog = true },
-                        onImport = { showImportDialog = true },
+                    DockSettingsSection(
+                        dockConfig = themeConfig.dockConfig,
+                        onUpdate = { onThemeConfigChange(themeConfig.copy(dockConfig = it)) },
                         accent = accent
                     )
+                }
 
-                    PerItemOverridesSection(
-                        controlsConfig = controlsConfig,
-                        onUpdateControls = ::updateControls,
-                        expandedAccordions = expandedAccordions,
-                        onToggleAccordion = { type ->
-                            expandedAccordions = if (expandedAccordions.contains(type)) {
-                                expandedAccordions - type
-                            } else {
-                                expandedAccordions + type
-                            }
-                        },
+                // Accordion 2: Home Feed & Library Shelves (CONF-03)
+                CustomizationAccordion(
+                    title = "Home Feed & Library Shelves",
+                    subtitle = "Shelf visibility, ordering, 16:9 cards, content region",
+                    isExpanded = expandedHome,
+                    onToggle = { expandedHome = !expandedHome },
+                    accent = accent
+                ) {
+                    HomeShelvesSettingsSection(
+                        homeConfig = themeConfig.homeLayoutConfig,
+                        onUpdate = { onThemeConfigChange(themeConfig.copy(homeLayoutConfig = it)) },
                         accent = accent
                     )
+                }
 
-                    PaletteAndBackgroundSection(
+                // Accordion 3: Full-Screen Lyrics & Display (CONF-04)
+                CustomizationAccordion(
+                    title = "Full-Screen Synced Lyrics",
+                    subtitle = "Typography font size, blur strength, 5s auto-hide delay, keep screen on",
+                    isExpanded = expandedLyrics,
+                    onToggle = { expandedLyrics = !expandedLyrics },
+                    accent = accent
+                ) {
+                    LyricsSettingsSection(
+                        lyricsConfig = themeConfig.lyricsViewConfig,
+                        onUpdate = { onThemeConfigChange(themeConfig.copy(lyricsViewConfig = it)) },
+                        accent = accent
+                    )
+                }
+
+                // Accordion 4: Motion & Spring Physics
+                CustomizationAccordion(
+                    title = "Spring Dynamics & Motion",
+                    subtitle = "Spring stiffness, bounciness, and gesture scale response",
+                    isExpanded = expandedMotion,
+                    onToggle = { expandedMotion = !expandedMotion },
+                    accent = accent
+                ) {
+                    MotionSettingsSection(
                         themeConfig = themeConfig,
                         onThemeConfigChange = onThemeConfigChange,
                         accent = accent
                     )
-
-                    Spacer(modifier = Modifier.height(LocalBottomBarPadding.current + 24.dp))
                 }
+
+                // Atmosphere / Background Shader Section
+                PaletteAndBackgroundSection(
+                    themeConfig = themeConfig,
+                    onThemeConfigChange = onThemeConfigChange,
+                    accent = accent
+                )
+
+                Spacer(modifier = Modifier.height(LocalBottomBarPadding.current + 24.dp))
             }
         }
     }
@@ -440,19 +191,389 @@ fun CustomizeUiView(
 private fun ScreenHeader() {
     Column {
         Text(
-            text = "Customize UI & Visuals",
+            text = "Appearance & Layout Customization",
             style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold)
         )
         Text(
-            text = "Real-time liquid glass shaders, physics tokens, and optical refraction",
+            text = "Fine-tune liquid glass shaders, dock tabs, shelves, lyrics, and spring physics",
             style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
         )
     }
 }
 
 /**
- * Master "Liquid glass controls" Card per D-01, D-02, D-04, D-14, D-15.
+ * Pinned Interactive Live Preview Card (D-03).
+ * Shows miniature gliding puck, sample text, and liquid slider updating in real time.
  */
+@Composable
+private fun LiveInteractiveGlassPreviewCard(
+    themeConfig: GlassThemeConfig,
+    accent: Color
+) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var previewSliderValue by remember { mutableFloatStateOf(0.65f) }
+    val shape = remember { ContinuousRoundedRectangle(20.dp) }
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "LIVE INTERACTIVE PREVIEW",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = accent,
+                    letterSpacing = 1.sp
+                )
+                Text(
+                    text = "Refraction: ${themeConfig.glassRefractionHeightDp.toInt()}dp",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.60f)
+                )
+            }
+
+            // Preview Surface Box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+                    .clip(shape)
+                    .background(Color.White.copy(alpha = 0.05f))
+                    .padding(12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Mini Gliding Puck Sample
+                    Box(
+                        modifier = Modifier
+                            .size(width = 68.dp, height = 36.dp)
+                            .clip(ContinuousCapsule())
+                            .background(accent.copy(alpha = 0.85f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Active", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = LiquidColors.SurfaceDark)
+                    }
+
+                    // Sample Typography
+                    Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+                        Text(
+                            text = "Sample Lyrics Text",
+                            fontSize = (themeConfig.lyricsViewConfig.fontSizeSp * 0.55f).sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White
+                        )
+                        Text(
+                            text = "Apple Music Glass Sweep",
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.60f)
+                        )
+                    }
+
+                    // Mini Liquid Slider
+                    LiquidGlassSlider(
+                        value = previewSliderValue,
+                        onValueChange = { previewSliderValue = it },
+                        modifier = Modifier.width(90.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomizationAccordion(
+    title: String,
+    subtitle: String,
+    isExpanded: Boolean,
+    onToggle: () -> Unit,
+    accent: Color,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val rotation by animateFloatAsState(if (isExpanded) 180f else 0f)
+
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.60f))
+                    )
+                }
+                Icon(
+                    imageVector = Icons.Rounded.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = if (isExpanded) accent else Color.White.copy(alpha = 0.70f),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            AnimatedVisibility(visible = isExpanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    content()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DockSettingsSection(
+    dockConfig: DockConfig,
+    onUpdate: (DockConfig) -> Unit,
+    accent: Color
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Show Search Button", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Separate circular Search glass button on the dock", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+            }
+            LiquidSwitch(
+                checked = dockConfig.showSearchButton,
+                onCheckedChange = { onUpdate(dockConfig.copy(showSearchButton = it)) }
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Auto-hide Mini Player", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Collapse floating pill deck during rapid gestures", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+            }
+            LiquidSwitch(
+                checked = dockConfig.autoHideMiniPlayer,
+                onCheckedChange = { onUpdate(dockConfig.copy(autoHideMiniPlayer = it)) }
+            )
+        }
+
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Collapse Sensitivity", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("${dockConfig.collapseSensitivity}x", fontSize = 13.sp, color = accent)
+            }
+            LiquidGlassSlider(
+                value = (dockConfig.collapseSensitivity - 0.5f) / 1.5f,
+                onValueChange = { frac ->
+                    val sens = (0.5f + frac * 1.5f)
+                    onUpdate(dockConfig.copy(collapseSensitivity = (sens * 10).toInt() / 10f))
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeShelvesSettingsSection(
+    homeConfig: HomeLayoutConfig,
+    onUpdate: (HomeLayoutConfig) -> Unit,
+    accent: Color
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Wide 16:9 Video Cards", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Use widescreen aspect ratio for new releases", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+            }
+            LiquidSwitch(
+                checked = homeConfig.cardAspectWide,
+                onCheckedChange = { onUpdate(homeConfig.copy(cardAspectWide = it)) }
+            )
+        }
+
+        Text("Active Home Shelves", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
+
+        val allShelves = listOf(
+            "QUICK_PICKS" to "Quick Picks",
+            "NEW_RELEASES" to "New Releases & Videos",
+            "TRENDING" to "Trending in Region",
+            "PLAYLISTS" to "Curated Playlists",
+            "FOLLOWED_ARTISTS" to "From Artists You Follow"
+        )
+
+        allShelves.forEach { (shelfKey, shelfTitle) ->
+            val isVisible = !homeConfig.hiddenShelves.contains(shelfKey)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        val newHidden = if (isVisible) {
+                            homeConfig.hiddenShelves + shelfKey
+                        } else {
+                            homeConfig.hiddenShelves - shelfKey
+                        }
+                        onUpdate(homeConfig.copy(hiddenShelves = newHidden))
+                    }
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(shelfTitle, fontSize = 13.sp, color = if (isVisible) Color.White else Color.White.copy(alpha = 0.4f))
+                LiquidCheckbox(
+                    checked = isVisible,
+                    onCheckedChange = { checked ->
+                        val newHidden = if (!checked) {
+                            homeConfig.hiddenShelves + shelfKey
+                        } else {
+                            homeConfig.hiddenShelves - shelfKey
+                        }
+                        onUpdate(homeConfig.copy(hiddenShelves = newHidden))
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LyricsSettingsSection(
+    lyricsConfig: LyricsViewConfig,
+    onUpdate: (LyricsViewConfig) -> Unit,
+    accent: Color
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Keep Screen On", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Prevent display timeout during full-screen lyrics", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+            }
+            LiquidSwitch(
+                checked = lyricsConfig.keepScreenOn,
+                onCheckedChange = { onUpdate(lyricsConfig.copy(keepScreenOn = it)) }
+            )
+        }
+
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Lyrics Font Size", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("${lyricsConfig.fontSizeSp.toInt()} sp", fontSize = 13.sp, color = accent)
+            }
+            LiquidGlassSlider(
+                value = (lyricsConfig.fontSizeSp - 20f) / 16f,
+                onValueChange = { frac ->
+                    val size = 20f + frac * 16f
+                    onUpdate(lyricsConfig.copy(fontSizeSp = size.toInt().toFloat()))
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Controls Auto-Hide Delay", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("${lyricsConfig.autoHideDelaySec} seconds", fontSize = 13.sp, color = accent)
+            }
+            LiquidGlassSlider(
+                value = (lyricsConfig.autoHideDelaySec - 3) / 12f,
+                onValueChange = { frac ->
+                    val sec = (3 + frac * 12f).toInt()
+                    onUpdate(lyricsConfig.copy(autoHideDelaySec = sec))
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun MotionSettingsSection(
+    themeConfig: GlassThemeConfig,
+    onThemeConfigChange: (GlassThemeConfig) -> Unit,
+    accent: Color
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Spring Bounciness", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("${(themeConfig.springBounciness * 100).toInt()}%", fontSize = 13.sp, color = accent)
+            }
+            LiquidGlassSlider(
+                value = (themeConfig.springBounciness - 0.5f) / 0.5f,
+                onValueChange = { frac ->
+                    val bounciness = 0.5f + frac * 0.5f
+                    onThemeConfigChange(themeConfig.copy(springBounciness = bounciness))
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Spring Stiffness", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("${themeConfig.springStiffness.toInt()}", fontSize = 13.sp, color = accent)
+            }
+            LiquidGlassSlider(
+                value = (themeConfig.springStiffness - 150f) / 850f,
+                onValueChange = { frac ->
+                    val stiffness = 150f + frac * 850f
+                    onThemeConfigChange(themeConfig.copy(springStiffness = stiffness))
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
 @Composable
 private fun MasterControlsCard(
     controlsConfig: GlassControlsConfig,
@@ -467,408 +588,111 @@ private fun MasterControlsCard(
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Header: Title & Action Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column {
                     Text(
-                        text = "Master Liquid Glass Controls",
+                        text = "Master Glass Shaders",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Text(
-                        text = "Global master switch and baseline optical parameters (D-01, D-04)",
-                        fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.60f)
+                        text = "Real-time backdrop refraction and blur",
+                        style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    IconButton(onClick = onExport) {
-                        Icon(Icons.Rounded.FileUpload, "Export", tint = Color.White, modifier = Modifier.size(18.dp))
-                    }
-                    IconButton(onClick = onImport) {
-                        Icon(Icons.Rounded.FileDownload, "Import", tint = Color.White, modifier = Modifier.size(18.dp))
-                    }
-                    IconButton(onClick = onResetAll) {
-                        Icon(Icons.Rounded.RestartAlt, "Reset All", tint = Color(0xFFF43F5E), modifier = Modifier.size(18.dp))
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Master On/Off Toggle (D-01)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Master Liquid Glass", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    Text("When OFF, small controls drop to plain squircle look for zero GPU load", fontSize = 11.sp, color = Color.White.copy(alpha = 0.60f))
-                }
-                LiquidGlassSwitch(
+                LiquidSwitch(
                     checked = controlsConfig.masterEnabled,
                     onCheckedChange = { onUpdateControls(controlsConfig.copy(masterEnabled = it)) }
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            // Master Preset Chips (D-02, D-03)
-            Text("Presets", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.85f))
-            Spacer(modifier = Modifier.height(6.dp))
+            // Presets Selector
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                GlassControlsPreset.values().forEach { preset ->
+                listOf(
+                    GlassControlsPreset.LIGHT to "Subtle",
+                    GlassControlsPreset.BALANCED to "Normal",
+                    GlassControlsPreset.FULL to "Strong"
+                ).forEach { (preset, label) ->
                     val isSelected = controlsConfig.preset == preset
-                    LiquidChip(
-                        selected = isSelected,
-                        onClick = { if (!isSelected) onRequestPresetChange(preset) },
-                        label = preset.displayName.substringBefore(" ("),
+                    LiquidButton(
+                        onClick = { onRequestPresetChange(preset) },
                         modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // 12 Shared Master Sliders (D-04)
-            Text("Master Optics & Springs", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.85f))
-            Spacer(modifier = Modifier.height(8.dp))
-
-            SliderRow("Backdrop Blur Radius", "${global.blurDp.roundToInt()} dp", global.blurDp, 0f..32f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(blurDp = it)))
-            }
-            SliderRow("SDF Lens Height", "${global.lensHeightDp.roundToInt()} dp", global.lensHeightDp, 0f..32f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(lensHeightDp = it)))
-            }
-            SliderRow("Lens Refraction Amount", "${global.lensAmountDp.roundToInt()} dp", global.lensAmountDp, 0f..30f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(lensAmountDp = it)))
-            }
-            SliderRow("Vibrancy Saturation", "${(global.vibrancy * 100).roundToInt()}%", global.vibrancy, 0f..1f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(vibrancy = it)))
-            }
-            SliderRow("Tint Fill Opacity", "${(global.tintOpacity * 100).roundToInt()}%", global.tintOpacity, 0f..1f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(tintOpacity = it)))
-            }
-            SliderRow("Specular Highlight", "${(global.highlightStrength * 100).roundToInt()}%", global.highlightStrength, 0f..1f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(highlightStrength = it)))
-            }
-            SliderRow("Shadow Ambient Depth", "${(global.shadowStrength * 100).roundToInt()}%", global.shadowStrength, 0f..1f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(shadowStrength = it)))
-            }
-            SliderRow("Chromatic Dispersion", "${(global.chromaticAberration * 100).roundToInt()}%", global.chromaticAberration, 0f..1f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(chromaticAberration = it)))
-            }
-            SliderRow("Corner Radius", "${global.cornerShapeDp.roundToInt()} dp", global.cornerShapeDp, 0f..32f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(cornerShapeDp = it)))
-            }
-            SliderRow("Touch Press Scale", "${((global.pressScale * 100).roundToInt()) / 100f}x", global.pressScale, 0.85f..1.0f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(pressScale = it)))
-            }
-            SliderRow("Spring Stiffness", "${global.springStiffness.roundToInt()}", global.springStiffness, 100f..1000f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(springStiffness = it)))
-            }
-            SliderRow("Spring Damping Ratio", "${((global.springDamping * 100).roundToInt()) / 100f}", global.springDamping, 0.40f..1.0f, accent) {
-                onUpdateControls(controlsConfig.copy(global = global.copy(springDamping = it)))
-            }
-        }
-    }
-}
-
-/**
- * 9 Collapsible Per-Item Override Accordion Cards per D-05, D-06, D-07, D-08, D-15.
- */
-@Composable
-private fun PerItemOverridesSection(
-    controlsConfig: GlassControlsConfig,
-    onUpdateControls: (GlassControlsConfig) -> Unit,
-    expandedAccordions: Set<GlassComponentType>,
-    onToggleAccordion: (GlassComponentType) -> Unit,
-    accent: Color
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            text = "Per-Component Overrides (9 Categories)",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-        )
-        Text(
-            text = "Independent optics and motion tuning with immediate 'Use Global' inheritance (D-05, D-06)",
-            fontSize = 11.sp,
-            color = Color.White.copy(alpha = 0.60f)
-        )
-
-        GlassComponentType.values().forEach { type ->
-            val compConfig = controlsConfig.getComponent(type)
-            val isExpanded = expandedAccordions.contains(type)
-            val rotation by animateFloatAsState(if (isExpanded) 180f else 0f, label = "chevronRotate")
-
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    // Accordion Header
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onToggleAccordion(type) },
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.ExpandMore,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .rotate(rotation),
-                                tint = accent
-                            )
-                            Column {
-                                Text(
-                                    text = type.displayName,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = if (compConfig.useGlobal) "Inheriting master settings" else "Custom override active",
-                                    fontSize = 10.sp,
-                                    color = if (compConfig.useGlobal) Color.White.copy(alpha = 0.50f) else accent
-                                )
-                            }
-                        }
-
-                        // Immediate Use Global Switch (D-06)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text("Use Global", fontSize = 11.sp, color = Color.White.copy(alpha = 0.70f))
-                            LiquidGlassSwitch(
-                                checked = compConfig.useGlobal,
-                                onCheckedChange = { useGlobal ->
-                                    onUpdateControls(
-                                        controlsConfig.updateComponent(
-                                            type,
-                                            compConfig.copy(useGlobal = useGlobal)
-                                        )
-                                    )
-                                }
-                            )
-                        }
-                    }
-
-                    // Accordion Body
-                    AnimatedVisibility(visible = isExpanded) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (compConfig.useGlobal) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(ContinuousRoundedRectangle(8.dp))
-                                        .background(Color.White.copy(alpha = 0.05f))
-                                        .padding(10.dp)
-                                ) {
-                                    Text(
-                                        text = "Inheriting master settings. Turn off 'Use Global' above to configure independent optical parameters and motion physics for this control.",
-                                        fontSize = 11.sp,
-                                        color = Color.White.copy(alpha = 0.65f)
-                                    )
-                                }
-                            } else {
-                                // List performance override toggle (D-08)
-                                if (type.supportsListOverride) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("Force Lighter Style in Lists", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                            Text("Eliminates backdrop blur passes in scrolling lists for 120fps", fontSize = 10.sp, color = Color.White.copy(alpha = 0.55f))
-                                        }
-                                        LiquidGlassSwitch(
-                                            checked = compConfig.forceLighterInLists,
-                                            onCheckedChange = {
-                                                onUpdateControls(
-                                                    controlsConfig.updateComponent(
-                                                        type,
-                                                        compConfig.copy(forceLighterInLists = it)
-                                                    )
-                                                )
-                                            }
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                }
-
-                                // Granular Component Sliders
-                                SliderRow("Component Blur Radius", "${compConfig.blurDp.roundToInt()} dp", compConfig.blurDp, 0f..32f, accent) {
-                                    onUpdateControls(controlsConfig.updateComponent(type, compConfig.copy(blurDp = it)))
-                                }
-                                SliderRow("Lens Height", "${compConfig.lensHeightDp.roundToInt()} dp", compConfig.lensHeightDp, 0f..32f, accent) {
-                                    onUpdateControls(controlsConfig.updateComponent(type, compConfig.copy(lensHeightDp = it)))
-                                }
-                                SliderRow("Lens Amount", "${compConfig.lensAmountDp.roundToInt()} dp", compConfig.lensAmountDp, 0f..30f, accent) {
-                                    onUpdateControls(controlsConfig.updateComponent(type, compConfig.copy(lensAmountDp = it)))
-                                }
-                                SliderRow("Highlight Strength", "${(compConfig.highlightStrength * 100).roundToInt()}%", compConfig.highlightStrength, 0f..1f, accent) {
-                                    onUpdateControls(controlsConfig.updateComponent(type, compConfig.copy(highlightStrength = it)))
-                                }
-                                SliderRow("Press Scale", "${((compConfig.pressScale * 100).roundToInt()) / 100f}x", compConfig.pressScale, 0.85f..1.0f, accent) {
-                                    onUpdateControls(controlsConfig.updateComponent(type, compConfig.copy(pressScale = it)))
-                                }
-                                SliderRow("Spring Stiffness", "${compConfig.springStiffness.roundToInt()}", compConfig.springStiffness, 100f..1000f, accent) {
-                                    onUpdateControls(controlsConfig.updateComponent(type, compConfig.copy(springStiffness = it)))
-                                }
-                                SliderRow("Spring Damping", "${((compConfig.springDamping * 100).roundToInt()) / 100f}", compConfig.springDamping, 0.40f..1.0f, accent) {
-                                    onUpdateControls(controlsConfig.updateComponent(type, compConfig.copy(springDamping = it)))
-                                }
-
-                                // Reset to Global Button (D-15)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    TextButton(
-                                        onClick = {
-                                            onUpdateControls(
-                                                controlsConfig.updateComponent(
-                                                    type,
-                                                    ComponentGlassConfig(useGlobal = true)
-                                                )
-                                            )
-                                        }
-                                    ) {
-                                        Icon(Icons.Rounded.RestartAlt, null, modifier = Modifier.size(14.dp))
-                                        Spacer(Modifier.width(4.dp))
-                                        Text("Reset to Global", fontSize = 11.sp, color = Color.White.copy(alpha = 0.75f))
-                                    }
-                                }
-                            }
-                        }
+                        Text(
+                            text = label,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) accent else Color.White
+                        )
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Blur Radius Slider
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Blur Radius", fontSize = 13.sp)
+                    Text("${global.blurDp.toInt()} dp", fontSize = 13.sp, color = accent)
+                }
+                LiquidGlassSlider(
+                    value = (global.blurDp - 8f) / 56f,
+                    onValueChange = { frac ->
+                        val blur = 8f + frac * 56f
+                        onUpdateControls(controlsConfig.copy(global = global.copy(blurDp = blur)))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            // Lens Refraction Slider
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Lens Refraction", fontSize = 13.sp)
+                    Text("${global.lensAmountDp.toInt()} dp", fontSize = 13.sp, color = accent)
+                }
+                LiquidGlassSlider(
+                    value = global.lensAmountDp / 32f,
+                    onValueChange = { frac ->
+                        val lens = frac * 32f
+                        onUpdateControls(controlsConfig.copy(global = global.copy(lensAmountDp = lens)))
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
 }
 
-/**
- * Reusable slider control with label, value indicator, and accent styling.
- */
-@Composable
-private fun SliderRow(
-    label: String,
-    valueLabel: String,
-    value: Float,
-    range: ClosedFloatingPointRange<Float>,
-    accent: Color,
-    onValueChange: (Float) -> Unit
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(label, fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f))
-            Text(valueLabel, fontSize = 11.sp, color = accent, fontWeight = FontWeight.Bold)
-        }
-        LiquidGlassSlider(
-            value = value,
-            onValueChange = onValueChange,
-            valueRange = range
-        )
-    }
-}
-
-/**
- * Palette Presets and Animated Background Styles Section.
- */
 @Composable
 private fun PaletteAndBackgroundSection(
     themeConfig: GlassThemeConfig,
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
     accent: Color
 ) {
-    val palettes = listOf(
-        Triple("Cyberpunk", 0xFF8B5CF6L, Color(0xFF8B5CF6)),
-        Triple("Sapphire", 0xFF0284C7L, Color(0xFF0284C7)),
-        Triple("Emerald", 0xFF10B981L, Color(0xFF10B981)),
-        Triple("Sunset", 0xFFF97316L, Color(0xFFF97316)),
-        Triple("Rose", 0xFFF43F5EL, Color(0xFFF43F5E)),
-        Triple("Monolith", 0xFF94A3B8L, Color(0xFF94A3B8)),
-        Triple("Amber", 0xFFF59E0BL, Color(0xFFF59E0B)),
-        Triple("Amethyst", 0xFF6366F1L, Color(0xFF6366F1))
-    )
-
     val shaders = listOf(
-        "LIQUID_BLOBS" to "Liquid Blobs (Metaballs)",
+        "LIQUID_BLOBS" to "Liquid Blobs (Recommended)",
         "AURORA" to "Aurora Waves",
-        "MESH_GRADIENT" to "Mesh Gradient",
-        "ALBUM_ART_BLUR" to "Album Art Blur",
         "SLOW_CAUSTICS" to "Slow Caustics",
-        "STATIC" to "Frozen Glass"
+        "STATIC" to "Static OLED Minimal"
     )
 
-    // Accent Color Palette
-    GlassCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(14.dp)) {
-            Text(
-                text = "Accent Color Palette",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                palettes.forEach { (name, colorArgb, color) ->
-                    val isSelected = (themeConfig.fixedAccentColorArgb and 0xFFFFFFFFL) == (colorArgb and 0xFFFFFFFFL)
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable {
-                            onThemeConfigChange(
-                                themeConfig.copy(
-                                    fixedAccentColorArgb = colorArgb,
-                                    backgroundColorSource = "CUSTOM"
-                                )
-                            )
-                        }
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(32.dp)
-                                .clip(CircleShape)
-                                .background(color)
-                                .border(
-                                    width = if (isSelected) 3.dp else 1.dp,
-                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.3f),
-                                    shape = CircleShape
-                                )
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(name, fontSize = 9.sp, color = if (isSelected) Color.White else Color.White.copy(alpha = 0.6f))
-                    }
-                }
-            }
-        }
-    }
-
-    // Background Animation Style
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(14.dp)) {
             Text(

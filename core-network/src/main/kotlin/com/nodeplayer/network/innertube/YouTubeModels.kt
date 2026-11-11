@@ -951,6 +951,7 @@ data class YouTubeSearchResult(
     val songs: List<Track> = emptyList(),
     val albums: List<Track> = emptyList(),
     val artists: List<Track> = emptyList(),
+    val playlists: List<Track> = emptyList(),
 )
 
 data class YouTubeStreamInfo(

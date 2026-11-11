@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -237,7 +238,7 @@ fun SpotifyTransferReviewScreen(
         ) {
             when (selectedTab) {
                 0 -> {
-                    items(matchedTracks, key = { it.first.id }) { (spot, target) ->
+                    itemsIndexed(matchedTracks, key = { idx, item -> "${idx}_${item.first.id}" }) { _, (spot, target) ->
                         TrackRowItem(
                             title = target.title,
                             subtitle = "${target.artist} • (Spotify: ${spot.title})",
@@ -247,7 +248,7 @@ fun SpotifyTransferReviewScreen(
                     }
                 }
                 1 -> {
-                    items(uncertainTracks, key = { it.first.id }) { (spot, candidates) ->
+                    itemsIndexed(uncertainTracks, key = { idx, item -> "${idx}_${item.first.id}" }) { _, (spot, candidates) ->
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -290,7 +291,7 @@ fun SpotifyTransferReviewScreen(
                     }
                 }
                 2 -> {
-                    items(notFoundTracks, key = { it.id }) { spot ->
+                    itemsIndexed(notFoundTracks, key = { idx, spot -> "${idx}_${spot.id}" }) { _, spot ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

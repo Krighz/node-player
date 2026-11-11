@@ -13,10 +13,21 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import com.nodeplayer.ui.screens.DetailMediaHeader
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +41,7 @@ import com.nodeplayer.music.diagnostics.DiagnosticsDumpManager
 import com.nodeplayer.music.ui.components.DiagnosticsDumpDialog
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.nodeplayer.ui.components.ConvxLiquidDock
 import com.nodeplayer.ui.components.ConvxMiniPlayer
@@ -60,6 +72,7 @@ import com.nodeplayer.music.update.InstallUnknownAppsDialog
 import com.nodeplayer.music.update.PlaybackStopConfirmDialog
 import com.nodeplayer.music.update.WhatsNewSheet
 import android.widget.Toast
+import kotlinx.coroutines.withContext
 import com.nodeplayer.ui.components.NodeConnectPairingDialog
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
@@ -158,6 +171,7 @@ class MainActivity : ComponentActivity() {
                 var selectedPlaylistForDetail by remember { mutableStateOf<com.nodeplayer.model.Playlist?>(null) }
                 var playlistDetailTracks by remember { mutableStateOf<List<com.nodeplayer.model.Track>>(emptyList()) }
                 var trackForAddToPlaylist by remember { mutableStateOf<com.nodeplayer.model.Track?>(null) }
+                var activePlaylistDetail by remember { mutableStateOf<Pair<com.nodeplayer.ui.screens.DetailMediaHeader, List<com.nodeplayer.model.Track>>?>(null) }
 
                 // Spotify Transfer State
                 var showSpotifyDialog by remember { mutableStateOf(false) }
@@ -175,10 +189,12 @@ class MainActivity : ComponentActivity() {
                 var spotifyMatchingCurrentTitle by remember { mutableStateOf<String?>(null) }
                 var spotifyMatchingJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
-                val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder", "widgets", "widget_settings", "playlist_detail")
-                BackHandler(enabled = isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null) {
+                val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder", "widgets", "widget_settings", "playlist_detail", "settings", "equalizer", "optical_diagnostics")
+                BackHandler(enabled = isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null || activePlaylistDetail != null) {
                     if (isNowPlayingExpanded) {
                         isNowPlayingExpanded = false
+                    } else if (activePlaylistDetail != null) {
+                        activePlaylistDetail = null
                     } else if (selectedPlaylistForDetail != null) {
                         selectedPlaylistForDetail = null
                     } else if (isSubRoute) {
@@ -239,6 +255,7 @@ class MainActivity : ComponentActivity() {
                 var pendingApkToInstall by remember { mutableStateOf<File?>(null) }
                 val downloadStatus by UpdateManager.downloadStatus.collectAsState()
                 var showSearchSheet by remember { mutableStateOf(false) }
+                var showYouTubeLoginSheet by remember { mutableStateOf(false) }
                 var showPairingDialog by remember { mutableStateOf(false) }
                 var pairingProgress by remember { mutableStateOf(false) }
                 var pairingStatusMsg by remember { mutableStateOf<String?>(null) }
@@ -339,11 +356,37 @@ class MainActivity : ComponentActivity() {
                         )
 
                         // 2. Foreground Interactive UI (Cards use clean translucent glass; no recursive blur)
-                        when (currentRoute) {
-                            "home" -> com.nodeplayer.music.ui.screens.HomeScreen(
+                        if (activePlaylistDetail != null) {
+                            val (header, detailTracks) = activePlaylistDetail!!
+                            com.nodeplayer.ui.screens.PlaylistDetailView(
+                                header = header,
+                                tracks = detailTracks,
+                                currentTrack = currentTrack,
+                                isPlaying = isPlaying,
+                                isSavedInLibrary = false,
+                                onBack = { activePlaylistDetail = null },
+                                onPlayTrack = { tr, q -> viewModel.playTrack(tr, q) },
+                                onPlayAll = { q -> if (q.isNotEmpty()) viewModel.playTrack(q[0], q) },
+                                onShuffleAll = { q ->
+                                    if (q.isNotEmpty()) {
+                                        val shuffled = q.shuffled()
+                                        viewModel.playTrack(shuffled[0], shuffled)
+                                    }
+                                },
+                                onToggleSaveLibrary = { h ->
+                                    viewModel.createPlaylist(h.title, detailTracks)
+                                    safeToast("Saved ${detailTracks.size} tracks to library", Toast.LENGTH_SHORT)
+                                },
+                                onTrackOptionsClick = { trackForAddToPlaylist = it }
+                            )
+                        } else when (currentRoute) {
+                            "home", "new", "explore" -> com.nodeplayer.music.ui.screens.HomeScreen(
                                 allTracks = allTracks,
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
+                                currentRoute = currentRoute,
+                                dockScrollController = dockScrollController,
+                                onSearchClick = { showSearchSheet = true },
                                 onTrackClick = { track, queue ->
                                     viewModel.playTrack(track, queue)
                                 },
@@ -352,6 +395,19 @@ class MainActivity : ComponentActivity() {
                                 onOpenStats = { currentRoute = "stats" },
                                 onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
                                 onOpenNodeConnect = { showPairingDialog = true },
+                                onOpenEqualizer = { currentRoute = "equalizer" },
+                                onOpenSettings = { currentRoute = "settings" },
+                                onOpenOfflineMusic = { com.nodeplayer.common.AppModeState.setOnlineMode(false) },
+                                onSignInClick = { showYouTubeLoginSheet = true },
+                                onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
+                                    activePlaylistDetail = com.nodeplayer.ui.screens.DetailMediaHeader(
+                                        id = title,
+                                        title = title,
+                                        subtitle = subtitle,
+                                        artworkUrl = artworkUrl,
+                                        description = if (items.isNotEmpty()) "Explore ${items.size} curated tracks from $title." else null
+                                    ) to items
+                                },
                                 nodeConnectStatus = if (connectedPeers.isNotEmpty()) com.nodeplayer.ui.components.DeviceConnectStatus.CONNECTED
                                     else if (discoveredPeers.isNotEmpty() || activeSession != null) com.nodeplayer.ui.components.DeviceConnectStatus.DISCOVERING
                                     else com.nodeplayer.ui.components.DeviceConnectStatus.DISCONNECTED,
@@ -368,12 +424,23 @@ class MainActivity : ComponentActivity() {
                             )
                             "library" -> {
                                 if (selectedPlaylistForDetail != null) {
-                                    com.nodeplayer.music.ui.screens.PlaylistDetailScreen(
-                                        playlist = selectedPlaylistForDetail!!,
+                                    val pl = selectedPlaylistForDetail!!
+                                    val header = remember(pl.id, pl.name, pl.source, playlistDetailTracks) {
+                                        com.nodeplayer.ui.screens.DetailMediaHeader(
+                                            id = pl.id.toString(),
+                                            title = pl.name,
+                                            subtitle = "${pl.source.replaceFirstChar { it.uppercase() }} • ${playlistDetailTracks.size} tracks",
+                                            artworkUrl = playlistDetailTracks.firstOrNull()?.path,
+                                            description = "Saved in local library."
+                                        )
+                                    }
+                                    com.nodeplayer.ui.screens.PlaylistDetailView(
+                                        header = header,
                                         tracks = playlistDetailTracks,
                                         currentTrack = currentTrack,
                                         isPlaying = isPlaying,
-                                        onBackClick = { selectedPlaylistForDetail = null },
+                                        isSavedInLibrary = true,
+                                        onBack = { selectedPlaylistForDetail = null },
                                         onPlayTrack = { tr, q -> viewModel.playTrack(tr, q) },
                                         onPlayAll = { q -> if (q.isNotEmpty()) viewModel.playTrack(q[0], q) },
                                         onShuffleAll = { q ->
@@ -382,24 +449,7 @@ class MainActivity : ComponentActivity() {
                                                 viewModel.playTrack(shuffled[0], shuffled)
                                             }
                                         },
-                                        onReorderTracks = { pid, ids -> viewModel.reorderPlaylistTracks(pid, ids) },
-                                        onRemoveTrack = { pid, tid -> viewModel.removeTrackFromPlaylist(pid, tid) },
-                                        onRenamePlaylist = { pid, n ->
-                                            viewModel.renamePlaylist(pid, n)
-                                            selectedPlaylistForDetail = selectedPlaylistForDetail?.copy(name = n)
-                                        },
-                                        onDeletePlaylist = { pid ->
-                                            viewModel.deletePlaylistById(pid)
-                                            selectedPlaylistForDetail = null
-                                        },
-                                        onResyncPlaylist = { pid ->
-                                            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                                val db = com.nodeplayer.music.NodePlayerApplication.instance.database
-                                                val ytClient = com.nodeplayer.music.auth.YouTubeAccountManager.innerTubeClient ?: com.nodeplayer.network.innertube.InnerTubeClient()
-                                                val importer = com.nodeplayer.music.library.YouTubePlaylistImporter(db, ytClient)
-                                                importer.resyncPlaylist(pid)
-                                            }
-                                        }
+                                        onTrackOptionsClick = { trackForAddToPlaylist = it }
                                     )
                                 } else {
                                     LibraryScreen(
@@ -463,6 +513,7 @@ class MainActivity : ComponentActivity() {
                                 onLoadConvolverPreset = { viewModel.setConvolverPreset(it) },
                                 rmsLevel = currentRms,
                                 isPerformanceMode = themeConfig.isPerformanceMode,
+                                onBack = { currentRoute = "home" },
                             )
                             "more" -> com.nodeplayer.music.ui.screens.MoreScreen(
                                 dailyStats = dailyStats,
@@ -534,6 +585,7 @@ class MainActivity : ComponentActivity() {
                                 onNavigateToOpticalDiagnostics = { currentRoute = "optical_diagnostics" },
                                 onPairNewDevice = { showPairingDialog = true },
                                 onRescanLibrary = { viewModel.refreshLibrary() },
+                                onBack = { currentRoute = "home" },
                             )
                             "widgets", "widget_settings" -> com.nodeplayer.music.ui.screens.WidgetSettingsScreen(
                                 currentTrack = currentTrack,
@@ -548,65 +600,124 @@ class MainActivity : ComponentActivity() {
                     }
                     }
 
-                    // 3. Floating Mini-Player & Bottom Navigation (Convx Liquid Glass Dock with Auto-Hide)
-                    val dockAutoHide = themeConfig.dockAutoHideEnabled
-                    val miniPlayerAutoHide = themeConfig.dockAutoHideMiniPlayer
-                    val dockOffsetFraction = if (dockAutoHide) dockScrollFraction else 0f
-                    val miniPlayerOffsetFraction = if (dockAutoHide && miniPlayerAutoHide) dockScrollFraction else 0f
+                    // 3. Floating Mini-Player & Bottom Navigation (Convx Liquid Glass Dock)
+                    val activeTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
+                    val isCollapsedDock = (themeConfig.dockAutoHideEnabled && dockScrollFraction > 0.3f && activeTrack != null) || (activePlaylistDetail != null && activeTrack != null)
 
-                    if (currentRoute !in listOf("widget_settings", "widgets", "optical_diagnostics")) {
+                    if (currentRoute !in listOf("widget_settings", "widgets", "optical_diagnostics", "settings", "equalizer")) {
                         Column(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .fillMaxWidth()
                                 .navigationBarsPadding()
                         ) {
-                            val activeTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
-                            if (activeTrack != null) {
-                                val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
-                                val effectiveDuration = if (srvDur > 0L) srvDur else activeTrack.durationMs
-                                val duration = effectiveDuration.coerceAtLeast(1L)
-                                val progress = (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                            val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
+                            val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
+                            val effectiveDuration = if (srvDur > 0L) srvDur else (activeTrack?.durationMs ?: 0L)
+                            val duration = effectiveDuration.coerceAtLeast(1L)
+                            val progress = (currentPositionMs.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
 
-                                val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
+                            if (isCollapsedDock && activeTrack != null) {
+                                // Convx Collapsed Single-Row Island: [Home] [MiniPlayer] [Search]
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.10f))
+                                            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                                            .clickable {
+                                                if (activePlaylistDetail != null) {
+                                                    activePlaylistDetail = null
+                                                } else {
+                                                    currentRoute = "home"
+                                                }
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (activePlaylistDetail != null) Icons.AutoMirrored.Rounded.ArrowBack else Icons.Rounded.Home,
+                                            contentDescription = if (activePlaylistDetail != null) "Back" else "Home",
+                                            tint = if (currentRoute == "home" && activePlaylistDetail == null) accentColor else Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
 
-                                ConvxMiniPlayer(
-                                    currentTrack = activeTrack,
-                                    isPlaying = isPlaying,
-                                    progressFraction = progress,
-                                    onPlayPauseClick = { viewModel.togglePlayPause() },
-                                    onSkipNextClick = { viewModel.skipNext() },
-                                    onSkipPreviousClick = { viewModel.skipPrevious() },
-                                    onClick = { isNowPlayingExpanded = true },
-                                    gesturesEnabled = false,
-                                    rmsLevel = currentRms,
+                                    ConvxMiniPlayer(
+                                        currentTrack = activeTrack,
+                                        isPlaying = isPlaying,
+                                        progressFraction = progress,
+                                        onPlayPauseClick = { viewModel.togglePlayPause() },
+                                        onSkipNextClick = { viewModel.skipNext() },
+                                        onSkipPreviousClick = { viewModel.skipPrevious() },
+                                        onClick = { isNowPlayingExpanded = true },
+                                        gesturesEnabled = false,
+                                        rmsLevel = currentRms,
+                                        isPerformanceMode = themeConfig.isPerformanceMode,
+                                        shaderEnabled = isShaderActive,
+                                        chromaticFringe = themeConfig.chromaticFringeValue(),
+                                        backdrop = pageBackdrop,
+                                        isCollapsed = true,
+                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.White.copy(alpha = 0.10f))
+                                            .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+                                            .clickable { showSearchSheet = true },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Search,
+                                            contentDescription = "Search",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+                            } else if (activePlaylistDetail == null) {
+                                // Convx Full 2-Tier Dock: MiniPlayer above, ConvxLiquidDock below
+                                if (activeTrack != null) {
+                                    ConvxMiniPlayer(
+                                        currentTrack = activeTrack,
+                                        isPlaying = isPlaying,
+                                        progressFraction = progress,
+                                        onPlayPauseClick = { viewModel.togglePlayPause() },
+                                        onSkipNextClick = { viewModel.skipNext() },
+                                        onSkipPreviousClick = { viewModel.skipPrevious() },
+                                        onClick = { isNowPlayingExpanded = true },
+                                        gesturesEnabled = false,
+                                        rmsLevel = currentRms,
+                                        isPerformanceMode = themeConfig.isPerformanceMode,
+                                        shaderEnabled = isShaderActive,
+                                        chromaticFringe = themeConfig.chromaticFringeValue(),
+                                        backdrop = pageBackdrop,
+                                        isCollapsed = false
+                                    )
+                                }
+
+                                ConvxLiquidDock(
+                                    selectedRoute = currentRoute,
+                                    onRouteChange = { currentRoute = it },
+                                    onSearchClick = { showSearchSheet = true },
                                     isPerformanceMode = themeConfig.isPerformanceMode,
                                     shaderEnabled = isShaderActive,
                                     chromaticFringe = themeConfig.chromaticFringeValue(),
+                                    searchButtonVisible = themeConfig.showDockSearchButton,
+                                    lensStrength = themeConfig.lensRefractionStrength,
+                                    rimSpecular = themeConfig.lensRimSpecular,
                                     backdrop = pageBackdrop
                                 )
                             }
-
-                            val isShaderActive = themeConfig.isShaderActive(selfTestResult.passed)
-
-                            GlassDebug.logThrottled(
-                                "GlassPath",
-                                "API=${android.os.Build.VERSION.SDK_INT}, shaderMode=${themeConfig.shaderMode}, selfTestPassed=${selfTestResult.passed}, " +
-                                "isShaderActive=$isShaderActive, perfMode=${themeConfig.isPerformanceMode}, dockLens=${themeConfig.dockGlassLensEnabled}"
-                            )
-
-                            ConvxLiquidDock(
-                                selectedRoute = currentRoute,
-                                onRouteChange = { currentRoute = it },
-                                onSearchClick = { showSearchSheet = true },
-                                isPerformanceMode = themeConfig.isPerformanceMode,
-                                shaderEnabled = isShaderActive,
-                                chromaticFringe = themeConfig.chromaticFringeValue(),
-                                searchButtonVisible = themeConfig.showDockSearchButton,
-                                lensStrength = themeConfig.lensRefractionStrength,
-                                rimSpecular = themeConfig.lensRimSpecular,
-                                backdrop = pageBackdrop
-                            )
                         }
                     }
 
@@ -677,6 +788,13 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                    if (showYouTubeLoginSheet) {
+                        com.nodeplayer.music.ui.auth.YouTubeLoginSheet(
+                            onDismiss = { showYouTubeLoginSheet = false },
+                            onLoginSuccess = { showYouTubeLoginSheet = false }
+                        )
+                    }
+
                     if (showSpotifyDialog) {
                         com.nodeplayer.ui.spotify.SpotifyImportDialog(
                             isConfigured = !spotifyClientId.isNullOrBlank(),
@@ -704,29 +822,34 @@ class MainActivity : ComponentActivity() {
                                     spotifyMatchingProgress = 0f
                                     spotifyMatchingJob?.cancel()
                                     spotifyMatchingJob = lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                        val tracks = com.nodeplayer.music.auth.SpotifyAccountManager.client.getPlaylistTracks(token, pl.id).getOrDefault(emptyList())
-                                        val ytClient = com.nodeplayer.music.auth.YouTubeAccountManager.innerTubeClient ?: com.nodeplayer.network.innertube.InnerTubeClient()
-                                        val matcher = com.nodeplayer.network.spotify.SpotifyTrackMatcher(ytClient)
+                                        try {
+                                            val tracks = com.nodeplayer.music.auth.SpotifyAccountManager.client.getPlaylistTracks(token, pl.id).getOrDefault(emptyList())
+                                            val ytClient = com.nodeplayer.music.auth.YouTubeAccountManager.innerTubeClient ?: com.nodeplayer.network.innertube.InnerTubeClient()
+                                            val matcher = com.nodeplayer.network.spotify.SpotifyTrackMatcher(ytClient)
 
-                                        val matched = mutableListOf<Pair<com.nodeplayer.network.spotify.SpotifyTrack, com.nodeplayer.model.Track>>()
-                                        val uncertain = mutableListOf<Pair<com.nodeplayer.network.spotify.SpotifyTrack, List<com.nodeplayer.model.Track>>>()
-                                        val notFound = mutableListOf<com.nodeplayer.network.spotify.SpotifyTrack>()
+                                            val matched = mutableListOf<Pair<com.nodeplayer.network.spotify.SpotifyTrack, com.nodeplayer.model.Track>>()
+                                            val uncertain = mutableListOf<Pair<com.nodeplayer.network.spotify.SpotifyTrack, List<com.nodeplayer.model.Track>>>()
+                                            val notFound = mutableListOf<com.nodeplayer.network.spotify.SpotifyTrack>()
 
-                                        tracks.forEachIndexed { idx, spotTrack ->
-                                            spotifyMatchingCurrentTitle = spotTrack.title
-                                            spotifyMatchingProgress = (idx + 1).toFloat() / tracks.size.toFloat()
-                                            when (val res = matcher.matchTrack(spotTrack)) {
-                                                is com.nodeplayer.network.spotify.MatchResult.HighConfidence -> matched.add(spotTrack to res.candidate)
-                                                is com.nodeplayer.network.spotify.MatchResult.Uncertain -> uncertain.add(spotTrack to res.topCandidates)
-                                                is com.nodeplayer.network.spotify.MatchResult.NotFound -> notFound.add(spotTrack)
+                                            tracks.forEachIndexed { idx, spotTrack ->
+                                                spotifyMatchingCurrentTitle = spotTrack.title
+                                                spotifyMatchingProgress = (idx + 1).toFloat() / tracks.size.toFloat()
+                                                when (val res = matcher.matchTrack(spotTrack)) {
+                                                    is com.nodeplayer.network.spotify.MatchResult.HighConfidence -> matched.add(spotTrack to res.candidate)
+                                                    is com.nodeplayer.network.spotify.MatchResult.Uncertain -> uncertain.add(spotTrack to res.topCandidates)
+                                                    is com.nodeplayer.network.spotify.MatchResult.NotFound -> notFound.add(spotTrack)
+                                                }
                                             }
-                                        }
 
-                                        spotifyMatchedTracks = matched
-                                        spotifyUncertainTracks = uncertain
-                                        spotifyNotFoundTracks = notFound
-                                        isSpotifyMatching = false
-                                        spotifyMatchingCurrentTitle = null
+                                            spotifyMatchedTracks = matched
+                                            spotifyUncertainTracks = uncertain
+                                            spotifyNotFoundTracks = notFound
+                                        } catch (t: Throwable) {
+                                            com.nodeplayer.common.logging.NodeLog.e("SpotifyMatch", "Matching failed", t)
+                                        } finally {
+                                            isSpotifyMatching = false
+                                            spotifyMatchingCurrentTitle = null
+                                        }
                                     }
                                 }
                             },
@@ -853,9 +976,9 @@ class MainActivity : ComponentActivity() {
                     }
 
                     if (showSearchSheet) {
-                        GlobalSearchSheet(
-                            tracks = allTracks,
-                            onTrackClick = { track ->
+                        com.nodeplayer.ui.screens.GlassSearchView(
+                            onDismiss = { showSearchSheet = false },
+                            onPlayTrack = { track, queue ->
                                 if (track.path.startsWith("nodeconnect://")) {
                                     val conn = hub?.activeConnections?.firstOrNull()
                                     if (conn != null) {
@@ -869,16 +992,68 @@ class MainActivity : ComponentActivity() {
                                             safeToast("Playing '${track.title}' from ${conn.peerDeviceName}...", android.widget.Toast.LENGTH_SHORT)
                                         }
                                     }
-                                } else if (track.path.startsWith("nodeplayer://youtube/")) {
-                                    viewModel.playTrack(track, listOf(track))
-                                    isNowPlayingExpanded = true
                                 } else {
-                                    viewModel.playTrack(track, allTracks)
+                                    viewModel.playTrack(track, queue)
                                     isNowPlayingExpanded = true
                                 }
                                 showSearchSheet = false
                             },
-                            onDismiss = { showSearchSheet = false }
+                            onAlbumClick = { albumTrack: com.nodeplayer.model.Track ->
+                                val cleanAlbumId = if (albumTrack.album.isNotBlank() && (albumTrack.album.startsWith("OLAK") || albumTrack.album.startsWith("MPRE"))) {
+                                    albumTrack.album
+                                } else {
+                                    "album_${albumTrack.album.lowercase().replace(" ", "_")}"
+                                }
+                                val header = DetailMediaHeader(
+                                    id = cleanAlbumId,
+                                    title = albumTrack.album.ifBlank { albumTrack.title },
+                                    subtitle = albumTrack.artist,
+                                    artworkUrl = albumTrack.path,
+                                    isAlbum = true
+                                )
+                                activePlaylistDetail = header to listOf<com.nodeplayer.model.Track>(albumTrack)
+                                showSearchSheet = false
+                                if (cleanAlbumId.startsWith("OLAK") || cleanAlbumId.startsWith("MPRE")) {
+                                    lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                        val result = com.nodeplayer.network.innertube.InnerTubeClient().use { client ->
+                                            client.fetchPlaylistTracks(cleanAlbumId)
+                                        }
+                                        val loadedTracks = result.getOrDefault(emptyList())
+                                        if (loadedTracks.isNotEmpty()) {
+                                            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                activePlaylistDetail = header to loadedTracks
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            onPlaylistClick = { playlistTrack: com.nodeplayer.model.Track ->
+                                val cleanPlaylistId = if (playlistTrack.album.isNotBlank() && (playlistTrack.album.startsWith("PL") || playlistTrack.album.startsWith("VL") || playlistTrack.album.startsWith("RD"))) {
+                                    playlistTrack.album
+                                } else {
+                                    playlistTrack.path.substringAfter("nodeplayer://youtube/playlist/", playlistTrack.album)
+                                }
+                                val header = DetailMediaHeader(
+                                    id = cleanPlaylistId,
+                                    title = playlistTrack.title,
+                                    subtitle = playlistTrack.artist.ifBlank { "YouTube Music" },
+                                    artworkUrl = if (playlistTrack.path.startsWith("http")) playlistTrack.path else null,
+                                    description = "YouTube Music Playlist",
+                                    isAlbum = false
+                                )
+                                activePlaylistDetail = header to emptyList()
+                                showSearchSheet = false
+                                lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    val result = com.nodeplayer.network.innertube.InnerTubeClient().use { client ->
+                                        client.fetchPlaylistTracks(cleanPlaylistId)
+                                    }
+                                    val loadedTracks = result.getOrDefault(emptyList())
+                                    withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                        activePlaylistDetail = header to loadedTracks
+                                    }
+                                }
+                            },
+                            backdrop = pageBackdrop
                         )
                     }
                     if (showPairingDialog) {

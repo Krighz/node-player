@@ -90,6 +90,19 @@ class WindowsPlaybackEngine(
         }
     }
 
+    fun playNext(track: Track) {
+        val current = _queue.value.toMutableList()
+        val nextIdx = (_currentQueueIndex.value + 1).coerceAtMost(current.size)
+        current.add(nextIdx, track)
+        _queue.value = current
+    }
+
+    fun addToQueue(track: Track) {
+        val current = _queue.value.toMutableList()
+        current.add(track)
+        _queue.value = current
+    }
+
     fun playIndex(index: Int) {
         val q = _queue.value
         if (q.isNotEmpty() && index in q.indices) {

@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -88,6 +89,14 @@ fun AppleMusicLyricsView(
 
     var userScrolledManually by remember { mutableStateOf(false) }
     var lastInteractionTime by remember { mutableStateOf(0L) }
+
+    val isDragged by listState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(isDragged) {
+        if (isDragged) {
+            userScrolledManually = true
+            lastInteractionTime = System.currentTimeMillis()
+        }
+    }
 
     // Active line detection
     val lines = lyrics?.lines ?: emptyList()
@@ -285,12 +294,6 @@ fun AppleMusicLyricsView(
                             .width(columnWidth)
                             .fillMaxHeight()
                             .padding(horizontal = 24.dp)
-                            .pointerInput(Unit) {
-                                detectDragGestures { _, _ ->
-                                    userScrolledManually = true
-                                    lastInteractionTime = System.currentTimeMillis()
-                                }
-                            }
                     ) {
                         LazyColumn(
                             state = listState,
