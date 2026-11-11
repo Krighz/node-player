@@ -136,10 +136,28 @@ fun NowPlayingView(
                 }
             }
     ) {
-        // Underlying AlbumArtGradientBackdrop
-        AlbumArtGradientBackdrop(
-            track = currentTrack,
+        // Underlying ArtworkMeshBackdrop beneath all player layers (D-05, D-08)
+        val artworkUrl = remember(currentTrack.id, currentTrack.path) {
+            currentTrack.path.takeIf { it.isNotBlank() } ?: currentTrack.id.toString()
+        }
+        ArtworkMeshBackdrop(
+            artworkUrl = artworkUrl,
             modifier = Modifier.fillMaxSize()
+        )
+
+        // Subtle top legibility scrim so status bar and drag handle remain legible on high-luminance artwork covers
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.45f),
+                            Color.Transparent
+                        )
+                    )
+                )
         )
 
         // Foreground controls layer
