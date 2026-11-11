@@ -34,6 +34,52 @@ actual object PlatformArtworkProvider {
         return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)?.asImageBitmap()
     }
 
+    actual suspend fun loadArtwork(url: String, maxSizePx: Int): ImageBitmap? {
+        if (url.isBlank()) return null
+        val targetPx = maxSizePx.coerceIn(96, 512)
+        val cachedBytes = ArtworkCache.getBytes(url)
+        if (cachedBytes != null && cachedBytes.isNotEmpty()) {
+            return decodeSemaphore.withPermit {
+                try {
+                    decodeSampledBitmap(cachedBytes, targetPx)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
+        val resolvedUrl = if (url.startsWith("nodeplayer://youtube/")) {
+            val videoId = url.removePrefix("nodeplayer://youtube/")
+            "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+        } else {
+            url
+        }
+        return decodeSemaphore.withPermit {
+            val hook = remoteImageFetcher
+            if (hook != null) {
+                try {
+                    hook(resolvedUrl, targetPx)
+                } catch (_: Exception) {
+                    null
+                }
+            } else {
+                try {
+                    val uri = java.net.URI(resolvedUrl).toURL()
+                    val conn = uri.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 4000
+                    conn.readTimeout = 4000
+                    conn.instanceFollowRedirects = true
+                    val bytes = conn.inputStream.use { it.readBytes() }
+                    if (bytes.isNotEmpty()) {
+                        ArtworkCache.putBytes(url, bytes)
+                        decodeSampledBitmap(bytes, targetPx)
+                    } else null
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
+    }
+
     actual suspend fun loadArtwork(track: Track, maxSizePx: Int): ImageBitmap? {
         val path = track.path
         if (path.isBlank()) return null
@@ -176,3 +222,6 @@ actual object PlatformArtworkProvider {
         }
     }
 }
+
+actual fun imageBitmapOf(pixels: IntArray, width: Int, height: Int): ImageBitmap =
+    Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888).asImageBitmap()

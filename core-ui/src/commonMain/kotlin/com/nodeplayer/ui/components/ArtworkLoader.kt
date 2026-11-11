@@ -28,8 +28,11 @@ import kotlinx.coroutines.withContext
 
 expect object PlatformArtworkProvider {
     suspend fun loadArtwork(track: Track, maxSizePx: Int = ArtworkCache.DEFAULT_TARGET_SIZE_PX): ImageBitmap?
+    suspend fun loadArtwork(url: String, maxSizePx: Int = ArtworkCache.DEFAULT_TARGET_SIZE_PX): ImageBitmap?
     suspend fun extractVibrantColor(track: Track): Color?
 }
+
+expect fun imageBitmapOf(pixels: IntArray, width: Int, height: Int): ImageBitmap
 
 internal class BoundedLruCache<K : Any, V : Any>(
     private val maxEntries: Int

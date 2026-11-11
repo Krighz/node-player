@@ -7,10 +7,15 @@ import com.nodeplayer.model.Track
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import org.jetbrains.skia.Bitmap
+import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image
+import org.jetbrains.skia.ImageInfo
 import org.jetbrains.skia.SamplingMode
 import java.io.File
 import java.io.FileInputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 actual object PlatformArtworkProvider {
 
@@ -46,6 +51,43 @@ actual object PlatformArtworkProvider {
             }
         } finally {
             skiaImage.close()
+        }
+    }
+
+    actual suspend fun loadArtwork(url: String, maxSizePx: Int): ImageBitmap? {
+        if (url.isBlank()) return null
+        val targetPx = maxSizePx.coerceIn(96, 512)
+        val cachedBytes = ArtworkCache.getBytes(url)
+        if (cachedBytes != null && cachedBytes.isNotEmpty()) {
+            return decodeSemaphore.withPermit {
+                try {
+                    decodeSampledDesktopBitmap(cachedBytes, targetPx)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
+        val resolvedUrl = if (url.startsWith("nodeplayer://youtube/")) {
+            val videoId = url.removePrefix("nodeplayer://youtube/")
+            "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+        } else {
+            url
+        }
+        return decodeSemaphore.withPermit {
+            try {
+                val uri = java.net.URI(resolvedUrl).toURL()
+                val conn = uri.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                conn.instanceFollowRedirects = true
+                val bytes = conn.inputStream.use { it.readBytes() }
+                if (bytes.isNotEmpty()) {
+                    ArtworkCache.putBytes(url, bytes)
+                    decodeSampledDesktopBitmap(bytes, targetPx)
+                } else null
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 
@@ -272,4 +314,14 @@ actual object PlatformArtworkProvider {
             null
         }
     }
+}
+
+actual fun imageBitmapOf(pixels: IntArray, width: Int, height: Int): ImageBitmap {
+    val bitmap = Bitmap()
+    bitmap.allocPixels(ImageInfo(width, height, ColorType.BGRA_8888, ColorAlphaType.UNPREMUL))
+    val bytes = ByteBuffer.allocate(pixels.size * 4).order(ByteOrder.LITTLE_ENDIAN)
+    bytes.asIntBuffer().put(pixels)
+    bitmap.installPixels(bytes.array())
+    bitmap.setImmutable()
+    return bitmap.asComposeImageBitmap()
 }
