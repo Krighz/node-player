@@ -383,7 +383,9 @@ private class DrawBackdropNode(
 
     private fun updateEffects() {
         if (!isRenderEffectSupported()) {
-            GlassDebug.logThrottled("UpdateEffects", "isRenderEffectSupported() returned false")
+            if (GlassDebug.isEnabled) {
+                GlassDebug.logThrottled("UpdateEffects", "isRenderEffectSupported() returned false")
+            }
             return
         }
 

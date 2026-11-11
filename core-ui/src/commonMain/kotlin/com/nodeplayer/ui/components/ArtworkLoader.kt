@@ -109,14 +109,13 @@ fun TrackArtwork(
             bitmap = cached
             return@LaunchedEffect
         }
-        withContext(Dispatchers.IO) {
-            val loaded = PlatformArtworkProvider.loadArtwork(track, targetSizePx)
-            if (loaded != null) {
-                ArtworkCache.put(sizedCacheKey, loaded)
-                withContext(Dispatchers.Main) {
-                    bitmap = loaded
-                }
+        val loaded = withContext(Dispatchers.IO) {
+            PlatformArtworkProvider.loadArtwork(track, targetSizePx)?.also {
+                ArtworkCache.put(sizedCacheKey, it)
             }
+        }
+        if (loaded != null) {
+            bitmap = loaded
         }
     }
 

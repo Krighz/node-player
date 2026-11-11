@@ -76,7 +76,8 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             }
         }
         NodeLog.isVerbose = BuildConfig.DEBUG
-        com.nodeplayer.ui.debug.GlassDebug.isEnabled = BuildConfig.DEBUG
+        // Keep GlassDebug opt-in so debug benchmarks and normal scrolling never pay per-frame nanoTime/logging overhead
+        com.nodeplayer.ui.debug.GlassDebug.isEnabled = false
         NodeLog.i("app/lifecycle", "NodePlayerApplication initialized")
 
         com.nodeplayer.common.media.CipherSolver.current = com.nodeplayer.music.cipher.AndroidCipherSolver(this)

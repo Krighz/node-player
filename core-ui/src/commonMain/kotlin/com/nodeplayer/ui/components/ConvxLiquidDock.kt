@@ -112,11 +112,13 @@ fun ConvxLiquidDock(
     val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
     val puckActive = themeConfig.dockGlassPuckEnabled
 
-    GlassDebug.logThrottled(
-        "ConvxLiquidDock",
-        "lensActive=$lensActive (dockGlassLens=${themeConfig.dockGlassLensEnabled}, shaderEnabled=$shaderEnabled, !perf=${!isPerformanceMode}, strength=${themeConfig.glassStrength}, !plain=${!resolvedDock.isPlainSquircle}, master=${controlsConfig.masterEnabled}), " +
-        "rimActive=$rimActive, puckActive=$puckActive, blurDp=${resolvedDock.blurDp}, lensH=${resolvedDock.lensHeightDp}, lensAmt=${resolvedDock.lensAmountDp}, backdrop=${backdrop::class.simpleName}"
-    )
+    if (GlassDebug.isEnabled) {
+        GlassDebug.logThrottled(
+            "ConvxLiquidDock",
+            "lensActive=$lensActive (dockGlassLens=${themeConfig.dockGlassLensEnabled}, shaderEnabled=$shaderEnabled, !perf=${!isPerformanceMode}, strength=${themeConfig.glassStrength}, !plain=${!resolvedDock.isPlainSquircle}, master=${controlsConfig.masterEnabled}), " +
+                "rimActive=$rimActive, puckActive=$puckActive, blurDp=${resolvedDock.blurDp}, lensH=${resolvedDock.lensHeightDp}, lensAmt=${resolvedDock.lensAmountDp}, backdrop=${backdrop::class.simpleName}"
+        )
+    }
 
     val selectedIndex = items.indexOfFirst { it.route == selectedRoute }.coerceAtLeast(0)
     var pillWidthPx by remember { mutableIntStateOf(0) }

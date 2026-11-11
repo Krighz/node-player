@@ -1,17 +1,18 @@
 package com.nodeplayer.ui.debug
 
 import com.nodeplayer.common.logging.NodeLog
+import java.util.concurrent.ConcurrentHashMap
 
 object GlassDebug {
     @Volatile
     var isEnabled: Boolean = false // Debug flag (disabled by default in production)
 
-    private val lastLogTimes = mutableMapOf<String, Long>()
-    private val lastLogValues = mutableMapOf<String, String>()
+    private val lastLogTimes = ConcurrentHashMap<String, Long>()
 
     // Performance measurements: update and draw times in nanoseconds
     private val drawDurations = mutableListOf<Long>()
     private val updateDurations = mutableListOf<Long>()
+    @Volatile
     private var lastPerfReportTime = 0L
 
     fun logThrottled(key: String, message: String, minIntervalMs: Long = 1000L) {
@@ -21,7 +22,6 @@ object GlassDebug {
 
         if (now - lastTime >= minIntervalMs) {
             lastLogTimes[key] = now
-            lastLogValues[key] = message
             NodeLog.i("GlassDebug", "[$key] $message")
         }
     }
@@ -83,7 +83,6 @@ object GlassDebug {
         synchronized(drawDurations) { drawDurations.clear() }
         synchronized(updateDurations) { updateDurations.clear() }
         lastLogTimes.clear()
-        lastLogValues.clear()
         lastPerfReportTime = 0L
     }
 }

@@ -89,10 +89,12 @@ fun ConvxMiniPlayer(
     val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF" && !resolvedMiniPlayer.isPlainSquircle && controlsConfig.masterEnabled
     val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
 
-    GlassDebug.logThrottled(
-        "ConvxMiniPlayer",
-        "lensActive=$lensActive, blurDp=${resolvedMiniPlayer.blurDp}, lensH=${resolvedMiniPlayer.lensHeightDp}, lensAmt=${resolvedMiniPlayer.lensAmountDp}, backdrop=${backdrop::class.simpleName}"
-    )
+    if (GlassDebug.isEnabled) {
+        GlassDebug.logThrottled(
+            "ConvxMiniPlayer",
+            "lensActive=$lensActive, blurDp=${resolvedMiniPlayer.blurDp}, lensH=${resolvedMiniPlayer.lensHeightDp}, lensAmt=${resolvedMiniPlayer.lensAmountDp}, backdrop=${backdrop::class.simpleName}"
+        )
+    }
 
     val containerShape = remember(resolvedMiniPlayer.cornerShapeDp) { ContinuousRoundedRectangle(resolvedMiniPlayer.cornerShapeDp.dp) }
     val artworkShape = remember { ContinuousRoundedRectangle(10.dp) }

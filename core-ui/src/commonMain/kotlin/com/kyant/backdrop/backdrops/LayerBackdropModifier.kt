@@ -55,10 +55,12 @@ private class LayerBackdropNode(
 
     override fun ContentDrawScope.draw() {
         drawContent()
-        GlassDebug.logThrottled(
-            "LayerBackdrop",
-            "Recording page into backdrop: size=${this.size}, layerCoordAttached=${backdrop.layerCoordinates != null}"
-        )
+        if (GlassDebug.isEnabled) {
+            GlassDebug.logThrottled(
+                "LayerBackdrop",
+                "Recording page into backdrop: size=${this.size}, layerCoordAttached=${backdrop.layerCoordinates != null}"
+            )
+        }
         backdrop._isRecording = true
         try {
             recordLayer(backdrop.graphicsLayer) { backdrop.onDraw(this@draw) }

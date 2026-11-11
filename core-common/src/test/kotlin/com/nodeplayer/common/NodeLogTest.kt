@@ -44,4 +44,17 @@ class NodeLogTest {
         assertTrue(failure.isFailure)
         assertEquals("Test exception", (failure as NodeResult.Failure).message)
     }
+
+    @Test
+    fun testAsyncFileLoggingFlushesOffThread() {
+        val tempFile = kotlin.io.path.createTempFile("nodelog-test-", ".log").toFile()
+        tempFile.deleteOnExit()
+
+        NodeLog.initFileLogging(tempFile)
+        NodeLog.i("perf/logging", "Async log write entry")
+        NodeLog.flushFileLogging(timeoutMs = 2000L)
+
+        val content = tempFile.readText()
+        assertTrue(content.contains("Async log write entry"), "Expected flushed log entry in $tempFile")
+    }
 }
