@@ -2,6 +2,7 @@ package com.nodeplayer.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,8 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
@@ -30,6 +34,41 @@ import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.ScreenTransitions
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/**
+ * Avatar sizing and border constants per D-15.
+ */
+val PROFILE_AVATAR_SIZE: Dp = 56.dp
+val PROFILE_AVATAR_BORDER_WIDTH: Dp = 1.5.dp
+
+/**
+ * Formats a channel handle ensuring the '@' prefix is present.
+ */
+fun formatChannelHandle(handle: String?): String? {
+    if (handle.isNullOrBlank()) return null
+    val trimmed = handle.trim()
+    return if (trimmed.startsWith("@")) trimmed else "@$trimmed"
+}
+
+/**
+ * Resolves the profile subtitle text per D-15 and D-16.
+ * Priority: formatted channelHandle -> accountEmail -> "Sign in to YouTube Music"
+ */
+fun resolveProfileSubtitle(
+    channelHandle: String?,
+    accountEmail: String?,
+    accountName: String?
+): String {
+    val formattedHandle = formatChannelHandle(channelHandle)
+    return when {
+        !formattedHandle.isNullOrBlank() -> formattedHandle
+        !accountEmail.isNullOrBlank() -> accountEmail
+        !accountName.isNullOrBlank() -> "Signed in"
+        else -> "Sign in to YouTube Music"
+    }
+}
 
 /**
  * Sliding Liquid-Glass Profile & Top-Level Destinations Bottom Sheet.
@@ -49,6 +88,8 @@ fun HomeProfileSheet(
     onDismiss: () -> Unit,
     accountName: String? = null,
     accountEmail: String? = null,
+    avatarUrl: String? = null,
+    channelHandle: String? = null,
     onSignInClick: () -> Unit = {},
     onHistoryClick: () -> Unit = {},
     onEqualizerClick: () -> Unit,
@@ -133,23 +174,76 @@ fun HomeProfileSheet(
                         .padding(14.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val avatarBorderBrush = remember(accent) {
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.White.copy(alpha = 0.35f),
+                                accent.copy(alpha = 0.20f)
+                            )
+                        )
+                    }
+
+                    // Avatar Container (56dp circular layout per D-15 & D-16)
                     Box(
                         modifier = Modifier
-                            .size(44.dp)
+                            .size(PROFILE_AVATAR_SIZE)
                             .clip(CircleShape)
-                            .background(
-                                Brush.linearGradient(
-                                    listOf(accent, accent.copy(alpha = 0.5f))
-                                )
-                            ),
+                            .background(accent.copy(alpha = 0.15f))
+                            .border(PROFILE_AVATAR_BORDER_WIDTH, avatarBorderBrush, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Person,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        var avatarBitmap by remember(avatarUrl) { mutableStateOf<ImageBitmap?>(null) }
+
+                        LaunchedEffect(avatarUrl) {
+                            if (!avatarUrl.isNullOrBlank()) {
+                                val loaded = withContext(Dispatchers.IO) {
+                                    PlatformArtworkProvider.loadArtwork(avatarUrl, maxSizePx = 128)
+                                }
+                                if (loaded != null) {
+                                    avatarBitmap = loaded
+                                }
+                            } else {
+                                avatarBitmap = null
+                            }
+                        }
+
+                        val currentBitmap = avatarBitmap
+                        if (currentBitmap != null) {
+                            Image(
+                                bitmap = currentBitmap,
+                                contentDescription = "Profile Avatar",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                            )
+                        } else {
+                            // Logged-out / Guest fallback or default avatar
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (accountName != null) {
+                                            Brush.linearGradient(
+                                                listOf(accent, accent.copy(alpha = 0.5f))
+                                            )
+                                        } else {
+                                            Brush.linearGradient(
+                                                listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f))
+                                            )
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Person,
+                                    contentDescription = "User Avatar",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.width(14.dp))
@@ -162,10 +256,15 @@ fun HomeProfileSheet(
                                 color = Color.White
                             )
                         )
+                        val subtitleText = resolveProfileSubtitle(
+                            channelHandle = channelHandle,
+                            accountEmail = accountEmail,
+                            accountName = accountName
+                        )
                         Text(
-                            text = accountEmail ?: "Sign in to YouTube Music",
+                            text = subtitleText,
                             style = MaterialTheme.typography.bodySmall.copy(
-                                color = Color.White.copy(alpha = 0.60f)
+                                color = Color.White.copy(alpha = if (channelHandle != null) 0.70f else 0.60f)
                             )
                         )
                     }

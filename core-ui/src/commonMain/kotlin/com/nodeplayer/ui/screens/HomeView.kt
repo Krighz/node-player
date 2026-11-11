@@ -45,6 +45,7 @@ fun HomeView(
     onCastToPeer: (DiscoveredPeerInfo) -> Unit = {},
     onToggleNodeConnect: (Boolean) -> Unit = {},
     onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
+    youTubeAccount: com.nodeplayer.model.YouTubeAccount? = null,
     modifier: Modifier = Modifier
 ) {
     val isOnline by AppModeState.isOnlineMode.collectAsState()
@@ -71,6 +72,11 @@ fun HomeView(
                 onPlayPause = onPlayPause,
                 recentTracks = recentTracks,
                 dockScrollController = dockScrollController,
+                isLoggedIn = youTubeAccount != null,
+                accountName = youTubeAccount?.name,
+                accountEmail = youTubeAccount?.email,
+                avatarUrl = youTubeAccount?.avatarUrl,
+                channelHandle = youTubeAccount?.channelHandle,
                 onOpenEqualizer = onNavigateToEqualizer,
                 onOpenSettings = onNavigateToSettings,
                 onOpenOfflineMusic = { AppModeState.setOnlineMode(false) },

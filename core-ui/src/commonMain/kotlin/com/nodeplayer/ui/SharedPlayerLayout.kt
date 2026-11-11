@@ -126,6 +126,7 @@ fun SharedPlayerLayout(
     sleepTimerRemainingSec: Long? = null,
     onSetSleepTimer: (Int?) -> Unit = {},
     onKeepScreenOn: (Boolean) -> Unit = {},
+    youTubeAccount: YouTubeAccount? = null,
     modifier: Modifier = Modifier
 ) {
     var currentNav by remember { mutableStateOf(PlayerNavDestination.HOME) }
@@ -411,6 +412,7 @@ fun SharedPlayerLayout(
                                     onSelectMusicFolder = onSelectMusicFolder,
                                     onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
                                     onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
+                                    youTubeAccount = youTubeAccount,
                                     onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
                                         activeDetailHeader = DetailMediaHeader(
                                             id = "home_pl_${title.hashCode()}",
@@ -650,6 +652,7 @@ fun SharedPlayerLayout(
                                 onPairNewDevice = onPairNewDevice,
                                 onCastToPeer = onCastToPeer,
                                 onToggleNodeConnect = onToggleNodeConnect,
+                                youTubeAccount = youTubeAccount,
                                 onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
                                     activeDetailHeader = DetailMediaHeader(
                                         id = "home_pl_${title.hashCode()}",
