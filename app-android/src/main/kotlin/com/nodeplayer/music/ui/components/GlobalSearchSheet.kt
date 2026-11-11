@@ -137,6 +137,9 @@ fun GlobalSearchSheet(
         }
     }
 
+    val sheetShape = remember { ContinuousRoundedRectangle(28.dp) }
+    val searchFieldShape = remember { ContinuousRoundedRectangle(16.dp) }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF12141A).copy(alpha = 0.95f),
@@ -149,7 +152,7 @@ fun GlobalSearchSheet(
                     .background(Color.White.copy(alpha = 0.25f))
             )
         },
-        shape = ContinuousRoundedRectangle(28.dp)
+        shape = sheetShape
     ) {
         Column(
             modifier = Modifier
@@ -198,7 +201,7 @@ fun GlobalSearchSheet(
                     }
                 },
                 singleLine = true,
-                shape = ContinuousRoundedRectangle(16.dp),
+                shape = searchFieldShape,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = accent,
                     unfocusedBorderColor = Color.White.copy(alpha = 0.15f),

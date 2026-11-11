@@ -25,11 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.Shadow
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalAccentColor
@@ -85,32 +80,27 @@ fun HomeProfileSheet(
             contentAlignment = Alignment.BottomCenter
         ) {
             val sheetShape = remember { ContinuousRoundedRectangle(28.dp) }
+            val accountCardShape = remember { ContinuousRoundedRectangle(16.dp) }
+            val sheetBorderBrush = remember {
+                Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.24f),
+                        Color.White.copy(alpha = 0.06f)
+                    )
+                )
+            }
 
-            // Sheet container
+            // Sheet container — lightweight translucent glass surface + hairline border (P24)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clip(sheetShape)
+                    .background(Color(0xFF12161F).copy(alpha = 0.92f))
+                    .border(1.dp, sheetBorderBrush, sheetShape)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
                         onClick = {} // Consume click
-                    )
-                    .drawBackdrop(
-                        backdrop = backdrop,
-                        shape = { sheetShape },
-                        effects = {
-                            blur(24.dp.toPx())
-                            lens(16.dp.toPx(), 8.dp.toPx(), chromaticAberration = true)
-                        },
-                        highlight = {
-                            Highlight.Ambient.copy(width = 1.dp, alpha = 0.45f)
-                        },
-                        shadow = {
-                            Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.60f))
-                        },
-                        onDrawSurface = {
-                            drawRect(Color(0xFF12161F).copy(alpha = 0.88f))
-                        }
                     )
                     .padding(horizontal = 20.dp, vertical = 20.dp)
             ) {
@@ -130,9 +120,9 @@ fun HomeProfileSheet(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(ContinuousRoundedRectangle(16.dp))
+                        .clip(accountCardShape)
                         .background(Color.White.copy(alpha = 0.05f))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.12f), ContinuousRoundedRectangle(16.dp))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.12f), accountCardShape)
                         .clickable {
                             onDismiss()
                             onSignInClick()
@@ -185,7 +175,7 @@ fun HomeProfileSheet(
                                 contentColor = Color.White
                             ),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            shape = ContinuousCapsule()
+                            shape = remember { ContinuousCapsule() }
                         ) {
                             Text("Sign In", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
@@ -295,10 +285,11 @@ private fun ProfileSheetItem(
     subtitle: String,
     onClick: () -> Unit
 ) {
+    val itemShape = remember { ContinuousRoundedRectangle(12.dp) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(ContinuousRoundedRectangle(12.dp))
+            .clip(itemShape)
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically

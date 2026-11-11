@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,10 +42,12 @@ fun TrackDetailsSheet(
 ) {
     val accent = LocalAccentColor.current
     val scrollState = rememberScrollState()
+    val sheetShape = remember { ContinuousRoundedRectangle(28.dp) }
+    val iconShape = remember { ContinuousRoundedRectangle(12.dp) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        shape = ContinuousRoundedRectangle(28.dp),
+        shape = sheetShape,
         containerColor = Color(0xFF0F111A).copy(alpha = 0.96f),
         dragHandle = {
             BottomSheetDefaults.DragHandle(color = Color.White.copy(alpha = 0.3f))
@@ -64,7 +67,7 @@ fun TrackDetailsSheet(
                 Box(
                     modifier = Modifier
                         .size(44.dp)
-                        .clip(ContinuousRoundedRectangle(12.dp))
+                        .clip(iconShape)
                         .background(accent.copy(alpha = 0.2f)),
                     contentAlignment = Alignment.Center
                 ) {

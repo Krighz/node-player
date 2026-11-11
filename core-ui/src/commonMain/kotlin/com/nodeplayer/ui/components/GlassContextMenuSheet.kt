@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -56,11 +58,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.Shadow
 import com.nodeplayer.model.ContextMenuConfig
 import com.nodeplayer.model.Track
 import com.nodeplayer.model.TrackActionId
@@ -111,32 +108,26 @@ fun GlassContextMenuSheet(
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val sheetWidth = if (maxWidth > 600.dp) 520.dp else maxWidth
                 val sheetShape = remember { ContinuousRoundedRectangle(28.dp) }
+                val borderBrush = remember {
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.24f),
+                            Color.White.copy(alpha = 0.06f)
+                        )
+                    )
+                }
 
                 Column(
                     modifier = Modifier
                         .widthIn(max = sheetWidth)
                         .fillMaxWidth()
+                        .clip(sheetShape)
+                        .background(Color(0xFF101420).copy(alpha = 0.92f))
+                        .border(1.dp, borderBrush, sheetShape)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             onClick = {} // Consume click
-                        )
-                        .drawBackdrop(
-                            backdrop = backdrop,
-                            shape = { sheetShape },
-                            effects = {
-                                blur(24.dp.toPx())
-                                lens(16.dp.toPx(), 8.dp.toPx(), chromaticAberration = true)
-                            },
-                            highlight = {
-                                Highlight.Ambient.copy(width = 1.dp, alpha = 0.45f)
-                            },
-                            shadow = {
-                                Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.60f))
-                            },
-                            onDrawSurface = {
-                                drawRect(Color(0xFF101420).copy(alpha = 0.88f))
-                            }
                         )
                         .padding(horizontal = 20.dp, vertical = 20.dp)
                 ) {

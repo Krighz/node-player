@@ -39,8 +39,10 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import com.nodeplayer.common.AppModeState
 import com.nodeplayer.model.GlassThemeConfig
 import com.kyant.backdrop.Backdrop
@@ -250,64 +252,42 @@ fun ConvxLiquidDock(
                     )
                 }
         ) {
-            // Layer 1: Sliding circular lens bead (centered vertically in capsule, no edge overspill)
+            // Layer 1: Sliding circular lens bead (lightweight luminous pill — outer capsule owns hero lens+blur)
             if (puckActive && pillWidthPx > 0) {
-                val puckOffsetDp = with(density) { (animatedPuckCenterXPx - puckRadiusPx).toDp() }
+                val puckBrush = remember(accent, resolvedDock.tintOpacity, isDark) {
+                    val coreAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.55f else 0.42f)).coerceIn(0.22f, 0.72f)
+                    Brush.radialGradient(
+                        listOf(
+                            accent.copy(alpha = coreAlpha),
+                            accent.copy(alpha = coreAlpha * 0.45f),
+                            Color.Transparent
+                        )
+                    )
+                }
+                val puckBorderBrush = remember(resolvedDock.highlightStrength) {
+                    val topAlpha = (0.72f * resolvedDock.highlightStrength).coerceIn(0.25f, 0.90f)
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = topAlpha),
+                            Color.White.copy(alpha = 0.14f)
+                        )
+                    )
+                }
                 Box(
                     modifier = Modifier
-                        .offset(x = puckOffsetDp, y = 5.dp)
+                        .offset {
+                            IntOffset(
+                                x = (animatedPuckCenterXPx - puckRadiusPx).roundToInt(),
+                                y = 5.dp.roundToPx()
+                            )
+                        }
                         .size(puckDiameterDp)
-                        .then(
-                            if (lensActive) {
-                                Modifier.drawBackdrop(
-                                    backdrop = backdrop,
-                                    shape = { puckShape },
-                                    effects = {
-                                        blur(resolvedDock.blurDp.dp.toPx() * 0.5f)
-                                        lens(
-                                            resolvedDock.lensHeightDp.dp.toPx() * 0.9f,
-                                            resolvedDock.lensAmountDp.dp.toPx() * 0.9f,
-                                            chromaticAberration = true
-                                        )
-                                        vibrancy()
-                                    },
-                                    highlight = {
-                                        Highlight.Ambient.copy(
-                                            width = 1.4.dp,
-                                            alpha = (0.85f * resolvedDock.highlightStrength).coerceIn(0.2f, 1f)
-                                        )
-                                    },
-                                    shadow = {
-                                        Shadow(radius = 10.dp, color = Color.Black.copy(alpha = 0.35f))
-                                    },
-                                    onDrawSurface = {
-                                        val surfaceAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.55f else 0.40f)).coerceIn(0.2f, 0.8f)
-                                        drawCircle(accent.copy(alpha = surfaceAlpha))
-                                    }
-                                )
-                            } else {
-                                Modifier
-                                    .clip(puckShape)
-                                    .background(
-                                        Brush.radialGradient(
-                                            listOf(
-                                                accent.copy(alpha = 0.45f),
-                                                accent.copy(alpha = 0.20f),
-                                                Color.Transparent
-                                            )
-                                        )
-                                    )
-                                    .border(
-                                        width = 1.2.dp,
-                                        brush = Brush.verticalGradient(
-                                            listOf(
-                                                Color.White.copy(alpha = 0.70f),
-                                                Color.White.copy(alpha = 0.15f)
-                                            )
-                                        ),
-                                        shape = puckShape
-                                    )
-                            }
+                        .clip(puckShape)
+                        .background(puckBrush)
+                        .border(
+                            width = 1.2.dp,
+                            brush = puckBorderBrush,
+                            shape = puckShape
                         )
                 )
             }
@@ -369,54 +349,30 @@ fun ConvxLiquidDock(
             }
         }
 
-        // Circular Glass Search Button (only shown if Search is not already a dock tab)
+        // Circular Glass Search Button (lightweight surface + hairline border; hero lens+blur reserved for main Dock & MiniPlayer)
         if (effectiveSearchButtonVisible) {
             Spacer(modifier = Modifier.width(10.dp))
+            val searchAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.72f else 0.58f)).coerceIn(0.25f, 0.85f)
+            val searchColor = if (isDark) LiquidColors.SurfaceElevated else Color.White
+            val searchBorderBrush = remember(rimActive, rimSpecular) {
+                val topAlpha = if (rimActive) (0.35f * rimSpecular.coerceAtLeast(0.4f)).coerceIn(0.15f, 0.45f) else 0.14f
+                Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = topAlpha),
+                        Color.White.copy(alpha = 0.10f)
+                    )
+                )
+            }
             Box(
                 modifier = Modifier
                     .size(54.dp)
                     .pressScale(onClick = onSearchClick)
-                    .then(
-                        if (lensActive) {
-                            Modifier.drawBackdrop(
-                                backdrop = backdrop,
-                                shape = { searchShape },
-                                effects = {
-                                    blur(14.dp.toPx())
-                                    lens(14.dp.toPx(), 12.dp.toPx(), chromaticAberration = chromaticFringe > 0.05f)
-                                    vibrancy()
-                                },
-                                highlight = {
-                                    if (rimActive) {
-                                        Highlight.Ambient.copy(width = 1.dp, alpha = 0.85f * rimSpecular)
-                                    } else Highlight.Ambient.copy(alpha = 0f)
-                                },
-                                shadow = {
-                                    Shadow(radius = 10.dp, color = Color.Black.copy(alpha = 0.25f))
-                                },
-                                onDrawSurface = {
-                                    val surfaceAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.55f else 0.40f)).coerceIn(0.15f, 0.75f)
-                                    val surfaceColor = if (isDark) LiquidColors.SurfaceElevated else Color.White
-                                    drawRect(surfaceColor.copy(alpha = surfaceAlpha))
-                                }
-                            )
-                        } else {
-                            val fallbackAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.75f else 0.60f)).coerceIn(0.25f, 0.85f)
-                            val fallbackColor = if (isDark) LiquidColors.SurfaceElevated else Color.White
-                            Modifier
-                                .clip(searchShape)
-                                .background(fallbackColor.copy(alpha = fallbackAlpha))
-                                .border(
-                                    width = 1.dp,
-                                    brush = Brush.verticalGradient(
-                                        listOf(
-                                            Color.White.copy(alpha = 0.35f),
-                                            Color.White.copy(alpha = 0.10f)
-                                        )
-                                    ),
-                                    shape = searchShape
-                                )
-                        }
+                    .clip(searchShape)
+                    .background(searchColor.copy(alpha = searchAlpha))
+                    .border(
+                        width = 1.dp,
+                        brush = searchBorderBrush,
+                        shape = searchShape
                     ),
                 contentAlignment = Alignment.Center
             ) {

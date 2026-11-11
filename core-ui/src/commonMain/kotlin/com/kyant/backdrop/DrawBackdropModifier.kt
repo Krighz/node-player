@@ -342,12 +342,16 @@ private class DrawBackdropNode(
         drawContent()
         onDrawFront?.invoke(this)
 
-        exportedBackdrop?.graphicsLayer?.let { layer ->
-            recordLayer(layer) {
-                onDrawBehind?.invoke(this)
-                drawBackdropLayer()
-                onDrawSurface?.invoke(this)
-                onDrawFront?.invoke(this)
+        exportedBackdrop?.let { target ->
+            if (target !== backdrop) {
+                target.graphicsLayer?.let { layer ->
+                    recordLayer(layer) {
+                        onDrawBehind?.invoke(this)
+                        drawBackdropLayer()
+                        onDrawSurface?.invoke(this)
+                        onDrawFront?.invoke(this)
+                    }
+                }
             }
         }
     }
