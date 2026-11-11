@@ -213,7 +213,10 @@ data class HomeLayoutConfig(
 data class LyricsViewConfig(
     val fontSizeSp: Float = 28.0f,
     val blurRadiusDp: Float = 4.0f,
+    val blurredLinesCount: Int = 3,
+    val wordFillStyle: String = "GRADIENT_SWEEP", // GRADIENT_SWEEP, PER_WORD_FADE
     val autoHideDelaySec: Int = 5,
+    val showPreviewLine: Boolean = true,
     val keepScreenOn: Boolean = true
 )
 

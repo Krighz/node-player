@@ -126,8 +126,7 @@ fun SharedPlayerLayout(
 ) {
     var currentNav by remember { mutableStateOf(PlayerNavDestination.HOME) }
     var searchQuery by remember { mutableStateOf("") }
-    var showNowPlayingOverlay by remember { mutableStateOf(false) }
-    var showFullScreenLyrics by remember { mutableStateOf(false) }
+    var playerPresentationState by remember { mutableStateOf<com.nodeplayer.model.PlayerPresentationState>(com.nodeplayer.model.PlayerPresentationState.Closed) }
     var activeContextMenuTrack by remember { mutableStateOf<Track?>(null) }
     var isMuted by remember { mutableStateOf(false) }
     var previousVolume by remember { mutableFloatStateOf(volume) }
@@ -287,14 +286,21 @@ fun SharedPlayerLayout(
         ) {
             // 1. Full Dynamic Liquid Glass Background for expanded desktop mode
             if (isExpanded) {
-                LiquidGlassBackground(
-                    accentColor = accent,
-                    isOled = themeConfig.isOledBlack,
-                    isPlaying = isPlaying,
-                    isPerformanceMode = themeConfig.isPerformanceMode,
-                    animatedBackdrop = themeConfig.animatedBackdrop && isPlaying,
-                    themeConfig = themeConfig
-                )
+                if (playerPresentationState !is com.nodeplayer.model.PlayerPresentationState.Closed) {
+                    com.nodeplayer.ui.player.AlbumArtGradientBackdrop(
+                        track = currentTrack,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    LiquidGlassBackground(
+                        accentColor = accent,
+                        isOled = themeConfig.isOledBlack,
+                        isPlaying = isPlaying,
+                        isPerformanceMode = themeConfig.isPerformanceMode,
+                        animatedBackdrop = themeConfig.animatedBackdrop && isPlaying,
+                        themeConfig = themeConfig
+                    )
+                }
             }
 
             // 2. Main Layout (Expanded Desktop / Landscape vs Portrait Phone)
@@ -523,7 +529,7 @@ fun SharedPlayerLayout(
                         onOpenSignalPath = { currentNav = PlayerNavDestination.EQUALIZER },
                         onOpenOutputDevicePicker = { currentNav = PlayerNavDestination.SETTINGS },
                         onCastClick = { /* open cast sheet */ },
-                        onExpandNowPlaying = { showNowPlayingOverlay = true },
+                        onExpandNowPlaying = { playerPresentationState = com.nodeplayer.model.PlayerPresentationState.NowPlaying },
                         sleepTimerRemainingSec = sleepTimerRemainingSec,
                         onSetSleepTimer = onSetSleepTimer,
                         backdrop = pageBackdrop,
@@ -544,15 +550,22 @@ fun SharedPlayerLayout(
                         CompositionLocalProvider(
                             LocalControlBackdrop provides remember { emptyBackdrop() }
                         ) {
-                        // Background gradient/blobs
-                        LiquidGlassBackground(
-                            accentColor = accent,
-                            isOled = themeConfig.isOledBlack,
-                            isPlaying = isPlaying,
-                            isPerformanceMode = themeConfig.isPerformanceMode,
-                            animatedBackdrop = themeConfig.animatedBackdrop && isPlaying,
-                            themeConfig = themeConfig
-                        )
+                        // Background gradient/blobs or Full Bleed Album Art Gradient
+                        if (playerPresentationState !is com.nodeplayer.model.PlayerPresentationState.Closed) {
+                            com.nodeplayer.ui.player.AlbumArtGradientBackdrop(
+                                track = currentTrack,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            LiquidGlassBackground(
+                                accentColor = accent,
+                                isOled = themeConfig.isOledBlack,
+                                isPlaying = isPlaying,
+                                isPerformanceMode = themeConfig.isPerformanceMode,
+                                animatedBackdrop = themeConfig.animatedBackdrop && isPlaying,
+                                themeConfig = themeConfig
+                            )
+                        }
 
                         // Active Destination View (full-bleed, scrolling underneath floating chrome)
                         when (currentNav) {
@@ -683,8 +696,8 @@ fun SharedPlayerLayout(
                     }
                     }
 
-                    // Floating Chrome Sibling Overlays above page layer in z-order (hidden when full screen lyrics is active)
-                    if (!showFullScreenLyrics) {
+                    // Floating Chrome Sibling Overlays above page layer in z-order (hidden when Now Playing or Full Screen Lyrics is active)
+                    if (playerPresentationState is com.nodeplayer.model.PlayerPresentationState.Closed) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -765,7 +778,7 @@ fun SharedPlayerLayout(
                                             onPlayPauseClick = onPlayPause,
                                             onSkipNextClick = onNext,
                                             onSkipPreviousClick = onPrevious,
-                                            onClick = { showNowPlayingOverlay = true },
+                                            onClick = { playerPresentationState = com.nodeplayer.model.PlayerPresentationState.NowPlaying },
                                             backdrop = pageBackdrop,
                                             isCollapsed = false,
                                             modifier = Modifier.padding(bottom = 6.dp)
@@ -899,33 +912,75 @@ fun SharedPlayerLayout(
 
             // 4. Expanded Now Playing Fullscreen Overlay (Lyrics, Queue, Artwork)
             AnimatedVisibility(
-                visible = showNowPlayingOverlay && !showFullScreenLyrics,
+                visible = playerPresentationState is com.nodeplayer.model.PlayerPresentationState.NowPlaying,
                 enter = fadeIn(),
                 exit = fadeOut()
             ) {
-                NowPlayingView(
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    positionMs = positionMs,
-                    durationMs = durationMs,
-                    queue = queue,
-                    currentQueueIndex = currentQueueIndex,
-                    lrcContent = lrcContent,
-                    onPlayPause = onPlayPause,
-                    onNext = onNext,
-                    onPrevious = onPrevious,
-                    onSeek = onSeek,
-                    onSelectQueueItem = onSelectQueueItem,
-                    onToggleFullScreenLyrics = {
-                        showFullScreenLyrics = true
-                    },
-                    onClose = { showNowPlayingOverlay = false }
-                )
+                var showPlaybackOptions by remember { mutableStateOf(false) }
+                var showQuickSettings by remember { mutableStateOf(false) }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    NowPlayingView(
+                        currentTrack = currentTrack,
+                        isPlaying = isPlaying,
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        queue = queue,
+                        currentQueueIndex = currentQueueIndex,
+                        lrcContent = lrcContent,
+                        audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                        onPlayPause = onPlayPause,
+                        onNext = onNext,
+                        onPrevious = onPrevious,
+                        onSeek = onSeek,
+                        onOpenLyrics = {
+                            playerPresentationState = com.nodeplayer.model.PlayerPresentationState.Lyrics(controlsVisible = true)
+                        },
+                        onOpenNodeConnect = { onPairNewDevice() },
+                        onOpenPlaybackOptions = { showPlaybackOptions = true },
+                        onOpenThreeDotsMenu = { showQuickSettings = true },
+                        onClose = { playerPresentationState = com.nodeplayer.model.PlayerPresentationState.Closed }
+                    )
+
+                    // Playback Options Sheet
+                    com.nodeplayer.ui.player.PlaybackOptionsSheet(
+                        visible = showPlaybackOptions,
+                        queue = queue,
+                        currentQueueIndex = currentQueueIndex,
+                        isShuffle = isShuffle,
+                        repeatMode = repeatMode,
+                        infiniteAutoplay = false,
+                        accentColor = dynamicArtAccent ?: baseAccent,
+                        onToggleShuffle = onToggleShuffle,
+                        onCycleRepeat = onCycleRepeat,
+                        onToggleInfiniteAutoplay = { /* toggle infinite autoplay */ },
+                        onSelectQueueItem = onSelectQueueItem,
+                        onRemoveQueueItem = { /* remove item from queue */ },
+                        onDismiss = { showPlaybackOptions = false }
+                    )
+
+                    // Quick Settings Sheet
+                    com.nodeplayer.ui.player.QuickSettingsSheet(
+                        visible = showQuickSettings,
+                        volume = volume,
+                        outputDeviceName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                        audioFormatDescription = audioOutputInfo.format,
+                        sleepTimerRemainingSec = sleepTimerRemainingSec,
+                        accentColor = dynamicArtAccent ?: baseAccent,
+                        onVolumeChange = onVolumeChange,
+                        onSetSleepTimer = onSetSleepTimer,
+                        onOpenEqualizer = {
+                            playerPresentationState = com.nodeplayer.model.PlayerPresentationState.Closed
+                            currentNav = PlayerNavDestination.EQUALIZER
+                        },
+                        onDismiss = { showQuickSettings = false }
+                    )
+                }
             }
 
             // 5. Full-Screen Synced Lyrics Immersive Overlay (LYR-01, LYR-02, LYR-03, LYR-04, LYR-05)
             AnimatedVisibility(
-                visible = showFullScreenLyrics,
+                visible = playerPresentationState is com.nodeplayer.model.PlayerPresentationState.Lyrics,
                 enter = fadeIn(spring(stiffness = 400f)) + slideInVertically(spring(stiffness = 400f)) { it },
                 exit = fadeOut(spring(stiffness = 400f)) + slideOutVertically(spring(stiffness = 400f)) { it }
             ) {
@@ -943,12 +998,14 @@ fun SharedPlayerLayout(
                     isPlaying = isPlaying,
                     currentPositionMs = positionMs,
                     durationMs = durationMs,
-                    dominantColor = dynamicArtAccent ?: baseAccent,
                     onPlayPause = onPlayPause,
                     onNext = onNext,
                     onPrevious = onPrevious,
                     onSeekTo = onSeek,
-                    onClose = { showFullScreenLyrics = false },
+                    onClose = {
+                        // Back hierarchy: from Lyrics collapses to NowPlaying
+                        playerPresentationState = com.nodeplayer.model.PlayerPresentationState.NowPlaying
+                    },
                     onKeepScreenOn = onKeepScreenOn
                 )
             }
@@ -1015,7 +1072,7 @@ fun SharedPlayerLayout(
                                 activeDetailTracks = listOf(tr)
                             }
                             com.nodeplayer.model.TrackActionId.VIEW_LYRICS -> {
-                                showFullScreenLyrics = true
+                                playerPresentationState = com.nodeplayer.model.PlayerPresentationState.Lyrics(controlsVisible = true)
                             }
                             com.nodeplayer.model.TrackActionId.SHARE -> {
                                 // Platform share or toast

@@ -39,9 +39,10 @@ Before touching any code or making an edit:
 
 ## 4. Verification & Validation Gate
 
-- **Verify Before Declaring Done:** Every change must be verified.
-  - Run the relevant unit tests (e.g. `./gradlew :core-dsp:test`, `./gradlew :core-ui:desktopTest`, etc.) or compile check.
-  - Never claim a bug is fixed without actual test output or compiler evidence.
+- **Verify Every Change After Writing:** Immediately after writing or editing code, verify it thoroughly:
+  - **Logical Error & Goal Check:** Review the implemented code against edge cases, unintended regressions, and off-by-one or state mismatch errors to ensure there are no logical flaws and that the code completely succeeds at its intended goal on every execution.
+  - **Executable Verification:** Run relevant unit/integration tests or build checks (e.g. `./gradlew :core-dsp:test`, `./gradlew :core-ui:desktopTest`, compilation tasks) to validate the fix or feature.
+  - Never claim a task is completed or bug is fixed without actual test output, compiler evidence, or concrete verification.
 - **No Hallucinations:** Every claim regarding behavior or test results must be backed by executed commands, logs, or file contents.
 
 ---

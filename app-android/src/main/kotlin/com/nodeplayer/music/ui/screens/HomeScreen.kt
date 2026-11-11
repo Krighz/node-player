@@ -124,6 +124,7 @@ fun HomeScreen(
                 onOpenSmartPlaylists = onOpenSmartPlaylists,
                 onOpenStats = onOpenStats,
                 onOpenDuplicateFinder = onOpenDuplicateFinder,
+                onOpenSettings = onOpenSettings,
                 onOpenNodeConnect = onOpenNodeConnect,
                 nodeConnectStatus = nodeConnectStatus,
                 connectedDeviceCount = connectedDeviceCount,
@@ -146,6 +147,7 @@ private fun OfflineHomeScreenContent(
     onOpenSmartPlaylists: () -> Unit,
     onOpenStats: () -> Unit,
     onOpenDuplicateFinder: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     onOpenNodeConnect: () -> Unit = {},
     nodeConnectStatus: DeviceConnectStatus = DeviceConnectStatus.DISCONNECTED,
     connectedDeviceCount: Int = 0,
@@ -264,9 +266,9 @@ private fun OfflineHomeScreenContent(
                         lighterStyle = true
                     )
                     LiquidIconButton(
-                        icon = Icons.Rounded.ContentCopy,
-                        onClick = onOpenDuplicateFinder,
-                        contentDescription = "Duplicate Finder",
+                        icon = Icons.Rounded.Settings,
+                        onClick = onOpenSettings,
+                        contentDescription = "Settings",
                         size = 38.dp,
                         lighterStyle = true
                     )

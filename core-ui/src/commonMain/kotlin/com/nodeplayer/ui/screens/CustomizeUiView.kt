@@ -491,6 +491,21 @@ private fun LyricsSettingsSection(
             )
         }
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Show Preview in Now Playing", fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Text("Display single active lyric line above timeline", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+            }
+            LiquidSwitch(
+                checked = lyricsConfig.showPreviewLine,
+                onCheckedChange = { onUpdate(lyricsConfig.copy(showPreviewLine = it)) }
+            )
+        }
+
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -500,9 +515,9 @@ private fun LyricsSettingsSection(
                 Text("${lyricsConfig.fontSizeSp.toInt()} sp", fontSize = 13.sp, color = accent)
             }
             LiquidGlassSlider(
-                value = (lyricsConfig.fontSizeSp - 20f) / 16f,
+                value = (lyricsConfig.fontSizeSp - 20f) / 28f,
                 onValueChange = { frac ->
-                    val size = 20f + frac * 16f
+                    val size = 20f + frac * 28f
                     onUpdate(lyricsConfig.copy(fontSizeSp = size.toInt().toFloat()))
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -515,13 +530,31 @@ private fun LyricsSettingsSection(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text("Controls Auto-Hide Delay", fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Text("${lyricsConfig.autoHideDelaySec} seconds", fontSize = 13.sp, color = accent)
+                Text(if (lyricsConfig.autoHideDelaySec == 0) "Never" else "${lyricsConfig.autoHideDelaySec} seconds", fontSize = 13.sp, color = accent)
             }
             LiquidGlassSlider(
-                value = (lyricsConfig.autoHideDelaySec - 3) / 12f,
+                value = lyricsConfig.autoHideDelaySec / 15f,
                 onValueChange = { frac ->
-                    val sec = (3 + frac * 12f).toInt()
+                    val sec = (frac * 15f).toInt()
                     onUpdate(lyricsConfig.copy(autoHideDelaySec = sec))
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Distance-Blurred Lines Count", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("${lyricsConfig.blurredLinesCount} lines", fontSize = 13.sp, color = accent)
+            }
+            LiquidGlassSlider(
+                value = (lyricsConfig.blurredLinesCount - 1) / 5f,
+                onValueChange = { frac ->
+                    val count = 1 + (frac * 5f).toInt()
+                    onUpdate(lyricsConfig.copy(blurredLinesCount = count))
                 },
                 modifier = Modifier.fillMaxWidth()
             )

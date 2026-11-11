@@ -15,6 +15,8 @@ import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -160,6 +162,7 @@ class MainActivity : ComponentActivity() {
                 val intentRoute = intent?.getStringExtra("route")
                 var currentRoute by remember { mutableStateOf(intentRoute ?: "home") }
                 var isNowPlayingExpanded by remember { mutableStateOf(false) }
+                var isLyricsExpanded by remember { mutableStateOf(false) }
 
                 val dailyStats by viewModel.dailyListeningStats.collectAsState()
                 val sessionSec by viewModel.sessionListeningSeconds.collectAsState()
@@ -190,8 +193,11 @@ class MainActivity : ComponentActivity() {
                 var spotifyMatchingJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
                 val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder", "widgets", "widget_settings", "playlist_detail", "settings", "equalizer", "optical_diagnostics")
-                BackHandler(enabled = isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null || activePlaylistDetail != null) {
-                    if (isNowPlayingExpanded) {
+                BackHandler(enabled = isLyricsExpanded || isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null || activePlaylistDetail != null) {
+                    if (isLyricsExpanded) {
+                        // Collapse Lyrics back to NowPlaying (ARCH-03)
+                        isLyricsExpanded = false
+                    } else if (isNowPlayingExpanded) {
                         isNowPlayingExpanded = false
                     } else if (activePlaylistDetail != null) {
                         activePlaylistDetail = null
@@ -721,7 +727,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    // 4. Full Now Playing Sheet (Smooth slide animation)
+                    // 4. Full Now Playing Screen (State 1: Full-bleed edge-to-edge)
                     val activeNowPlayingTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
                     AnimatedVisibility(
                         visible = isNowPlayingExpanded && activeNowPlayingTrack != null,
@@ -729,36 +735,124 @@ class MainActivity : ComponentActivity() {
                         exit = slideOutVertically(targetOffsetY = { it })
                     ) {
                         activeNowPlayingTrack?.let { track ->
-                            NowPlayingSheet(
-                                track = track,
-                                isPlaying = isPlaying,
-                                currentPositionMs = currentPositionMs,
-                                audioOutputInfo = audioOutputInfo,
-                                onPlayPauseClick = { viewModel.togglePlayPause() },
-                                onSkipNextClick = { viewModel.skipNext() },
-                                onSkipPreviousClick = { viewModel.skipPrevious() },
-                                onSeekTo = { viewModel.seekTo(it) },
-                                onDismiss = { isNowPlayingExpanded = false },
-                                onOpenEq = {
-                                    isNowPlayingExpanded = false
-                                    currentRoute = "equalizer"
-                                },
-                                isShuffle = isShuffleEnabled,
-                                onToggleShuffle = { viewModel.toggleShuffle() },
-                                rmsLevel = currentRms,
-                                isPerformanceMode = themeConfig.isPerformanceMode,
-                                queue = queue,
-                                onPlayTrack = { viewModel.playTrack(it, queue) },
-                                onRemoveFromQueue = { viewModel.removeFromQueue(it) },
-                                onMoveQueueItem = { from, to -> viewModel.moveQueueItem(from, to) },
-                                sleepTimerRemainingSec = sleepTimerRemainingSec,
-                                onSetSleepTimer = { viewModel.setSleepTimer(it) },
-                                onOpenSignalPath = {
-                                    // Open signal path dialog / inspector
-                                },
-                                themeConfig = themeConfig,
-                                onAddToPlaylistClick = { trackForAddToPlaylist = it },
-                            )
+                            var showAndroidPlaybackOptions by remember { mutableStateOf(false) }
+                            var showAndroidQuickSettings by remember { mutableStateOf(false) }
+
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                com.nodeplayer.ui.player.NowPlayingView(
+                                    currentTrack = track,
+                                    isPlaying = isPlaying,
+                                    positionMs = currentPositionMs,
+                                    durationMs = track.durationMs,
+                                    queue = queue,
+                                    currentQueueIndex = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0),
+                                    lrcContent = null,
+                                    audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                                    sourceLabel = if (currentRoute == "search") "Search" else "Library",
+                                    onPlayPause = { viewModel.togglePlayPause() },
+                                    onNext = { viewModel.skipNext() },
+                                    onPrevious = { viewModel.skipPrevious() },
+                                    onSeek = { viewModel.seekTo(it) },
+                                    onOpenLyrics = {
+                                        isLyricsExpanded = true
+                                    },
+                                    onOpenNodeConnect = {
+                                        showPairingDialog = true
+                                    },
+                                    onOpenPlaybackOptions = { showAndroidPlaybackOptions = true },
+                                    onOpenThreeDotsMenu = { showAndroidQuickSettings = true },
+                                    onClose = { isNowPlayingExpanded = false }
+                                )
+
+                                com.nodeplayer.ui.player.PlaybackOptionsSheet(
+                                    visible = showAndroidPlaybackOptions,
+                                    queue = queue,
+                                    currentQueueIndex = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0),
+                                    isShuffle = isShuffleEnabled,
+                                    repeatMode = 0,
+                                    infiniteAutoplay = false,
+                                    accentColor = accentColor,
+                                    onToggleShuffle = { viewModel.toggleShuffle() },
+                                    onCycleRepeat = { /* cycle repeat */ },
+                                    onToggleInfiniteAutoplay = { /* toggle autoplay */ },
+                                    onSelectQueueItem = { idx ->
+                                        if (idx in queue.indices) viewModel.playTrack(queue[idx], queue)
+                                    },
+                                    onRemoveQueueItem = { idx -> viewModel.removeFromQueue(idx) },
+                                    onDismiss = { showAndroidPlaybackOptions = false }
+                                )
+
+                                com.nodeplayer.ui.player.QuickSettingsSheet(
+                                    visible = showAndroidQuickSettings,
+                                    volume = 1.0f,
+                                    outputDeviceName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                                    audioFormatDescription = audioOutputInfo.format,
+                                    sleepTimerRemainingSec = sleepTimerRemainingSec,
+                                    accentColor = accentColor,
+                                    onVolumeChange = { /* volume */ },
+                                    onSetSleepTimer = { viewModel.setSleepTimer(it) },
+                                    onOpenEqualizer = {
+                                        isNowPlayingExpanded = false
+                                        currentRoute = "equalizer"
+                                    },
+                                    onDismiss = { showAndroidQuickSettings = false }
+                                )
+
+                                // State 2: Full-Screen Synchronized Lyrics View
+                                AnimatedVisibility(
+                                    visible = isLyricsExpanded,
+                                    enter = fadeIn(spring(stiffness = 380f)),
+                                    exit = fadeOut(spring(stiffness = 380f))
+                                ) {
+                                    val context = androidx.compose.ui.platform.LocalContext.current
+                                    var trackLyrics by remember(track.id) { mutableStateOf<com.nodeplayer.model.Lyrics?>(null) }
+                                    var isLyricsLoading by remember(track.id) { mutableStateOf(false) }
+
+                                    LaunchedEffect(track.id) {
+                                        isLyricsLoading = true
+                                        trackLyrics = com.nodeplayer.music.lyrics.LyricsManager.getLyrics(
+                                            context = context,
+                                            track = track,
+                                            forceRefresh = false
+                                        )
+                                        isLyricsLoading = false
+                                    }
+
+                                    com.nodeplayer.ui.lyrics.FullScreenLyricsView(
+                                        track = track,
+                                        lyrics = trackLyrics,
+                                        isPlaying = isPlaying,
+                                        currentPositionMs = currentPositionMs,
+                                        durationMs = track.durationMs,
+                                        isLoading = isLyricsLoading,
+                                        audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                                        onPlayPause = { viewModel.togglePlayPause() },
+                                        onNext = { viewModel.skipNext() },
+                                        onPrevious = { viewModel.skipPrevious() },
+                                        onSeekTo = { viewModel.seekTo(it) },
+                                        onClose = { isLyricsExpanded = false },
+                                        onOpenMenu = { showAndroidQuickSettings = true },
+                                        onShare = {
+                                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(android.content.Intent.EXTRA_SUBJECT, "Now Playing: ${track.title}")
+                                                val shareText = buildString {
+                                                    append("Listening to \"${track.title}\" by ${track.artist}")
+                                                    val plain = trackLyrics?.plainText
+                                                    if (!plain.isNullOrBlank()) {
+                                                        append("\n\n")
+                                                        append(plain.take(500))
+                                                    }
+                                                }
+                                                putExtra(android.content.Intent.EXTRA_TEXT, shareText)
+                                            }
+                                            startActivity(android.content.Intent.createChooser(shareIntent, "Share Track & Lyrics"))
+                                        },
+                                        onOpenNodeConnect = { showPairingDialog = true },
+                                        onOpenPlaybackOptions = { showAndroidPlaybackOptions = true }
+                                    )
+                                }
+                            }
                         }
                     }
 
