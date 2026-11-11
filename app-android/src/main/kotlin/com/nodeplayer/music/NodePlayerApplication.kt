@@ -2,9 +2,17 @@ package com.nodeplayer.music
 
 import android.app.Application
 import android.content.Context
+import android.graphics.drawable.BitmapDrawable
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
 import androidx.room.Room
+import coil.Coil
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.nodeplayer.common.logging.LogLevel
 import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.music.data.NodeDatabase
@@ -22,6 +30,17 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             .components {
                 add(AudioArtworkFetcher.TrackFactory())
                 add(AudioArtworkFetcher.FileFactory())
+            }
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizePercent(0.20)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(128L * 1024 * 1024)
+                    .build()
             }
             .crossfade(true)
             .build()
@@ -90,6 +109,25 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             .build()
 
         libraryScanner = LibraryScanner(applicationContext)
+
+        com.nodeplayer.ui.components.PlatformArtworkProvider.remoteImageFetcher = { url, maxSizePx ->
+            val targetPx = maxSizePx.coerceIn(
+                AudioArtworkFetcher.MIN_TARGET_SIZE_PX,
+                AudioArtworkFetcher.MAX_TARGET_SIZE_PX
+            )
+            val request = ImageRequest.Builder(this@NodePlayerApplication)
+                .data(url)
+                .size(targetPx, targetPx)
+                .allowHardware(false)
+                .build()
+            val result = Coil.imageLoader(this@NodePlayerApplication).execute(request)
+            if (result is SuccessResult) {
+                val bmp = (result.drawable as? BitmapDrawable)?.bitmap ?: result.drawable.toBitmap()
+                bmp.asImageBitmap()
+            } else {
+                null
+            }
+        }
 
         startAsyncBootstrap()
     }

@@ -25,31 +25,65 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.ui.theme.LocalAccentColor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.concurrent.ConcurrentHashMap
 
 expect object PlatformArtworkProvider {
-    suspend fun loadArtwork(track: Track): ImageBitmap?
+    suspend fun loadArtwork(track: Track, maxSizePx: Int = ArtworkCache.DEFAULT_TARGET_SIZE_PX): ImageBitmap?
     suspend fun extractVibrantColor(track: Track): Color?
 }
 
-object ArtworkCache {
-    private val memoryCache = ConcurrentHashMap<String, ImageBitmap>()
-    private val byteCache = ConcurrentHashMap<String, ByteArray>()
+internal class BoundedLruCache<K : Any, V : Any>(
+    private val maxEntries: Int
+) {
+    private val map = LinkedHashMap<K, V>(maxEntries, 0.75f, true)
 
-    fun get(key: String): ImageBitmap? = memoryCache[key]
-    fun put(key: String, bitmap: ImageBitmap) {
-        if (memoryCache.size > 300) {
-            memoryCache.clear()
+    fun get(key: K): V? = synchronized(map) { map[key] }
+
+    fun put(key: K, value: V) {
+        synchronized(map) {
+            map[key] = value
+            if (map.size > maxEntries) {
+                val eldest = map.entries.iterator()
+                if (eldest.hasNext()) {
+                    eldest.next()
+                    eldest.remove()
+                }
+            }
         }
-        memoryCache[key] = bitmap
     }
 
-    fun getBytes(key: String): ByteArray? = byteCache[key]
-    fun putBytes(key: String, bytes: ByteArray) {
-        if (byteCache.size > 200) {
-            byteCache.clear()
-        }
-        byteCache[key] = bytes
+    fun size(): Int = synchronized(map) { map.size }
+
+    fun clear() {
+        synchronized(map) { map.clear() }
+    }
+}
+
+object ArtworkCache {
+    const val MAX_MEMORY_ENTRIES = 300
+    const val MAX_BYTE_ENTRIES = 200
+    const val DEFAULT_TARGET_SIZE_PX = 256
+
+    private val memoryCache = BoundedLruCache<String, ImageBitmap>(MAX_MEMORY_ENTRIES)
+    private val byteCache = BoundedLruCache<String, ByteArray>(MAX_BYTE_ENTRIES)
+
+    fun sizedKey(baseKey: String, maxSizePx: Int = DEFAULT_TARGET_SIZE_PX): String =
+        "$baseKey@$maxSizePx"
+
+    fun get(key: String): ImageBitmap? = memoryCache.get(key)
+
+    fun put(key: String, bitmap: ImageBitmap) = memoryCache.put(key, bitmap)
+
+    fun getBytes(key: String): ByteArray? = byteCache.get(key)
+
+    fun putBytes(key: String, bytes: ByteArray) = byteCache.put(key, bytes)
+
+    fun memorySize(): Int = memoryCache.size()
+
+    fun byteSize(): Int = byteCache.size()
+
+    fun clear() {
+        memoryCache.clear()
+        byteCache.clear()
     }
 }
 
@@ -58,25 +92,27 @@ fun TrackArtwork(
     track: Track?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
-    cornerRadius: Dp = 12.dp
+    cornerRadius: Dp = 12.dp,
+    targetSizePx: Int = ArtworkCache.DEFAULT_TARGET_SIZE_PX
 ) {
     val accent = LocalAccentColor.current
     val cacheKey = track?.path ?: track?.id?.toString() ?: ""
-    var bitmap by remember(track?.id, track?.path) {
-        mutableStateOf(if (cacheKey.isNotEmpty()) ArtworkCache.get(cacheKey) else null)
+    val sizedCacheKey = if (cacheKey.isNotEmpty()) ArtworkCache.sizedKey(cacheKey, targetSizePx) else ""
+    var bitmap by remember(track?.id, track?.path, targetSizePx) {
+        mutableStateOf(if (sizedCacheKey.isNotEmpty()) ArtworkCache.get(sizedCacheKey) else null)
     }
 
-    LaunchedEffect(track?.id, track?.path) {
-        if (track == null || cacheKey.isEmpty()) return@LaunchedEffect
-        val cached = ArtworkCache.get(cacheKey)
+    LaunchedEffect(track?.id, track?.path, targetSizePx) {
+        if (track == null || sizedCacheKey.isEmpty()) return@LaunchedEffect
+        val cached = ArtworkCache.get(sizedCacheKey)
         if (cached != null) {
             bitmap = cached
             return@LaunchedEffect
         }
         withContext(Dispatchers.IO) {
-            val loaded = PlatformArtworkProvider.loadArtwork(track)
+            val loaded = PlatformArtworkProvider.loadArtwork(track, targetSizePx)
             if (loaded != null) {
-                ArtworkCache.put(cacheKey, loaded)
+                ArtworkCache.put(sizedCacheKey, loaded)
                 withContext(Dispatchers.Main) {
                     bitmap = loaded
                 }
@@ -85,21 +121,25 @@ fun TrackArtwork(
     }
 
     val squircleShape = remember(cornerRadius) { ContinuousRoundedRectangle(cornerRadius) }
+    val borderBrush = remember {
+        Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+        )
+    }
+    val backgroundBrush = remember(accent) {
+        Brush.linearGradient(
+            listOf(accent.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+        )
+    }
     Box(
         modifier = modifier
             .clip(squircleShape)
             .border(
                 1.dp,
-                Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
-                ),
+                borderBrush,
                 squircleShape
             )
-            .background(
-                Brush.linearGradient(
-                    listOf(accent.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
-                )
-            ),
+            .background(backgroundBrush),
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
