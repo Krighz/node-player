@@ -58,12 +58,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val albums = allTracks.map { scanner.extractAlbums(it) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val artists = allTracks.map { scanner.extractArtists(it) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val folders = allTracks.map { scanner.extractFolders(it) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val allScannedFolders = dao.getAllScannedFolders()
@@ -177,6 +180,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var audioDeviceCallback: AudioDeviceCallback? = null
 
     private var progressJob: Job? = null
+    private val seekPersistDebouncer = TrailingSeekDebouncer(
+        scope = viewModelScope,
+        dispatcher = Dispatchers.IO,
+        delayMs = 300L
+    ) { positionMs ->
+        _currentTrack.value?.let { track ->
+            prefs.edit().putLong("last_pos", positionMs).putLong("last_track_id", track.id).apply()
+        }
+        com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
+    }
 
     init {
         val audioParserVersion = prefs.getInt("audio_parser_version", 0)
@@ -869,10 +882,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             mediaController?.seekTo(positionMs)
         }
-        _currentTrack.value?.let {
-            prefs.edit().putLong("last_pos", positionMs).putLong("last_track_id", it.id).apply()
-        }
-        com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
+        seekPersistDebouncer.schedule(positionMs)
     }
 
     private fun startPositionTracking() {
@@ -883,10 +893,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val pos = service?.player?.currentPosition ?: mediaController?.currentPosition ?: 0L
                 val dur = service?.player?.duration ?: mediaController?.duration ?: 0L
                 val playing = service?.player?.isPlaying ?: mediaController?.isPlaying ?: false
-                _isPlaying.value = playing
-                _currentPositionMs.value = pos
+                if (_isPlaying.value != playing) {
+                    _isPlaying.value = playing
+                }
+                if (_currentPositionMs.value != pos) {
+                    _currentPositionMs.value = pos
+                }
                 _currentTrack.value?.let { track ->
-                    if (dur > 0L && track.durationMs != dur) {
+                    if (shouldUpdateTrackDuration(track.durationMs, dur)) {
                         _currentTrack.value = track.copy(durationMs = dur)
                     }
                     val now = System.currentTimeMillis()
@@ -916,9 +930,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     lastSessionTickMs = System.currentTimeMillis()
                 }
 
-                // Read real RMS audio level from DSP engine
-                _currentRms.value = service?.dspAudioProcessor?.currentRms ?: 0.0f
-                _convolverCpuPercent.value = service?.crossfadeManager?.activeDspChain?.convolver?.lastCpuUsagePercent ?: 0.0f
+                // Read real RMS audio level from DSP engine (suppress noise below threshold)
+                val nextRms = if (playing) (service?.dspAudioProcessor?.currentRms ?: 0.0f) else 0.0f
+                if (shouldEmitFloatDelta(_currentRms.value, nextRms, epsilon = 0.002f)) {
+                    _currentRms.value = nextRms
+                }
+                val nextCpu = service?.crossfadeManager?.activeDspChain?.convolver?.lastCpuUsagePercent ?: 0.0f
+                if (shouldEmitFloatDelta(_convolverCpuPercent.value, nextCpu, epsilon = 0.1f)) {
+                    _convolverCpuPercent.value = nextCpu
+                }
                 delay(120)
             }
         }
@@ -1492,11 +1512,45 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     override fun onCleared() {
         super.onCleared()
         progressJob?.cancel()
+        seekPersistDebouncer.cancel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audioDeviceCallback != null) {
             val audioManager = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
             audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
             audioDeviceCallback = null
         }
         controllerFuture?.let { MediaController.releaseFuture(it) }
+    }
+
+    companion object {
+        fun shouldEmitFloatDelta(prev: Float, next: Float, epsilon: Float = 0.002f): Boolean {
+            if (next == 0.0f && prev != 0.0f) return true
+            return kotlin.math.abs(next - prev) >= epsilon
+        }
+
+        fun shouldUpdateTrackDuration(currentMs: Long, newMs: Long): Boolean {
+            return newMs > 0L && (currentMs <= 0L || kotlin.math.abs(currentMs - newMs) > 1000L)
+        }
+    }
+}
+
+class TrailingSeekDebouncer(
+    private val scope: kotlinx.coroutines.CoroutineScope,
+    private val dispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
+    private val delayMs: Long = 300L,
+    private val onPersist: suspend (Long) -> Unit
+) {
+    private var job: Job? = null
+
+    fun schedule(positionMs: Long) {
+        job?.cancel()
+        job = scope.launch(dispatcher) {
+            delay(delayMs)
+            onPersist(positionMs)
+        }
+    }
+
+    fun cancel() {
+        job?.cancel()
+        job = null
     }
 }

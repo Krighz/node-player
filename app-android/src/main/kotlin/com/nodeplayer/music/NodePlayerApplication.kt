@@ -47,8 +47,11 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
                 android.util.Log.println(androidPriority, tag, message)
             }
         }
-        NodeLog.initFileLogging(java.io.File(filesDir, "logs/node_connect.log"))
-        NodeLog.isVerbose = true
+        NodeLog.isVerbose = BuildConfig.DEBUG
+        com.nodeplayer.ui.debug.GlassDebug.isEnabled = BuildConfig.DEBUG
+        if (BuildConfig.DEBUG) {
+            Thread { ensureFileLoggingInitialized(this) }.start()
+        }
         NodeLog.i("app/lifecycle", "NodePlayerApplication initialized")
 
         com.nodeplayer.music.diagnostics.LocalCrashLogger.init(this)
@@ -102,5 +105,17 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
     companion object {
         lateinit var instance: NodePlayerApplication
             private set
+
+        @Volatile
+        private var fileLoggingInitialized: Boolean = false
+
+        fun ensureFileLoggingInitialized(context: Context) {
+            if (fileLoggingInitialized) return
+            synchronized(this) {
+                if (fileLoggingInitialized) return
+                NodeLog.initFileLogging(java.io.File(context.filesDir, "logs/node_connect.log"))
+                fileLoggingInitialized = true
+            }
+        }
     }
 }
