@@ -43,6 +43,8 @@ import kotlinx.coroutines.withContext
 import com.nodeplayer.ui.player.BottomPlayerDeck
 import com.nodeplayer.ui.player.BottomPlayerDock
 import com.nodeplayer.ui.player.NowPlayingView
+import com.nodeplayer.ui.player.ProgressContainerTransform
+import com.nodeplayer.ui.theme.MotionTokens
 import com.nodeplayer.ui.screens.*
 import com.nodeplayer.ui.theme.GlassTokensData
 import com.nodeplayer.ui.theme.LocalAccentColor
@@ -129,6 +131,17 @@ fun SharedPlayerLayout(
     var currentNav by remember { mutableStateOf(PlayerNavDestination.HOME) }
     var searchQuery by remember { mutableStateOf("") }
     var playerPresentationState by remember { mutableStateOf<com.nodeplayer.model.PlayerPresentationState>(com.nodeplayer.model.PlayerPresentationState.Closed) }
+    val playerExpansionProgress = remember { androidx.compose.animation.core.Animatable(0f) }
+    val springSpec = remember(themeConfig) { MotionTokens.resolveSpringSpec(themeConfig, MotionTokens.Smooth) }
+
+    LaunchedEffect(playerPresentationState) {
+        val target = if (playerPresentationState is com.nodeplayer.model.PlayerPresentationState.NowPlaying) 1.0f else 0.0f
+        if (themeConfig.reduceMotion || themeConfig.motionLevel == com.nodeplayer.model.MotionLevel.OFF || themeConfig.isPerformanceMode) {
+            playerExpansionProgress.snapTo(target)
+        } else if (playerExpansionProgress.targetValue != target) {
+            playerExpansionProgress.animateTo(target, animationSpec = springSpec)
+        }
+    }
     var activeContextMenuTrack by remember { mutableStateOf<Track?>(null) }
     var isMuted by remember { mutableStateOf(false) }
     var previousVolume by remember { mutableFloatStateOf(volume) }
@@ -913,36 +926,93 @@ fun SharedPlayerLayout(
             }
 
             // 4. Expanded Now Playing Fullscreen Overlay (Lyrics, Queue, Artwork)
-            AnimatedVisibility(
-                visible = playerPresentationState is com.nodeplayer.model.PlayerPresentationState.NowPlaying,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
+            // Driven by continuous Container Transform morphing with interactive gestures
+            val expansionProgress = playerExpansionProgress.value
+            if (expansionProgress > 0.001f || playerPresentationState is com.nodeplayer.model.PlayerPresentationState.NowPlaying) {
                 var showPlaybackOptions by remember { mutableStateOf(false) }
                 var showQuickSettings by remember { mutableStateOf(false) }
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    NowPlayingView(
-                        currentTrack = currentTrack,
-                        isPlaying = isPlaying,
-                        positionMs = positionMs,
-                        positionProvider = { positionMs },
-                        durationMs = durationMs,
-                        queue = queue,
-                        currentQueueIndex = currentQueueIndex,
-                        lrcContent = lrcContent,
-                        audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
-                        onPlayPause = onPlayPause,
-                        onNext = onNext,
-                        onPrevious = onPrevious,
-                        onSeek = onSeek,
-                        onOpenLyrics = {
-                            playerPresentationState = com.nodeplayer.model.PlayerPresentationState.Lyrics(controlsVisible = true)
+                    ProgressContainerTransform(
+                        progress = expansionProgress,
+                        miniPlayerContent = {
+                            // Mini player ghost content during early morph phase
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 2.dp)
+                                    .height(56.dp)
+                            ) {
+                                ConvxMiniPlayer(
+                                    currentTrack = currentTrack,
+                                    isPlaying = isPlaying,
+                                    progressFraction = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f,
+                                    onPlayPauseClick = onPlayPause,
+                                    onSkipNextClick = onNext,
+                                    onSkipPreviousClick = onPrevious,
+                                    onClick = {
+                                        playerPresentationState = com.nodeplayer.model.PlayerPresentationState.NowPlaying
+                                    },
+                                    backdrop = pageBackdrop,
+                                    isCollapsed = false
+                                )
+                            }
                         },
-                        onOpenNodeConnect = { onPairNewDevice() },
-                        onOpenPlaybackOptions = { showPlaybackOptions = true },
-                        onOpenThreeDotsMenu = { showQuickSettings = true },
-                        onClose = { playerPresentationState = com.nodeplayer.model.PlayerPresentationState.Closed }
+                        fullPlayerContent = {
+                            NowPlayingView(
+                                currentTrack = currentTrack,
+                                isPlaying = isPlaying,
+                                positionMs = positionMs,
+                                positionProvider = { positionMs },
+                                durationMs = durationMs,
+                                queue = queue,
+                                currentQueueIndex = currentQueueIndex,
+                                lrcContent = lrcContent,
+                                audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                                onPlayPause = onPlayPause,
+                                onNext = onNext,
+                                onPrevious = onPrevious,
+                                onSeek = onSeek,
+                                onOpenLyrics = {
+                                    playerPresentationState = com.nodeplayer.model.PlayerPresentationState.Lyrics(controlsVisible = true)
+                                },
+                                onOpenNodeConnect = { onPairNewDevice() },
+                                onOpenPlaybackOptions = { showPlaybackOptions = true },
+                                onOpenThreeDotsMenu = { showQuickSettings = true },
+                                onClose = {
+                                    coroutineScope.launch {
+                                        if (themeConfig.reduceMotion || themeConfig.motionLevel == com.nodeplayer.model.MotionLevel.OFF || themeConfig.isPerformanceMode) {
+                                            playerExpansionProgress.snapTo(0f)
+                                        } else {
+                                            playerExpansionProgress.animateTo(0f, animationSpec = springSpec)
+                                        }
+                                        playerPresentationState = com.nodeplayer.model.PlayerPresentationState.Closed
+                                    }
+                                },
+                                onDragDelta = { deltaY ->
+                                    coroutineScope.launch {
+                                        val newProgress = (playerExpansionProgress.value - (deltaY / 600f)).coerceIn(0f, 1f)
+                                        playerExpansionProgress.snapTo(newProgress)
+                                    }
+                                },
+                                onDragEnd = { velocityY ->
+                                    coroutineScope.launch {
+                                        val shouldExpand = playerExpansionProgress.value > 0.6f && velocityY <= 0f
+                                        val target = if (shouldExpand) 1f else 0f
+                                        if (themeConfig.reduceMotion || themeConfig.motionLevel == com.nodeplayer.model.MotionLevel.OFF || themeConfig.isPerformanceMode) {
+                                            playerExpansionProgress.snapTo(target)
+                                        } else {
+                                            playerExpansionProgress.animateTo(target, animationSpec = springSpec)
+                                        }
+                                        playerPresentationState = if (shouldExpand) {
+                                            com.nodeplayer.model.PlayerPresentationState.NowPlaying
+                                        } else {
+                                            com.nodeplayer.model.PlayerPresentationState.Closed
+                                        }
+                                    }
+                                }
+                            )
+                        }
                     )
 
                     // Playback Options Sheet

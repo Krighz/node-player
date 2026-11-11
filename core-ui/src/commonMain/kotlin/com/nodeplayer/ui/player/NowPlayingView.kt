@@ -91,7 +91,9 @@ fun NowPlayingView(
     onOpenThreeDotsMenu: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    positionProvider: () -> Long = { positionMs }
+    positionProvider: () -> Long = { positionMs },
+    onDragDelta: ((Float) -> Unit)? = null,
+    onDragEnd: ((Float) -> Unit)? = null
 ) {
     if (currentTrack == null) return
 
@@ -109,11 +111,27 @@ fun NowPlayingView(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    if (dragAmount.y > 35f && abs(dragAmount.y) > abs(dragAmount.x) * 1.5f) {
-                        change.consume()
-                        onClose()
+            .pointerInput(onDragDelta, onDragEnd) {
+                if (onDragDelta != null) {
+                    var accumulatedVelocity = 0f
+                    detectDragGestures(
+                        onDragEnd = {
+                            onDragEnd?.invoke(accumulatedVelocity)
+                        },
+                        onDrag = { change, dragAmount ->
+                            if (abs(dragAmount.y) > abs(dragAmount.x) * 1.2f) {
+                                change.consume()
+                                accumulatedVelocity = dragAmount.y
+                                onDragDelta(dragAmount.y)
+                            }
+                        }
+                    )
+                } else {
+                    detectDragGestures { change, dragAmount ->
+                        if (dragAmount.y > 35f && abs(dragAmount.y) > abs(dragAmount.x) * 1.5f) {
+                            change.consume()
+                            onClose()
+                        }
                     }
                 }
             }
