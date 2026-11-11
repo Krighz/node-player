@@ -44,7 +44,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import com.nodeplayer.library.LrcParser
+import com.nodeplayer.model.LyricWord
 import com.nodeplayer.model.Lyrics
 import com.nodeplayer.model.LyricsLine
 import com.nodeplayer.model.Track
@@ -56,6 +61,29 @@ import kotlin.math.abs
 fun findActiveLyricText(lines: List<LyricsLine>, positionMs: Long): String? {
     val idx = findActiveLyricIndex(lines, positionMs)
     return if (idx in lines.indices) lines[idx].text else null
+}
+
+fun findActiveLyricLine(lines: List<LyricsLine>, positionMs: Long): LyricsLine? {
+    val idx = findActiveLyricIndex(lines, positionMs)
+    return if (idx in lines.indices) lines[idx] else null
+}
+
+fun calculateLyricLineCharsSungProgress(line: LyricsLine, currentPositionMs: Long): Float {
+    if (currentPositionMs < line.timestampMs) return 0f
+    val words = line.words
+    if (words.isEmpty()) {
+        val end = line.endTimeMs ?: (line.timestampMs + 3500L)
+        val duration = (end - line.timestampMs).coerceAtLeast(1L)
+        if (currentPositionMs >= end) return 1f
+        return ((currentPositionMs - line.timestampMs).toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    }
+
+    val totalChars = words.sumOf { it.text.length }.coerceAtLeast(1)
+    var sungChars = 0f
+    for (word in words) {
+        sungChars += word.charsSungAt(currentPositionMs)
+    }
+    return (sungChars / totalChars.toFloat()).coerceIn(0f, 1f)
 }
 
 /**
@@ -398,35 +426,108 @@ fun NowPlayingView(
 }
 
 @Composable
-private fun NowPlayingLyricPreview(
+fun NowPlayingLyricPreview(
     lyrics: Lyrics,
     positionProvider: () -> Long,
-    onOpenLyrics: () -> Unit
+    onOpenLyrics: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val currentPositionProvider = androidx.compose.runtime.rememberUpdatedState(positionProvider)
-    val activeLyricLine by remember(lyrics) {
+
+    // Fast-path index lookup driven by positionProvider
+    val activeLine by remember(lyrics) {
         derivedStateOf {
             if (lyrics.lines.isEmpty()) null
-            else findActiveLyricText(lyrics.lines, currentPositionProvider.value())
+            else findActiveLyricLine(lyrics.lines, currentPositionProvider.value())
         }
     }
 
-    if (!activeLyricLine.isNullOrBlank()) {
-        Text(
-            text = activeLyricLine!!,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color.White.copy(alpha = 0.60f),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { onOpenLyrics() }
-                .padding(vertical = 4.dp),
-            textAlign = TextAlign.Start
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-    } else {
-        Spacer(modifier = Modifier.height(20.dp))
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 28.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .clickable(onClick = onOpenLyrics)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        val line = activeLine
+        if (line != null && line.text.isNotBlank()) {
+            if (line.isWordSynced) {
+                // Word-synced karaoke progress wipe
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    // Base inactive text rendered dimmed
+                    Text(
+                        text = line.text,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.50f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    // Overlay sung text rendered in pure white clipped to sung progress fraction
+                    Text(
+                        text = line.text,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.drawWithContent {
+                            val pos = currentPositionProvider.value()
+                            val progress = calculateLyricLineCharsSungProgress(line, pos)
+                            if (progress >= 1f) {
+                                drawContent()
+                            } else if (progress > 0f) {
+                                clipRect(
+                                    left = 0f,
+                                    top = 0f,
+                                    right = size.width * progress,
+                                    bottom = size.height
+                                ) {
+                                    this@drawWithContent.drawContent()
+                                }
+                            }
+                        }
+                    )
+                }
+            } else {
+                // Standard LRC line-synced preview
+                Text(
+                    text = line.text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.90f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        } else {
+            // Instrumental break / intro placeholder
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.GraphicEq,
+                    contentDescription = "Instrumental",
+                    tint = Color.White.copy(alpha = 0.40f),
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "Instrumental",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White.copy(alpha = 0.40f),
+                    maxLines = 1
+                )
+            }
+        }
     }
+    Spacer(modifier = Modifier.height(10.dp))
 }
