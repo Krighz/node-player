@@ -1,6 +1,9 @@
 package com.nodeplayer.network.innertube
 
 import com.nodeplayer.common.logging.NodeLog
+import com.nodeplayer.model.MoodGenre
+import com.nodeplayer.model.MoodGenreSection
+import com.nodeplayer.model.Playlist
 import com.nodeplayer.model.Track
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
@@ -129,11 +132,11 @@ class InnerTubeClient(
     }
 
     /**
-     * Executes a raw InnerTube browse request for [browseId] using [YouTubeClient.WEB_REMIX].
+     * Executes a raw InnerTube browse request for [browseId] and optional [params] using [YouTubeClient.WEB_REMIX].
      */
-    suspend fun browse(browseId: String): Result<BrowseResponse> = runCatching {
+    suspend fun browse(browseId: String, params: String? = null): Result<BrowseResponse> = runCatching {
         val client = YouTubeClient.WEB_REMIX
-        NodeLog.d(TAG, "Fetching browse feed (browseId=$browseId, client=${client.clientName})")
+        NodeLog.d(TAG, "Fetching browse feed (browseId=$browseId, params=$params, client=${client.clientName})")
         withRetry {
             httpClient.post("browse") {
                 header("User-Agent", client.userAgent)
@@ -144,7 +147,8 @@ class InnerTubeClient(
                 setBody(
                     BrowseBody(
                         context = client.toContext(locale),
-                        browseId = browseId
+                        browseId = browseId,
+                        params = params
                     )
                 )
             }.body<BrowseResponse>()
@@ -228,6 +232,225 @@ class InnerTubeClient(
         sections
     }.onFailure { e ->
         NodeLog.e(TAG, "Failed to load charts sections", e)
+    }
+
+    /**
+     * Browses moods and genres categories (`FEmusic_moods_and_genres`).
+     * Returns structured sections (e.g. "Moods & moments", "Genres") and their items.
+     */
+    suspend fun browseMoodAndGenres(): Result<List<MoodGenreSection>> = runCatching {
+        val client = YouTubeClient.WEB_REMIX
+        NodeLog.d(TAG, "Fetching moods and genres categories (browseId=FEmusic_moods_and_genres)")
+        val responseText = withRetry {
+            httpClient.post("browse") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
+                header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
+                setBody(
+                    BrowseBody(
+                        context = client.toContext(locale),
+                        browseId = "FEmusic_moods_and_genres"
+                    )
+                )
+            }.bodyAsText()
+        }
+        parseMoodAndGenresResponse(responseText)
+    }.onFailure { e ->
+        NodeLog.e(TAG, "Failed to load moods and genres", e)
+    }
+
+    /**
+     * Parses raw InnerTube JSON for `FEmusic_moods_and_genres` into [MoodGenreSection]s.
+     */
+    internal fun parseMoodAndGenresResponse(jsonText: String): List<MoodGenreSection> {
+        val sections = mutableListOf<MoodGenreSection>()
+        try {
+            val root = json.parseToJsonElement(jsonText).jsonObject
+            val tabs = root["contents"]?.jsonObject?.get("singleColumnBrowseResultsRenderer")?.jsonObject?.get("tabs")?.jsonArray
+                ?: root["contents"]?.jsonObject?.get("tabs")?.jsonArray
+            val contents = tabs?.firstOrNull()?.jsonObject?.get("tabRenderer")?.jsonObject?.get("content")?.jsonObject
+                ?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
+                ?: root["contents"]?.jsonObject?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
+
+            contents?.forEach { sectionElement ->
+                val sectionObj = sectionElement.jsonObject
+                // Handle gridRenderer
+                val gridRenderer = sectionObj["gridRenderer"]?.jsonObject
+                val musicCarousel = sectionObj["musicCarouselShelfRenderer"]?.jsonObject
+
+                val sectionTitle = gridRenderer?.get("header")?.jsonObject?.get("gridHeaderRenderer")?.jsonObject
+                    ?.get("title")?.jsonObject?.get("runs")?.jsonArray?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                    ?: gridRenderer?.get("header")?.jsonObject?.get("gridHeaderRenderer")?.jsonObject
+                        ?.get("title")?.jsonObject?.get("simpleText")?.jsonPrimitive?.content
+                    ?: musicCarousel?.get("header")?.jsonObject?.get("musicCarouselShelfBasicHeaderRenderer")?.jsonObject
+                        ?.get("title")?.jsonObject?.get("runs")?.jsonArray?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                    ?: "Categories"
+
+                val itemsArray = gridRenderer?.get("items")?.jsonArray
+                    ?: musicCarousel?.get("contents")?.jsonArray
+
+                val items = mutableListOf<MoodGenre>()
+                itemsArray?.forEach { itemElem ->
+                    val btn = itemElem.jsonObject["musicNavigationButtonRenderer"]?.jsonObject
+                    if (btn != null) {
+                        val title = btn["buttonText"]?.jsonObject?.get("runs")?.jsonArray
+                            ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                            ?: btn["buttonText"]?.jsonObject?.get("simpleText")?.jsonPrimitive?.content
+                            ?: ""
+
+                        val stripeColor = btn["solid"]?.jsonObject?.get("leftStripeColor")?.jsonPrimitive?.content?.toLongOrNull()
+                            ?: btn["leftStripeColor"]?.jsonPrimitive?.content?.toLongOrNull()
+
+                        val clickCommand = btn["clickCommand"]?.jsonObject
+                        val browseEndpoint = clickCommand?.get("browseEndpoint")?.jsonObject
+                        val browseId = browseEndpoint?.get("browseId")?.jsonPrimitive?.content ?: ""
+                        val params = browseEndpoint?.get("params")?.jsonPrimitive?.content
+
+                        val thumbnails = btn["thumbnail"]?.jsonObject?.get("musicThumbnailRenderer")?.jsonObject
+                            ?.get("thumbnail")?.jsonObject?.get("thumbnails")?.jsonArray
+                            ?: btn["thumbnailRenderer"]?.jsonObject?.get("musicThumbnailRenderer")?.jsonObject
+                                ?.get("thumbnail")?.jsonObject?.get("thumbnails")?.jsonArray
+                            ?: btn["thumbnails"]?.jsonArray
+                        val rawThumbUrl = thumbnails?.lastOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
+                        val thumbnailUrl = rawThumbUrl?.let {
+                            if (it.startsWith("//")) "https:$it" else it
+                        }
+
+                        if (title.isNotBlank() && browseId.isNotBlank()) {
+                            items.add(
+                                MoodGenre(
+                                    title = title,
+                                    stripeColor = stripeColor,
+                                    browseId = browseId,
+                                    params = params,
+                                    thumbnailUrl = thumbnailUrl
+                                )
+                            )
+                        }
+                    }
+                }
+
+                if (items.isNotEmpty()) {
+                    sections.add(MoodGenreSection(title = sectionTitle, items = items))
+                }
+            }
+        } catch (e: Exception) {
+            NodeLog.w(TAG, "Failed to parse moods and genres response: ${e.message}")
+        }
+        return sections
+    }
+
+    /**
+     * Browses category shelves (e.g. for a specific mood or genre category browseId) and returns
+     * playlists contained in the category carousel/shelf renderers.
+     */
+    suspend fun browseCategoryShelves(browseId: String, params: String? = null): Result<List<Playlist>> = runCatching {
+        val client = YouTubeClient.WEB_REMIX
+        NodeLog.d(TAG, "Fetching category shelves (browseId=$browseId, params=$params)")
+        val responseText = withRetry {
+            httpClient.post("browse") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
+                header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
+                setBody(
+                    BrowseBody(
+                        context = client.toContext(locale),
+                        browseId = browseId,
+                        params = params
+                    )
+                )
+            }.bodyAsText()
+        }
+        parseCategoryShelvesResponse(responseText)
+    }.onFailure { e ->
+        NodeLog.e(TAG, "Failed to load category shelves", e)
+    }
+
+    /**
+     * Parses raw InnerTube JSON for category browse response into a list of [Playlist]s.
+     */
+    internal fun parseCategoryShelvesResponse(jsonText: String): List<Playlist> {
+        val playlists = mutableListOf<Playlist>()
+        try {
+            val root = json.parseToJsonElement(jsonText).jsonObject
+            val tabs = root["contents"]?.jsonObject?.get("singleColumnBrowseResultsRenderer")?.jsonObject?.get("tabs")?.jsonArray
+                ?: root["contents"]?.jsonObject?.get("tabs")?.jsonArray
+                ?: root["contents"]?.jsonObject?.get("twoColumnBrowseResultsRenderer")?.jsonObject?.get("secondaryContents")?.jsonObject?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
+
+            val sectionContents = if (tabs != null && tabs.firstOrNull()?.jsonObject?.containsKey("tabRenderer") == true) {
+                tabs.firstOrNull()?.jsonObject?.get("tabRenderer")?.jsonObject?.get("content")?.jsonObject
+                    ?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
+            } else if (tabs != null && tabs.firstOrNull()?.jsonObject?.containsKey("musicCarouselShelfRenderer") == true) {
+                tabs
+            } else {
+                root["contents"]?.jsonObject?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
+            }
+
+            sectionContents?.forEach { sectionElement ->
+                val sectionObj = sectionElement.jsonObject
+                val carousel = sectionObj["musicCarouselShelfRenderer"]?.jsonObject
+                val shelf = sectionObj["musicShelfRenderer"]?.jsonObject
+                    ?: sectionObj["musicPlaylistShelfRenderer"]?.jsonObject
+
+                val itemsArray = carousel?.get("contents")?.jsonArray
+                    ?: shelf?.get("contents")?.jsonArray
+
+                itemsArray?.forEach { itemElem ->
+                    val twoRow = itemElem.jsonObject["musicTwoRowItemRenderer"]?.jsonObject
+                        ?: itemElem.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject
+
+                    if (twoRow != null) {
+                        val navEndpoint = twoRow["navigationEndpoint"]?.jsonObject
+                        val browseEndpoint = navEndpoint?.get("browseEndpoint")?.jsonObject
+                        val browseId = browseEndpoint?.get("browseId")?.jsonPrimitive?.content
+                            ?: twoRow["thumbnailOverlay"]?.jsonObject
+                                ?.get("musicItemThumbnailOverlayRenderer")?.jsonObject
+                                ?.get("content")?.jsonObject
+                                ?.get("musicPlayButtonRenderer")?.jsonObject
+                                ?.get("playNavigationEndpoint")?.jsonObject
+                                ?.get("watchPlaylistEndpoint")?.jsonObject
+                                ?.get("playlistId")?.jsonPrimitive?.content
+                            ?: twoRow["thumbnailOverlay"]?.jsonObject
+                                ?.get("musicItemThumbnailOverlayRenderer")?.jsonObject
+                                ?.get("content")?.jsonObject
+                                ?.get("musicPlayButtonRenderer")?.jsonObject
+                                ?.get("playNavigationEndpoint")?.jsonObject
+                                ?.get("watchEndpoint")?.jsonObject
+                                ?.get("playlistId")?.jsonPrimitive?.content
+
+                        val title = twoRow["title"]?.jsonObject?.get("runs")?.jsonArray
+                            ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                            ?: twoRow["title"]?.jsonObject?.get("simpleText")?.jsonPrimitive?.content
+
+                        if (!browseId.isNullOrBlank() && !title.isNullOrBlank()) {
+                            val cleanId = if (browseId.startsWith("VL")) browseId.removePrefix("VL") else browseId
+                            val syntheticId = generateSyntheticTrackId(cleanId)
+
+                            val subtitleRuns = twoRow["subtitle"]?.jsonObject?.get("runs")?.jsonArray
+                            val countStr = subtitleRuns?.lastOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
+                            val trackCount = countStr?.filter { it.isDigit() }?.toIntOrNull() ?: 0
+
+                            playlists.add(
+                                Playlist(
+                                    id = syntheticId,
+                                    name = title,
+                                    trackCount = trackCount,
+                                    source = "youtube",
+                                    externalId = cleanId
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            NodeLog.w(TAG, "Failed to parse category shelves response: ${e.message}")
+        }
+        return playlists
     }
 
     /**
