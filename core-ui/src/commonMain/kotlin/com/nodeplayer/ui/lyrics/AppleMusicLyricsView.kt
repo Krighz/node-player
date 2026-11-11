@@ -1,11 +1,10 @@
 package com.nodeplayer.ui.lyrics
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,12 +25,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.Navigation
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -49,9 +45,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,13 +57,73 @@ import com.nodeplayer.model.Lyrics
 import com.nodeplayer.model.Track
 import com.nodeplayer.ui.components.GlassControlSurface
 import com.nodeplayer.ui.components.LiquidButton
+import com.nodeplayer.ui.player.ArtworkMeshBackdrop
 import com.nodeplayer.ui.theme.LocalAccentColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
+ * 3-Dot pulsing instrumental countdown indicator for musical interludes exceeding 4.0 seconds (D-12).
+ *
+ * Parameters per D-12:
+ * - GAP_DOTS = 3
+ * - GAP_DOT_SIZE = 13.dp
+ * - GAP_DOT_GAP = 5.dp
+ * - Sequentially lights up each dot according to break elapsed time:
+ *   val through = ((clockMs - breakStartMs).toFloat() / breakDurationMs).coerceIn(0f, 1f)
+ *   val lit = (through * 3 - dot).coerceIn(0f, 1f)
+ *   Color.White.copy(alpha = 0.25f + 0.75f * lit)
+ */
+@Composable
+fun InstrumentalBreakCountdown(
+    clockMs: Long,
+    breakStartMs: Long,
+    breakEndMs: Long,
+    modifier: Modifier = Modifier,
+    dotColor: Color = Color.White
+) {
+    val breakDurationMs = (breakEndMs - breakStartMs).coerceAtLeast(1L)
+    val through = ((clockMs - breakStartMs).toFloat() / breakDurationMs.toFloat()).coerceIn(0f, 1f)
+
+    val dotSize = 13.dp
+    val dotGap = 5.dp
+    val totalWidth = (dotSize * 3) + (dotGap * 2)
+
+    Canvas(
+        modifier = modifier
+            .padding(vertical = 14.dp)
+            .size(width = totalWidth, height = dotSize)
+    ) {
+        val radiusPx = (dotSize.toPx()) / 2f
+        val gapPx = dotGap.toPx()
+
+        for (dot in 0 until 3) {
+            val lit = (through * 3f - dot.toFloat()).coerceIn(0f, 1f)
+            val alpha = (0.25f + 0.75f * lit).coerceIn(0f, 1f)
+            val cx = radiusPx + dot * (radiusPx * 2f + gapPx)
+            val cy = size.height / 2f
+
+            drawCircle(
+                color = dotColor.copy(alpha = alpha),
+                radius = radiusPx,
+                center = Offset(cx, cy)
+            )
+        }
+    }
+}
+
+/**
  * Apple Music-style fullscreen glass lyrics view.
- * Meets requirements LYR-08 through LYR-12 and UI-SPEC design contract.
+ *
+ * Conforms to D-11, D-12, D-13, and D-14:
+ * - Overhauled with BitChord 1-to-1 lyrics engine.
+ * - Mounts [ArtworkMeshBackdrop] as the hardware-accelerated ambient background.
+ * - Word-by-word active glow sweep with dimmed inactive lines.
+ * - Duet call-and-response alignment (Start vs End).
+ * - Backing vocal subtext with independent sweep.
+ * - 3-Dot pulsing countdown during instrumental breaks > 4.0s.
+ * - Spring-damped auto-centering with drag-to-pause logic.
+ * - Strictly preserves public signature and default parameter overloads per D-14.
  */
 @Composable
 fun AppleMusicLyricsView(
@@ -78,8 +134,8 @@ fun AppleMusicLyricsView(
     isOnlineMode: Boolean,
     onSeekTo: (Long) -> Unit,
     onClose: () -> Unit,
-    onSearchAgain: () -> Unit,
-    onOpenOffsetControls: () -> Unit,
+    onSearchAgain: () -> Unit = {},
+    onOpenOffsetControls: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val listState = rememberLazyListState()
@@ -98,7 +154,7 @@ fun AppleMusicLyricsView(
         }
     }
 
-    // Active line detection
+    // Active line detection: binary search or indexOfLast
     val lines = lyrics?.lines ?: emptyList()
     val activeIndex by remember(lines, currentPositionMs) {
         derivedStateOf {
@@ -118,27 +174,40 @@ fun AppleMusicLyricsView(
     LaunchedEffect(activeIndex, userScrolledManually) {
         if (!userScrolledManually && activeIndex >= 0 && activeIndex < lines.size) {
             val targetScroll = (activeIndex - 2).coerceAtLeast(0)
-            listState.animateScrollToItem(targetScroll)
+            listState.animateScrollToItem(
+                index = targetScroll,
+                scrollOffset = 0
+            )
         }
     }
 
-    // Background color wash gradient
-    val backgroundBrush = remember(accentColor) {
-        Brush.verticalGradient(
-            colors = listOf(
-                accentColor.copy(alpha = 0.22f),
-                Color(0xFF0F1424).copy(alpha = 0.94f)
-            )
-        )
-    }
-
     BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            .background(backgroundBrush)
+        modifier = modifier.fillMaxSize()
     ) {
         val isWide = maxWidth >= 600.dp
         val columnWidth = if (isWide) maxWidth * 0.60f else maxWidth
+
+        // 1. Zero-allocation hardware GPU mesh backdrop per D-05 & D-09
+        ArtworkMeshBackdrop(
+            artworkUrl = track?.path ?: track?.id?.toString(),
+            fallback = accentColor.copy(alpha = 0.35f),
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Subtle dark translucent scrim for legibility
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.35f),
+                            Color.Black.copy(alpha = 0.55f),
+                            Color.Black.copy(alpha = 0.70f)
+                        )
+                    )
+                )
+        )
 
         Column(modifier = Modifier.fillMaxSize()) {
             // Header Bar
@@ -153,7 +222,7 @@ fun AppleMusicLyricsView(
                     Icon(
                         imageVector = Icons.Rounded.KeyboardArrowDown,
                         contentDescription = "Close Lyrics",
-                        tint = baseTextColor.copy(alpha = 0.85f),
+                        tint = Color.White.copy(alpha = 0.85f),
                         modifier = Modifier.size(28.dp)
                     )
                 }
@@ -166,7 +235,7 @@ fun AppleMusicLyricsView(
                         text = track?.title ?: "No track playing",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.SemiBold,
-                            color = baseTextColor
+                            color = Color.White
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -174,7 +243,7 @@ fun AppleMusicLyricsView(
                     Text(
                         text = track?.artist ?: "",
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = baseTextColor.copy(alpha = 0.65f)
+                            color = Color.White.copy(alpha = 0.65f)
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -186,7 +255,7 @@ fun AppleMusicLyricsView(
                         Icon(
                             imageVector = Icons.Rounded.Tune,
                             contentDescription = "Timing Offset",
-                            tint = if ((lyrics?.offsetMs ?: 0L) != 0L) accentColor else baseTextColor.copy(alpha = 0.70f)
+                            tint = if ((lyrics?.offsetMs ?: 0L) != 0L) accentColor else Color.White.copy(alpha = 0.70f)
                         )
                     }
                 }
@@ -211,7 +280,7 @@ fun AppleMusicLyricsView(
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = "Looking for lyrics…",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = baseTextColor.copy(alpha = 0.70f))
+                            style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.70f))
                         )
                     }
                 } else if (lyrics == null || (!lyrics.isSynced && lyrics.plainText.isEmpty())) {
@@ -225,7 +294,7 @@ fun AppleMusicLyricsView(
                             text = if (!isOnlineMode) "No lyrics available offline" else "No lyrics",
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.SemiBold,
-                                color = baseTextColor
+                                color = Color.White
                             )
                         )
                         Spacer(modifier = Modifier.height(8.dp))
@@ -236,7 +305,7 @@ fun AppleMusicLyricsView(
                                 "We couldn't find lyrics for this track. Check that the title and artist are correct, or search again."
                             },
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                color = baseTextColor.copy(alpha = 0.65f),
+                                color = Color.White.copy(alpha = 0.65f),
                                 textAlign = TextAlign.Center
                             )
                         )
@@ -249,7 +318,7 @@ fun AppleMusicLyricsView(
                                 text = "Search again",
                                 style = MaterialTheme.typography.labelLarge.copy(
                                     fontWeight = FontWeight.SemiBold,
-                                    color = baseTextColor
+                                    color = Color.White
                                 )
                             )
                         }
@@ -270,7 +339,7 @@ fun AppleMusicLyricsView(
                                 Text(
                                     text = "Synced lyrics unavailable — showing plain text.",
                                     style = MaterialTheme.typography.labelMedium.copy(
-                                        color = baseTextColor.copy(alpha = 0.50f)
+                                        color = Color.White.copy(alpha = 0.50f)
                                     ),
                                     modifier = Modifier.padding(bottom = 24.dp)
                                 )
@@ -281,7 +350,7 @@ fun AppleMusicLyricsView(
                                     style = MaterialTheme.typography.bodyLarge.copy(
                                         fontSize = 18.sp,
                                         lineHeight = 28.sp,
-                                        color = baseTextColor.copy(alpha = 0.85f)
+                                        color = Color.White.copy(alpha = 0.85f)
                                     )
                                 )
                             }
@@ -297,21 +366,42 @@ fun AppleMusicLyricsView(
                     ) {
                         LazyColumn(
                             state = listState,
-                            contentPadding = PaddingValues(vertical = 120.dp),
+                            contentPadding = PaddingValues(top = 80.dp, bottom = 140.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
                             itemsIndexed(
                                 items = lines,
                                 key = { index, line -> "${line.timestampMs}_$index" }
                             ) { index, line ->
-                                LyricLineItem(
+                                WordByWordKaraokeText(
                                     line = line,
                                     index = index,
                                     activeIndex = activeIndex,
                                     currentPositionMs = currentPositionMs,
-                                    baseColor = baseTextColor,
-                                    onSeek = onSeekTo
+                                    onSeek = onSeekTo,
+                                    activeColor = Color.White,
+                                    inactiveColor = Color(0xFFC0C0C0),
+                                    accentSweepColor = accentColor,
+                                    fontSize = 34.sp
                                 )
+
+                                // Check for instrumental interlude break > 4.0s (D-12)
+                                val nextLine = lines.getOrNull(index + 1)
+                                val lineEnd = line.endTimeMs ?: (line.timestampMs + 3500L)
+                                val gapDuration = if (nextLine != null) {
+                                    nextLine.timestampMs - lineEnd
+                                } else {
+                                    0L
+                                }
+
+                                if (gapDuration > 4000L && index == activeIndex && currentPositionMs >= lineEnd && currentPositionMs < nextLine!!.timestampMs) {
+                                    InstrumentalBreakCountdown(
+                                        clockMs = currentPositionMs,
+                                        breakStartMs = lineEnd,
+                                        breakEndMs = nextLine.timestampMs,
+                                        dotColor = Color.White
+                                    )
+                                }
                             }
                         }
 
@@ -352,7 +442,7 @@ fun AppleMusicLyricsView(
                                         text = "Jump to current",
                                         style = MaterialTheme.typography.labelMedium.copy(
                                             fontWeight = FontWeight.SemiBold,
-                                            color = baseTextColor
+                                            color = Color.White
                                         )
                                     )
                                 }
