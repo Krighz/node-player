@@ -28,6 +28,8 @@ import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassThemeConfig
+import com.nodeplayer.ui.theme.ScreenTransitions
 
 /**
  * Sliding Liquid-Glass Profile & Top-Level Destinations Bottom Sheet.
@@ -60,11 +62,12 @@ fun HomeProfileSheet(
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val themeConfig = LocalGlassThemeConfig.current
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(spring(stiffness = 400f)) + slideInVertically(spring(stiffness = 400f)) { it },
-        exit = fadeOut(spring(stiffness = 400f)) + slideOutVertically(spring(stiffness = 400f)) { it },
+        enter = ScreenTransitions.sheetEnter(themeConfig),
+        exit = ScreenTransitions.sheetExit(themeConfig),
         modifier = modifier
     ) {
         // Scrim background

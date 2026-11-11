@@ -63,6 +63,8 @@ import com.nodeplayer.model.Track
 import com.nodeplayer.model.TrackActionId
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassThemeConfig
+import com.nodeplayer.ui.theme.ScreenTransitions
 
 /**
  * Standardized liquid-glass bottom sheet context menu for tracks, albums, playlists, and artists.
@@ -83,14 +85,15 @@ fun GlassContextMenuSheet(
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
+    val themeConfig = LocalGlassThemeConfig.current
     if (track == null) return
 
     val actions = remember(config) { config.getActiveTrackActions() }
 
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(spring(stiffness = 400f)) + slideInVertically(spring(stiffness = 400f)) { it },
-        exit = fadeOut(spring(stiffness = 400f)) + slideOutVertically(spring(stiffness = 400f)) { it },
+        enter = ScreenTransitions.sheetEnter(themeConfig),
+        exit = ScreenTransitions.sheetExit(themeConfig),
         modifier = modifier
     ) {
         // Scrim background
