@@ -98,6 +98,8 @@ class InnerTubeClient(
 
             sessionCookie?.let { cookie ->
                 header(HttpHeaders.Cookie, cookie)
+                header("X-Goog-AuthUser", "0")
+                header("X-Origin", YouTubeAuth.ORIGIN_MUSIC)
                 cachedSapisid?.let { sapisid ->
                     val authHeader = YouTubeAuth.generateSapisidHash(sapisid)
                     header(HttpHeaders.Authorization, authHeader)
@@ -121,6 +123,7 @@ class InnerTubeClient(
             try {
                 return block()
             } catch (t: Throwable) {
+                if (t is kotlinx.coroutines.CancellationException) throw t
                 lastException = t
                 if (attempt < maxAttempts) {
                     kotlinx.coroutines.delay(currentDelay)
@@ -180,8 +183,11 @@ class InnerTubeClient(
                         ?: item.musicResponsiveListItemRenderer?.let { mapResponsiveListItemToTrack(it) }
                 }
 
-                if (tracks.isNotEmpty()) {
-                    sections.add(YouTubeSection(title = title, items = tracks))
+                val playlists = carousel.contents.mapNotNull { content ->
+                    content.musicTwoRowItemRenderer?.let { mapTwoRowItemToPlaylist(it) }
+                }
+                if (tracks.isNotEmpty() || playlists.isNotEmpty()) {
+                    sections.add(YouTubeSection(title = title, items = tracks, playlists = playlists))
                 }
             } else if (shelf != null) {
                 val title = shelf.title?.text() ?: "Recommendations"
@@ -467,14 +473,14 @@ class InnerTubeClient(
 
         val existingTitles = homeResult.map { it.title.lowercase().trim() }.toMutableSet()
         for (section in chartsResult) {
-            if (section.title.lowercase().trim() !in existingTitles && section.items.isNotEmpty()) {
+            if (section.title.lowercase().trim() !in existingTitles && (section.items.isNotEmpty() || section.playlists.isNotEmpty())) {
                 combined.add(section)
                 existingTitles.add(section.title.lowercase().trim())
             }
         }
 
         for (section in exploreResult) {
-            if (section.title.lowercase().trim() !in existingTitles && section.items.isNotEmpty()) {
+            if (section.title.lowercase().trim() !in existingTitles && (section.items.isNotEmpty() || section.playlists.isNotEmpty())) {
                 combined.add(section)
                 existingTitles.add(section.title.lowercase().trim())
             }
@@ -763,7 +769,31 @@ class InnerTubeClient(
 
     // --- Domain Mappers ---
 
+    private fun mapTwoRowItemToPlaylist(item: MusicTwoRowItemRenderer): YouTubePlaylistSummary? {
+        val endpoint = item.navigationEndpoint
+        val browseId = endpoint?.browseEndpoint?.browseId
+        val playlistId = browseId?.takeIf { it.startsWith("VL") }?.removePrefix("VL")
+            ?: endpoint?.watchPlaylistEndpoint?.playlistId
+            ?: endpoint?.watchEndpoint?.takeIf { it.videoId == null }?.playlistId
+            ?: item.thumbnailOverlay?.musicItemThumbnailOverlayRenderer?.content
+                ?.musicPlayButtonRenderer?.playNavigationEndpoint?.let { play ->
+                    play.watchPlaylistEndpoint?.playlistId
+                        ?: play.watchEndpoint?.takeIf { it.videoId == null }?.playlistId
+                }
+            ?: return null
+        val title = item.title?.text()?.takeIf { it.isNotBlank() } ?: return null
+        return YouTubePlaylistSummary(
+            id = playlistId,
+            title = title,
+            author = item.subtitle?.text()?.takeIf { it.isNotBlank() },
+            thumbnailUrl = item.thumbnailRenderer?.musicThumbnailRenderer?.getThumbnailUrl()
+                ?: item.thumbnailRenderer?.croppedSquareThumbnailRenderer?.getThumbnailUrl()
+        )
+    }
+
     private fun mapTwoRowItemToTrack(item: MusicTwoRowItemRenderer): Track? {
+        // Playlist cards are opened as collections, even when they also have a play endpoint.
+        if (mapTwoRowItemToPlaylist(item) != null) return null
         val videoId = item.navigationEndpoint?.watchEndpoint?.videoId
             ?: item.thumbnailOverlay?.musicItemThumbnailOverlayRenderer?.content
                 ?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId
@@ -905,9 +935,13 @@ class InnerTubeClient(
         if (cookie.isNullOrBlank()) return@runCatching null
 
         withRetry {
+            val client = YouTubeClient.WEB_REMIX
             val response = httpClient.post("account/account_menu") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
                 val reqBody = AccountMenuBody(
-                    context = clientContext.toContext(locale, visitorData = null)
+                    context = client.toContext(locale, visitorData = null)
                 )
                 setBody(reqBody)
             }
@@ -929,9 +963,11 @@ class InnerTubeClient(
         return try {
             val element = json.parseToJsonElement(jsonText)
             val actions = element.jsonObject["actions"]?.jsonArray
-            val openMenuAction = actions?.firstOrNull()?.jsonObject?.get("openPopupAction")?.jsonObject
-            val menuRenderer = openMenuAction?.get("popup")?.jsonObject?.get("multiPageMenuRenderer")?.jsonObject
-            val headerRenderer = menuRenderer?.get("header")?.jsonObject?.get("activeAccountHeaderRenderer")?.jsonObject
+            val headerRenderer = actions?.firstNotNullOfOrNull { action ->
+                action.jsonObject["openPopupAction"]?.jsonObject?.get("popup")?.jsonObject
+                    ?.get("multiPageMenuRenderer")?.jsonObject?.get("header")?.jsonObject
+                    ?.get("activeAccountHeaderRenderer")?.jsonObject
+            }
 
             if (headerRenderer != null) {
                 val accountName = headerRenderer["accountName"]?.jsonObject?.get("runs")?.jsonArray

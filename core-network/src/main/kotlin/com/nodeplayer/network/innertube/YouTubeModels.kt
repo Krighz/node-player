@@ -927,6 +927,7 @@ data class PlayerResponse(
 data class YouTubeSection(
     val title: String,
     val items: List<Track>,
+    val playlists: List<YouTubePlaylistSummary> = emptyList(),
 )
 
 data class YouTubePlaylistSummary(

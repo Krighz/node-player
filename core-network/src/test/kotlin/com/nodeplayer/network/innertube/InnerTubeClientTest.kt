@@ -78,6 +78,34 @@ class InnerTubeClientTest {
     }
 
     @Test
+    fun homeRequestsUseCurrentSessionAndKeepPlaylistCards() = runTest {
+        val cookies = mutableListOf<String?>()
+        val engine = MockEngine { request ->
+            cookies.add(request.headers[HttpHeaders.Cookie])
+            if (cookies.size == 2) assertTrue(request.headers[HttpHeaders.Authorization]?.startsWith("SAPISIDHASH ") == true)
+            respond(
+                """{"contents":{"sectionListRenderer":{"contents":[{"musicCarouselShelfRenderer":{
+                  "header":{"musicCarouselShelfBasicHeaderRenderer":{"title":{"runs":[{"text":"Made for you"}]}}},
+                  "contents":[
+                    {"musicTwoRowItemRenderer":{"title":{"runs":[{"text":"Your mix"}]},"subtitle":{"runs":[{"text":"YouTube Music"}]},"navigationEndpoint":{"browseEndpoint":{"browseId":"VLPL123"}},"thumbnailRenderer":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://example.com/cover.jpg"}]}}}}},
+                    {"musicTwoRowItemRenderer":{"title":{"runs":[{"text":"Song"}]},"navigationEndpoint":{"watchEndpoint":{"videoId":"song123","playlistId":"RD123"}}}}
+                  ]}}]}}}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = InnerTubeClient(engine = engine)
+        client.getHomeRecommendations().getOrThrow()
+        client.sessionCookie = "SAPISID=synthetic; LOGIN_INFO=synthetic"
+        val section = client.getHomeRecommendations().getOrThrow().single()
+        assertEquals(null, cookies.first())
+        assertEquals(client.sessionCookie, cookies.last())
+        assertEquals("PL123", section.playlists.single().id)
+        assertEquals("https://example.com/cover.jpg", section.playlists.single().thumbnailUrl)
+        assertEquals("nodeplayer://youtube/song123", section.items.single().path)
+        client.close()
+    }
+
+    @Test
     fun testSearchEndpointAndCategorization() = runTest {
         val mockEngine = MockEngine { request ->
             assertEquals("https://music.youtube.com/youtubei/v1/search", request.url.toString())

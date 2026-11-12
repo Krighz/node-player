@@ -68,6 +68,7 @@ fun YouTubeLoginSheet(
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var pageProgress by remember { mutableFloatStateOf(0f) }
     var isCapturing by remember { mutableStateOf(false) }
+    var loginError by remember { mutableStateOf<String?>(null) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -118,6 +119,10 @@ fun YouTubeLoginSheet(
                     }
                 }
 
+                loginError?.let { message ->
+                    Text(message, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                }
+
                 // Loading progress bar
                 if (pageProgress > 0f && pageProgress < 1f) {
                     LinearProgressIndicator(
@@ -158,7 +163,6 @@ fun YouTubeLoginSheet(
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                         super.onPageStarted(view, url, favicon)
-                                        checkAndCaptureCookies(url)
                                     }
 
                                     override fun onPageFinished(view: WebView?, url: String?) {
@@ -170,27 +174,29 @@ fun YouTubeLoginSheet(
                                         view: WebView?,
                                         request: WebResourceRequest?
                                     ): Boolean {
-                                        val nextUrl = request?.url?.toString()
-                                        checkAndCaptureCookies(nextUrl)
                                         return false
                                     }
 
                                     private fun checkAndCaptureCookies(url: String?) {
                                         if (url == null || isCapturing) return
                                         val host = try { android.net.Uri.parse(url).host } catch (_: Exception) { null }
-                                        if (host != null && (host == "youtube.com" || host.endsWith(".youtube.com"))) {
+                                        if (host == "music.youtube.com") {
                                             val cookies = CookieManager.getInstance().getCookie(url)
                                             val sapisid = YouTubeAuth.extractSapisid(cookies)
-                                            if (!sapisid.isNullOrBlank() || (cookies != null && cookies.contains("LOGIN_INFO"))) {
+                                            if (!sapisid.isNullOrBlank() && cookies != null) {
                                                 isCapturing = true
+                                                loginError = null
                                                 NodeLog.i(TAG, "Captured authenticated session cookie: ${YouTubeAuth.maskCookieForLog(cookies)}")
                                                 coroutineScope.launch {
                                                     try {
                                                         YouTubeAccountManager.onLoginSuccess(cookies)
                                                         onLoginSuccess()
                                                         onDismiss()
-                                                    } catch (t: Throwable) {
+                                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                                        throw cancelled
+                                                    } catch (t: Exception) {
                                                         NodeLog.e(TAG, "Error finalizing YouTube login", t)
+                                                        loginError = "Couldn't finish signing in. Reload to try again."
                                                         isCapturing = false
                                                     }
                                                 }

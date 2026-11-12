@@ -105,6 +105,7 @@ fun HomeScreen(
             val recentTracks = remember(allTracks) {
                 filterAndSortRecentTracks(allTracks)
             }
+            val account = (ytAuthState as? com.nodeplayer.model.AuthState.LoggedIn)?.account
             OnlineHomeView(
                 currentTrack = currentTrack,
                 isPlaying = isPlaying,
@@ -113,7 +114,12 @@ fun HomeScreen(
                 recentTracks = recentTracks,
                 currentRoute = currentRoute,
                 dockScrollController = dockScrollController,
-                isLoggedIn = ytAuthState is com.nodeplayer.model.AuthState.LoggedIn,
+                isLoggedIn = account != null,
+                accountId = account?.id,
+                accountName = account?.name,
+                accountEmail = account?.email,
+                avatarUrl = account?.avatarUrl,
+                channelHandle = account?.channelHandle,
                 onSearchClick = onSearchClick,
                 onOpenEqualizer = onOpenEqualizer,
                 onOpenSettings = onOpenSettings,

@@ -2,6 +2,7 @@ package com.nodeplayer.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +26,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
@@ -33,22 +36,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.nodeplayer.common.AppModeState
+import com.nodeplayer.model.MoodGenreSection
 import com.nodeplayer.model.Track
 import com.nodeplayer.network.cache.HomeFeedDiskCache
 import com.nodeplayer.network.innertube.SharedInnerTubeProvider
 import com.nodeplayer.network.innertube.YouTubeSection
+import com.nodeplayer.network.innertube.YouTubePlaylistSummary
 import com.nodeplayer.network.recommender.HomeFeedRecommender
 import com.nodeplayer.ui.LocalBottomBarPadding
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.DockScrollController
 import com.nodeplayer.ui.components.HomeProfileSheet
+import com.nodeplayer.ui.components.PlatformArtworkProvider
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.LiquidColors
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -84,8 +94,7 @@ fun filterAndSortRecentTracks(tracks: List<Track>): List<Track> =
  * 4. Playlists (1:1 squircle cards with curator)
  * 5. From artists you follow (1:1 squircle/circle cards)
  *
- * Backed by [HomeFeedDiskCache] for instant sub-50ms cold-start display,
- * and [HomeFeedRecommender] for local history fallback and "Not interested" dismissals.
+ * Uses [HomeFeedDiskCache] for cached shelves and [HomeFeedRecommender] for local history fallback and "Not interested" dismissals.
  */
 @Composable
 fun OnlineHomeView(
@@ -97,6 +106,7 @@ fun OnlineHomeView(
     currentRoute: String = "home",
     dockScrollController: DockScrollController? = null,
     isLoggedIn: Boolean = false,
+    accountId: String? = null,
     accountName: String? = null,
     accountEmail: String? = null,
     avatarUrl: String? = null,
@@ -117,8 +127,12 @@ fun OnlineHomeView(
     val scope = rememberCoroutineScope()
     var showOnboardingBanner by remember { mutableStateOf(true) }
 
-    val diskCache = remember { HomeFeedDiskCache() }
     val recommender = remember { HomeFeedRecommender() }
+    // Separate guest, account session and route caches; never reuse a different session's feed.
+    val diskCache = remember(isLoggedIn, accountId, currentRoute) {
+        val session = SharedInnerTubeProvider.get().sessionCookie ?: "guest"
+        HomeFeedDiskCache(cacheKey = "$currentRoute:$session")
+    }
 
     val dockConnection = rememberDockScrollConnection(
         controller = dockScrollController,
@@ -126,74 +140,57 @@ fun OnlineHomeView(
     )
 
     var showProfileSheet by remember { mutableStateOf(false) }
-    var sections by remember { mutableStateOf<List<YouTubeSection>>(diskCache.sectionsState.value) }
-    var isRefreshing by remember { mutableStateOf(false) }
-    var isFallbackMode by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    // Never show a previous session's feed while a new account or route is loading.
+    var sections by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf(diskCache.sectionsState.value) }
+    var isRefreshing by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf(true) }
+    var isFallbackMode by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf(false) }
+    var errorMessage by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<String?>(null) }
+    var categories by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<List<MoodGenreSection>>(emptyList()) }
+    var categorySections by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<List<YouTubeSection>?>(null) }
+    var actionJob by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<Job?>(null) }
+    DisposableEffect(isLoggedIn, accountId, currentRoute) {
+        onDispose { actionJob?.cancel() }
+    }
 
-    fun refreshFeed(forceNetwork: Boolean = false) {
-        scope.launch {
-            isRefreshing = true
-            errorMessage = null
-
-            withContext(Dispatchers.IO) {
-                try {
-                    val innerClient = SharedInnerTubeProvider.get()
-                    val result = if (currentRoute == "new") {
-                        val exploreRes = innerClient.getExploreSections().getOrDefault(emptyList())
-                        val chartsRes = innerClient.getChartsSections().getOrDefault(emptyList())
-                        val combined = (exploreRes + chartsRes).distinctBy { it.title }
-                        if (combined.isNotEmpty()) Result.success(combined) else innerClient.getCombinedHomeFeed()
-                    } else {
-                        innerClient.getCombinedHomeFeed()
-                    }
-                    withContext(Dispatchers.Main) {
-                        if (result.isSuccess) {
-                            val loaded = result.getOrNull().orEmpty()
-                            val clean = recommender.filterDismissedSections(loaded)
-                            sections = clean
-                            diskCache.save(clean, region = recommender.resolveRegion())
-                            isFallbackMode = false
-                            errorMessage = null
-                        } else {
-                            // Fallback mode using local history & cached charts
-                            val fallbackPicks = recommender.buildFallbackQuickPicks(recentTracks)
-                            if (sections.isEmpty() && fallbackPicks.isNotEmpty()) {
-                                sections = listOf(
-                                    YouTubeSection(title = "Quick Picks", items = fallbackPicks)
-                                )
-                            }
-                            isFallbackMode = true
-                            errorMessage = result.exceptionOrNull()?.message ?: "Using offline fallback"
-                        }
-                        isRefreshing = false
-                    }
-                } catch (t: Throwable) {
-                    withContext(Dispatchers.Main) {
-                        val fallbackPicks = recommender.buildFallbackQuickPicks(recentTracks)
-                        if (sections.isEmpty() && fallbackPicks.isNotEmpty()) {
-                            sections = listOf(
-                                YouTubeSection(title = "Quick Picks", items = fallbackPicks)
-                            )
-                        }
-                        isFallbackMode = true
-                        errorMessage = t.message ?: "Network error - using offline fallback"
-                        isRefreshing = false
-                    }
+    suspend fun refreshFeed() {
+        isRefreshing = true
+        errorMessage = null
+        try {
+            val result = withContext(Dispatchers.IO) {
+                val innerClient = SharedInnerTubeProvider.get()
+                if (currentRoute == "new" || currentRoute == "explore") {
+                    val explore = innerClient.getExploreSections().getOrDefault(emptyList())
+                    val charts = innerClient.getChartsSections().getOrDefault(emptyList())
+                    (explore + charts).distinctBy { it.title }.takeIf { it.isNotEmpty() }
+                        ?: throw IllegalStateException("No explore shelves available")
+                } else {
+                    innerClient.getCombinedHomeFeed().getOrThrow()
                 }
             }
+            coroutineContext.ensureActive()
+            sections = recommender.filterDismissedSections(result)
+            isFallbackMode = false
+            val loadedSections = sections
+            withContext(Dispatchers.IO) { diskCache.save(loadedSections, region = recommender.resolveRegion()) }
+            categories = withContext(Dispatchers.IO) {
+                SharedInnerTubeProvider.get().browseMoodAndGenres().getOrDefault(emptyList())
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            val fallback = recommender.buildFallbackQuickPicks(recentTracks)
+            if (sections.isEmpty() && fallback.isNotEmpty()) {
+                sections = listOf(YouTubeSection(title = "Quick Picks", items = fallback))
+            }
+            isFallbackMode = true
+            errorMessage = error.message ?: "Unable to load recommendations"
+        } finally {
+            isRefreshing = false
         }
     }
 
-    LaunchedEffect(Unit) {
-        // Cold-start display from cache if present; refresh in background
-        if (sections.isEmpty()) {
-            val cached = diskCache.loadFromDisk()
-            if (cached.isNotEmpty()) {
-                sections = recommender.filterDismissedSections(cached)
-            }
-        }
-        refreshFeed(forceNetwork = false)
+    LaunchedEffect(isLoggedIn, accountId, currentRoute) {
+        refreshFeed()
     }
 
     LaunchedEffect(listState) {
@@ -206,8 +203,9 @@ fun OnlineHomeView(
             }
     }
 
-    val orderedShelves = remember(sections) {
-        if (sections.isNotEmpty()) organizeShelves(sections) else emptyList()
+    val orderedShelves = remember(sections, categorySections) {
+        val visibleSections = categorySections ?: sections
+        if (visibleSections.isNotEmpty()) organizeShelves(visibleSections) else emptyList()
     }
     val shelfKeys = remember(orderedShelves) {
         uniqueLazyKeys(orderedShelves) { it.title }
@@ -247,7 +245,7 @@ fun OnlineHomeView(
                                     .background(if (isFallbackMode) LiquidColors.AmberWarning else LiquidColors.ElectricCyan)
                             )
                             Text(
-                                text = if (currentRoute == "new") "NEW RELEASES & CHARTS" else if (isFallbackMode) "OFFLINE / LOCAL FALLBACK" else "ONLINE FLOW",
+                                text = if (currentRoute == "new" || currentRoute == "explore") "NEW RELEASES & CHARTS" else if (isFallbackMode) "OFFLINE / LOCAL FALLBACK" else "ONLINE FLOW",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.ExtraBold,
                                     letterSpacing = 1.3.sp,
@@ -256,7 +254,7 @@ fun OnlineHomeView(
                             )
                         }
                         Text(
-                            text = if (currentRoute == "new") "Explore & Charts" else "YouTube Music",
+                            text = if (currentRoute == "new" || currentRoute == "explore") "Explore & Charts" else "YouTube Music",
                             style = MaterialTheme.typography.headlineMedium.copy(
                                 fontWeight = FontWeight.ExtraBold,
                                 color = Color.White
@@ -274,12 +272,23 @@ fun OnlineHomeView(
                             .clickable { showProfileSheet = true },
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = if (isLoggedIn) Icons.Rounded.AccountCircle else Icons.Rounded.Person,
-                            contentDescription = "Profile & Settings",
-                            tint = if (isLoggedIn) accent else Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        var avatar by remember(avatarUrl) { mutableStateOf<ImageBitmap?>(null) }
+                        LaunchedEffect(avatarUrl) {
+                            avatar = if (avatarUrl.isNullOrBlank()) null else withContext(Dispatchers.IO) {
+                                PlatformArtworkProvider.loadArtwork(avatarUrl, maxSizePx = 128)
+                            }
+                        }
+                        val image = avatar
+                        if (image != null) {
+                            Image(image, contentDescription = "Profile & Settings", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        } else {
+                            Icon(
+                                imageVector = if (isLoggedIn) Icons.Rounded.AccountCircle else Icons.Rounded.Person,
+                                contentDescription = "Profile & Settings",
+                                tint = if (isLoggedIn) accent else Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -398,6 +407,57 @@ fun OnlineHomeView(
                 }
             }
 
+            if (errorMessage != null && orderedShelves.isNotEmpty() && !isFallbackMode) {
+                item(key = "playlist_error") {
+                    ErrorRetryCard(message = errorMessage!!, onRetry = { actionJob?.cancel(); actionJob = scope.launch { refreshFeed() } })
+                }
+            }
+
+            if (categorySections != null) {
+                item(key = "category_back") {
+                    Text("‹  All recommendations", color = accent, modifier = Modifier.clickable { categorySections = null })
+                }
+            } else {
+                categories.forEachIndexed { sectionIndex, categorySection ->
+                    item(key = "categories_$sectionIndex") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(categorySection.title.uppercase(), color = Color.White, style = MaterialTheme.typography.titleMedium)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                itemsIndexed(categorySection.items) { _, category ->
+                                    Text(
+                                        category.title,
+                                        color = Color.White,
+                                        modifier = Modifier.clip(HOME_CAPSULE_SHAPE)
+                                            .background(accent.copy(alpha = 0.25f))
+                                            .clickable {
+                                                actionJob?.cancel()
+                                                errorMessage = null
+                                                actionJob = scope.launch {
+                                                    val result = withContext(Dispatchers.IO) {
+                                                        SharedInnerTubeProvider.get().browseCategoryShelves(category.browseId, category.params)
+                                                    }
+                                                    coroutineContext.ensureActive()
+                                                    result.onSuccess { playlists ->
+                                                        val available = playlists.mapNotNull { playlist ->
+                                                            playlist.externalId?.takeIf { it.isNotBlank() }
+                                                                ?.let { YouTubePlaylistSummary(id = it, title = playlist.name) }
+                                                        }
+                                                        if (available.isNotEmpty()) {
+                                                            categorySections = listOf(YouTubeSection(
+                                                                title = category.title, items = emptyList(), playlists = available
+                                                            ))
+                                                        } else errorMessage = "No playlists available for ${category.title}"
+                                                    }.onFailure { errorMessage = it.message ?: "Unable to load category" }
+                                                }
+                                            }.padding(horizontal = 16.dp, vertical = 10.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // Ordered 5 Shelves: Quick Picks, New music videos, Trending in region, Playlists, Artists
             if (orderedShelves.isNotEmpty()) {
                 itemsIndexed(
@@ -427,6 +487,23 @@ fun OnlineHomeView(
                                 clickedShelf.items
                             )
                         },
+                        onPlaylistClick = { playlist ->
+                            actionJob?.cancel()
+                            errorMessage = null
+                            actionJob = scope.launch {
+                                val result = withContext(Dispatchers.IO) {
+                                    SharedInnerTubeProvider.get().fetchPlaylistTracks(playlist.id)
+                                }
+                                coroutineContext.ensureActive()
+                                result.onSuccess { tracks ->
+                                    if (tracks.isNotEmpty()) {
+                                        onOpenPlaylistDetail?.invoke(playlist.title, playlist.author ?: "YouTube Music", playlist.thumbnailUrl, tracks)
+                                    } else {
+                                        errorMessage = "No tracks available in ${playlist.title}"
+                                    }
+                                }.onFailure { errorMessage = it.message ?: "Unable to load playlist" }
+                            }
+                        },
                         onDismissTrack = { dismissedTrack ->
                             recommender.dismissTrack(dismissedTrack)
                             sections = recommender.filterDismissedSections(sections)
@@ -448,7 +525,7 @@ fun OnlineHomeView(
                 item(key = "home_error_retry", contentType = "error_card") {
                     ErrorRetryCard(
                         message = errorMessage ?: "Failed to load feed",
-                        onRetry = { refreshFeed(forceNetwork = true) }
+                        onRetry = { actionJob?.cancel(); actionJob = scope.launch { refreshFeed() } }
                     )
                 }
             }
@@ -518,6 +595,7 @@ private fun HomeShelfSection(
     isPlaying: Boolean,
     onTrackClick: (Track) -> Unit,
     onShelfClick: ((YouTubeSection) -> Unit)? = null,
+    onPlaylistClick: (YouTubePlaylistSummary) -> Unit,
     onDismissTrack: (Track) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -544,7 +622,7 @@ private fun HomeShelfSection(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.clickable { onShelfClick?.invoke(shelf) }
+            modifier = Modifier.clickable(enabled = shelf.items.isNotEmpty()) { onShelfClick?.invoke(shelf) }
         ) {
             Icon(
                 imageVector = shelfIcon,
@@ -567,6 +645,13 @@ private fun HomeShelfSection(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
+            itemsIndexed(
+                items = shelf.playlists,
+                key = { index, playlist -> "playlist_${playlist.id}_$index" },
+                contentType = { _, _ -> "playlist_card" }
+            ) { _, playlist ->
+                HomePlaylistCard(playlist, onClick = { onPlaylistClick(playlist) })
+            }
             itemsIndexed(
                 items = shelf.items,
                 key = { idx, _ -> itemKeys[idx] },
@@ -592,6 +677,32 @@ private fun HomeShelfSection(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun HomePlaylistCard(playlist: YouTubePlaylistSummary, onClick: () -> Unit) {
+    var artwork by remember(playlist.thumbnailUrl) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(playlist.thumbnailUrl) {
+        artwork = playlist.thumbnailUrl?.let { url ->
+            withContext(Dispatchers.IO) { PlatformArtworkProvider.loadArtwork(url, maxSizePx = 320) }
+        }
+    }
+    Column(modifier = Modifier.width(136.dp).clickable { onClick() }) {
+        Box(
+            modifier = Modifier.size(136.dp).clip(HOME_CARD_SHAPE_14).background(LiquidColors.SurfaceCard),
+            contentAlignment = Alignment.Center
+        ) {
+            val image = artwork
+            if (image != null) {
+                Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            } else {
+                Icon(Icons.Rounded.LibraryMusic, contentDescription = null, tint = Color.White)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(playlist.title, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+        playlist.author?.let { Text(it, color = Color.White.copy(alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
     }
 }
 

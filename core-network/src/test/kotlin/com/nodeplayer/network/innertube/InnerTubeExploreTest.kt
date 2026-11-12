@@ -46,10 +46,13 @@ class InnerTubeExploreTest {
 
     @Test
     fun testFetchAccountInfoWithHandleAndAvatarNormalization() = runBlocking {
-        val mockEngine = MockEngine { _ ->
+        val mockEngine = MockEngine { request ->
+            assertEquals(YouTubeClient.WEB_REMIX.clientId, request.headers["X-YouTube-Client-Name"])
+            assertEquals(YouTubeClient.WEB_REMIX.clientVersion, request.headers["X-YouTube-Client-Version"])
             val json = """
                 {
                   "actions": [
+                    { "ignoredAction": {} },
                     {
                       "openPopupAction": {
                         "popup": {
