@@ -73,6 +73,7 @@ fun HomeView(
                 recentTracks = recentTracks,
                 dockScrollController = dockScrollController,
                 isLoggedIn = youTubeAccount != null,
+                accountId = youTubeAccount?.id,
                 accountName = youTubeAccount?.name,
                 accountEmail = youTubeAccount?.email,
                 avatarUrl = youTubeAccount?.avatarUrl,

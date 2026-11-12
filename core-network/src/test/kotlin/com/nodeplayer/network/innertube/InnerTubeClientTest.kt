@@ -14,6 +14,28 @@ import org.junit.Test
 class InnerTubeClientTest {
 
     @Test
+    fun signedInTwoColumnFeedAndSelectedTabAreParsed() {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val response = json.decodeFromString<BrowseResponse>("""{
+          "contents":{"twoColumnBrowseResultsRenderer":{"tabs":[
+            {"tabRenderer":{"content":{"sectionListRenderer":{"contents":[]}}}},
+            {"tabRenderer":{"selected":true,"content":{"sectionListRenderer":{"contents":[
+              {"musicCarouselShelfRenderer":{"header":{"musicCarouselShelfBasicHeaderRenderer":{"title":{"simpleText":"For you"}}},"contents":[
+                {"musicTwoRowItemRenderer":{"title":{"simpleText":"Song"},"navigationEndpoint":{"watchEndpoint":{"videoId":"song-id"}}}},
+                {"musicTwoRowItemRenderer":{"title":{"simpleText":"Your mix"},"navigationEndpoint":{"browseEndpoint":{"browseId":"VLRDmix"}}}}
+              ]}}
+            ]}}}}
+          ]}}}
+        """)
+        InnerTubeClient().use { client ->
+            val section = client.parseBrowseSections(response).single()
+            assertEquals("For you", section.title)
+            assertEquals("Song", section.items.single().title)
+            assertEquals("RDmix", section.playlists.single().id)
+        }
+    }
+
+    @Test
     fun testGetHomeRecommendationsMapping() = runTest {
         val mockEngine = MockEngine { request ->
             assertEquals("https://music.youtube.com/youtubei/v1/browse", request.url.toString())
@@ -74,6 +96,40 @@ class InnerTubeClientTest {
         assertEquals("The Wall", track.album)
         assertEquals("nodeplayer://youtube/pink12345", track.path)
         assertTrue(track.id > 0)
+        client.close()
+    }
+
+    @Test
+    fun homeRequestsUseCurrentSessionAndKeepPlaylistCards() = runTest {
+        val cookies = mutableListOf<String?>()
+        val engine = MockEngine { request ->
+            assertEquals(listOf("https://music.youtube.com"), request.headers.getAll("Origin"))
+            assertEquals(listOf("https://music.youtube.com/"), request.headers.getAll("Referer"))
+            assertEquals("music.youtube.com", request.url.host)
+            assertEquals(listOf(YouTubeClient.WEB_REMIX.clientId), request.headers.getAll("X-YouTube-Client-Name"))
+            assertEquals(listOf(YouTubeClient.WEB_REMIX.clientVersion), request.headers.getAll("X-YouTube-Client-Version"))
+            assertEquals(listOf(YouTubeClient.WEB_REMIX.userAgent), request.headers.getAll("User-Agent"))
+            cookies.add(request.headers[HttpHeaders.Cookie])
+            if (cookies.size == 2) assertTrue(request.headers[HttpHeaders.Authorization]?.startsWith("SAPISIDHASH ") == true)
+            respond(
+                """{"contents":{"sectionListRenderer":{"contents":[{"musicCarouselShelfRenderer":{
+                  "header":{"musicCarouselShelfBasicHeaderRenderer":{"title":{"runs":[{"text":"Made for you"}]}}},
+                  "contents":[
+                    {"musicTwoRowItemRenderer":{"title":{"runs":[{"text":"Your mix"}]},"subtitle":{"runs":[{"text":"YouTube Music"}]},"navigationEndpoint":{"browseEndpoint":{"browseId":"VLPL123"}},"thumbnailRenderer":{"musicThumbnailRenderer":{"thumbnail":{"thumbnails":[{"url":"https://example.com/cover.jpg"}]}}}}},
+                    {"musicTwoRowItemRenderer":{"title":{"runs":[{"text":"Song"}]},"navigationEndpoint":{"watchEndpoint":{"videoId":"song123","playlistId":"RD123"}}}}
+                  ]}}]}}}""",
+                HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json")
+            )
+        }
+        val client = InnerTubeClient(engine = engine)
+        client.getHomeRecommendations().getOrThrow()
+        client.sessionCookie = "SAPISID=synthetic; LOGIN_INFO=synthetic"
+        val section = client.getHomeRecommendations().getOrThrow().single()
+        assertEquals(null, cookies.first())
+        assertEquals(client.sessionCookie, cookies.last())
+        assertEquals("PL123", section.playlists.single().id)
+        assertEquals("https://example.com/cover.jpg", section.playlists.single().thumbnailUrl)
+        assertEquals("nodeplayer://youtube/song123", section.items.single().path)
         client.close()
     }
 

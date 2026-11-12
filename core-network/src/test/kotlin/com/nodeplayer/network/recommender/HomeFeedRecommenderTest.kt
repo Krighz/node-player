@@ -14,6 +14,15 @@ class HomeFeedRecommenderTest {
     private val recommender = HomeFeedRecommender()
 
     @Test
+    fun playlistOnlySectionsSurviveFiltering() {
+        val section = com.nodeplayer.network.innertube.YouTubeSection(
+            title = "Made for you", items = emptyList(),
+            playlists = listOf(com.nodeplayer.network.innertube.YouTubePlaylistSummary(id = "PL123", title = "Mix"))
+        )
+        assertEquals(listOf(section), HomeFeedRecommender().filterDismissedSections(listOf(section)))
+    }
+
+    @Test
     fun testScoringWeightsRecencyAndPlayCount() {
         val now = 1_700_000_000_000L
 
@@ -123,6 +132,22 @@ class HomeFeedRecommenderTest {
         // Invalid or empty override falls back to system locale or US
         val fallback = recommender.resolveRegion(null)
         assertTrue(fallback.isNotEmpty() && fallback.length == 2)
+    }
+
+    @Test
+    fun cachedFeedsAreScopedAndRetainPlaylists() {
+        val dir = File(System.getProperty("java.io.tmpdir"), "np_scoped_cache_${System.nanoTime()}")
+        try {
+            val section = YouTubeSection("Mixes", emptyList(), listOf(
+                com.nodeplayer.network.innertube.YouTubePlaylistSummary("PL123", "My mix", thumbnailUrl = "https://example.com/image")
+            ))
+            HomeFeedDiskCache(cacheDir = dir, cacheKey = "home:account-a").save(listOf(section))
+            assertEquals(listOf(section), HomeFeedDiskCache(cacheDir = dir, cacheKey = "home:account-a").loadFromDisk())
+            assertTrue(HomeFeedDiskCache(cacheDir = dir, cacheKey = "home:account-b").loadFromDisk().isEmpty())
+            assertTrue(HomeFeedDiskCache(cacheDir = dir, cacheKey = "explore:account-a").loadFromDisk().isEmpty())
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 
     @Test

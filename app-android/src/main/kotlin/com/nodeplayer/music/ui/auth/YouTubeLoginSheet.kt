@@ -106,60 +106,7 @@ fun YouTubeLoginSheet(
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var pageProgress by remember { mutableFloatStateOf(0f) }
     var isCapturing by remember { mutableStateOf(false) }
-    var isPageReady by remember { mutableStateOf(false) }
-
-    fun captureSession(view: WebView) {
-        val cookies = CookieManager.getInstance().getCookie("https://music.youtube.com") ?: return
-        val sapisid = YouTubeAuth.extractSapisid(cookies)
-        if (sapisid.isNullOrBlank()) return
-
-        view.evaluateJavascript(YTCFG_PROBE) { raw ->
-            val jsonStr = raw?.trim()?.takeIf { it != "null" && it.isNotBlank() }
-            val config = try {
-                if (jsonStr != null) org.json.JSONObject(jsonStr) else null
-            } catch (e: Exception) {
-                NodeLog.w(TAG, "YTCFG probe parse error: ${e.message}, raw=$raw")
-                null
-            }
-            val loggedIn = config?.optString("loggedIn") == "true"
-            if (!loggedIn || config == null) {
-                NodeLog.w(TAG, "Confirmation requested before page exposed a signed-in identity")
-                return@evaluateJavascript
-            }
-
-            fun String?.nullIfBlankOrNull(): String? =
-                takeIf { !it.isNullOrBlank() && it != "null" }
-
-            val pageId = config.optString("pageId").nullIfBlankOrNull()
-            val rawDataSyncId = config.optString("dataSyncId").nullIfBlankOrNull()
-            val dataSyncId = pageId ?: normalizeDataSyncId(rawDataSyncId)
-            val authUser = config.optString("authUser").nullIfBlankOrNull()
-            val visitorData = config.optString("visitorData").nullIfBlankOrNull()
-            val clientVersion = config.optString("clientVersion").nullIfBlankOrNull()
-
-            isCapturing = true
-            CookieManager.getInstance().flush()
-            NodeLog.i(TAG, "Captured session: authUser=$authUser pageId=${pageId ?: "none"} dataSyncId=${dataSyncId?.take(12) ?: "none"}")
-
-            coroutineScope.launch {
-                try {
-                    YouTubeAccountManager.onLoginSuccess(
-                        cookie = cookies,
-                        pageId = pageId,
-                        dataSyncId = dataSyncId,
-                        authUser = authUser,
-                        visitorData = visitorData,
-                        clientVersion = clientVersion
-                    )
-                    onLoginSuccess()
-                    onDismiss()
-                } catch (t: Throwable) {
-                    NodeLog.e(TAG, "Error finalizing YouTube login", t)
-                    isCapturing = false
-                }
-            }
-        }
-    }
+    var loginError by remember { mutableStateOf<String?>(null) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -221,6 +168,10 @@ fun YouTubeLoginSheet(
                             tint = Color.White.copy(alpha = 0.70f)
                         )
                     }
+                }
+
+                loginError?.let { message ->
+                    Text(message, color = Color.White, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 }
 
                 // Loading progress bar
@@ -309,6 +260,33 @@ fun YouTubeLoginSheet(
                                         request: WebResourceRequest?
                                     ): Boolean {
                                         return false
+                                    }
+
+                                    private fun checkAndCaptureCookies(url: String?) {
+                                        if (url == null || isCapturing) return
+                                        val host = try { android.net.Uri.parse(url).host } catch (_: Exception) { null }
+                                        if (host == "music.youtube.com") {
+                                            val cookies = CookieManager.getInstance().getCookie(url)
+                                            val sapisid = YouTubeAuth.extractSapisid(cookies)
+                                            if (!sapisid.isNullOrBlank() && cookies != null) {
+                                                isCapturing = true
+                                                loginError = null
+                                                NodeLog.i(TAG, "Captured authenticated session cookie: ${YouTubeAuth.maskCookieForLog(cookies)}")
+                                                coroutineScope.launch {
+                                                    try {
+                                                        YouTubeAccountManager.onLoginSuccess(cookies)
+                                                        onLoginSuccess()
+                                                        onDismiss()
+                                                    } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                                        throw cancelled
+                                                    } catch (t: Exception) {
+                                                        NodeLog.e(TAG, "Error finalizing YouTube login", t)
+                                                        loginError = "Couldn't finish signing in. Reload to try again."
+                                                        isCapturing = false
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
 

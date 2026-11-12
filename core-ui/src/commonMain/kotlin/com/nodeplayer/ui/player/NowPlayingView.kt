@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.ui.draw.drawWithContent
@@ -187,10 +188,12 @@ fun NowPlayingView(
         val artworkUrl = remember(currentTrack.id, currentTrack.path) {
             currentTrack.path.takeIf { it.isNotBlank() } ?: currentTrack.id.toString()
         }
-        ArtworkMeshBackdrop(
-            artworkUrl = artworkUrl,
-            modifier = Modifier.fillMaxSize()
-        )
+        val themeConfig = com.nodeplayer.ui.theme.LocalGlassThemeConfig.current
+        if (themeConfig.animatedBackdrop) {
+            ArtworkMeshBackdrop(artworkUrl = artworkUrl, modifier = Modifier.fillMaxSize())
+        } else {
+            Box(Modifier.fillMaxSize().background(Color.Black))
+        }
 
         // Subtle top legibility scrim so status bar and drag handle remain legible on high-luminance artwork covers
         Box(
@@ -240,19 +243,16 @@ fun NowPlayingView(
                 )
             }
 
-            // Hero Album Art in upper section with smooth squircle border
-            Box(
-                modifier = Modifier
-                    .weight(1.0f)
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                TrackArtwork(
+                val artworkSize = minOf(maxWidth, maxHeight, 360.dp)
+                com.nodeplayer.ui.components.TrackArtwork(
                     track = currentTrack,
-                    modifier = Modifier
-                        .size(300.dp),
-                    cornerRadius = 24.dp
+                    modifier = Modifier.size(artworkSize),
+                    cornerRadius = 24.dp,
+                    targetSizePx = 512
                 )
             }
 

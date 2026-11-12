@@ -43,14 +43,23 @@ object AudioCache {
         }
     }
 
-    fun getCachedResolvedUrl(videoId: String): String? = resolvedStreamUrls[videoId]
+    fun getCachedResolvedUrl(videoId: String): String? {
+        val url = resolvedStreamUrls[videoId] ?: return null
+        val expiresAt = Regex("[?&]expire=([0-9]+)").find(url)?.groupValues?.get(1)?.toLongOrNull()
+        if (expiresAt != null && expiresAt <= System.currentTimeMillis() / 1000L + 60L) {
+            invalidateUrl(videoId)
+            return null
+        }
+        return url
+    }
 
     fun getUserAgentForUrl(url: String): String? =
         resolvedUserAgents[url] ?: extractVideoId(url)?.let { resolvedUserAgents[it] }
 
     fun invalidateUrl(urlOrVideoId: String) {
         val videoId = extractVideoId(urlOrVideoId) ?: urlOrVideoId
-        resolvedStreamUrls.remove(videoId)
+        val previousUrl = resolvedStreamUrls.remove(videoId)
+        previousUrl?.let { resolvedUserAgents.remove(it) }
         resolvedUserAgents.remove(videoId)
         resolvedUserAgents.remove(urlOrVideoId)
         NodeLog.i(TAG, "Invalidated cached stream URL for $urlOrVideoId (videoId=$videoId)")
@@ -309,9 +318,8 @@ object AudioCache {
             val resolvedUri = Uri.parse(liveUrl)
             val finalSpec = dataSpec.withUri(resolvedUri).buildUpon().setKey(cacheKey).build()
 
-            // Trigger proactive background caching of the entire track into SimpleCache
-            preloadEntireTrack(context, videoId, liveUrl, cacheKey)
-
+            // CacheDataSource writes the bytes consumed by playback. A second full download
+            // here competed with startup buffering and could hold the same cache span.
             finalSpec
         }
     }

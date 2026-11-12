@@ -3,6 +3,7 @@ package com.nodeplayer.network.cache
 import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.model.Track
 import com.nodeplayer.network.innertube.YouTubeSection
+import com.nodeplayer.network.innertube.YouTubePlaylistSummary
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,6 +11,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.security.MessageDigest
 
 @Serializable
 data class CachedTrackDto(
@@ -28,7 +30,17 @@ data class CachedTrackDto(
 @Serializable
 data class CachedSectionDto(
     val title: String,
-    val items: List<CachedTrackDto>
+    val items: List<CachedTrackDto>,
+    val playlists: List<CachedPlaylistDto> = emptyList()
+)
+
+@Serializable
+data class CachedPlaylistDto(
+    val id: String,
+    val title: String,
+    val author: String? = null,
+    val trackCount: Int = 0,
+    val thumbnailUrl: String? = null
 )
 
 @Serializable
@@ -43,7 +55,9 @@ data class HomeFeedCachePayload(
  * Implements stale-while-revalidate for sub-50ms cold-start display.
  */
 class HomeFeedDiskCache(
-    private val cacheDir: File? = null
+    private val cacheDir: File? = null,
+    private val cacheKey: String? = null,
+    private val loadOnInit: Boolean = true
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -59,9 +73,13 @@ class HomeFeedDiskCache(
 
     private val cacheFile: File? by lazy {
         try {
-            val baseDir = cacheDir ?: File(System.getProperty("user.home"), ".nodeplayer/cache")
+            val baseDir = cacheDir ?: defaultCacheDir ?: File(System.getProperty("user.home"), ".nodeplayer/cache")
             if (!baseDir.exists()) baseDir.mkdirs()
-            File(baseDir, "home_feed_cache.json")
+            val filename = if (cacheKey == null) "home_feed_cache.json" else {
+                val digest = MessageDigest.getInstance("SHA-256").digest(cacheKey.toByteArray(Charsets.UTF_8))
+                "home_feed_${digest.joinToString("") { "%02x".format(it) }}.json"
+            }
+            File(baseDir, filename)
         } catch (t: Throwable) {
             NodeLog.w(TAG, "Failed to resolve cache file path: ${t.message}")
             null
@@ -69,7 +87,7 @@ class HomeFeedDiskCache(
     }
 
     init {
-        loadFromDisk()
+        if (loadOnInit) loadFromDisk()
     }
 
     fun getTimestamp(): Long = cachedTimestamp
@@ -94,7 +112,8 @@ class HomeFeedDiskCache(
                 sections = sections.map { sec ->
                     CachedSectionDto(
                         title = sec.title,
-                        items = sec.items.map { it.toDto() }
+                        items = sec.items.map { it.toDto() },
+                        playlists = sec.playlists.map { CachedPlaylistDto(it.id, it.title, it.author, it.trackCount, it.thumbnailUrl) }
                     )
                 }
             )
@@ -121,7 +140,8 @@ class HomeFeedDiskCache(
             val loadedSections = payload.sections.map { sec ->
                 YouTubeSection(
                     title = sec.title,
-                    items = sec.items.map { it.toTrack() }
+                    items = sec.items.map { it.toTrack() },
+                    playlists = sec.playlists.map { YouTubePlaylistSummary(it.id, it.title, it.author, it.trackCount, it.thumbnailUrl) }
                 )
             }
             _sectionsState.value = loadedSections
@@ -145,6 +165,16 @@ class HomeFeedDiskCache(
 
     companion object {
         private const val TAG = "nodeplayer/home_cache"
+        @Volatile var defaultCacheDir: File? = null
+        private val sharedCaches = object : LinkedHashMap<String, HomeFeedDiskCache>(8, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, HomeFeedDiskCache>?): Boolean = size > 6
+        }
+
+        /** Creation does no disk I/O; callers load on an IO dispatcher. */
+        @Synchronized
+        fun shared(key: String): HomeFeedDiskCache = sharedCaches.getOrPut(key) {
+            HomeFeedDiskCache(cacheKey = key, loadOnInit = false)
+        }
 
         fun Track.toDto(): CachedTrackDto = CachedTrackDto(
             id = id,

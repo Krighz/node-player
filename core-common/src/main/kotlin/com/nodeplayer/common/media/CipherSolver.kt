@@ -10,6 +10,9 @@ interface CipherSolver {
     /**
      * Deobfuscates encrypted stream signature cipher (params: s, sp, url) and returns direct stream URL.
      */
+    /** Timestamp from the same player JS used to decipher web-client streams. */
+    suspend fun getSignatureTimestamp(): Int? = null
+
     suspend fun deobfuscateStreamUrl(signatureCipher: String, videoId: String): String?
 
     /**

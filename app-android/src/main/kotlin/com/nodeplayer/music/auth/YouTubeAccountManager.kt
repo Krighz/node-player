@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.ensureActive
 
 /**
  * Singleton managing YouTube account authentication lifecycle, reactive state,
@@ -73,17 +74,14 @@ object YouTubeAccountManager {
         }
     }
 
-    suspend fun onLoginSuccess(
-        cookie: String,
-        pageId: String? = null,
-        dataSyncId: String? = null,
-        authUser: String? = null,
-        visitorData: String? = null,
-        clientVersion: String? = null
-    ) {
-        val client = innerTubeClient ?: return
-        val store = sessionStore ?: return
+    suspend fun onLoginSuccess(cookie: String) {
+        val client = checkNotNull(innerTubeClient) { "YouTube account manager is still initializing" }
+        val store = checkNotNull(sessionStore) { "YouTube account manager is still initializing" }
+        validationJob?.cancel()
+        validationJob = null
 
+        val previousState = _authState.value
+        val previousCookie = client.sessionCookie
         _authState.value = AuthState.Loading
         client.sessionCookie = cookie
         client.pageId = pageId
@@ -91,25 +89,28 @@ object YouTubeAccountManager {
         client.authUser = authUser
         if (visitorData != null) client.visitorData = visitorData
 
-        val accountResult = client.fetchAccountInfo()
-        val account = accountResult.getOrNull()
-
-        if (account != null) {
-            val normalizedAvatar = InnerTubeClient.normalizeAvatarUrl(account.avatarUrl)
-            val updatedAccount = account.copy(avatarUrl = normalizedAvatar)
-            store.saveSession(cookie, updatedAccount, stayLoggedIn = true)
-            _authState.value = AuthState.LoggedIn(updatedAccount)
-            NodeLog.i(TAG, "Login successful for user: ${updatedAccount.name} (${updatedAccount.handle})")
-        } else {
-            // Even if profile parsing fails, if cookies are valid keep logged in state
-            val fallbackAccount = YouTubeAccount(
-                id = "youtube_user",
-                name = "YouTube User",
-                isLoggedIn = true
-            )
-            store.saveSession(cookie, fallbackAccount, stayLoggedIn = true)
-            _authState.value = AuthState.LoggedIn(fallbackAccount)
-            NodeLog.w(TAG, "Login succeeded but profile info could not be parsed; using fallback account")
+        try {
+            val account = client.fetchAccountInfo().getOrThrow()
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            if (account != null) {
+                val normalizedAvatar = InnerTubeClient.normalizeAvatarUrl(account.avatarUrl)
+                val updatedAccount = account.copy(avatarUrl = normalizedAvatar)
+                store.saveSession(cookie, updatedAccount, stayLoggedIn = true)
+                _authState.value = AuthState.LoggedIn(updatedAccount)
+                NodeLog.i(TAG, "Login successful for user: ${updatedAccount.name} (${updatedAccount.handle})")
+            } else {
+                // A valid session can still have an unrecognized account menu.
+                val fallbackAccount = YouTubeAccount(id = "youtube_user", name = "YouTube User", isLoggedIn = true)
+                store.saveSession(cookie, fallbackAccount, stayLoggedIn = true)
+                _authState.value = AuthState.LoggedIn(fallbackAccount)
+                NodeLog.w(TAG, "Login succeeded but profile info could not be parsed; using fallback account")
+            }
+        } catch (error: Exception) {
+            if (_authState.value == AuthState.Loading && client.sessionCookie == cookie) {
+                client.sessionCookie = previousCookie
+                _authState.value = previousState
+            }
+            throw error
         }
     }
 
@@ -136,6 +137,7 @@ object YouTubeAccountManager {
 
         try {
             val accountResult = client.fetchAccountInfo()
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
             accountResult.onSuccess { account ->
                 if (account != null) {
                     val normalizedAvatar = InnerTubeClient.normalizeAvatarUrl(account.avatarUrl)
@@ -157,6 +159,8 @@ object YouTubeAccountManager {
                     _authState.value = AuthState.SessionExpired
                 }
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             NodeLog.w(TAG, "Exception during session validation: ${e.message}")
             _authState.value = AuthState.SessionExpired

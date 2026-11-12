@@ -279,8 +279,9 @@ data class ResponseContext(
 @Serializable
 data class Runs(
     val runs: List<Run>? = null,
+    val simpleText: String? = null,
 ) {
-    fun text(): String = runs?.joinToString("") { it.text } ?: ""
+    fun text(): String = runs?.joinToString("") { it.text } ?: simpleText.orEmpty()
 }
 
 @Serializable
@@ -513,6 +514,7 @@ data class Tabs(
         @Serializable
         data class TabRenderer(
             val title: String? = null,
+            val selected: Boolean = false,
             val content: Content? = null,
             val endpoint: NavigationEndpoint? = null,
         ) {
@@ -661,7 +663,7 @@ data class MusicResponsiveListItemRenderer(
     @Serializable
     data class PlaylistItemData(
         val playlistSetVideoId: String? = null,
-        val videoId: String,
+        val videoId: String? = null,
     )
 
     @Serializable
@@ -762,7 +764,14 @@ data class BrowseResponse(
     @Serializable
     data class Contents(
         val singleColumnBrowseResultsRenderer: Tabs? = null,
+        val twoColumnBrowseResultsRenderer: TwoColumnBrowseResults? = null,
         val sectionListRenderer: SectionListRenderer? = null,
+    )
+
+    @Serializable
+    data class TwoColumnBrowseResults(
+        val tabs: List<Tabs.Tab>? = null,
+        val secondaryContents: Tabs.Tab.TabRenderer.Content? = null,
     )
 
     @Serializable
@@ -927,6 +936,7 @@ data class PlayerResponse(
 data class YouTubeSection(
     val title: String,
     val items: List<Track>,
+    val playlists: List<YouTubePlaylistSummary> = emptyList(),
 )
 
 data class YouTubePlaylistSummary(

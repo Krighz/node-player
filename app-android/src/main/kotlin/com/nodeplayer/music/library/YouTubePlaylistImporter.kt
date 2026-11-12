@@ -1,5 +1,9 @@
 package com.nodeplayer.music.library
 
+import androidx.room.withTransaction
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.data.NodeDatabase
@@ -33,63 +37,63 @@ class YouTubePlaylistImporter(
         runCatching {
             val dao = database.playerDao()
             val remoteTracks = innerTubeClient.fetchPlaylistTracks(summary.id).getOrThrow()
-            if (remoteTracks.isEmpty()) {
-                NodeLog.w(TAG, "No tracks found in YouTube playlist ${summary.id}")
-            }
-
-            // Check if playlist was already imported by externalId
-            val existing = dao.getPlaylistByExternalId(summary.id)
-            val playlistId = existing?.id ?: dao.insertPlaylist(
-                PlaylistEntity(
-                    name = summary.title,
-                    source = "youtube",
-                    externalId = summary.id,
-                    createdAt = System.currentTimeMillis(),
-                    updatedAt = System.currentTimeMillis()
-                )
-            )
-
-            // Update title & timestamp if already exists
-            if (existing != null) {
-                dao.renamePlaylist(playlistId, summary.title)
-            }
-
-            // Re-sync: clear previous cross-references and re-insert fresh
-            dao.clearPlaylistTracks(playlistId)
-
-            val allLocalTracks = if (preferLocalMatch) dao.getAllTracksList() else emptyList()
-
-            val crossRefs = mutableListOf<PlaylistTrackCrossRef>()
-            for ((index, remoteTrack) in remoteTracks.withIndex()) {
-                val matchedLocal = if (preferLocalMatch) {
-                    findMatchingLocalTrack(remoteTrack, allLocalTracks)
-                } else null
-
-                val effectiveTrackId = if (matchedLocal != null) {
-                    NodeLog.d(TAG, "Matched online '${remoteTrack.title}' with local '${matchedLocal.title}' (id=${matchedLocal.id})")
-                    matchedLocal.id
-                } else {
-                    // Ensure the online track exists in Room `tracks` table
-                    ensureTrackPersisted(dao, remoteTrack)
-                    remoteTrack.id
-                }
-
-                crossRefs.add(
-                    PlaylistTrackCrossRef(
-                        playlistId = playlistId,
-                        trackId = effectiveTrackId,
-                        position = index
+            check(remoteTracks.isNotEmpty() || summary.trackCount == 0) { "YouTube returned no tracks for ${summary.title}" }
+            currentCoroutineContext().ensureActive()
+            database.withTransaction {
+                // Check if playlist was already imported by externalId
+                val existing = dao.getPlaylistByExternalId(summary.id)
+                val playlistId = existing?.id ?: dao.insertPlaylist(
+                    PlaylistEntity(
+                        name = summary.title,
+                        source = "youtube",
+                        externalId = summary.id,
+                        createdAt = System.currentTimeMillis(),
+                        updatedAt = System.currentTimeMillis()
                     )
                 )
-            }
 
-            if (crossRefs.isNotEmpty()) {
-                dao.insertPlaylistTracks(crossRefs)
-            }
+                // Update title & timestamp if already exists
+                if (existing != null) {
+                    dao.renamePlaylist(playlistId, summary.title)
+                }
 
-            NodeLog.i(TAG, "Imported YouTube playlist '${summary.title}' ($playlistId) with ${crossRefs.size} tracks")
-            playlistId
-        }
+                // Re-sync: clear previous cross-references and re-insert fresh
+                dao.clearPlaylistTracks(playlistId)
+
+                val allLocalTracks = if (preferLocalMatch) dao.getAllTracksList().filterNot { it.path.startsWith("nodeplayer://") } else emptyList()
+
+                val crossRefs = mutableListOf<PlaylistTrackCrossRef>()
+                for ((index, remoteTrack) in remoteTracks.withIndex()) {
+                    val matchedLocal = if (preferLocalMatch) {
+                        findMatchingLocalTrack(remoteTrack, allLocalTracks)
+                    } else null
+
+                    val effectiveTrackId = if (matchedLocal != null) {
+                        NodeLog.d(TAG, "Matched online '${remoteTrack.title}' with local '${matchedLocal.title}' (id=${matchedLocal.id})")
+                        matchedLocal.id
+                    } else {
+                        // Ensure the online track exists in Room `tracks` table
+                        ensureTrackPersisted(dao, remoteTrack)
+                        remoteTrack.id
+                    }
+
+                    crossRefs.add(
+                        PlaylistTrackCrossRef(
+                            playlistId = playlistId,
+                            trackId = effectiveTrackId,
+                            position = index
+                        )
+                    )
+                }
+
+                if (crossRefs.isNotEmpty()) {
+                    dao.insertPlaylistTracks(crossRefs)
+                }
+
+                NodeLog.i(TAG, "Imported YouTube playlist '${summary.title}' ($playlistId) with ${crossRefs.size} tracks")
+                playlistId
+            }
+        }.onFailure { if (it is CancellationException) throw it }
     }
 
     /**
@@ -113,6 +117,7 @@ class YouTubePlaylistImporter(
 
     private suspend fun ensureTrackPersisted(dao: com.nodeplayer.music.data.PlayerDao, track: Track) {
         val existing = dao.getTrackById(track.id)
+        check(existing == null || existing.path == track.path) { "A different library track already uses this track ID" }
         if (existing == null) {
             dao.insertTracks(listOf(TrackEntity.fromTrack(track)))
         }

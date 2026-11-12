@@ -228,7 +228,7 @@ data class GlassThemeConfig(
     val accentSource: String = "ARTWORK",   // ARTWORK, MATERIAL_YOU, PRESET
     val spacingDensity: String = "COMFORTABLE", // COMPACT, COMFORTABLE, ROOMY
     val cornerRoundness: String = "ROUNDED",   // SHARP (8dp), ROUNDED (16dp), PILL (24dp)
-    val animatedBackdrop: Boolean = true,
+    val animatedBackdrop: Boolean = false,
     val blurRadiusDp: Float = 28.0f,
     val tintAlpha: Float = 0.65f,
     val borderAlpha: Float = 0.30f,
@@ -247,7 +247,7 @@ data class GlassThemeConfig(
     val edgeHighlightStrength: Float = 0.60f, // 0.0 to 1.0 (rim light & chromatic fringe)
     val isFullyTransparent: Boolean = false,
     val keepTextReadable: Boolean = true,
-    val backgroundAnimationStyle: String = "LIQUID_BLOBS", // LIQUID_BLOBS, AURORA, MESH_GRADIENT, ALBUM_ART_BLUR, SLOW_CAUSTICS, STATIC
+    val backgroundAnimationStyle: String = "STATIC", // LIQUID_BLOBS, AURORA, MESH_GRADIENT, ALBUM_ART_BLUR, SLOW_CAUSTICS, STATIC
     val backgroundAnimationSpeed: Float = 1.0f,            // 0.2f to 3.0f
     val backgroundAnimationIntensity: Float = 0.8f,        // 0.1f to 1.0f
     val backgroundColorSource: String = "ARTWORK",         // ARTWORK, PALETTE, CUSTOM

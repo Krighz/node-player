@@ -57,6 +57,25 @@ class CrossfadePlayerManager(
     val playerA: ExoPlayer
     val playerB: ExoPlayer
 
+    private val retriedStreams = mutableMapOf<ExoPlayer, String>()
+
+    private fun retryExpiredStream(player: ExoPlayer, error: androidx.media3.common.PlaybackException) {
+        val httpError = generateSequence(error as Throwable?) { it.cause }
+            .filterIsInstance<androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException>().firstOrNull()
+            ?: return
+        if (httpError.responseCode !in listOf(403, 410)) return
+        val path = player.currentMediaItem?.localConfiguration?.uri?.toString() ?: return
+        val videoId = com.nodeplayer.music.playback.AudioCache.extractVideoId(path) ?: return
+        if (retriedStreams[player] == videoId) return
+        retriedStreams[player] = videoId
+        com.nodeplayer.music.playback.AudioCache.invalidateUrl(videoId)
+        val position = player.currentPosition
+        val playWhenReady = player.playWhenReady
+        player.seekTo(position)
+        player.prepare()
+        player.playWhenReady = playWhenReady
+    }
+
     private var activeIndex = 0 // 0 for A, 1 for B
 
     val activePlayer: ExoPlayer
@@ -185,6 +204,7 @@ class CrossfadePlayerManager(
                 }
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                retryExpiredStream(playerA, error)
                 Log.e(TAG, "[PlayerA Error] code=${error.errorCode}, message=${error.message}", error)
                 com.nodeplayer.common.logging.NodeLog.e(TAG, "[PlayerA Error] code=${error.errorCode}: ${error.message}", error)
             }
@@ -211,6 +231,7 @@ class CrossfadePlayerManager(
                 }
             }
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                retryExpiredStream(playerB, error)
                 Log.e(TAG, "[PlayerB Error] code=${error.errorCode}, message=${error.message}", error)
                 com.nodeplayer.common.logging.NodeLog.e(TAG, "[PlayerB Error] code=${error.errorCode}: ${error.message}", error)
             }
@@ -733,6 +754,7 @@ class CrossfadePlayerManager(
     }
 
     private fun setPlayerMediaSource(player: ExoPlayer, track: Track) {
+        retriedStreams.remove(player)
         val mediaItem = createMediaItem(track)
         val uri = mediaItem.localConfiguration?.uri
         val isSyntheticYouTube = track.path.startsWith("nodeplayer://youtube/") ||
@@ -766,7 +788,9 @@ class CrossfadePlayerManager(
             ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, track.id)
         }
         val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
-        val artworkUri = ContentUris.withAppendedId(albumArtBaseUri, track.albumId)
+        val artworkUri = if (track.path.startsWith("nodeplayer://youtube/")) {
+            Uri.parse("https://i.ytimg.com/vi/${track.path.removePrefix("nodeplayer://youtube/")}/hqdefault.jpg")
+        } else ContentUris.withAppendedId(albumArtBaseUri, track.albumId)
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
             .setArtist(track.artist)

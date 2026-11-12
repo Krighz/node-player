@@ -15,6 +15,9 @@ import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -94,6 +97,7 @@ class LibraryScanner(private val context: Context) {
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
 
                 while (cursor.moveToNext()) {
+                    currentCoroutineContext().ensureActive()
                     val id = cursor.getLong(idCol)
                     val path = cursor.getString(dataCol) ?: ""
                     val lowerPath = path.lowercase().replace('\\', '/')
@@ -174,6 +178,7 @@ class LibraryScanner(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
         }
 
@@ -263,6 +268,7 @@ class LibraryScanner(private val context: Context) {
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
 
                 while (cursor.moveToNext()) {
+                    currentCoroutineContext().ensureActive()
                     val id = cursor.getLong(idCol)
                     if (includedIds.contains(id)) continue
 
@@ -317,6 +323,7 @@ class LibraryScanner(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             e.printStackTrace()
         }
         excluded

@@ -58,7 +58,7 @@ class HomeFeedRecommender {
     fun filterDismissedSections(sections: List<YouTubeSection>): List<YouTubeSection> {
         return sections.mapNotNull { section ->
             val cleanItems = filterDismissed(section.items)
-            if (cleanItems.isNotEmpty()) {
+            if (cleanItems.isNotEmpty() || section.playlists.isNotEmpty()) {
                 section.copy(items = cleanItems)
             } else null
         }

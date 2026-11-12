@@ -58,4 +58,23 @@ class AudioCacheTest {
         val localKey = AudioCache.getEffectiveCacheKey(localUrl)
         assertEquals("file:///sdcard/Music/song.flac", localKey)
     }
+    @Test
+    fun expiredStreamUrlsAndTheirUserAgentsAreRemoved() {
+        val url = "https://example.com/audio?expire=1"
+        AudioCache.cacheResolvedUrl("expired_video", url, "test-agent")
+        assertNull(AudioCache.getCachedResolvedUrl("expired_video"))
+        assertNull(AudioCache.getUserAgentForUrl(url))
+    }
+
+    @Test
+    fun unexpiredStreamUrlsKeepTheirClientUserAgent() {
+        val expiry = System.currentTimeMillis() / 1000L + 3600L
+        val url = "https://example.com/audio?expire=$expiry"
+        AudioCache.cacheResolvedUrl("live_video", url, "test-agent")
+        assertEquals(url, AudioCache.getCachedResolvedUrl("live_video"))
+        assertEquals("test-agent", AudioCache.getUserAgentForUrl(url))
+        AudioCache.invalidateUrl("live_video")
+        assertNull(AudioCache.getUserAgentForUrl(url))
+    }
+
 }

@@ -53,29 +53,28 @@ actual object PlatformArtworkProvider {
         } else {
             url
         }
+        remoteImageFetcher?.let { hook ->
+            return try {
+                hook(resolvedUrl, targetPx)
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                null
+            }
+        }
         return decodeSemaphore.withPermit {
-            val hook = remoteImageFetcher
-            if (hook != null) {
-                try {
-                    hook(resolvedUrl, targetPx)
-                } catch (_: Exception) {
-                    null
-                }
-            } else {
-                try {
-                    val uri = java.net.URI(resolvedUrl).toURL()
-                    val conn = uri.openConnection() as java.net.HttpURLConnection
-                    conn.connectTimeout = 4000
-                    conn.readTimeout = 4000
-                    conn.instanceFollowRedirects = true
-                    val bytes = conn.inputStream.use { it.readBytes() }
-                    if (bytes.isNotEmpty()) {
-                        ArtworkCache.putBytes(url, bytes)
-                        decodeSampledBitmap(bytes, targetPx)
-                    } else null
-                } catch (_: Exception) {
-                    null
-                }
+            try {
+                val uri = java.net.URI(resolvedUrl).toURL()
+                val conn = uri.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                conn.instanceFollowRedirects = true
+                val bytes = conn.inputStream.use { it.readBytes() }
+                if (bytes.isNotEmpty()) {
+                    ArtworkCache.putBytes(url, bytes)
+                    decodeSampledBitmap(bytes, targetPx)
+                } else null
+            } catch (_: Exception) {
+                null
             }
         }
     }
@@ -107,29 +106,28 @@ actual object PlatformArtworkProvider {
             } else {
                 path
             }
+            remoteImageFetcher?.let { hook ->
+                return try {
+                    hook(resolvedUrl, targetPx)
+                } catch (error: Exception) {
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    null
+                }
+            }
             return decodeSemaphore.withPermit {
-                val hook = remoteImageFetcher
-                if (hook != null) {
-                    try {
-                        hook(resolvedUrl, targetPx)
-                    } catch (_: Exception) {
-                        null
-                    }
-                } else {
-                    try {
-                        val url = java.net.URI(resolvedUrl).toURL()
-                        val conn = url.openConnection() as java.net.HttpURLConnection
-                        conn.connectTimeout = 4000
-                        conn.readTimeout = 4000
-                        conn.instanceFollowRedirects = true
-                        val bytes = conn.inputStream.use { it.readBytes() }
-                        if (bytes.isNotEmpty()) {
-                            ArtworkCache.putBytes(path, bytes)
-                            decodeSampledBitmap(bytes, targetPx)
-                        } else null
-                    } catch (_: Exception) {
-                        null
-                    }
+                try {
+                    val url = java.net.URI(resolvedUrl).toURL()
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 4000
+                    conn.readTimeout = 4000
+                    conn.instanceFollowRedirects = true
+                    val bytes = conn.inputStream.use { it.readBytes() }
+                    if (bytes.isNotEmpty()) {
+                        ArtworkCache.putBytes(path, bytes)
+                        decodeSampledBitmap(bytes, targetPx)
+                    } else null
+                } catch (_: Exception) {
+                    null
                 }
             }
         }

@@ -1,5 +1,9 @@
 package com.nodeplayer.music.ui.screens
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -85,11 +89,14 @@ fun HomeScreen(
     onSearchClick: () -> Unit = {},
     currentRoute: String = "home",
     dockScrollController: com.nodeplayer.ui.components.DockScrollController? = null,
+    onOpenCategory: ((com.nodeplayer.model.MoodGenre, List<com.nodeplayer.model.Playlist>) -> Unit)? = null,
     onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val isOnline by AppModeState.isOnlineMode.collectAsState()
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val ytAuthState by com.nodeplayer.music.auth.YouTubeAccountManager.authState.collectAsState()
 
     AnimatedContent(
@@ -106,7 +113,28 @@ fun HomeScreen(
                 filterAndSortRecentTracks(allTracks)
             }
             val account = (ytAuthState as? com.nodeplayer.model.AuthState.LoggedIn)?.account
-            OnlineHomeView(
+            if (currentRoute == "new" || currentRoute == "explore") {
+                com.nodeplayer.ui.screens.ExploreView(
+                    innerTubeClient = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get(),
+                    dockScrollController = dockScrollController,
+                    onCategoryClick = { category ->
+                        scope.launch {
+                            try {
+                                val playlists = withContext(Dispatchers.IO) {
+                                    com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+                                        .browseCategoryShelves(category.browseId, category.params).getOrThrow()
+                                }
+                                onOpenCategory?.invoke(category, playlists)
+                            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                android.widget.Toast.makeText(context, "Couldn't load this category. Please try again.", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize().statusBarsPadding()
+                )
+            } else OnlineHomeView(
                 currentTrack = currentTrack,
                 isPlaying = isPlaying,
                 onPlayTrack = onTrackClick,
@@ -114,11 +142,12 @@ fun HomeScreen(
                 recentTracks = recentTracks,
                 currentRoute = currentRoute,
                 dockScrollController = dockScrollController,
-                isLoggedIn = ytAuthState is com.nodeplayer.model.AuthState.LoggedIn,
+                isLoggedIn = account != null,
+                accountId = account?.id,
                 accountName = account?.name,
                 accountEmail = account?.email,
                 avatarUrl = account?.avatarUrl,
-                channelHandle = account?.handle,
+                channelHandle = account?.channelHandle,
                 onSearchClick = onSearchClick,
                 onOpenEqualizer = onOpenEqualizer,
                 onOpenSettings = onOpenSettings,
