@@ -381,7 +381,7 @@ fun AppleMusicLyricsView(
                                     onSeek = onSeekTo,
                                     activeColor = Color.White,
                                     inactiveColor = Color(0xFFC0C0C0),
-                                    accentSweepColor = accentColor,
+                                    accentSweepColor = Color.White,
                                     fontSize = 34.sp
                                 )
 

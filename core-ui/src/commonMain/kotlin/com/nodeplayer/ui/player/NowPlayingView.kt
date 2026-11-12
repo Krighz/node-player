@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,6 +49,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
+import com.nodeplayer.model.AlbumArtPalette
+import com.nodeplayer.ui.components.PlatformArtworkProvider
+import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.library.LrcParser
 import com.nodeplayer.model.LyricWord
 import com.nodeplayer.model.Lyrics
@@ -125,8 +129,23 @@ fun NowPlayingView(
 ) {
     if (currentTrack == null) return
 
-    val cachedPalette = remember(currentTrack.id, currentTrack.path) {
-        PaletteExtractor.getCachedPalette(currentTrack)
+    // The palette is looked up once and never refreshed by a plain remember{}: if artwork finishes
+    // loading after this screen opens, the colors would stay on the orange fallback forever.
+    // produceState re-runs per track, extracts the vibrant color when the cache is empty, derives the
+    // full palette and caches it so other screens (lyrics, backdrops) get the same colors.
+    val cachedPalette by produceState<AlbumArtPalette?>(
+        initialValue = PaletteExtractor.getCachedPalette(currentTrack),
+        currentTrack.id,
+        currentTrack.path
+    ) {
+        value = PaletteExtractor.getCachedPalette(currentTrack) ?: run {
+            val extracted = PlatformArtworkProvider.extractVibrantColor(currentTrack)
+            extracted?.let { color ->
+                PaletteExtractor.derivePaletteFromBaseColor(color).also { palette ->
+                    PaletteExtractor.cachePalette(currentTrack, palette)
+                }
+            }
+        }
     }
     val vibrantColor = cachedPalette?.vibrant?.toComposeColor() ?: Color(0xFFD4883B)
     val darkMutedColor = cachedPalette?.darkMuted?.toComposeColor() ?: Color(0xFF0A0A0C)
@@ -221,8 +240,21 @@ fun NowPlayingView(
                 )
             }
 
-            // Spacer to push the title row down to ~62% of the screen
-            Spacer(modifier = Modifier.weight(1.0f))
+            // Hero Album Art in upper section with smooth squircle border
+            Box(
+                modifier = Modifier
+                    .weight(1.0f)
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                TrackArtwork(
+                    track = currentTrack,
+                    modifier = Modifier
+                        .size(300.dp),
+                    cornerRadius = 24.dp
+                )
+            }
 
             // 2. Lower Content Section: Title row, lyric preview, timeline, transport & bottom row
             Column(

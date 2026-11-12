@@ -73,12 +73,23 @@ object YouTubeAccountManager {
         }
     }
 
-    suspend fun onLoginSuccess(cookie: String) {
+    suspend fun onLoginSuccess(
+        cookie: String,
+        pageId: String? = null,
+        dataSyncId: String? = null,
+        authUser: String? = null,
+        visitorData: String? = null,
+        clientVersion: String? = null
+    ) {
         val client = innerTubeClient ?: return
         val store = sessionStore ?: return
 
         _authState.value = AuthState.Loading
         client.sessionCookie = cookie
+        client.pageId = pageId
+        client.dataSyncId = dataSyncId
+        client.authUser = authUser
+        if (visitorData != null) client.visitorData = visitorData
 
         val accountResult = client.fetchAccountInfo()
         val account = accountResult.getOrNull()

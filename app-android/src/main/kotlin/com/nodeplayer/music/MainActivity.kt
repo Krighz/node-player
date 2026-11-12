@@ -29,7 +29,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import com.nodeplayer.music.ui.screens.CategoryPlaylistsScreen
 import com.nodeplayer.ui.screens.DetailMediaHeader
+import com.nodeplayer.ui.screens.ExploreView
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -203,6 +205,7 @@ class MainActivity : ComponentActivity() {
                 var playlistDetailTracks by remember { mutableStateOf<List<com.nodeplayer.model.Track>>(emptyList()) }
                 var trackForAddToPlaylist by remember { mutableStateOf<com.nodeplayer.model.Track?>(null) }
                 var activePlaylistDetail by remember { mutableStateOf<Pair<com.nodeplayer.ui.screens.DetailMediaHeader, List<com.nodeplayer.model.Track>>?>(null) }
+                var activeCategoryForPlaylists by remember { mutableStateOf<com.nodeplayer.model.MoodGenre?>(null) }
 
                 // Spotify Transfer State
                 var showSpotifyDialog by remember { mutableStateOf(false) }
@@ -221,12 +224,14 @@ class MainActivity : ComponentActivity() {
                 var spotifyMatchingJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
                 val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder", "widgets", "widget_settings", "playlist_detail", "settings", "equalizer", "optical_diagnostics")
-                BackHandler(enabled = isLyricsExpanded || isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null || activePlaylistDetail != null) {
+                BackHandler(enabled = isLyricsExpanded || isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null || activePlaylistDetail != null || activeCategoryForPlaylists != null) {
                     if (isLyricsExpanded) {
                         // Collapse Lyrics back to NowPlaying (ARCH-03)
                         isLyricsExpanded = false
                     } else if (isNowPlayingExpanded) {
                         isNowPlayingExpanded = false
+                    } else if (activeCategoryForPlaylists != null) {
+                        activeCategoryForPlaylists = null
                     } else if (activePlaylistDetail != null) {
                         activePlaylistDetail = null
                     } else if (selectedPlaylistForDetail != null) {
@@ -413,8 +418,45 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onTrackOptionsClick = { trackForAddToPlaylist = it }
                             )
+                        } else if (activeCategoryForPlaylists != null) {
+                            CategoryPlaylistsScreen(
+                                category = activeCategoryForPlaylists!!,
+                                innerTubeClient = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get(),
+                                onPlaylistClick = { playlist ->
+                                    lifecycleScope.launch {
+                                        runCatching {
+                                            val client = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+                                            val tracks = client.fetchPlaylistTracks(
+                                                playlist.externalId ?: playlist.id.toString()
+                                            ).getOrDefault(emptyList())
+                                            activePlaylistDetail = DetailMediaHeader(
+                                                id = playlist.externalId ?: playlist.id.toString(),
+                                                title = playlist.name,
+                                                subtitle = "YouTube Music",
+                                                artworkUrl = playlist.artworkUrl ?: playlist.externalId?.let {
+                                                    "https://i.ytimg.com/vi/$it/hqdefault.jpg"
+                                                },
+                                                isAlbum = false
+                                            ) to tracks
+                                            activeCategoryForPlaylists = null
+                                        }.onFailure { e ->
+                                            com.nodeplayer.common.logging.NodeLog.e("MainActivity", "Failed to load playlist tracks", e)
+                                        }
+                                    }
+                                },
+                                onBack = { activeCategoryForPlaylists = null },
+                                dockScrollController = dockScrollController,
+                                modifier = Modifier.fillMaxSize()
+                            )
                         } else when (currentRoute) {
-                            "home", "new", "explore" -> com.nodeplayer.music.ui.screens.HomeScreen(
+                            "new", "explore" -> ExploreView(
+                                onCategoryClick = { category ->
+                                    activeCategoryForPlaylists = category
+                                },
+                                dockScrollController = dockScrollController,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            "home" -> com.nodeplayer.music.ui.screens.HomeScreen(
                                 allTracks = allTracks,
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,

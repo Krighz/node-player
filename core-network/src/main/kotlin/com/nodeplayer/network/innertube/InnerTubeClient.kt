@@ -25,7 +25,9 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -54,6 +56,12 @@ class InnerTubeClient(
         }
 
     private var cachedSapisid: String? = null
+
+    /** Authenticated session scope injected via YTCFG probe on login (AUTH-02). */
+    var authUser: String? = null
+    var pageId: String? = null
+    var dataSyncId: String? = null
+    var visitorData: String? = null
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -102,6 +110,9 @@ class InnerTubeClient(
                     val authHeader = YouTubeAuth.generateSapisidHash(sapisid)
                     header(HttpHeaders.Authorization, authHeader)
                 }
+                authUser?.let { header("X-Goog-AuthUser", it) }
+                pageId?.let { header("X-Goog-PageId", it) }
+                visitorData?.let { header("X-Goog-Visitor-Id", it) }
             }
         }
     }
@@ -146,7 +157,7 @@ class InnerTubeClient(
                 header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
                 setBody(
                     BrowseBody(
-                        context = client.toContext(locale),
+                        context = client.toContext(locale, visitorData = visitorData, dataSyncId = dataSyncId),
                         browseId = browseId,
                         params = params
                     )
@@ -250,7 +261,7 @@ class InnerTubeClient(
                 header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
                 setBody(
                     BrowseBody(
-                        context = client.toContext(locale),
+                        context = client.toContext(locale, visitorData = visitorData, dataSyncId = dataSyncId),
                         browseId = "FEmusic_moods_and_genres"
                     )
                 )
@@ -358,7 +369,7 @@ class InnerTubeClient(
                 header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
                 setBody(
                     BrowseBody(
-                        context = client.toContext(locale),
+                        context = client.toContext(locale, visitorData = visitorData, dataSyncId = dataSyncId),
                         browseId = browseId,
                         params = params
                     )
@@ -426,6 +437,17 @@ class InnerTubeClient(
                             ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
                             ?: twoRow["title"]?.jsonObject?.get("simpleText")?.jsonPrimitive?.content
 
+                        val thumbArray = twoRow["thumbnailRenderer"]?.jsonObject
+                            ?.get("musicThumbnailRenderer")?.jsonObject
+                            ?.get("thumbnail")?.jsonObject?.get("thumbnails")?.jsonArray
+                            ?: twoRow["thumbnail"]?.jsonObject?.get("thumbnails")?.jsonArray
+                            ?: twoRow["thumbnail"]?.jsonObject?.get("musicThumbnailRenderer")?.jsonObject
+                                ?.get("thumbnail")?.jsonObject?.get("thumbnails")?.jsonArray
+                        var artworkUrl = thumbArray?.lastOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
+                        if (artworkUrl != null && artworkUrl.startsWith("//")) {
+                            artworkUrl = "https:$artworkUrl"
+                        }
+
                         if (!browseId.isNullOrBlank() && !title.isNullOrBlank()) {
                             val cleanId = if (browseId.startsWith("VL")) browseId.removePrefix("VL") else browseId
                             val syntheticId = generateSyntheticTrackId(cleanId)
@@ -440,7 +462,8 @@ class InnerTubeClient(
                                     name = title,
                                     trackCount = trackCount,
                                     source = "youtube",
-                                    externalId = cleanId
+                                    externalId = cleanId,
+                                    artworkUrl = artworkUrl
                                 )
                             )
                         }
@@ -905,16 +928,28 @@ class InnerTubeClient(
         if (cookie.isNullOrBlank()) return@runCatching null
 
         withRetry {
+            val client = YouTubeClient.WEB_REMIX
             val response = httpClient.post("account/account_menu") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
+                header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
                 val reqBody = AccountMenuBody(
-                    context = clientContext.toContext(locale, visitorData = null)
+                    context = client.toContext(locale, visitorData = visitorData, dataSyncId = dataSyncId)
                 )
                 setBody(reqBody)
             }
 
             if (response.status == HttpStatusCode.OK) {
                 val responseText = response.bodyAsText()
-                parseAccountMenuResponse(responseText)
+                val parsed = parseAccountMenuResponse(responseText)
+                if (parsed != null) {
+                    parsed
+                } else {
+                    NodeLog.w(TAG, "Account menu returned OK but activeAccountHeaderRenderer was not found in response: ${responseText.take(200)}")
+                    null
+                }
             } else if (response.status == HttpStatusCode.Unauthorized || response.status == HttpStatusCode.Forbidden) {
                 NodeLog.w(TAG, "Account menu request unauthorized (${response.status.value})")
                 null
@@ -925,13 +960,26 @@ class InnerTubeClient(
         }
     }
 
+    private fun collectRenderers(root: JsonElement, name: String): List<JsonObject> {
+        val out = mutableListOf<JsonObject>()
+        fun walk(node: JsonElement) {
+            when (node) {
+                is JsonObject -> {
+                    (node[name] as? JsonObject)?.let(out::add)
+                    node.values.forEach(::walk)
+                }
+                is JsonArray -> node.forEach(::walk)
+                else -> Unit
+            }
+        }
+        walk(root)
+        return out
+    }
+
     private fun parseAccountMenuResponse(jsonText: String): com.nodeplayer.model.YouTubeAccount? {
         return try {
             val element = json.parseToJsonElement(jsonText)
-            val actions = element.jsonObject["actions"]?.jsonArray
-            val openMenuAction = actions?.firstOrNull()?.jsonObject?.get("openPopupAction")?.jsonObject
-            val menuRenderer = openMenuAction?.get("popup")?.jsonObject?.get("multiPageMenuRenderer")?.jsonObject
-            val headerRenderer = menuRenderer?.get("header")?.jsonObject?.get("activeAccountHeaderRenderer")?.jsonObject
+            val headerRenderer = collectRenderers(element, "activeAccountHeaderRenderer").firstOrNull()
 
             if (headerRenderer != null) {
                 val accountName = headerRenderer["accountName"]?.jsonObject?.get("runs")?.jsonArray
@@ -988,7 +1036,7 @@ class InnerTubeClient(
                 header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
                 setBody(
                     BrowseBody(
-                        context = client.toContext(locale),
+                        context = client.toContext(locale, visitorData = visitorData, dataSyncId = dataSyncId),
                         browseId = "FEmusic_library_playlists"
                     )
                 )

@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,7 +52,43 @@ import com.nodeplayer.ui.theme.LocalAccentColor
 import kotlinx.coroutines.launch
 
 private const val TAG = "YouTubeLoginSheet"
-private const val LOGIN_URL = "https://accounts.google.com/ServiceLogin?service=youtube&continue=https%3A%2F%2Fmusic.youtube.com%2F"
+private const val LOGIN_URL =
+    "https://accounts.google.com/ServiceLogin" +
+        "?ltmpl=music&service=youtube&prompt=select_account" +
+        "&continue=https%3A%2F%2Fmusic.youtube.com%2F"
+
+/**
+ * JavaScript probe injected into music.youtube.com after login to extract the authenticated
+ * session scope matching BitChord's YTCFG_PROBE implementation.
+ */
+private const val YTCFG_PROBE = """
+(function () {
+  try {
+    if (!window.ytcfg || !window.ytcfg.get) return null;
+    var get = function (key) {
+      var value = window.ytcfg.get(key);
+      return (value === undefined || value === null || value === '') ? null : String(value);
+    };
+    return {
+      loggedIn: String(!!window.ytcfg.get('LOGGED_IN')),
+      pageId: get('DELEGATED_SESSION_ID'),
+      dataSyncId: get('DATASYNC_ID'),
+      authUser: get('SESSION_INDEX'),
+      visitorData: get('VISITOR_DATA'),
+      clientVersion: get('INNERTUBE_CLIENT_VERSION')
+    };
+  } catch (e) {
+    return null;
+  }
+})()
+"""
+
+private fun normalizeDataSyncId(raw: String?): String? {
+    val value = raw?.takeIf { it.isNotBlank() } ?: return null
+    if (!value.contains("||")) return value
+    return value.substringAfter("||").takeIf { it.isNotBlank() }
+        ?: value.substringBefore("||").takeIf { it.isNotBlank() }
+}
 
 /**
  * Fullscreen glass dialog embedding a WebView for official Google/YouTube sign-in.
@@ -68,6 +106,60 @@ fun YouTubeLoginSheet(
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var pageProgress by remember { mutableFloatStateOf(0f) }
     var isCapturing by remember { mutableStateOf(false) }
+    var isPageReady by remember { mutableStateOf(false) }
+
+    fun captureSession(view: WebView) {
+        val cookies = CookieManager.getInstance().getCookie("https://music.youtube.com") ?: return
+        val sapisid = YouTubeAuth.extractSapisid(cookies)
+        if (sapisid.isNullOrBlank()) return
+
+        view.evaluateJavascript(YTCFG_PROBE) { raw ->
+            val jsonStr = raw?.trim()?.takeIf { it != "null" && it.isNotBlank() }
+            val config = try {
+                if (jsonStr != null) org.json.JSONObject(jsonStr) else null
+            } catch (e: Exception) {
+                NodeLog.w(TAG, "YTCFG probe parse error: ${e.message}, raw=$raw")
+                null
+            }
+            val loggedIn = config?.optString("loggedIn") == "true"
+            if (!loggedIn || config == null) {
+                NodeLog.w(TAG, "Confirmation requested before page exposed a signed-in identity")
+                return@evaluateJavascript
+            }
+
+            fun String?.nullIfBlankOrNull(): String? =
+                takeIf { !it.isNullOrBlank() && it != "null" }
+
+            val pageId = config.optString("pageId").nullIfBlankOrNull()
+            val rawDataSyncId = config.optString("dataSyncId").nullIfBlankOrNull()
+            val dataSyncId = pageId ?: normalizeDataSyncId(rawDataSyncId)
+            val authUser = config.optString("authUser").nullIfBlankOrNull()
+            val visitorData = config.optString("visitorData").nullIfBlankOrNull()
+            val clientVersion = config.optString("clientVersion").nullIfBlankOrNull()
+
+            isCapturing = true
+            CookieManager.getInstance().flush()
+            NodeLog.i(TAG, "Captured session: authUser=$authUser pageId=${pageId ?: "none"} dataSyncId=${dataSyncId?.take(12) ?: "none"}")
+
+            coroutineScope.launch {
+                try {
+                    YouTubeAccountManager.onLoginSuccess(
+                        cookie = cookies,
+                        pageId = pageId,
+                        dataSyncId = dataSyncId,
+                        authUser = authUser,
+                        visitorData = visitorData,
+                        clientVersion = clientVersion
+                    )
+                    onLoginSuccess()
+                    onDismiss()
+                } catch (t: Throwable) {
+                    NodeLog.e(TAG, "Error finalizing YouTube login", t)
+                    isCapturing = false
+                }
+            }
+        }
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -106,6 +198,19 @@ fun YouTubeLoginSheet(
                             .padding(horizontal = 8.dp)
                     )
 
+                    if (isPageReady) {
+                        Button(
+                            onClick = {
+                                webViewRef?.let { captureSession(it) }
+                            },
+                            enabled = !isCapturing,
+                            colors = ButtonDefaults.buttonColors(containerColor = accent),
+                            modifier = Modifier.padding(end = 4.dp)
+                        ) {
+                            Text(if (isCapturing) "Checking…" else "Use Profile", color = Color.White)
+                        }
+                    }
+
                     IconButton(
                         onClick = { webViewRef?.reload() },
                         modifier = Modifier.size(44.dp)
@@ -134,19 +239,47 @@ fun YouTubeLoginSheet(
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     AndroidView(
                         factory = { ctx ->
+                            // BitChord: clear Google cookies specifically before sign in
+                            val cookieManager = CookieManager.getInstance()
+                            cookieManager.setAcceptCookie(true)
+
+                            listOf(
+                                "https://music.youtube.com",
+                                "https://www.youtube.com",
+                                "https://youtube.com",
+                                "https://accounts.google.com",
+                                "https://www.google.com",
+                                "https://google.com"
+                            ).forEach { origin ->
+                                val jar = cookieManager.getCookie(origin) ?: return@forEach
+                                val host = origin.substringAfter("://")
+                                jar.split(';').forEach { entry ->
+                                    val name = entry.substringBefore('=').trim()
+                                    if (name.isNotEmpty()) {
+                                        val exp = "$name=; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0"
+                                        cookieManager.setCookie(origin, "$exp; Path=/")
+                                        cookieManager.setCookie(origin, "$exp; Path=/; Domain=$host")
+                                        cookieManager.setCookie(origin, "$exp; Path=/; Domain=.$host")
+                                    }
+                                }
+                            }
+                            cookieManager.flush()
+
                             WebView(ctx).apply {
                                 layoutParams = ViewGroup.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
+                                clearCache(true)
+                                clearHistory()
+                                clearFormData()
+
                                 settings.javaScriptEnabled = true
                                 settings.domStorageEnabled = true
                                 settings.databaseEnabled = true
                                 settings.userAgentString =
                                     "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 
-                                val cookieManager = CookieManager.getInstance()
-                                cookieManager.setAcceptCookie(true)
                                 cookieManager.setAcceptThirdPartyCookies(this, true)
 
                                 webChromeClient = object : WebChromeClient() {
@@ -158,44 +291,24 @@ fun YouTubeLoginSheet(
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                                         super.onPageStarted(view, url, favicon)
-                                        checkAndCaptureCookies(url)
                                     }
 
                                     override fun onPageFinished(view: WebView?, url: String?) {
                                         super.onPageFinished(view, url)
-                                        checkAndCaptureCookies(url)
+                                        val isMusic = url?.startsWith("https://music.youtube.com") == true
+                                        isPageReady = isMusic
+
+                                        // Auto-capture if session is ready on music.youtube.com
+                                        if (isMusic && !isCapturing && view != null) {
+                                            captureSession(view)
+                                        }
                                     }
 
                                     override fun shouldOverrideUrlLoading(
                                         view: WebView?,
                                         request: WebResourceRequest?
                                     ): Boolean {
-                                        val nextUrl = request?.url?.toString()
-                                        checkAndCaptureCookies(nextUrl)
                                         return false
-                                    }
-
-                                    private fun checkAndCaptureCookies(url: String?) {
-                                        if (url == null || isCapturing) return
-                                        val host = try { android.net.Uri.parse(url).host } catch (_: Exception) { null }
-                                        if (host != null && (host == "youtube.com" || host.endsWith(".youtube.com"))) {
-                                            val cookies = CookieManager.getInstance().getCookie(url)
-                                            val sapisid = YouTubeAuth.extractSapisid(cookies)
-                                            if (!sapisid.isNullOrBlank() || (cookies != null && cookies.contains("LOGIN_INFO"))) {
-                                                isCapturing = true
-                                                NodeLog.i(TAG, "Captured authenticated session cookie: ${YouTubeAuth.maskCookieForLog(cookies)}")
-                                                coroutineScope.launch {
-                                                    try {
-                                                        YouTubeAccountManager.onLoginSuccess(cookies)
-                                                        onLoginSuccess()
-                                                        onDismiss()
-                                                    } catch (t: Throwable) {
-                                                        NodeLog.e(TAG, "Error finalizing YouTube login", t)
-                                                        isCapturing = false
-                                                    }
-                                                }
-                                            }
-                                        }
                                     }
                                 }
 

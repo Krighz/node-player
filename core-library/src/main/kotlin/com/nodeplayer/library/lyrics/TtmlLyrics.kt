@@ -176,7 +176,7 @@ object TtmlLyrics {
                 }
                 else -> if (child.nodeType == Node.TEXT_NODE) {
                     val text = child.textContent.orEmpty()
-                    if (text.isNotBlank()) out += Piece.Text(text)
+                    if (text.isNotEmpty()) out += Piece.Text(text)
                 }
             }
         }
@@ -235,7 +235,9 @@ object TtmlLyrics {
                     )
                     end = piece.end
                     timed = true
-                    if (piece.text.last().isWhitespace()) flush()
+                    if (piece.text.last().isWhitespace()) {
+                        flush()
+                    }
                 }
             }
         }

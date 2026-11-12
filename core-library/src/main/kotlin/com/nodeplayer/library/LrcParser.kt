@@ -154,44 +154,40 @@ object LrcParser {
         }
 
         val words = mutableListOf<LyricWord>()
-        val cleanTextBuilder = StringBuilder()
 
         for (i in tags.indices) {
             val startTs = tags[i].first
             val startPos = tags[i].second
             val endPos = if (i + 1 < tags.size) {
-                // Start of next tag: need to find its match start
                 val nextTagMatcher = WORD_TIME_TAG_REGEX.matcher(content)
                 if (nextTagMatcher.find(startPos)) nextTagMatcher.start() else content.length
             } else {
                 content.length
             }
 
-            val wordText = content.substring(startPos, endPos)
-            if (wordText.isNotEmpty()) {
+            val rawWordText = content.substring(startPos, endPos)
+            val trimmedWord = rawWordText.trim()
+            if (trimmedWord.isNotEmpty()) {
                 val endTs = if (i + 1 < tags.size) tags[i + 1].first else startTs + 600L
-                cleanTextBuilder.append(wordText)
-                val trimmedWord = wordText.trim()
-                if (trimmedWord.isNotEmpty()) {
-                    words.add(
-                        LyricWord(
-                            text = wordText, // keep spacing
-                            startMs = startTs,
-                            endMs = maxOf(startTs + 100L, endTs)
-                        )
+                words.add(
+                    LyricWord(
+                        text = trimmedWord,
+                        startMs = startTs,
+                        endMs = maxOf(startTs + 100L, endTs)
                     )
-                }
+                )
             }
         }
 
-        return words to cleanTextBuilder.toString().trim()
+        val cleanText = if (words.isNotEmpty()) words.joinToString(" ") { it.text } else content.replace(WORD_TIME_TAG_REGEX.toRegex(), "").trim()
+        return words to cleanText
     }
 
     private fun estimateWords(lineText: String, lineStartMs: Long, lineEndMs: Long): List<LyricWord> {
         val trimmed = lineText.trim()
         if (trimmed.isEmpty()) return emptyList()
 
-        val tokens = trimmed.split(Regex("\\s+"))
+        val tokens = trimmed.split(Regex("\\s+")).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return emptyList()
 
         val totalChars = tokens.sumOf { it.length }
@@ -211,9 +207,7 @@ object LrcParser {
             }
 
             val wordEnd = if (isLast) lineEndMs else currentStart + wordDuration
-            // Attach a trailing space to all except last token
-            val wordWithSpace = if (isLast) token else "$token "
-            words.add(LyricWord(text = wordWithSpace, startMs = currentStart, endMs = wordEnd))
+            words.add(LyricWord(text = token, startMs = currentStart, endMs = wordEnd))
             currentStart = wordEnd
         }
 
