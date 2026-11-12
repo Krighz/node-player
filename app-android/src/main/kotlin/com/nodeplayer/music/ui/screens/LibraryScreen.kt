@@ -80,6 +80,8 @@ fun LibraryScreen(
     onOpenPlaylist: ((com.nodeplayer.model.Playlist) -> Unit)? = null,
     onCreatePlaylist: ((String) -> Unit)? = null,
     onImportYouTubePlaylists: (() -> Unit)? = null,
+    youTubeSyncing: Boolean = false,
+    youTubeSyncError: String? = null,
     onImportSpotifyPlaylists: (() -> Unit)? = null,
     onAddToPlaylist: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -142,6 +144,16 @@ fun LibraryScreen(
                         tint = accent
                     )
                 }
+            }
+        }
+
+        if (youTubeSyncing) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = accent)
+            Text("Syncing YouTube playlists…", style = MaterialTheme.typography.labelSmall, color = accent)
+        }
+        if (youTubeSyncError != null) {
+            TextButton(onClick = { onImportYouTubePlaylists?.invoke() }) {
+                Text(youTubeSyncError, color = MaterialTheme.colorScheme.error)
             }
         }
 
@@ -297,9 +309,9 @@ fun SongsList(
                         .padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val artworkRequest = remember(track.albumId, context) {
+                    val artworkRequest = remember(track.id, track.path, track.albumId, context) {
                         ImageRequest.Builder(context)
-                            .data("content://media/external/audio/albumart/${track.albumId}")
+                            .data(track)
                             .size(144, 144)
                             .build()
                     }
@@ -1028,7 +1040,7 @@ fun PlaylistsTab(
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Import YT",
+                                text = "Sync YouTube",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.Bold,
                                     color = accent

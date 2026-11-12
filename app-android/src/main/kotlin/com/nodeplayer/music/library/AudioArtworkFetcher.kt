@@ -36,6 +36,20 @@ class AudioArtworkFetcher(
         val (targetW, targetH) = resolveTargetSize(options.size)
         val maxDim = maxOf(targetW, targetH)
 
+        // Online tracks have no MediaStore album ID. Use Coil's shared HTTP/disk cache.
+        if (path.startsWith("nodeplayer://youtube/")) {
+            val videoId = path.removePrefix("nodeplayer://youtube/").substringBefore('?').substringBefore('/')
+            val request = coil.request.ImageRequest.Builder(context)
+                .data("https://i.ytimg.com/vi/$videoId/hqdefault.jpg")
+                .size(targetW, targetH)
+                .allowHardware(false)
+                .build()
+            val result = coil.Coil.imageLoader(context).execute(request)
+            return (result as? coil.request.SuccessResult)?.let {
+                DrawableResult(it.drawable, isSampled = true, dataSource = it.dataSource)
+            }
+        }
+
         // 0. Check in-memory byte cache for Node Connect virtual streams/tracks
         val cachedBytes = com.nodeplayer.ui.components.ArtworkCache.getBytes(path)
             ?: (if (trackId > 0) com.nodeplayer.ui.components.ArtworkCache.getBytes(trackId.toString()) else null)

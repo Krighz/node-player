@@ -55,6 +55,7 @@ import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.LiquidColors
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -131,7 +132,7 @@ fun OnlineHomeView(
     // Separate guest, account session and route caches; never reuse a different session's feed.
     val diskCache = remember(isLoggedIn, accountId, currentRoute) {
         val session = SharedInnerTubeProvider.get().sessionCookie ?: "guest"
-        HomeFeedDiskCache(cacheKey = "$currentRoute:$session")
+        HomeFeedDiskCache.shared("$currentRoute:$session")
     }
 
     val dockConnection = rememberDockScrollConnection(
@@ -159,12 +160,20 @@ fun OnlineHomeView(
             val result = withContext(Dispatchers.IO) {
                 val innerClient = SharedInnerTubeProvider.get()
                 if (currentRoute == "new" || currentRoute == "explore") {
-                    val explore = innerClient.getExploreSections().getOrDefault(emptyList())
-                    val charts = innerClient.getChartsSections().getOrDefault(emptyList())
+                    val (explore, charts) = kotlinx.coroutines.coroutineScope {
+                        val exploreRequest = async { innerClient.getExploreSections().getOrDefault(emptyList()) }
+                        val chartsRequest = async { innerClient.getChartsSections().getOrDefault(emptyList()) }
+                        exploreRequest.await() to chartsRequest.await()
+                    }
                     (explore + charts).distinctBy { it.title }.takeIf { it.isNotEmpty() }
                         ?: throw IllegalStateException("No explore shelves available")
                 } else {
-                    innerClient.getCombinedHomeFeed().getOrThrow()
+                    innerClient.getCombinedHomeFeed { home ->
+                        withContext(Dispatchers.Main) {
+                            if (home.isNotEmpty()) sections = recommender.filterDismissedSections(home)
+                        }
+                        if (home.isNotEmpty()) diskCache.save(home, region = recommender.resolveRegion())
+                    }.getOrThrow()
                 }
             }
             coroutineContext.ensureActive()
@@ -172,9 +181,6 @@ fun OnlineHomeView(
             isFallbackMode = false
             val loadedSections = sections
             withContext(Dispatchers.IO) { diskCache.save(loadedSections, region = recommender.resolveRegion()) }
-            categories = withContext(Dispatchers.IO) {
-                SharedInnerTubeProvider.get().browseMoodAndGenres().getOrDefault(emptyList())
-            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
@@ -183,14 +189,24 @@ fun OnlineHomeView(
                 sections = listOf(YouTubeSection(title = "Quick Picks", items = fallback))
             }
             isFallbackMode = true
-            errorMessage = error.message ?: "Unable to load recommendations"
+            errorMessage = error.cause?.message ?: error.message ?: "Unable to load recommendations"
         } finally {
             isRefreshing = false
         }
     }
 
-    LaunchedEffect(isLoggedIn, accountId, currentRoute) {
-        refreshFeed()
+    LaunchedEffect(diskCache) {
+        if (sections.isEmpty()) {
+            sections = withContext(Dispatchers.IO) { diskCache.loadFromDisk() }
+        }
+        if (!diskCache.isValid(ttlMs = 5 * 60 * 1000L)) refreshFeed()
+        else isRefreshing = false
+    }
+
+    LaunchedEffect(isLoggedIn, accountId) {
+        categories = withContext(Dispatchers.IO) {
+            SharedInnerTubeProvider.get().browseMoodAndGenres().getOrDefault(emptyList())
+        }
     }
 
     LaunchedEffect(listState) {
@@ -418,16 +434,16 @@ fun OnlineHomeView(
                     Text("‹  All recommendations", color = accent, modifier = Modifier.clickable { categorySections = null })
                 }
             } else {
-                categories.forEachIndexed { sectionIndex, categorySection ->
-                    item(key = "categories_$sectionIndex") {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text(categorySection.title.uppercase(), color = Color.White, style = MaterialTheme.typography.titleMedium)
-                            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                itemsIndexed(categorySection.items) { _, category ->
+                item(key = "compact_categories") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        itemsIndexed(categories.flatMap { it.items }.distinctBy { it.browseId to it.params }) { _, category ->
                                     Text(
                                         category.title,
                                         color = Color.White,
-                                        modifier = Modifier.clip(HOME_CAPSULE_SHAPE)
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        modifier = Modifier.widthIn(max = 140.dp).clip(HOME_CARD_SHAPE_14)
                                             .background(accent.copy(alpha = 0.25f))
                                             .clickable {
                                                 actionJob?.cancel()
@@ -449,11 +465,9 @@ fun OnlineHomeView(
                                                         } else errorMessage = "No playlists available for ${category.title}"
                                                     }.onFailure { errorMessage = it.message ?: "Unable to load category" }
                                                 }
-                                            }.padding(horizontal = 16.dp, vertical = 10.dp)
+                                            }.padding(horizontal = 12.dp, vertical = 8.dp)
                                     )
                                 }
-                            }
-                        }
                     }
                 }
             }

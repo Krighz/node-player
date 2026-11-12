@@ -35,6 +35,9 @@ import com.nodeplayer.music.diagnostics.ShaderSelfTestResult
 import com.nodeplayer.music.service.PlaybackService
 import com.nodeplayer.music.ui.theme.DefaultAccent
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -57,6 +60,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     // State flows
     val allTracks = dao.getAllTracks().map { list -> list.map { it.toTrack() } }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val albums = allTracks.map { scanner.extractAlbums(it) }
@@ -77,6 +81,48 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     val playlists = dao.getAllPlaylists()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    private val _youTubePlaylistSyncing = MutableStateFlow(false)
+    val youTubePlaylistSyncing = _youTubePlaylistSyncing.asStateFlow()
+    private val _youTubePlaylistSyncError = MutableStateFlow<String?>(null)
+    val youTubePlaylistSyncError = _youTubePlaylistSyncError.asStateFlow()
+    private var libraryRefreshJob: Job? = null
+    private var playlistSyncJob: Job? = null
+    private var lastPlaylistSyncTime = 0L
+    private var lastPlaylistSyncAccount: String? = null
+
+    fun syncYouTubePlaylists(force: Boolean = false) {
+        val account = (com.nodeplayer.music.auth.YouTubeAccountManager.authState.value as? AuthState.LoggedIn)?.account
+            ?: return
+        if (!com.nodeplayer.common.AppModeState.isOnlineMode.value || playlistSyncJob?.isActive == true) return
+        if (!force && lastPlaylistSyncAccount == account.id && System.currentTimeMillis() - lastPlaylistSyncTime < 300_000L) return
+        playlistSyncJob = viewModelScope.launch(Dispatchers.IO) {
+            _youTubePlaylistSyncing.value = true
+            _youTubePlaylistSyncError.value = null
+            try {
+                val client = com.nodeplayer.music.auth.YouTubeAccountManager.innerTubeClient ?: return@launch
+                val importer = com.nodeplayer.music.library.YouTubePlaylistImporter(app.database, client)
+                val summaries = client.fetchUserPlaylists().getOrThrow()
+                var failures = 0
+                for (summary in summaries) {
+                    ensureActive()
+                    importer.importPlaylist(summary).onFailure {
+                        if (it is CancellationException) throw it
+                        failures++
+                    }
+                }
+                if (failures > 0) error("Couldn't sync $failures playlists. Tap Sync YouTube to retry.")
+                lastPlaylistSyncAccount = account.id
+                lastPlaylistSyncTime = System.currentTimeMillis()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _youTubePlaylistSyncError.value = error.message ?: "Couldn't sync YouTube playlists"
+            } finally {
+                _youTubePlaylistSyncing.value = false
+            }
+        }
+    }
 
     private val _selectedFolder = MutableStateFlow<MusicFolder?>(null)
     val selectedFolder: StateFlow<MusicFolder?> = _selectedFolder.asStateFlow()
@@ -202,12 +248,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             GraphicsEventTracker.init(app)
             loadFilterPreferences()
             detectAudioOutput()
+            refreshLibrary()
         }
         runGraphicsSelfTest()
         initMediaController()
-        refreshLibrary()
         registerAudioDeviceCallback()
         restoreLastPlaybackSession()
+
+        viewModelScope.launch {
+            combine(
+                com.nodeplayer.music.auth.YouTubeAccountManager.authState,
+                com.nodeplayer.common.AppModeState.isOnlineMode
+            ) { auth, online -> (auth as? AuthState.LoggedIn)?.account?.id to online }
+                .distinctUntilChanged().collect {
+                    playlistSyncJob?.cancelAndJoin()
+                    if (it.first != null && it.second) syncYouTubePlaylists()
+                }
+        }
 
         // Sync and observe AppModeState with persistent settings
         viewModelScope.launch {
@@ -277,15 +334,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val selfTestPassed = GlassShaderSelfTest.getLastResult(app).passed
         return buildThemeConfigFromValues(
             glassStrength = prefs.getString("glass_strength", "BALANCED") ?: "BALANCED",
-            themeMode = prefs.getString("theme_mode", "SYSTEM") ?: "SYSTEM",
+            themeMode = prefs.getString("theme_mode", "OLED") ?: "OLED",
             accentSource = prefs.getString("accent_source", "ARTWORK") ?: "ARTWORK",
             spacingDensity = prefs.getString("spacing_density", "COMFORTABLE") ?: "COMFORTABLE",
             cornerRoundness = prefs.getString("corner_roundness", "ROUNDED") ?: "ROUNDED",
-            animatedBackdrop = prefs.getBoolean("animated_backdrop", true),
+            animatedBackdrop = prefs.getBoolean("animated_backdrop", false),
             blurRadiusDp = prefs.getFloat("glass_blur_radius", 28.0f),
             tintAlpha = prefs.getFloat("glass_tint_alpha", 0.65f),
             borderAlpha = prefs.getFloat("glass_border_alpha", 0.30f),
-            isOledBlack = prefs.getBoolean("is_oled_black", false),
+            isOledBlack = prefs.getBoolean("is_oled_black", true),
             useDynamicAccent = prefs.getBoolean("use_dynamic_accent", true),
             fixedAccentColorArgb = prefs.getLong("fixed_accent_color", 0xFF6366F1),
             cornerRadiusDp = prefs.getFloat("corner_radius_dp", 16.0f),
@@ -300,7 +357,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             edgeHighlightStrength = prefs.getFloat("glass_edge_highlight_strength", 0.60f),
             isFullyTransparent = prefs.getBoolean("glass_fully_transparent", false),
             keepTextReadable = prefs.getBoolean("glass_keep_text_readable", true),
-            backgroundAnimationStyle = prefs.getString("background_animation_style", "LIQUID_BLOBS") ?: "LIQUID_BLOBS",
+            backgroundAnimationStyle = prefs.getString("background_animation_style", "STATIC") ?: "STATIC",
             backgroundAnimationSpeed = prefs.getFloat("background_animation_speed", 1.0f),
             backgroundAnimationIntensity = prefs.getFloat("background_animation_intensity", 0.8f),
             backgroundColorSource = prefs.getString("background_color_source", "ARTWORK") ?: "ARTWORK",
@@ -486,13 +543,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         })
     }
 
+    @Synchronized
     fun refreshLibrary(
         includedFolders: Set<String> = _customFolders.value,
         excludedFolders: Set<String> = _excludedFolders.value,
         minDurationSec: Int = _minDurationSeconds.value,
         whitelistedIds: Set<Long> = _whitelistedTrackIds.value
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
+        libraryRefreshJob?.cancel()
+        libraryRefreshJob = viewModelScope.launch(Dispatchers.IO) {
             val minMs = minDurationSec * 1000L
             val scannedTracks = scanner.scanAllTracks(
                 minDurationMs = minMs,
@@ -640,7 +699,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     } else {
                         ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it.id)
                     }
-                    val artworkUri = if (it.path.startsWith("nodeplayer://")) {
+                    val artworkUri = if (it.path.startsWith("nodeplayer://youtube/")) {
+                        Uri.parse("https://i.ytimg.com/vi/${it.path.removePrefix("nodeplayer://youtube/")}/hqdefault.jpg")
+                    } else if (it.path.startsWith("nodeplayer://")) {
                         Uri.parse(it.path)
                     } else {
                         ContentUris.withAppendedId(albumArtBaseUri, it.albumId)
@@ -1524,7 +1585,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun getTracksForPlaylist(playlistId: Long): Flow<List<Track>> {
         return dao.getTracksForPlaylist(playlistId).map { entities ->
             entities.map { it.toTrack() }
-        }
+        }.flowOn(Dispatchers.Default)
     }
 
     override fun onCleared() {
@@ -1551,15 +1612,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         fun buildThemeConfigFromValues(
             glassStrength: String = "BALANCED",
-            themeMode: String = "SYSTEM",
+            themeMode: String = "OLED",
             accentSource: String = "ARTWORK",
             spacingDensity: String = "COMFORTABLE",
             cornerRoundness: String = "ROUNDED",
-            animatedBackdrop: Boolean = true,
+            animatedBackdrop: Boolean = false,
             blurRadiusDp: Float = 28.0f,
             tintAlpha: Float = 0.65f,
             borderAlpha: Float = 0.30f,
-            isOledBlack: Boolean = false,
+            isOledBlack: Boolean = true,
             useDynamicAccent: Boolean = true,
             fixedAccentColorArgb: Long = 0xFF6366F1,
             cornerRadiusDp: Float = 16.0f,
@@ -1574,7 +1635,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             edgeHighlightStrength: Float = 0.60f,
             isFullyTransparent: Boolean = false,
             keepTextReadable: Boolean = true,
-            backgroundAnimationStyle: String = "LIQUID_BLOBS",
+            backgroundAnimationStyle: String = "STATIC",
             backgroundAnimationSpeed: Float = 1.0f,
             backgroundAnimationIntensity: Float = 0.8f,
             backgroundColorSource: String = "ARTWORK",

@@ -110,6 +110,7 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             .build()
 
         libraryScanner = LibraryScanner(applicationContext)
+        com.nodeplayer.network.cache.HomeFeedDiskCache.defaultCacheDir = cacheDir.resolve("home_feeds")
 
         com.nodeplayer.ui.components.PlatformArtworkProvider.remoteImageFetcher = { url, maxSizePx ->
             val targetPx = maxSizePx.coerceIn(

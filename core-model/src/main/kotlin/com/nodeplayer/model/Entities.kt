@@ -30,7 +30,8 @@ data class Playlist(
     val source: String = "local", // "local", "youtube", "spotify"
     val externalId: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val thumbnailUrl: String? = null
 )
 
 data class QueueItem(

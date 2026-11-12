@@ -130,7 +130,7 @@ fun LiquidGlassBackground(
                     if (effectiveOled) {
                         val oledCenter = Offset(width * 0.5f, height * 0.75f)
                         val oledRadius = (width * 0.6f).coerceAtLeast(1f)
-                        val oledBrush = if (isPlaying && glassStrength != "OFF") {
+                        val oledBrush = if (style != "STATIC" && animatedBackdrop && isPlaying && glassStrength != "OFF") {
                             Brush.radialGradient(
                                 colors = listOf(
                                     primaryColor.copy(alpha = 0.09f * intensity),

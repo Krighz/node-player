@@ -23,8 +23,13 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -89,14 +94,18 @@ class InnerTubeClient(
 
         defaultRequest {
             url(YouTubeClient.API_URL_YOUTUBE_MUSIC)
-            header("User-Agent", clientContext.userAgent)
-            header("X-YouTube-Client-Name", clientContext.clientId)
-            header("X-YouTube-Client-Version", clientContext.clientVersion)
-            header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
-            header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
+            if (!headers.contains("User-Agent")) header("User-Agent", clientContext.userAgent)
+            if (!headers.contains("X-YouTube-Client-Name")) header("X-YouTube-Client-Name", clientContext.clientId)
+            if (!headers.contains("X-YouTube-Client-Version")) header("X-YouTube-Client-Version", clientContext.clientVersion)
+            if (!headers.contains("Origin")) header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+            if (!headers.contains("Referer")) header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
             contentType(ContentType.Application.Json)
 
-            sessionCookie?.let { cookie ->
+            val supportsSession = headers["X-YouTube-Client-Name"] in setOf(
+                YouTubeClient.WEB_REMIX.clientId, YouTubeClient.ANDROID_MUSIC.clientId,
+                YouTubeClient.IOS_MUSIC.clientId, YouTubeClient.TVHTML5_SIMPLY_EMBEDDED_PLAYER.clientId
+            )
+            sessionCookie?.takeIf { supportsSession }?.let { cookie ->
                 header(HttpHeaders.Cookie, cookie)
                 header("X-Goog-AuthUser", "0")
                 header("X-Origin", YouTubeAuth.ORIGIN_MUSIC)
@@ -164,10 +173,16 @@ class InnerTubeClient(
     internal fun parseBrowseSections(response: BrowseResponse): List<YouTubeSection> {
         val sections = mutableListOf<YouTubeSection>()
 
-        val sectionListContents = response.contents?.sectionListRenderer?.contents
-            ?: response.contents?.singleColumnBrowseResultsRenderer?.tabs?.firstOrNull()
-                ?.tabRenderer?.content?.sectionListRenderer?.contents
-            ?: emptyList()
+        val contents = response.contents
+        val sectionListContents = buildList {
+            addAll(contents?.sectionListRenderer?.contents.orEmpty())
+            val tabs = contents?.singleColumnBrowseResultsRenderer?.tabs
+                ?: contents?.twoColumnBrowseResultsRenderer?.tabs
+            val selected = tabs?.firstOrNull { it.tabRenderer?.selected == true } ?: tabs?.firstOrNull()
+            addAll(selected?.tabRenderer?.content?.sectionListRenderer?.contents.orEmpty())
+            addAll(contents?.twoColumnBrowseResultsRenderer?.secondaryContents?.sectionListRenderer?.contents.orEmpty())
+            addAll(response.continuationContents?.sectionListContinuation?.contents.orEmpty())
+        }
 
         for (content in sectionListContents) {
             val carousel = content.musicCarouselShelfRenderer
@@ -383,50 +398,16 @@ class InnerTubeClient(
         val playlists = mutableListOf<Playlist>()
         try {
             val root = json.parseToJsonElement(jsonText).jsonObject
-            val tabs = root["contents"]?.jsonObject?.get("singleColumnBrowseResultsRenderer")?.jsonObject?.get("tabs")?.jsonArray
-                ?: root["contents"]?.jsonObject?.get("tabs")?.jsonArray
-                ?: root["contents"]?.jsonObject?.get("twoColumnBrowseResultsRenderer")?.jsonObject?.get("secondaryContents")?.jsonObject?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
-
-            val sectionContents = if (tabs != null && tabs.firstOrNull()?.jsonObject?.containsKey("tabRenderer") == true) {
-                tabs.firstOrNull()?.jsonObject?.get("tabRenderer")?.jsonObject?.get("content")?.jsonObject
-                    ?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
-            } else if (tabs != null && tabs.firstOrNull()?.jsonObject?.containsKey("musicCarouselShelfRenderer") == true) {
-                tabs
-            } else {
-                root["contents"]?.jsonObject?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
-            }
-
-            sectionContents?.forEach { sectionElement ->
-                val sectionObj = sectionElement.jsonObject
-                val carousel = sectionObj["musicCarouselShelfRenderer"]?.jsonObject
-                val shelf = sectionObj["musicShelfRenderer"]?.jsonObject
-                    ?: sectionObj["musicPlaylistShelfRenderer"]?.jsonObject
-
-                val itemsArray = carousel?.get("contents")?.jsonArray
-                    ?: shelf?.get("contents")?.jsonArray
+            val sectionContents = renderers(root, setOf("musicCarouselShelfRenderer", "musicShelfRenderer", "musicPlaylistShelfRenderer", "gridRenderer"))
+            sectionContents.forEach { shelf ->
+                val itemsArray = (shelf["contents"] ?: shelf["items"]) as? JsonArray
 
                 itemsArray?.forEach { itemElem ->
                     val twoRow = itemElem.jsonObject["musicTwoRowItemRenderer"]?.jsonObject
                         ?: itemElem.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject
 
                     if (twoRow != null) {
-                        val navEndpoint = twoRow["navigationEndpoint"]?.jsonObject
-                        val browseEndpoint = navEndpoint?.get("browseEndpoint")?.jsonObject
-                        val browseId = browseEndpoint?.get("browseId")?.jsonPrimitive?.content
-                            ?: twoRow["thumbnailOverlay"]?.jsonObject
-                                ?.get("musicItemThumbnailOverlayRenderer")?.jsonObject
-                                ?.get("content")?.jsonObject
-                                ?.get("musicPlayButtonRenderer")?.jsonObject
-                                ?.get("playNavigationEndpoint")?.jsonObject
-                                ?.get("watchPlaylistEndpoint")?.jsonObject
-                                ?.get("playlistId")?.jsonPrimitive?.content
-                            ?: twoRow["thumbnailOverlay"]?.jsonObject
-                                ?.get("musicItemThumbnailOverlayRenderer")?.jsonObject
-                                ?.get("content")?.jsonObject
-                                ?.get("musicPlayButtonRenderer")?.jsonObject
-                                ?.get("playNavigationEndpoint")?.jsonObject
-                                ?.get("watchEndpoint")?.jsonObject
-                                ?.get("playlistId")?.jsonPrimitive?.content
+                        val browseId = playlistIdForRenderer(twoRow)
 
                         val title = twoRow["title"]?.jsonObject?.get("runs")?.jsonArray
                             ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
@@ -446,7 +427,10 @@ class InnerTubeClient(
                                     name = title,
                                     trackCount = trackCount,
                                     source = "youtube",
-                                    externalId = cleanId
+                                    externalId = cleanId,
+                                    thumbnailUrl = renderers(twoRow, setOf("thumbnail")).firstNotNullOfOrNull { thumb ->
+                                        (thumb["thumbnails"] as? JsonArray)?.lastOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.contentOrNull
+                                    }
                                 )
                             )
                         }
@@ -463,10 +447,20 @@ class InnerTubeClient(
      * Fetches a rich multi-shelf online home feed combining Quick Picks (from Home),
      * Trending / New Releases (from Explore), and Top Charts (Top 50 Worldwide & Regional).
      */
-    suspend fun getCombinedHomeFeed(): Result<List<YouTubeSection>> = runCatching {
-        val homeResult = getHomeRecommendations().getOrDefault(emptyList())
-        val exploreResult = getExploreSections().getOrDefault(emptyList())
-        val chartsResult = getChartsSections().getOrDefault(emptyList())
+    suspend fun getCombinedHomeFeed(
+        onHomeLoaded: suspend (List<YouTubeSection>) -> Unit = {}
+    ): Result<List<YouTubeSection>> = runCatching {
+        val (home, explore, charts) = coroutineScope {
+            val homeRequest = async { getHomeRecommendations() }
+            val exploreRequest = async { getExploreSections() }
+            val chartsRequest = async { getChartsSections() }
+            val home = homeRequest.await()
+            onHomeLoaded(home.getOrDefault(emptyList()))
+            Triple(home, exploreRequest.await(), chartsRequest.await())
+        }
+        val homeResult = home.getOrDefault(emptyList())
+        val exploreResult = explore.getOrDefault(emptyList())
+        val chartsResult = charts.getOrDefault(emptyList())
 
         val combined = mutableListOf<YouTubeSection>()
         combined.addAll(homeResult)
@@ -514,8 +508,18 @@ class InnerTubeClient(
             }
         }
 
+        // A new/restricted account can have no home shelves yet. Keep its library reachable.
+        if (combined.isEmpty() && !sessionCookie.isNullOrBlank()) {
+            val playlists = fetchUserPlaylists().getOrDefault(emptyList())
+            if (playlists.isNotEmpty()) {
+                combined.add(YouTubeSection(title = "Your playlists", items = emptyList(), playlists = playlists))
+            }
+        }
         if (combined.isEmpty()) {
-            throw IllegalStateException("No recommendation shelves available")
+            throw IllegalStateException(
+                "No recommendation shelves available",
+                home.exceptionOrNull() ?: explore.exceptionOrNull() ?: charts.exceptionOrNull()
+            )
         }
         NodeLog.i(TAG, "Loaded ${combined.size} combined online shelves")
         combined
@@ -647,7 +651,10 @@ class InnerTubeClient(
         client: YouTubeClient = clientContext,
     ): Result<PlayerResponse> = runCatching {
         NodeLog.d(TAG, "Fetching player response for videoId=$videoId (client=${client.clientName})")
-        val visitorData = getVisitorData()
+        val visitorData = kotlinx.coroutines.withTimeoutOrNull(3_000L) { getVisitorData() }
+        val signatureTimestamp = if (client.useSignatureTimestamp) {
+            com.nodeplayer.common.media.CipherSolver.current?.getSignatureTimestamp()
+        } else null
         withRetry {
             httpClient.post("player") {
                 header("User-Agent", client.userAgent)
@@ -656,7 +663,10 @@ class InnerTubeClient(
                 setBody(
                     PlayerBody(
                         context = client.toContext(locale, visitorData = visitorData),
-                        videoId = videoId
+                        videoId = videoId,
+                        playbackContext = signatureTimestamp?.let {
+                            PlayerBody.PlaybackContext(PlayerBody.PlaybackContext.ContentPlaybackContext(it))
+                        }
                     )
                 )
             }.body<PlayerResponse>()
@@ -1010,71 +1020,103 @@ class InnerTubeClient(
     }
 
     /**
-     * Fetches user's saved/owned playlists from YouTube Music (`FEmusic_library_playlists`).
+     * Fetches user's saved/owned playlists from YouTube Music (`FEmusic_liked_playlists`).
      * Requires an authenticated sessionCookie.
      */
     suspend fun fetchUserPlaylists(): Result<List<YouTubePlaylistSummary>> = runCatching {
-        val client = YouTubeClient.WEB_REMIX
-        val response = withRetry {
-            httpClient.post("browse") {
-                header("User-Agent", client.userAgent)
-                header("X-YouTube-Client-Name", client.clientId)
-                header("X-YouTube-Client-Version", client.clientVersion)
-                header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
-                header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
-                setBody(
-                    BrowseBody(
-                        context = client.toContext(locale),
-                        browseId = "FEmusic_library_playlists"
-                    )
-                )
-            }.bodyAsText()
-        }
-        parseUserPlaylists(response)
+        check(!sessionCookie.isNullOrBlank()) { "Sign in to sync YouTube playlists" }
+        fetchBrowsePages("FEmusic_liked_playlists")
+            .flatMap { parseUserPlaylists(it) }.distinctBy { it.id }
     }.onFailure { e ->
         NodeLog.e(TAG, "Failed to fetch user playlists", e)
+    }
+
+    /** Playlist cards can carry their browse endpoint in the title, not only at card level. */
+    private fun playlistIdForRenderer(item: JsonObject): String? =
+        renderers(item, setOf("browseEndpoint")).firstNotNullOfOrNull {
+            it["browseId"]?.jsonPrimitive?.contentOrNull?.takeIf { id ->
+                id.startsWith("VL") || id.startsWith("PL") || id.startsWith("RD") || id.startsWith("OLAK") || id == "LM" || id == "SE"
+            }
+        } ?: renderers(item, setOf("watchPlaylistEndpoint", "watchEndpoint", "playlistEditorEndpoint"))
+            .firstNotNullOfOrNull { it["playlistId"]?.jsonPrimitive?.contentOrNull }
+
+    private fun renderers(element: JsonElement, names: Set<String>): List<JsonObject> = buildList {
+        when (element) {
+            is JsonObject -> element.forEach { (name, value) ->
+                if (name in names && value is JsonObject) add(value)
+                else addAll(renderers(value, names))
+            }
+            is JsonArray -> element.forEach { addAll(renderers(it, names)) }
+            else -> Unit
+        }
+    }
+
+    /** Follow library/playlist pagination before committing a complete local snapshot. */
+    private suspend fun fetchBrowsePages(browseId: String): List<String> {
+        val client = YouTubeClient.WEB_REMIX
+        val pages = mutableListOf<String>()
+        val seen = mutableSetOf<String>()
+        var continuation: String? = null
+        var legacyContinuation = false
+        do {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
+            val next = continuation
+            val response = withRetry {
+                httpClient.post("browse") {
+                    header("User-Agent", client.userAgent)
+                    header("X-YouTube-Client-Name", client.clientId)
+                    header("X-YouTube-Client-Version", client.clientVersion)
+                    if (next != null && legacyContinuation) {
+                        url.parameters.append("ctoken", next)
+                        url.parameters.append("continuation", next)
+                    }
+                    setBody(BrowseBody(
+                        context = client.toContext(locale),
+                        browseId = if (next == null || legacyContinuation) browseId else null,
+                        continuation = if (legacyContinuation) null else next
+                    ))
+                }.bodyAsText()
+            }
+            val root = json.parseToJsonElement(response)
+            check(root is JsonObject && root["error"] == null) { "YouTube playlist request failed" }
+            pages.add(response)
+            val legacy = renderers(root, setOf("nextContinuationData", "reloadContinuationData"))
+                .firstNotNullOfOrNull { it["continuation"]?.jsonPrimitive?.contentOrNull }
+            legacyContinuation = legacy != null
+            continuation = legacy ?: renderers(root, setOf("continuationCommand"))
+                .firstNotNullOfOrNull { it["token"]?.jsonPrimitive?.contentOrNull }
+            if (continuation != null) {
+                check(seen.add(continuation) && pages.size < 100) { "YouTube playlist pagination did not finish" }
+            }
+        } while (continuation != null)
+        return pages
     }
 
     private fun parseUserPlaylists(jsonText: String): List<YouTubePlaylistSummary> {
         val list = mutableListOf<YouTubePlaylistSummary>()
         try {
             val root = json.parseToJsonElement(jsonText).jsonObject
-            val tabs = root["contents"]?.jsonObject
-                ?.get("singleColumnBrowseResultsRenderer")?.jsonObject
-                ?.get("tabs")?.jsonArray
-
-            val contents = tabs?.firstOrNull()?.jsonObject
-                ?.get("tabRenderer")?.jsonObject
-                ?.get("content")?.jsonObject
-                ?.get("sectionListRenderer")?.jsonObject
-                ?.get("contents")?.jsonArray
-                ?: root["contents"]?.jsonObject?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
-
-            contents?.forEach { sectionElement ->
-                val grid = sectionElement.jsonObject["gridRenderer"]?.jsonObject
-                val items = grid?.get("items")?.jsonArray
-                    ?: sectionElement.jsonObject["musicShelfRenderer"]?.jsonObject?.get("contents")?.jsonArray
-                    ?: sectionElement.jsonObject["musicCarouselShelfRenderer"]?.jsonObject?.get("contents")?.jsonArray
+            val contents = renderers(root, setOf(
+                "gridRenderer", "musicGridRenderer", "musicShelfRenderer", "musicCarouselShelfRenderer",
+                "gridContinuation", "musicShelfContinuation"
+            ))
+            val appendedItems = renderers(root, setOf("appendContinuationItemsAction"))
+            (contents + appendedItems).forEach { shelf ->
+                val items = (shelf["items"] ?: shelf["contents"] ?: shelf["continuationItems"]) as? JsonArray
 
                 items?.forEach { itemElement ->
                     val twoRow = itemElement.jsonObject["musicTwoRowItemRenderer"]?.jsonObject
                         ?: itemElement.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject
                     if (twoRow != null) {
-                        val navEndpoint = twoRow["navigationEndpoint"]?.jsonObject
-                        val browseEndpoint = navEndpoint?.get("browseEndpoint")?.jsonObject
-                        val playlistId = browseEndpoint?.get("browseId")?.jsonPrimitive?.content
-                            ?: twoRow["thumbnailOverlay"]?.jsonObject
-                                ?.get("musicItemThumbnailOverlayRenderer")?.jsonObject
-                                ?.get("content")?.jsonObject
-                                ?.get("musicPlayButtonRenderer")?.jsonObject
-                                ?.get("playNavigationEndpoint")?.jsonObject
-                                ?.get("watchEndpoint")?.jsonObject
-                                ?.get("playlistId")?.jsonPrimitive?.content
-
-                        if (!playlistId.isNullOrBlank()) {
+                        val playlistId = playlistIdForRenderer(twoRow)
+                        if (playlistId != null) {
                             val title = twoRow["title"]?.jsonObject?.get("runs")?.jsonArray
                                 ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
                                 ?: twoRow["title"]?.jsonObject?.get("simpleText")?.jsonPrimitive?.content
+                                ?: twoRow["flexColumns"]?.jsonArray?.firstOrNull()?.jsonObject
+                                    ?.get("musicResponsiveListItemFlexColumnRenderer")?.jsonObject
+                                    ?.get("text")?.jsonObject?.get("runs")?.jsonArray
+                                    ?.firstOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
                                 ?: "YouTube Playlist"
 
                             val subtitleRuns = twoRow["subtitle"]?.jsonObject?.get("runs")?.jsonArray
@@ -1114,23 +1156,7 @@ class InnerTubeClient(
      */
     suspend fun fetchPlaylistTracks(playlistId: String): Result<List<Track>> = runCatching {
         val cleanId = if (playlistId.startsWith("VL")) playlistId else "VL$playlistId"
-        val client = YouTubeClient.WEB_REMIX
-        val response = withRetry {
-            httpClient.post("browse") {
-                header("User-Agent", client.userAgent)
-                header("X-YouTube-Client-Name", client.clientId)
-                header("X-YouTube-Client-Version", client.clientVersion)
-                header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
-                header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
-                setBody(
-                    BrowseBody(
-                        context = client.toContext(locale),
-                        browseId = cleanId
-                    )
-                )
-            }.bodyAsText()
-        }
-        parsePlaylistTracks(response)
+        fetchBrowsePages(cleanId).flatMap { parsePlaylistTracks(it) }.distinctBy { it.path }
     }.onFailure { e ->
         NodeLog.e(TAG, "Failed to fetch playlist tracks for $playlistId", e)
     }
@@ -1140,44 +1166,19 @@ class InnerTubeClient(
         try {
             val root = json.parseToJsonElement(jsonText).jsonObject
 
-            // Support both twoColumnBrowseResultsRenderer (web remix playlists) and singleColumnBrowseResultsRenderer
-            val twoColSecondary = root["contents"]?.jsonObject
-                ?.get("twoColumnBrowseResultsRenderer")?.jsonObject
-                ?.get("secondaryContents")?.jsonObject
-                ?.get("sectionListRenderer")?.jsonObject
-                ?.get("contents")?.jsonArray
-
-            val twoColTabs = root["contents"]?.jsonObject
-                ?.get("twoColumnBrowseResultsRenderer")?.jsonObject
-                ?.get("tabs")?.jsonArray
-                ?.firstOrNull()?.jsonObject
-                ?.get("tabRenderer")?.jsonObject
-                ?.get("content")?.jsonObject
-                ?.get("sectionListRenderer")?.jsonObject
-                ?.get("contents")?.jsonArray
-
-            val singleColTabs = root["contents"]?.jsonObject
-                ?.get("singleColumnBrowseResultsRenderer")?.jsonObject
-                ?.get("tabs")?.jsonArray
-                ?.firstOrNull()?.jsonObject
-                ?.get("tabRenderer")?.jsonObject
-                ?.get("content")?.jsonObject
-                ?.get("sectionListRenderer")?.jsonObject
-                ?.get("contents")?.jsonArray
-
-            val contents = twoColSecondary
-                ?: twoColTabs
-                ?: singleColTabs
-                ?: root["contents"]?.jsonObject?.get("sectionListRenderer")?.jsonObject?.get("contents")?.jsonArray
-
-            contents?.forEach { sectionElement ->
-                val shelf = sectionElement.jsonObject["musicPlaylistShelfRenderer"]?.jsonObject
-                    ?: sectionElement.jsonObject["musicShelfRenderer"]?.jsonObject
-                val items = shelf?.get("contents")?.jsonArray
+            val contents = renderers(root, setOf(
+                "musicPlaylistShelfRenderer", "musicShelfRenderer",
+                "musicPlaylistShelfContinuation", "musicShelfContinuation", "appendContinuationItemsAction"
+            ))
+            check(contents.isNotEmpty()) { "YouTube returned an unsupported playlist layout" }
+            contents.forEach { shelf ->
+                val items = (shelf["contents"] ?: shelf["continuationItems"]) as? JsonArray
                 items?.forEach { itemElement ->
                     val responsiveItem = itemElement.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject
                     if (responsiveItem != null) {
-                        val videoId = responsiveItem["playlistItemData"]?.jsonObject?.get("videoId")?.jsonPrimitive?.content
+                        val videoId = responsiveItem["navigationEndpoint"]?.jsonObject
+                            ?.get("watchEndpoint")?.jsonObject?.get("videoId")?.jsonPrimitive?.content
+                            ?: responsiveItem["playlistItemData"]?.jsonObject?.get("videoId")?.jsonPrimitive?.content
                             ?: responsiveItem["menu"]?.jsonObject
                                 ?.get("menuRenderer")?.jsonObject
                                 ?.get("topLevelButtons")?.jsonArray
@@ -1236,6 +1237,7 @@ class InnerTubeClient(
             }
         } catch (e: Exception) {
             NodeLog.w(TAG, "Error parsing playlist tracks JSON: ${e.message}")
+            throw e
         }
         return tracks
     }

@@ -18,7 +18,8 @@ class StartupThemeConfigCharacterizationTest {
         assertEquals("ARTWORK", defaults.accentSource)
         assertEquals("COMFORTABLE", defaults.spacingDensity)
         assertEquals("ROUNDED", defaults.cornerRoundness)
-        assertTrue(defaults.animatedBackdrop)
+        assertFalse(defaults.animatedBackdrop)
+        assertEquals("STATIC", defaults.backgroundAnimationStyle)
         assertEquals(28.0f, defaults.blurRadiusDp, 0.001f)
         assertEquals(0.65f, defaults.tintAlpha, 0.001f)
         assertEquals(0.30f, defaults.borderAlpha, 0.001f)
@@ -43,8 +44,8 @@ class StartupThemeConfigCharacterizationTest {
         val fromPrefFallbacks = PlayerViewModel.buildThemeConfigFromValues()
         assertEquals(
             GlassThemeConfig(
-                themeMode = "SYSTEM",
-                isOledBlack = false,
+                themeMode = "OLED",
+                isOledBlack = true,
                 fixedAccentColorArgb = 0xFF6366F1,
                 animateOnlyWhilePlaying = true,
                 controlsGlassEnabled = true

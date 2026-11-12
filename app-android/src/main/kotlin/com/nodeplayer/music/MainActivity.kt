@@ -15,6 +15,8 @@ import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -196,12 +198,16 @@ class MainActivity : ComponentActivity() {
                 val sessionSec by viewModel.sessionListeningSeconds.collectAsState()
 
                 val rawPlaylists by viewModel.playlists.collectAsState()
+                val youTubeSyncing by viewModel.youTubePlaylistSyncing.collectAsState()
+                val youTubeSyncError by viewModel.youTubePlaylistSyncError.collectAsState()
                 val domainPlaylists = remember(rawPlaylists) {
                     rawPlaylists.map { it.toPlaylist() }
                 }
                 var selectedPlaylistForDetail by remember { mutableStateOf<com.nodeplayer.model.Playlist?>(null) }
                 var playlistDetailTracks by remember { mutableStateOf<List<com.nodeplayer.model.Track>>(emptyList()) }
                 var trackForAddToPlaylist by remember { mutableStateOf<com.nodeplayer.model.Track?>(null) }
+                var activeCategory by remember { mutableStateOf<Pair<com.nodeplayer.model.MoodGenre, List<com.nodeplayer.model.Playlist>>?>(null) }
+                var loadingCategoryPlaylistId by remember { mutableStateOf<String?>(null) }
                 var activePlaylistDetail by remember { mutableStateOf<Pair<com.nodeplayer.ui.screens.DetailMediaHeader, List<com.nodeplayer.model.Track>>?>(null) }
 
                 // Spotify Transfer State
@@ -221,7 +227,7 @@ class MainActivity : ComponentActivity() {
                 var spotifyMatchingJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
 
                 val isSubRoute = currentRoute in listOf("stats", "recap", "smart_playlists", "duplicate_finder", "widgets", "widget_settings", "playlist_detail", "settings", "equalizer", "optical_diagnostics")
-                BackHandler(enabled = isLyricsExpanded || isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null || activePlaylistDetail != null) {
+                BackHandler(enabled = isLyricsExpanded || isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null || activePlaylistDetail != null || activeCategory != null) {
                     if (isLyricsExpanded) {
                         // Collapse Lyrics back to NowPlaying (ARCH-03)
                         isLyricsExpanded = false
@@ -229,6 +235,8 @@ class MainActivity : ComponentActivity() {
                         isNowPlayingExpanded = false
                     } else if (activePlaylistDetail != null) {
                         activePlaylistDetail = null
+                    } else if (activeCategory != null) {
+                        activeCategory = null
                     } else if (selectedPlaylistForDetail != null) {
                         selectedPlaylistForDetail = null
                     } else if (isSubRoute) {
@@ -392,6 +400,19 @@ class MainActivity : ComponentActivity() {
                         // 2. Foreground Interactive UI (Cards use clean translucent glass; no recursive blur)
                         if (activePlaylistDetail != null) {
                             val (header, detailTracks) = activePlaylistDetail!!
+                            val playOrOpenTrack: (com.nodeplayer.model.Track, List<com.nodeplayer.model.Track>) -> Unit = { track, queue ->
+                                if (track.path.startsWith("nodeplayer://youtube/playlist/")) {
+                                    coroutineScope.launch {
+                                        val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+                                                .fetchPlaylistTracks(track.path.removePrefix("nodeplayer://youtube/playlist/"))
+                                        }
+                                        result.onSuccess { songs ->
+                                            activePlaylistDetail = header.copy(id = track.path, title = track.title) to songs
+                                        }.onFailure { safeToast("Couldn't open playlist. Please try again.", Toast.LENGTH_SHORT) }
+                                    }
+                                } else viewModel.playTrack(track, queue)
+                            }
                             com.nodeplayer.ui.screens.PlaylistDetailView(
                                 header = header,
                                 tracks = detailTracks,
@@ -399,12 +420,12 @@ class MainActivity : ComponentActivity() {
                                 isPlaying = isPlaying,
                                 isSavedInLibrary = false,
                                 onBack = { activePlaylistDetail = null },
-                                onPlayTrack = { tr, q -> viewModel.playTrack(tr, q) },
-                                onPlayAll = { q -> if (q.isNotEmpty()) viewModel.playTrack(q[0], q) },
+                                onPlayTrack = playOrOpenTrack,
+                                onPlayAll = { q -> if (q.isNotEmpty()) playOrOpenTrack(q[0], q) },
                                 onShuffleAll = { q ->
                                     if (q.isNotEmpty()) {
                                         val shuffled = q.shuffled()
-                                        viewModel.playTrack(shuffled[0], shuffled)
+                                        playOrOpenTrack(shuffled[0], shuffled)
                                     }
                                 },
                                 onToggleSaveLibrary = { h ->
@@ -412,6 +433,35 @@ class MainActivity : ComponentActivity() {
                                     safeToast("Saved ${detailTracks.size} tracks to library", Toast.LENGTH_SHORT)
                                 },
                                 onTrackOptionsClick = { trackForAddToPlaylist = it }
+                            )
+                        } else if (activeCategory != null) {
+                            val (category, playlists) = activeCategory!!
+                            com.nodeplayer.ui.screens.CategoryPlaylistsView(
+                                title = category.title,
+                                playlists = playlists,
+                                onBack = { activeCategory = null },
+                                loadingPlaylistId = loadingCategoryPlaylistId,
+                                onOpenPlaylist = { playlist ->
+                                    val playlistId = playlist.externalId
+                                    if (playlistId != null && loadingCategoryPlaylistId == null) {
+                                        loadingCategoryPlaylistId = playlistId
+                                        coroutineScope.launch {
+                                            try {
+                                                val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                    com.nodeplayer.network.innertube.SharedInnerTubeProvider.get().fetchPlaylistTracks(playlistId)
+                                                }
+                                                if (activeCategory?.first == category) {
+                                                    result.onSuccess { songs ->
+                                                        activePlaylistDetail = com.nodeplayer.ui.screens.DetailMediaHeader(
+                                                            id = playlistId, title = playlist.name,
+                                                            subtitle = category.title, artworkUrl = playlist.thumbnailUrl
+                                                        ) to songs
+                                                    }.onFailure { safeToast("Couldn't open playlist. Please try again.", Toast.LENGTH_SHORT) }
+                                                }
+                                            } finally { loadingCategoryPlaylistId = null }
+                                        }
+                                    }
+                                }
                             )
                         } else when (currentRoute) {
                             "home", "new", "explore" -> com.nodeplayer.music.ui.screens.HomeScreen(
@@ -433,6 +483,7 @@ class MainActivity : ComponentActivity() {
                                 onOpenSettings = { currentRoute = "settings" },
                                 onOpenOfflineMusic = { com.nodeplayer.common.AppModeState.setOnlineMode(false) },
                                 onSignInClick = { showYouTubeLoginSheet = true },
+                                onOpenCategory = { category, playlists -> activeCategory = category to playlists },
                                 onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
                                     activePlaylistDetail = com.nodeplayer.ui.screens.DetailMediaHeader(
                                         id = title,
@@ -457,6 +508,7 @@ class MainActivity : ComponentActivity() {
                                 },
                             )
                             "library" -> {
+                                LaunchedEffect(Unit) { viewModel.syncYouTubePlaylists() }
                                 if (selectedPlaylistForDetail != null) {
                                     val pl = selectedPlaylistForDetail!!
                                     val header = remember(pl.id, pl.name, pl.source, playlistDetailTracks) {
@@ -499,6 +551,7 @@ class MainActivity : ComponentActivity() {
                                         onRescanClick = {
                                             checkAndRequestPermissions()
                                             viewModel.refreshLibrary()
+                                            viewModel.syncYouTubePlaylists(force = true)
                                         },
                                         onPlayNext = { viewModel.playNext(it) },
                                         onAddToQueue = { viewModel.addToQueue(it) },
@@ -507,6 +560,13 @@ class MainActivity : ComponentActivity() {
                                         onAnalyzeTrack = { viewModel.analyzeTrack(it) },
                                         analyzingTrackId = analyzingTrackId,
                                         playlists = domainPlaylists,
+                                        youTubeSyncing = youTubeSyncing,
+                                        youTubeSyncError = youTubeSyncError,
+                                        onImportYouTubePlaylists = {
+                                            if (com.nodeplayer.music.auth.YouTubeAccountManager.isLoggedIn()) {
+                                                viewModel.syncYouTubePlaylists(force = true)
+                                            } else showYouTubeLoginSheet = true
+                                        },
                                         onOpenPlaylist = { selectedPlaylistForDetail = it },
                                         onCreatePlaylist = { name -> viewModel.createPlaylist(name) },
                                         onImportSpotifyPlaylists = {
@@ -642,18 +702,19 @@ class MainActivity : ComponentActivity() {
                         val activeTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
                         MainBottomDockOverlay(
                             activeTrack = activeTrack,
+                            isNowPlayingExpanded = isNowPlayingExpanded,
                             isPlaying = isPlaying,
                             themeConfig = effectiveThemeConfig,
                             shaderActive = effectiveThemeConfig.isShaderActive(selfTestResult.passed),
                             dockScrollController = dockScrollController,
-                            hasActivePlaylistDetail = activePlaylistDetail != null,
+                            hasActivePlaylistDetail = activePlaylistDetail != null || activeCategory != null,
                             currentRoute = currentRoute,
                             accentColor = accentColor,
                             pageBackdrop = pageBackdrop,
                             positionProvider = { currentPositionState.value },
                             rmsProvider = { currentRmsState.value },
                             onRouteChange = { currentRoute = it },
-                            onClearPlaylistDetail = { activePlaylistDetail = null },
+                            onClearPlaylistDetail = { if (activePlaylistDetail != null) activePlaylistDetail = null else activeCategory = null },
                             onOpenSearch = { showSearchSheet = true },
                             onExpandNowPlaying = { isNowPlayingExpanded = true },
                             onPlayPause = { viewModel.togglePlayPause() },
@@ -664,10 +725,11 @@ class MainActivity : ComponentActivity() {
 
                     // 4. Full Now Playing Screen (State 1: Full-bleed edge-to-edge)
                     val activeNowPlayingTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
+                    val playerMotionEnabled = themeConfig.motionLevel != com.nodeplayer.model.MotionLevel.OFF && themeConfig.animationPreset != "OFF"
                     AnimatedVisibility(
                         visible = isNowPlayingExpanded && activeNowPlayingTrack != null,
-                        enter = slideInVertically(initialOffsetY = { it }),
-                        exit = slideOutVertically(targetOffsetY = { it })
+                        enter = slideInVertically(tween(if (playerMotionEnabled) 320 else 0, easing = FastOutSlowInEasing), initialOffsetY = { it }) + fadeIn(tween(if (playerMotionEnabled) 180 else 0)),
+                        exit = slideOutVertically(tween(if (playerMotionEnabled) 280 else 0, easing = FastOutSlowInEasing), targetOffsetY = { it }) + fadeOut(tween(if (playerMotionEnabled) 240 else 0))
                     ) {
                         activeNowPlayingTrack?.let { track ->
                             var showAndroidPlaybackOptions by remember { mutableStateOf(false) }
@@ -1463,6 +1525,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun BoxScope.MainBottomDockOverlay(
     activeTrack: com.nodeplayer.model.Track?,
+    isNowPlayingExpanded: Boolean,
     isPlaying: Boolean,
     themeConfig: com.nodeplayer.model.GlassThemeConfig,
     shaderActive: Boolean,
@@ -1481,6 +1544,11 @@ private fun BoxScope.MainBottomDockOverlay(
     onSkipNext: () -> Unit,
     onSkipPrevious: () -> Unit
 ) {
+    val motionEnabled = themeConfig.motionLevel != com.nodeplayer.model.MotionLevel.OFF && themeConfig.animationPreset != "OFF"
+    val expansion = animateFloatAsState(
+        targetValue = if (isNowPlayingExpanded) 1f else 0f,
+        animationSpec = tween(if (motionEnabled) 280 else 0, easing = FastOutSlowInEasing), label = "dockPlayerTransition"
+    )
     val dockScrollFractionState = dockScrollController.offsetFraction.collectAsState()
     val isCollapsedDock by remember(themeConfig.dockAutoHideEnabled, activeTrack, hasActivePlaylistDetail) {
         derivedStateOf {
@@ -1494,6 +1562,12 @@ private fun BoxScope.MainBottomDockOverlay(
             .align(Alignment.BottomCenter)
             .fillMaxWidth()
             .navigationBarsPadding()
+            .graphicsLayer {
+                alpha = 1f - expansion.value
+                translationY = 32.dp.toPx() * expansion.value
+                scaleX = 1f - 0.04f * expansion.value
+                scaleY = scaleX
+            }
     ) {
         val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
         val effectiveDuration = if (srvDur > 0L) srvDur else (activeTrack?.durationMs ?: 0L)

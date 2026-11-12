@@ -56,7 +56,8 @@ data class HomeFeedCachePayload(
  */
 class HomeFeedDiskCache(
     private val cacheDir: File? = null,
-    private val cacheKey: String? = null
+    private val cacheKey: String? = null,
+    private val loadOnInit: Boolean = true
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -72,7 +73,7 @@ class HomeFeedDiskCache(
 
     private val cacheFile: File? by lazy {
         try {
-            val baseDir = cacheDir ?: File(System.getProperty("user.home"), ".nodeplayer/cache")
+            val baseDir = cacheDir ?: defaultCacheDir ?: File(System.getProperty("user.home"), ".nodeplayer/cache")
             if (!baseDir.exists()) baseDir.mkdirs()
             val filename = if (cacheKey == null) "home_feed_cache.json" else {
                 val digest = MessageDigest.getInstance("SHA-256").digest(cacheKey.toByteArray(Charsets.UTF_8))
@@ -86,7 +87,7 @@ class HomeFeedDiskCache(
     }
 
     init {
-        loadFromDisk()
+        if (loadOnInit) loadFromDisk()
     }
 
     fun getTimestamp(): Long = cachedTimestamp
@@ -164,6 +165,16 @@ class HomeFeedDiskCache(
 
     companion object {
         private const val TAG = "nodeplayer/home_cache"
+        @Volatile var defaultCacheDir: File? = null
+        private val sharedCaches = object : LinkedHashMap<String, HomeFeedDiskCache>(8, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, HomeFeedDiskCache>?): Boolean = size > 6
+        }
+
+        /** Creation does no disk I/O; callers load on an IO dispatcher. */
+        @Synchronized
+        fun shared(key: String): HomeFeedDiskCache = sharedCaches.getOrPut(key) {
+            HomeFeedDiskCache(cacheKey = key, loadOnInit = false)
+        }
 
         fun Track.toDto(): CachedTrackDto = CachedTrackDto(
             id = id,

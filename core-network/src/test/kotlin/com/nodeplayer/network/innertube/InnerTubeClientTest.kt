@@ -14,6 +14,28 @@ import org.junit.Test
 class InnerTubeClientTest {
 
     @Test
+    fun signedInTwoColumnFeedAndSelectedTabAreParsed() {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val response = json.decodeFromString<BrowseResponse>("""{
+          "contents":{"twoColumnBrowseResultsRenderer":{"tabs":[
+            {"tabRenderer":{"content":{"sectionListRenderer":{"contents":[]}}}},
+            {"tabRenderer":{"selected":true,"content":{"sectionListRenderer":{"contents":[
+              {"musicCarouselShelfRenderer":{"header":{"musicCarouselShelfBasicHeaderRenderer":{"title":{"simpleText":"For you"}}},"contents":[
+                {"musicTwoRowItemRenderer":{"title":{"simpleText":"Song"},"navigationEndpoint":{"watchEndpoint":{"videoId":"song-id"}}}},
+                {"musicTwoRowItemRenderer":{"title":{"simpleText":"Your mix"},"navigationEndpoint":{"browseEndpoint":{"browseId":"VLRDmix"}}}}
+              ]}}
+            ]}}}}
+          ]}}}
+        """)
+        InnerTubeClient().use { client ->
+            val section = client.parseBrowseSections(response).single()
+            assertEquals("For you", section.title)
+            assertEquals("Song", section.items.single().title)
+            assertEquals("RDmix", section.playlists.single().id)
+        }
+    }
+
+    @Test
     fun testGetHomeRecommendationsMapping() = runTest {
         val mockEngine = MockEngine { request ->
             assertEquals("https://music.youtube.com/youtubei/v1/browse", request.url.toString())
@@ -81,6 +103,12 @@ class InnerTubeClientTest {
     fun homeRequestsUseCurrentSessionAndKeepPlaylistCards() = runTest {
         val cookies = mutableListOf<String?>()
         val engine = MockEngine { request ->
+            assertEquals(listOf("https://music.youtube.com"), request.headers.getAll("Origin"))
+            assertEquals(listOf("https://music.youtube.com/"), request.headers.getAll("Referer"))
+            assertEquals("music.youtube.com", request.url.host)
+            assertEquals(listOf(YouTubeClient.WEB_REMIX.clientId), request.headers.getAll("X-YouTube-Client-Name"))
+            assertEquals(listOf(YouTubeClient.WEB_REMIX.clientVersion), request.headers.getAll("X-YouTube-Client-Version"))
+            assertEquals(listOf(YouTubeClient.WEB_REMIX.userAgent), request.headers.getAll("User-Agent"))
             cookies.add(request.headers[HttpHeaders.Cookie])
             if (cookies.size == 2) assertTrue(request.headers[HttpHeaders.Authorization]?.startsWith("SAPISIDHASH ") == true)
             respond(
