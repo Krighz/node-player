@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
  *   The home view surfaces curated online recommendations and online search queries InnerTube.
  */
 object AppModeState {
-    private val _isOnlineMode = MutableStateFlow(false)
+    private val _isOnlineMode = MutableStateFlow(true)
     val isOnlineMode: StateFlow<Boolean> = _isOnlineMode.asStateFlow()
 
     fun setOnlineMode(enabled: Boolean) {

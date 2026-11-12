@@ -35,6 +35,9 @@ import com.nodeplayer.music.diagnostics.ShaderSelfTestResult
 import com.nodeplayer.music.service.PlaybackService
 import com.nodeplayer.music.ui.theme.DefaultAccent
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -47,7 +50,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val app = application as NodePlayerApplication
     private val dao = app.database.playerDao()
     private val scanner = app.libraryScanner
-    private val prefs: SharedPreferences = app.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences by lazy {
+        app.getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+    }
 
     private var controllerFuture: ListenableFuture<MediaController>? = null
     var mediaController: MediaController? = null
@@ -55,15 +60,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     // State flows
     val allTracks = dao.getAllTracks().map { list -> list.map { it.toTrack() } }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val albums = allTracks.map { scanner.extractAlbums(it) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val artists = allTracks.map { scanner.extractArtists(it) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val folders = allTracks.map { scanner.extractFolders(it) }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     val allScannedFolders = dao.getAllScannedFolders()
@@ -72,6 +81,48 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     val playlists = dao.getAllPlaylists()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    private val _youTubePlaylistSyncing = MutableStateFlow(false)
+    val youTubePlaylistSyncing = _youTubePlaylistSyncing.asStateFlow()
+    private val _youTubePlaylistSyncError = MutableStateFlow<String?>(null)
+    val youTubePlaylistSyncError = _youTubePlaylistSyncError.asStateFlow()
+    private var libraryRefreshJob: Job? = null
+    private var playlistSyncJob: Job? = null
+    private var lastPlaylistSyncTime = 0L
+    private var lastPlaylistSyncAccount: String? = null
+
+    fun syncYouTubePlaylists(force: Boolean = false) {
+        val account = (com.nodeplayer.music.auth.YouTubeAccountManager.authState.value as? AuthState.LoggedIn)?.account
+            ?: return
+        if (!com.nodeplayer.common.AppModeState.isOnlineMode.value || playlistSyncJob?.isActive == true) return
+        if (!force && lastPlaylistSyncAccount == account.id && System.currentTimeMillis() - lastPlaylistSyncTime < 300_000L) return
+        playlistSyncJob = viewModelScope.launch(Dispatchers.IO) {
+            _youTubePlaylistSyncing.value = true
+            _youTubePlaylistSyncError.value = null
+            try {
+                val client = com.nodeplayer.music.auth.YouTubeAccountManager.innerTubeClient ?: return@launch
+                val importer = com.nodeplayer.music.library.YouTubePlaylistImporter(app.database, client)
+                val summaries = client.fetchUserPlaylists().getOrThrow()
+                var failures = 0
+                for (summary in summaries) {
+                    ensureActive()
+                    importer.importPlaylist(summary).onFailure {
+                        if (it is CancellationException) throw it
+                        failures++
+                    }
+                }
+                if (failures > 0) error("Couldn't sync $failures playlists. Tap Sync YouTube to retry.")
+                lastPlaylistSyncAccount = account.id
+                lastPlaylistSyncTime = System.currentTimeMillis()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _youTubePlaylistSyncError.value = error.message ?: "Couldn't sync YouTube playlists"
+            } finally {
+                _youTubePlaylistSyncing.value = false
+            }
+        }
+    }
 
     private val _selectedFolder = MutableStateFlow<MusicFolder?>(null)
     val selectedFolder: StateFlow<MusicFolder?> = _selectedFolder.asStateFlow()
@@ -156,6 +207,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val sessionListeningSeconds = MutableStateFlow(0L)
     private var pauseStartTimestamp = 0L
     private var lastSessionTickMs = System.currentTimeMillis()
+    private var lastPrefsSaveMs = 0L
 
     // Resume on Headset Connect
     private val _resumeOnHeadsetConnect = MutableStateFlow(true)
@@ -169,27 +221,50 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _activePresetLabel = MutableStateFlow<String?>(null)
     val activePresetLabel: StateFlow<String?> = _activePresetLabel.asStateFlow()
 
-    // Graphics Self-Test Result & Fallback State
-    private val _shaderSelfTestResult = MutableStateFlow(GlassShaderSelfTest.getLastResult(app))
+    // Graphics Self-Test Result & Fallback State (hydrated asynchronously in init)
+    private val _shaderSelfTestResult = MutableStateFlow(ShaderSelfTestResult(passed = true, reason = "Not executed yet"))
     val shaderSelfTestResult: StateFlow<ShaderSelfTestResult> = _shaderSelfTestResult.asStateFlow()
 
     private var audioDeviceCallback: AudioDeviceCallback? = null
 
     private var progressJob: Job? = null
+    private val seekPersistDebouncer = TrailingSeekDebouncer(
+        scope = viewModelScope,
+        dispatcher = Dispatchers.IO,
+        delayMs = 300L
+    ) { positionMs ->
+        _currentTrack.value?.let { track ->
+            prefs.edit().putLong("last_pos", positionMs).putLong("last_track_id", track.id).apply()
+        }
+        com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
+    }
 
     init {
-        val audioParserVersion = prefs.getInt("audio_parser_version", 0)
-        if (audioParserVersion < 2) {
-            prefs.edit().putInt("audio_parser_version", 2).apply()
+        viewModelScope.launch(Dispatchers.IO) {
+            val audioParserVersion = prefs.getInt("audio_parser_version", 0)
+            if (audioParserVersion < 2) {
+                prefs.edit().putInt("audio_parser_version", 2).apply()
+            }
+            GraphicsEventTracker.init(app)
+            loadFilterPreferences()
+            detectAudioOutput()
+            refreshLibrary()
         }
-        GraphicsEventTracker.init(app)
         runGraphicsSelfTest()
-        loadFilterPreferences()
         initMediaController()
-        refreshLibrary()
         registerAudioDeviceCallback()
-        detectAudioOutput()
         restoreLastPlaybackSession()
+
+        viewModelScope.launch {
+            combine(
+                com.nodeplayer.music.auth.YouTubeAccountManager.authState,
+                com.nodeplayer.common.AppModeState.isOnlineMode
+            ) { auth, online -> (auth as? AuthState.LoggedIn)?.account?.id to online }
+                .distinctUntilChanged().collect {
+                    playlistSyncJob?.cancelAndJoin()
+                    if (it.first != null && it.second) syncYouTubePlaylists()
+                }
+        }
 
         // Sync and observe AppModeState with persistent settings
         viewModelScope.launch {
@@ -205,9 +280,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             _shaderSelfTestResult.value = result
             if (!result.passed) {
                 // Refresh theme config so safe fallback is applied
-                withContext(Dispatchers.Main) {
-                    _themeConfig.value = loadThemeConfig()
-                }
+                _themeConfig.value = loadThemeConfig()
             }
         }
     }
@@ -217,13 +290,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             GlassShaderSelfTest.setForceFail(app, forceFail)
             val updated = GlassShaderSelfTest.getLastResult(app)
             _shaderSelfTestResult.value = updated
-            withContext(Dispatchers.Main) {
-                _themeConfig.value = loadThemeConfig()
-            }
+            _themeConfig.value = loadThemeConfig()
         }
     }
 
-    private fun loadFilterPreferences() {
+    private suspend fun loadFilterPreferences() {
         val whitelistStrings = prefs.getStringSet("whitelisted_track_ids", emptySet()) ?: emptySet()
         _whitelistedTrackIds.value = whitelistStrings.mapNotNull { it.toLongOrNull() }.toSet()
         val custom = prefs.getStringSet("custom_folders", emptySet()) ?: emptySet()
@@ -248,7 +319,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val sysEq = prefs.getBoolean("system_eq_enabled", false)
         _systemEqEnabled.value = sysEq
         if (sysEq) {
-            com.nodeplayer.music.service.SystemWideEqService.start(getApplication(), _effectConfig.value)
+            withContext(Dispatchers.Main) {
+                com.nodeplayer.music.service.SystemWideEqService.start(getApplication(), _effectConfig.value)
+            }
         }
 
         _resumeOnHeadsetConnect.value = prefs.getBoolean("resume_on_headset_connect", true)
@@ -259,23 +332,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun loadThemeConfig(): GlassThemeConfig {
         val selfTestPassed = GlassShaderSelfTest.getLastResult(app).passed
-        val refractionEnabled = prefs.getBoolean("refraction_shader_enabled", true) && selfTestPassed
-        return GlassThemeConfig(
+        return buildThemeConfigFromValues(
             glassStrength = prefs.getString("glass_strength", "BALANCED") ?: "BALANCED",
-            themeMode = prefs.getString("theme_mode", "SYSTEM") ?: "SYSTEM",
+            themeMode = prefs.getString("theme_mode", "OLED") ?: "OLED",
             accentSource = prefs.getString("accent_source", "ARTWORK") ?: "ARTWORK",
             spacingDensity = prefs.getString("spacing_density", "COMFORTABLE") ?: "COMFORTABLE",
             cornerRoundness = prefs.getString("corner_roundness", "ROUNDED") ?: "ROUNDED",
-            animatedBackdrop = prefs.getBoolean("animated_backdrop", true),
+            animatedBackdrop = prefs.getBoolean("animated_backdrop", false),
             blurRadiusDp = prefs.getFloat("glass_blur_radius", 28.0f),
             tintAlpha = prefs.getFloat("glass_tint_alpha", 0.65f),
             borderAlpha = prefs.getFloat("glass_border_alpha", 0.30f),
-            isOledBlack = prefs.getBoolean("is_oled_black", false),
+            isOledBlack = prefs.getBoolean("is_oled_black", true),
             useDynamicAccent = prefs.getBoolean("use_dynamic_accent", true),
             fixedAccentColorArgb = prefs.getLong("fixed_accent_color", 0xFF6366F1),
             cornerRadiusDp = prefs.getFloat("corner_radius_dp", 16.0f),
             isPerformanceMode = prefs.getBoolean("is_performance_mode", false),
-            refractionShaderEnabled = refractionEnabled,
+            refractionShaderEnabledPref = prefs.getBoolean("refraction_shader_enabled", true),
+            selfTestPassed = selfTestPassed,
             hapticsEnabled = prefs.getBoolean("haptics_enabled", true),
             shaderMode = prefs.getString("glass_shader_mode", "AUTO") ?: "AUTO",
             glassOpacity = prefs.getFloat("glass_opacity", 0.65f),
@@ -284,11 +357,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             edgeHighlightStrength = prefs.getFloat("glass_edge_highlight_strength", 0.60f),
             isFullyTransparent = prefs.getBoolean("glass_fully_transparent", false),
             keepTextReadable = prefs.getBoolean("glass_keep_text_readable", true),
-            backgroundAnimationStyle = prefs.getString("background_animation_style", "LIQUID_BLOBS") ?: "LIQUID_BLOBS",
+            backgroundAnimationStyle = prefs.getString("background_animation_style", "STATIC") ?: "STATIC",
             backgroundAnimationSpeed = prefs.getFloat("background_animation_speed", 1.0f),
             backgroundAnimationIntensity = prefs.getFloat("background_animation_intensity", 0.8f),
             backgroundColorSource = prefs.getString("background_color_source", "ARTWORK") ?: "ARTWORK",
-            animateOnlyWhilePlaying = prefs.getBoolean("animate_only_while_playing", false),
+            animateOnlyWhilePlaying = prefs.getBoolean("animate_only_while_playing", true),
             frameRateCap = prefs.getString("frame_rate_cap", "AUTO") ?: "AUTO",
             renderQuality = prefs.getString("render_quality", "MAX_NATIVE") ?: "MAX_NATIVE",
             antiBandingDithering = prefs.getBoolean("anti_banding_dithering", true),
@@ -311,7 +384,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             reduceMotion = prefs.getBoolean("reduce_motion", false),
             dockGlassLensEnabled = prefs.getBoolean("dock_glass_lens_enabled", true),
             dockGlassRimEnabled = prefs.getBoolean("dock_glass_rim_enabled", true),
-            dockGlassPuckEnabled = prefs.getBoolean("dock_glass_puck_enabled", true)
+            dockGlassPuckEnabled = prefs.getBoolean("dock_glass_puck_enabled", true),
+            dockAutoHideEnabled = prefs.getBoolean("dock_auto_hide_enabled", true),
+            dockAutoHideMiniPlayer = prefs.getBoolean("dock_auto_hide_mini_player", true),
+            dockScrollSensitivity = prefs.getFloat("dock_scroll_sensitivity", 1.0f),
+            dockReturnDelayMs = prefs.getLong("dock_return_delay_ms", 1200L),
+            lyricsFontSizeSp = prefs.getFloat("lyrics_font_size_sp", 28.0f),
+            lyricsAutoHideDelaySec = prefs.getInt("lyrics_auto_hide_delay_sec", 5),
+            controlsGlassEnabled = prefs.getBoolean("controls_glass_enabled", true)
         )
     }
 
@@ -320,10 +400,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val audioManager = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
             audioDeviceCallback = object : AudioDeviceCallback() {
                 override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
-                    detectAudioOutput()
+                    viewModelScope.launch(Dispatchers.IO) { detectAudioOutput() }
                 }
                 override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) {
-                    detectAudioOutput()
+                    viewModelScope.launch(Dispatchers.IO) { detectAudioOutput() }
                 }
             }
             audioManager.registerAudioDeviceCallback(audioDeviceCallback, null)
@@ -463,13 +543,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         })
     }
 
+    @Synchronized
     fun refreshLibrary(
         includedFolders: Set<String> = _customFolders.value,
         excludedFolders: Set<String> = _excludedFolders.value,
         minDurationSec: Int = _minDurationSeconds.value,
         whitelistedIds: Set<Long> = _whitelistedTrackIds.value
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
+        libraryRefreshJob?.cancel()
+        libraryRefreshJob = viewModelScope.launch(Dispatchers.IO) {
             val minMs = minDurationSec * 1000L
             val scannedTracks = scanner.scanAllTracks(
                 minDurationMs = minMs,
@@ -617,7 +699,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     } else {
                         ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it.id)
                     }
-                    val artworkUri = if (it.path.startsWith("nodeplayer://")) {
+                    val artworkUri = if (it.path.startsWith("nodeplayer://youtube/")) {
+                        Uri.parse("https://i.ytimg.com/vi/${it.path.removePrefix("nodeplayer://youtube/")}/hqdefault.jpg")
+                    } else if (it.path.startsWith("nodeplayer://")) {
                         Uri.parse(it.path)
                     } else {
                         ContentUris.withAppendedId(albumArtBaseUri, it.albumId)
@@ -736,7 +820,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.setShuffle(newShuffle)
-            _queue.value = service.crossfadeManager.currentQueue
+            _queue.value = service.crossfadeManager.currentQueue.toList()
             _currentTrack.value?.let { com.nodeplayer.music.widget.WidgetUpdateManager.saveLastKnownTrack(getApplication(), it) }
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
         }
@@ -746,7 +830,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.playNext(track)
-            _queue.value = service.crossfadeManager.currentQueue
+            _queue.value = service.crossfadeManager.currentQueue.toList()
         } else {
             val q = _queue.value.toMutableList()
             val cur = _currentTrack.value
@@ -756,7 +840,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             } else {
                 q.add(track)
             }
-            _queue.value = q
+            _queue.value = q.toList()
         }
     }
 
@@ -764,11 +848,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.addToQueue(track)
-            _queue.value = service.crossfadeManager.currentQueue
+            _queue.value = service.crossfadeManager.currentQueue.toList()
         } else {
             val q = _queue.value.toMutableList()
             q.add(track)
-            _queue.value = q
+            _queue.value = q.toList()
         }
     }
 
@@ -776,13 +860,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.removeFromQueue(index)
-            _queue.value = service.crossfadeManager.currentQueue
+            _queue.value = service.crossfadeManager.currentQueue.toList()
             _currentTrack.value = service.crossfadeManager.currentPlayingTrack
         } else {
             val q = _queue.value.toMutableList()
             if (index in q.indices) {
                 q.removeAt(index)
-                _queue.value = q
+                _queue.value = q.toList()
             }
         }
     }
@@ -791,13 +875,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.moveQueueItem(fromIndex, toIndex)
-            _queue.value = service.crossfadeManager.currentQueue
+            _queue.value = service.crossfadeManager.currentQueue.toList()
         } else {
             val q = _queue.value.toMutableList()
             if (fromIndex in q.indices && toIndex in q.indices && fromIndex != toIndex) {
                 val item = q.removeAt(fromIndex)
                 q.add(toIndex, item)
-                _queue.value = q
+                _queue.value = q.toList()
             }
         }
     }
@@ -859,10 +943,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             mediaController?.seekTo(positionMs)
         }
-        _currentTrack.value?.let {
-            prefs.edit().putLong("last_pos", positionMs).putLong("last_track_id", it.id).apply()
-        }
-        com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
+        seekPersistDebouncer.schedule(positionMs)
     }
 
     private fun startPositionTracking() {
@@ -873,13 +954,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val pos = service?.player?.currentPosition ?: mediaController?.currentPosition ?: 0L
                 val dur = service?.player?.duration ?: mediaController?.duration ?: 0L
                 val playing = service?.player?.isPlaying ?: mediaController?.isPlaying ?: false
-                _isPlaying.value = playing
-                _currentPositionMs.value = pos
+                if (_isPlaying.value != playing) {
+                    _isPlaying.value = playing
+                }
+                if (_currentPositionMs.value != pos) {
+                    _currentPositionMs.value = pos
+                }
                 _currentTrack.value?.let { track ->
-                    if (dur > 0L && track.durationMs != dur) {
+                    if (shouldUpdateTrackDuration(track.durationMs, dur)) {
                         _currentTrack.value = track.copy(durationMs = dur)
                     }
-                    prefs.edit().putLong("last_pos", pos).putLong("last_track_id", track.id).apply()
+                    val now = System.currentTimeMillis()
+                    if (now - lastPrefsSaveMs >= 5000L || !playing) {
+                        lastPrefsSaveMs = now
+                        viewModelScope.launch(Dispatchers.IO) {
+                            prefs.edit().putLong("last_pos", pos).putLong("last_track_id", track.id).apply()
+                        }
+                    }
                 }
 
                 if (playing) {
@@ -900,9 +991,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     lastSessionTickMs = System.currentTimeMillis()
                 }
 
-                // Read real RMS audio level from DSP engine
-                _currentRms.value = service?.dspAudioProcessor?.currentRms ?: 0.0f
-                _convolverCpuPercent.value = service?.crossfadeManager?.activeDspChain?.convolver?.lastCpuUsagePercent ?: 0.0f
+                // Read real RMS audio level from DSP engine (suppress noise below threshold)
+                val nextRms = if (playing) (service?.dspAudioProcessor?.currentRms ?: 0.0f) else 0.0f
+                if (shouldEmitFloatDelta(_currentRms.value, nextRms, epsilon = 0.002f)) {
+                    _currentRms.value = nextRms
+                }
+                val nextCpu = service?.crossfadeManager?.activeDspChain?.convolver?.lastCpuUsagePercent ?: 0.0f
+                if (shouldEmitFloatDelta(_convolverCpuPercent.value, nextCpu, epsilon = 0.1f)) {
+                    _convolverCpuPercent.value = nextCpu
+                }
                 delay(120)
             }
         }
@@ -917,14 +1014,32 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val albumArtUri = Uri.parse("content://media/external/audio/albumart")
                 val artUri = ContentUris.withAppendedId(albumArtUri, track.albumId)
-                val inputStream = getApplication<Application>().contentResolver.openInputStream(artUri)
-                val bitmap = BitmapFactory.decodeStream(inputStream)
-                inputStream?.close()
-                if (bitmap != null) {
-                    val palette = Palette.from(bitmap).generate()
-                    val swatch = palette.vibrantSwatch ?: palette.dominantSwatch
-                    if (swatch != null) {
-                        _accentColor.value = Color(swatch.rgb)
+                val bytes = getApplication<Application>().contentResolver.openInputStream(artUri)?.use { it.readBytes() }
+                if (bytes != null && bytes.isNotEmpty()) {
+                    val boundsOpts = BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                    }
+                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, boundsOpts)
+                    val sampleSize = com.nodeplayer.ui.components.computeBitmapSampleSize(
+                        boundsOpts.outWidth,
+                        boundsOpts.outHeight,
+                        192
+                    )
+                    val decodeOpts = BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+                    }
+                    val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts)
+                    if (bitmap != null) {
+                        try {
+                            val palette = Palette.from(bitmap).generate()
+                            val swatch = palette.vibrantSwatch ?: palette.dominantSwatch
+                            if (swatch != null) {
+                                _accentColor.value = Color(swatch.rgb)
+                            }
+                        } finally {
+                            bitmap.recycle()
+                        }
                     }
                 }
             } catch (_: Exception) {
@@ -1268,6 +1383,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .putBoolean("dock_glass_lens_enabled", newConfig.dockGlassLensEnabled)
             .putBoolean("dock_glass_rim_enabled", newConfig.dockGlassRimEnabled)
             .putBoolean("dock_glass_puck_enabled", newConfig.dockGlassPuckEnabled)
+            .putBoolean("dock_auto_hide_enabled", newConfig.dockAutoHideEnabled)
+            .putBoolean("dock_auto_hide_mini_player", newConfig.dockAutoHideMiniPlayer)
+            .putFloat("dock_scroll_sensitivity", newConfig.dockScrollSensitivity)
+            .putLong("dock_return_delay_ms", newConfig.dockReturnDelayMs)
+            .putBoolean("lyrics_animation_enabled", newConfig.lyricsAnimationEnabled)
+            .putFloat("lyrics_font_size_sp", newConfig.lyricsViewConfig.fontSizeSp)
+            .putInt("lyrics_auto_hide_delay_sec", newConfig.lyricsViewConfig.autoHideDelaySec)
+            .putBoolean("controls_glass_enabled", newConfig.controlsGlassEnabled)
             .apply()
 
         // Sync widgets with current glass settings and re-render
@@ -1392,6 +1515,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch(Dispatchers.IO) {
             val playlistId = dao.insertPlaylist(com.nodeplayer.music.data.PlaylistEntity(name = name.trim()))
             if (initialTracks.isNotEmpty()) {
+                dao.insertTracks(initialTracks.map { com.nodeplayer.music.data.TrackEntity.fromTrack(it) })
                 val refs = initialTracks.mapIndexed { index, t ->
                     com.nodeplayer.music.data.PlaylistTrackCrossRef(
                         playlistId = playlistId,
@@ -1406,6 +1530,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun addTrackToPlaylist(playlistId: Long, track: Track) {
         viewModelScope.launch(Dispatchers.IO) {
+            dao.insertTracks(listOf(com.nodeplayer.music.data.TrackEntity.fromTrack(track)))
             val existingIds = dao.getPlaylistTrackIds(playlistId)
             if (!existingIds.contains(track.id)) {
                 val ref = com.nodeplayer.music.data.PlaylistTrackCrossRef(
@@ -1424,14 +1549,213 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun deletePlaylistById(playlistId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val p = dao.getAllPlaylistsList().find { it.id == playlistId }
+            if (p != null) dao.deletePlaylist(p)
+        }
+    }
+
+    fun renamePlaylist(playlistId: Long, newName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.renamePlaylist(playlistId, newName)
+        }
+    }
+
+    fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.removeTrackFromPlaylist(playlistId, trackId)
+        }
+    }
+
+    fun reorderPlaylistTracks(playlistId: Long, orderedTrackIds: List<Long>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.clearPlaylistTracks(playlistId)
+            val refs = orderedTrackIds.mapIndexed { idx, tid ->
+                com.nodeplayer.music.data.PlaylistTrackCrossRef(
+                    playlistId = playlistId,
+                    trackId = tid,
+                    position = idx
+                )
+            }
+            dao.insertPlaylistTracks(refs)
+        }
+    }
+
+    fun getTracksForPlaylist(playlistId: Long): Flow<List<Track>> {
+        return dao.getTracksForPlaylist(playlistId).map { entities ->
+            entities.map { it.toTrack() }
+        }.flowOn(Dispatchers.Default)
+    }
+
     override fun onCleared() {
         super.onCleared()
         progressJob?.cancel()
+        seekPersistDebouncer.cancel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && audioDeviceCallback != null) {
             val audioManager = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
             audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
             audioDeviceCallback = null
         }
         controllerFuture?.let { MediaController.releaseFuture(it) }
+    }
+
+    companion object {
+        fun shouldEmitFloatDelta(prev: Float, next: Float, epsilon: Float = 0.002f): Boolean {
+            if (next == 0.0f && prev != 0.0f) return true
+            return kotlin.math.abs(next - prev) >= epsilon
+        }
+
+        fun shouldUpdateTrackDuration(currentMs: Long, newMs: Long): Boolean {
+            return newMs > 0L && (currentMs <= 0L || kotlin.math.abs(currentMs - newMs) > 1000L)
+        }
+
+        fun buildThemeConfigFromValues(
+            glassStrength: String = "BALANCED",
+            themeMode: String = "OLED",
+            accentSource: String = "ARTWORK",
+            spacingDensity: String = "COMFORTABLE",
+            cornerRoundness: String = "ROUNDED",
+            animatedBackdrop: Boolean = false,
+            blurRadiusDp: Float = 28.0f,
+            tintAlpha: Float = 0.65f,
+            borderAlpha: Float = 0.30f,
+            isOledBlack: Boolean = true,
+            useDynamicAccent: Boolean = true,
+            fixedAccentColorArgb: Long = 0xFF6366F1,
+            cornerRadiusDp: Float = 16.0f,
+            isPerformanceMode: Boolean = false,
+            refractionShaderEnabledPref: Boolean = true,
+            selfTestPassed: Boolean = true,
+            hapticsEnabled: Boolean = true,
+            shaderMode: String = "AUTO",
+            glassOpacity: Float = 0.65f,
+            blurStrength: Float = 0.70f,
+            glassTexture: Float = 0.40f,
+            edgeHighlightStrength: Float = 0.60f,
+            isFullyTransparent: Boolean = false,
+            keepTextReadable: Boolean = true,
+            backgroundAnimationStyle: String = "STATIC",
+            backgroundAnimationSpeed: Float = 1.0f,
+            backgroundAnimationIntensity: Float = 0.8f,
+            backgroundColorSource: String = "ARTWORK",
+            animateOnlyWhilePlaying: Boolean = true,
+            frameRateCap: String = "AUTO",
+            renderQuality: String = "MAX_NATIVE",
+            antiBandingDithering: Boolean = true,
+            fontFamily: String = "SYSTEM",
+            showDockSearchButton: Boolean = true,
+            showMiniPlayerWave: Boolean = true,
+            formatBadgeVisible: Boolean = true,
+            lensRefractionStrength: Float = 0.85f,
+            lensRimSpecular: Float = 0.85f,
+            animationPreset: String = "SMOOTH",
+            motionSpeed: Float = 1.0f,
+            springBounciness: Float = 0.82f,
+            springStiffness: Float = 380f,
+            switchOvershootEnabled: Boolean = true,
+            pressScaleEnabled: Boolean = true,
+            pressScaleStrength: Float = 0.96f,
+            staggeredListAnimation: Boolean = true,
+            lyricsAnimationEnabled: Boolean = true,
+            screenTransitionStyle: String = "SLIDE",
+            reduceMotion: Boolean = false,
+            dockGlassLensEnabled: Boolean = true,
+            dockGlassRimEnabled: Boolean = true,
+            dockGlassPuckEnabled: Boolean = true,
+            dockAutoHideEnabled: Boolean = true,
+            dockAutoHideMiniPlayer: Boolean = true,
+            dockScrollSensitivity: Float = 1.0f,
+            dockReturnDelayMs: Long = 1200L,
+            lyricsFontSizeSp: Float = 28.0f,
+            lyricsAutoHideDelaySec: Int = 5,
+            controlsGlassEnabled: Boolean = true
+        ): GlassThemeConfig {
+            val refractionEnabled = refractionShaderEnabledPref && selfTestPassed
+            return GlassThemeConfig(
+                glassStrength = glassStrength,
+                themeMode = themeMode,
+                accentSource = accentSource,
+                spacingDensity = spacingDensity,
+                cornerRoundness = cornerRoundness,
+                animatedBackdrop = animatedBackdrop,
+                blurRadiusDp = blurRadiusDp,
+                tintAlpha = tintAlpha,
+                borderAlpha = borderAlpha,
+                isOledBlack = isOledBlack,
+                useDynamicAccent = useDynamicAccent,
+                fixedAccentColorArgb = fixedAccentColorArgb,
+                cornerRadiusDp = cornerRadiusDp,
+                isPerformanceMode = isPerformanceMode,
+                refractionShaderEnabled = refractionEnabled,
+                hapticsEnabled = hapticsEnabled,
+                shaderMode = shaderMode,
+                glassOpacity = glassOpacity,
+                blurStrength = blurStrength,
+                glassTexture = glassTexture,
+                edgeHighlightStrength = edgeHighlightStrength,
+                isFullyTransparent = isFullyTransparent,
+                keepTextReadable = keepTextReadable,
+                backgroundAnimationStyle = backgroundAnimationStyle,
+                backgroundAnimationSpeed = backgroundAnimationSpeed,
+                backgroundAnimationIntensity = backgroundAnimationIntensity,
+                backgroundColorSource = backgroundColorSource,
+                animateOnlyWhilePlaying = animateOnlyWhilePlaying,
+                frameRateCap = frameRateCap,
+                renderQuality = renderQuality,
+                antiBandingDithering = antiBandingDithering,
+                fontFamily = fontFamily,
+                showDockSearchButton = showDockSearchButton,
+                showMiniPlayerWave = showMiniPlayerWave,
+                formatBadgeVisible = formatBadgeVisible,
+                lensRefractionStrength = lensRefractionStrength,
+                lensRimSpecular = lensRimSpecular,
+                animationPreset = animationPreset,
+                motionSpeed = motionSpeed,
+                springBounciness = springBounciness,
+                springStiffness = springStiffness,
+                switchOvershootEnabled = switchOvershootEnabled,
+                pressScaleEnabled = pressScaleEnabled,
+                pressScaleStrength = pressScaleStrength,
+                staggeredListAnimation = staggeredListAnimation,
+                lyricsAnimationEnabled = lyricsAnimationEnabled,
+                screenTransitionStyle = screenTransitionStyle,
+                reduceMotion = reduceMotion,
+                dockGlassLensEnabled = dockGlassLensEnabled,
+                dockGlassRimEnabled = dockGlassRimEnabled,
+                dockGlassPuckEnabled = dockGlassPuckEnabled,
+                dockAutoHideEnabled = dockAutoHideEnabled,
+                dockAutoHideMiniPlayer = dockAutoHideMiniPlayer,
+                dockScrollSensitivity = dockScrollSensitivity,
+                dockReturnDelayMs = dockReturnDelayMs,
+                lyricsViewConfig = com.nodeplayer.model.LyricsViewConfig(
+                    fontSizeSp = lyricsFontSizeSp,
+                    autoHideDelaySec = lyricsAutoHideDelaySec
+                ),
+                controlsGlassEnabled = controlsGlassEnabled
+            )
+        }
+    }
+}
+
+class TrailingSeekDebouncer(
+    private val scope: kotlinx.coroutines.CoroutineScope,
+    private val dispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
+    private val delayMs: Long = 300L,
+    private val onPersist: suspend (Long) -> Unit
+) {
+    private var job: Job? = null
+
+    fun schedule(positionMs: Long) {
+        job?.cancel()
+        job = scope.launch(dispatcher) {
+            delay(delayMs)
+            onPersist(positionMs)
+        }
+    }
+
+    fun cancel() {
+        job?.cancel()
+        job = null
     }
 }

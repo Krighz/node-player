@@ -54,15 +54,21 @@ class LayerBackdrop internal constructor(
         layerBlock: (GraphicsLayerScope.() -> Unit)?
     ) {
         if (isRecording) {
-            GlassDebug.logThrottled("LayerBackdrop", "Self-sampling cycle prevented: LayerBackdrop is currently recording")
+            if (GlassDebug.isEnabled) {
+                GlassDebug.logThrottled("LayerBackdrop", "Self-sampling cycle prevented: LayerBackdrop is currently recording")
+            }
             return
         }
         val coordinates = coordinates ?: run {
-            GlassDebug.logThrottled("LayerBackdrop", "drawBackdrop skipped: coordinates is null")
+            if (GlassDebug.isEnabled) {
+                GlassDebug.logThrottled("LayerBackdrop", "drawBackdrop skipped: coordinates is null")
+            }
             return
         }
         val layerCoordinates = layerCoordinates ?: run {
-            GlassDebug.logThrottled("LayerBackdrop", "drawBackdrop skipped: layerCoordinates is null")
+            if (GlassDebug.isEnabled) {
+                GlassDebug.logThrottled("LayerBackdrop", "drawBackdrop skipped: layerCoordinates is null")
+            }
             return
         }
         val offset =
@@ -72,7 +78,9 @@ class LayerBackdrop internal constructor(
                 // TODO: outer transformations lead to wrong position calculation
                 coordinates.positionInWindow() - layerCoordinates.positionInWindow()
             }
-        GlassDebug.logThrottled("LayerBackdrop", "drawBackdrop sampling at offset: ($offset), layerSize=${graphicsLayer.size}")
+        if (GlassDebug.isEnabled) {
+            GlassDebug.logThrottled("LayerBackdrop", "drawBackdrop sampling at offset: ($offset), layerSize=${graphicsLayer.size}")
+        }
         withTransform({
             if (layerBlock != null) {
                 with(obtainInverseLayerScope()) { inverseTransform(density, layerBlock) }

@@ -1,15 +1,20 @@
 package com.nodeplayer.ui.screens
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyHorizontalGrid
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
@@ -17,555 +22,1065 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.kyant.backdrop.Backdrop
+import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
+import com.nodeplayer.network.library.*
 import com.nodeplayer.ui.LocalBottomBarPadding
+import com.nodeplayer.ui.component.shapes.ContinuousCapsule
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.DockScrollController
-import com.nodeplayer.ui.components.GlassBadge
-import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.LiquidButton
 import com.nodeplayer.ui.components.LiquidIconButton
-import com.nodeplayer.ui.components.LiquidSegmentedControl
 import com.nodeplayer.ui.components.SoundWaveVisualizer
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
+import com.nodeplayer.ui.theme.LiquidColors
 
+private val LIB_NAV_CONTAINER_SHAPE = ContinuousRoundedRectangle(20.dp)
+private val LIB_NAV_BORDER_BRUSH = Brush.verticalGradient(
+    listOf(Color.White.copy(alpha = 0.18f), Color.White.copy(alpha = 0.04f))
+)
+private val LIB_NAV_ICON_SHAPE = ContinuousRoundedRectangle(10.dp)
+private val LIB_RECENT_CARD_SHAPE = ContinuousRoundedRectangle(14.dp)
+private val LIB_EMPTY_CARD_SHAPE = ContinuousRoundedRectangle(24.dp)
+private val LIB_EMPTY_BORDER_BRUSH = Brush.verticalGradient(
+    listOf(Color.White.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
+)
+private val LIB_SONG_THUMB_SHAPE = ContinuousRoundedRectangle(10.dp)
+private val LIB_PLAYLIST_THUMB_SHAPE = ContinuousRoundedRectangle(12.dp)
+private val LIB_ALBUM_CARD_SHAPE = ContinuousRoundedRectangle(16.dp)
+
+/**
+ * Sub-destinations within the Apple Music-style Library view.
+ */
+enum class LibrarySubDestination {
+    NONE,
+    PLAYLISTS,
+    ARTISTS,
+    ALBUMS,
+    SONGS
+}
+
+/**
+ * Revamped Apple Music-Style Online Library View (LBRY-01, LBRY-02, LBRY-03).
+ *
+ * Features:
+ * - Dedicated navigation rows: Playlists, Artists, Albums, Songs with badges and in-place drilldown (D-01).
+ * - "Recently Added" 2-row horizontal scroll carousel with 1:1 squircle cover cards (D-02).
+ * - Strict online-first content aggregation: exclusively shows online saved/liked songs, playlists,
+ *   and derived online albums/artists (D-03, LBRY-02).
+ * - Centered liquid-glass empty-state card with "Explore Home" and "Search Music" quick actions (D-04).
+ * - Offline local storage remains accessed via the Home profile menu 'Offline Music' switch (LBRY-03).
+ */
 @Composable
 fun LibraryView(
-    tracks: List<Track>,
+    tracks: List<Track> = emptyList(),
     albums: List<Album> = emptyList(),
     artists: List<Artist> = emptyList(),
     folders: List<MusicFolder> = emptyList(),
-    currentTrack: Track?,
-    isPlaying: Boolean,
+    currentTrack: Track? = null,
+    isPlaying: Boolean = false,
     onTrackClick: (Track, List<Track>) -> Unit,
-    onRescanClick: () -> Unit,
+    onRescanClick: () -> Unit = {},
     onPlayNext: (Track) -> Unit = {},
     onAddToQueue: (Track) -> Unit = {},
     searchQuery: String = "",
     onSearchChange: (String) -> Unit = {},
     remoteTracks: List<Track> = emptyList(),
+    onlineLibraryManager: OnlineLibraryManager? = null,
+    onNavigateToHome: () -> Unit = {},
+    onNavigateToSearch: () -> Unit = {},
+    onOpenPlaylistDetail: ((OnlinePlaylist) -> Unit)? = null,
+    onOpenAlbumDetail: ((OnlineAlbum) -> Unit)? = null,
     dockScrollController: DockScrollController? = null,
+    backdrop: Backdrop = remember { emptyBackdrop() },
     modifier: Modifier = Modifier
 ) {
-    val accent = LocalAccentColor.current
     val themeConfig = LocalGlassThemeConfig.current
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var isGridView by remember { mutableStateOf(false) }
-    var selectedFolder by remember { mutableStateOf<MusicFolder?>(null) }
-    val tabs = listOf("Songs", "Albums", "Artists", "Folders")
+    val bottomBarPadding = LocalBottomBarPadding.current + 80.dp
+
+    val manager = remember(onlineLibraryManager) {
+        onlineLibraryManager ?: OnlineLibraryManager()
+    }
+
+    // Seed any remote online tracks into online library manager
+    LaunchedEffect(remoteTracks) {
+        for (track in remoteTracks) {
+            if (manager.isOnlineTrack(track) && !manager.isSaved(track.id)) {
+                manager.saveTrack(track)
+            }
+        }
+    }
+
+    val libraryState by manager.state.collectAsState()
+    var subDestination by remember { mutableStateOf(LibrarySubDestination.NONE) }
 
     val dockConnection = rememberDockScrollConnection(
         controller = dockScrollController,
         enabled = themeConfig.dockAutoHideEnabled
     )
-    val songsListState = rememberLazyListState()
-    val folderTracksListState = rememberLazyListState()
 
-    LaunchedEffect(songsListState.firstVisibleItemIndex, songsListState.firstVisibleItemScrollOffset) {
-        if (songsListState.firstVisibleItemIndex == 0 && songsListState.firstVisibleItemScrollOffset == 0) {
-            dockScrollController?.onListScrolledToTop(0, 0)
-        }
-    }
-
-    LaunchedEffect(folderTracksListState.firstVisibleItemIndex, folderTracksListState.firstVisibleItemScrollOffset) {
-        if (folderTracksListState.firstVisibleItemIndex == 0 && folderTracksListState.firstVisibleItemScrollOffset == 0) {
-            dockScrollController?.onListScrolledToTop(0, 0)
-        }
-    }
-
-    val filteredTracks = remember(tracks, remoteTracks, searchQuery) {
-        if (searchQuery.isBlank()) tracks
-        else {
-            val local = tracks.filter {
-                it.title.contains(searchQuery, ignoreCase = true) ||
-                it.artist.contains(searchQuery, ignoreCase = true) ||
-                it.album.contains(searchQuery, ignoreCase = true)
-            }
-            val remote = remoteTracks.filter {
-                it.title.contains(searchQuery, ignoreCase = true) ||
-                it.artist.contains(searchQuery, ignoreCase = true) ||
-                it.album.contains(searchQuery, ignoreCase = true)
-            }
-            local + remote
-        }
-    }
-
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
             .nestedScroll(dockConnection)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Search & Rescan Header
+        AnimatedContent(
+            targetState = subDestination,
+            transitionSpec = {
+                if (targetState != LibrarySubDestination.NONE) {
+                    (slideInHorizontally(spring(stiffness = 500f)) { it } + fadeIn()).togetherWith(
+                        slideOutHorizontally(spring(stiffness = 500f)) { -it / 3 } + fadeOut()
+                    )
+                } else {
+                    (slideInHorizontally(spring(stiffness = 500f)) { -it / 3 } + fadeIn()).togetherWith(
+                        slideOutHorizontally(spring(stiffness = 500f)) { it } + fadeOut()
+                    )
+                }
+            },
+            label = "LibrarySubDestinationTransition"
+        ) { targetSub ->
+            when (targetSub) {
+                LibrarySubDestination.NONE -> {
+                    LibraryRootView(
+                        libraryState = libraryState,
+                        onNavigateSub = { subDestination = it },
+                        onTrackClick = onTrackClick,
+                        onNavigateToHome = onNavigateToHome,
+                        onNavigateToSearch = onNavigateToSearch,
+                        onOpenPlaylistDetail = onOpenPlaylistDetail,
+                        onOpenAlbumDetail = onOpenAlbumDetail,
+                        bottomPadding = bottomBarPadding
+                    )
+                }
+                LibrarySubDestination.SONGS -> {
+                    OnlineSongsSubView(
+                        songs = libraryState.songs,
+                        currentTrack = currentTrack,
+                        isPlaying = isPlaying,
+                        onBack = { subDestination = LibrarySubDestination.NONE },
+                        onTrackClick = onTrackClick,
+                        onPlayNext = onPlayNext,
+                        onAddToQueue = onAddToQueue,
+                        onNavigateToHome = onNavigateToHome,
+                        onNavigateToSearch = onNavigateToSearch,
+                        bottomPadding = bottomBarPadding
+                    )
+                }
+                LibrarySubDestination.PLAYLISTS -> {
+                    OnlinePlaylistsSubView(
+                        playlists = libraryState.playlists,
+                        onBack = { subDestination = LibrarySubDestination.NONE },
+                        onPlaylistClick = { pl -> onOpenPlaylistDetail?.invoke(pl) },
+                        onNavigateToHome = onNavigateToHome,
+                        onNavigateToSearch = onNavigateToSearch,
+                        bottomPadding = bottomBarPadding
+                    )
+                }
+                LibrarySubDestination.ALBUMS -> {
+                    OnlineAlbumsSubView(
+                        albums = libraryState.albums,
+                        onBack = { subDestination = LibrarySubDestination.NONE },
+                        onAlbumClick = { al -> onOpenAlbumDetail?.invoke(al) },
+                        onNavigateToHome = onNavigateToHome,
+                        onNavigateToSearch = onNavigateToSearch,
+                        bottomPadding = bottomBarPadding
+                    )
+                }
+                LibrarySubDestination.ARTISTS -> {
+                    OnlineArtistsSubView(
+                        artists = libraryState.artists,
+                        onBack = { subDestination = LibrarySubDestination.NONE },
+                        onNavigateToHome = onNavigateToHome,
+                        onNavigateToSearch = onNavigateToSearch,
+                        bottomPadding = bottomBarPadding
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Root Apple Music-style Library view:
+ * Top navigation rows (Playlists, Artists, Albums, Songs) + "Recently Added" 2-row carousel.
+ */
+@Composable
+private fun LibraryRootView(
+    libraryState: OnlineLibraryState,
+    onNavigateSub: (LibrarySubDestination) -> Unit,
+    onTrackClick: (Track, List<Track>) -> Unit,
+    onNavigateToHome: () -> Unit,
+    onNavigateToSearch: () -> Unit,
+    onOpenPlaylistDetail: ((OnlinePlaylist) -> Unit)? = null,
+    onOpenAlbumDetail: ((OnlineAlbum) -> Unit)? = null,
+    bottomPadding: Dp
+) {
+    val accent = LocalAccentColor.current
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = 16.dp, bottom = bottomPadding)
+    ) {
+        // Top Title
+        item(key = "library_title", contentType = "library_title") {
+            Text(
+                text = "Library",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+            )
+        }
+
+        // Apple Music Navigation Rows (D-01, LBRY-01)
+        item(key = "nav_rows", contentType = "library_nav_rows") {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(LIB_NAV_CONTAINER_SHAPE)
+                    .background(LiquidColors.SurfaceElevated.copy(alpha = 0.50f))
+                    .border(
+                        width = 0.5.dp,
+                        brush = LIB_NAV_BORDER_BRUSH,
+                        shape = LIB_NAV_CONTAINER_SHAPE
+                    )
+            ) {
+                LibraryNavRow(
+                    title = "Playlists",
+                    icon = Icons.Rounded.QueueMusic,
+                    count = libraryState.playlists.size,
+                    onClick = { onNavigateSub(LibrarySubDestination.PLAYLISTS) }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 56.dp, end = 16.dp),
+                    color = Color.White.copy(alpha = 0.08f),
+                    thickness = 0.5.dp
+                )
+                LibraryNavRow(
+                    title = "Artists",
+                    icon = Icons.Rounded.Person,
+                    count = libraryState.artists.size,
+                    onClick = { onNavigateSub(LibrarySubDestination.ARTISTS) }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 56.dp, end = 16.dp),
+                    color = Color.White.copy(alpha = 0.08f),
+                    thickness = 0.5.dp
+                )
+                LibraryNavRow(
+                    title = "Albums",
+                    icon = Icons.Rounded.Album,
+                    count = libraryState.albums.size,
+                    onClick = { onNavigateSub(LibrarySubDestination.ALBUMS) }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 56.dp, end = 16.dp),
+                    color = Color.White.copy(alpha = 0.08f),
+                    thickness = 0.5.dp
+                )
+                LibraryNavRow(
+                    title = "Songs",
+                    icon = Icons.Rounded.MusicNote,
+                    count = libraryState.songs.size,
+                    onClick = { onNavigateSub(LibrarySubDestination.SONGS) }
+                )
+            }
+        }
+
+        // "Recently Added" Section Header (D-02)
+        item(key = "recently_added_header", contentType = "library_section_header") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Recently Added",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+
+                if (libraryState.recentlyAdded.isNotEmpty()) {
+                    Text(
+                        text = "See All",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = accent,
+                        modifier = Modifier
+                            .clickable { onNavigateSub(LibrarySubDestination.ALBUMS) }
+                            .padding(vertical = 4.dp)
+                    )
+                }
+            }
+        }
+
+        // "Recently Added" 2-Row Carousel (D-02)
+        if (libraryState.recentlyAdded.isNotEmpty()) {
+            item(key = "recently_added_grid", contentType = "library_recent_grid") {
+                val recentKeys = remember(libraryState.recentlyAdded) {
+                    uniqueLazyKeys(libraryState.recentlyAdded) { "${it.type}_${it.id}" }
+                }
+                LazyHorizontalGrid(
+                    rows = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(290.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    gridItemsIndexed(
+                        items = libraryState.recentlyAdded,
+                        key = { index, _ -> recentKeys[index] },
+                        contentType = { _, _ -> "recently_added_card" }
+                    ) { _, item ->
+                        RecentlyAddedCard(
+                            item = item,
+                            onClick = {
+                                when (item.type) {
+                                    OnlineMediaType.TRACK -> {
+                                        val track = libraryState.songs.find { it.id.toString() == item.id }
+                                        if (track != null) {
+                                            onTrackClick(track, libraryState.songs)
+                                        }
+                                    }
+                                    OnlineMediaType.ALBUM -> {
+                                        val album = libraryState.albums.find { it.id == item.id }
+                                        if (album != null && onOpenAlbumDetail != null) {
+                                            onOpenAlbumDetail(album)
+                                        } else {
+                                            onNavigateSub(LibrarySubDestination.ALBUMS)
+                                        }
+                                    }
+                                    OnlineMediaType.PLAYLIST -> {
+                                        val pl = libraryState.playlists.find { it.id == item.id }
+                                        if (pl != null && onOpenPlaylistDetail != null) {
+                                            onOpenPlaylistDetail(pl)
+                                        } else {
+                                            onNavigateSub(LibrarySubDestination.PLAYLISTS)
+                                        }
+                                    }
+                                    OnlineMediaType.ARTIST -> onNavigateSub(LibrarySubDestination.ARTISTS)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+        } else {
+            // Polished Empty State Card (D-04)
+            item(key = "empty_library_card", contentType = "library_empty_card") {
+                LibraryEmptyCard(
+                    title = "Your online library is empty",
+                    description = "Songs you stream, like, or save will appear here in your personal library.",
+                    onExploreHome = onNavigateToHome,
+                    onSearchMusic = onNavigateToSearch,
+                    modifier = Modifier
+                        .padding(horizontal = 20.dp, vertical = 20.dp)
+                        .fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Single Apple Music navigation row item.
+ */
+@Composable
+private fun LibraryNavRow(
+    title: String,
+    icon: ImageVector,
+    count: Int,
+    onClick: () -> Unit
+) {
+    val accent = LocalAccentColor.current
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Tinted Icon Badge
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(ContinuousRoundedRectangle(10.dp))
+                .background(accent.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(14.dp))
+
+        Text(
+            text = title,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            modifier = Modifier.weight(1f)
+        )
+
+        if (count > 0) {
+            Text(
+                text = count.toString(),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color.White.copy(alpha = 0.50f),
+                modifier = Modifier.padding(end = 6.dp)
+            )
+        }
+
+        Icon(
+            imageVector = Icons.Rounded.ChevronRight,
+            contentDescription = null,
+            tint = Color.White.copy(alpha = 0.40f),
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+/**
+ * 1:1 squircle artwork card for Recently Added 2-row carousel.
+ */
+@Composable
+private fun RecentlyAddedCard(
+    item: OnlineMediaItem,
+    onClick: () -> Unit
+) {
+    val itemTrack = remember(item.id, item.artworkUrl) {
+        Track(
+            id = item.id.hashCode().toLong(),
+            title = item.title,
+            artist = item.subtitle,
+            album = item.title,
+            durationMs = 0L,
+            path = item.artworkUrl ?: ""
+        )
+    }
+
+    Column(
+        modifier = Modifier
+            .width(125.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(125.dp)
+                .clip(LIB_RECENT_CARD_SHAPE)
+        ) {
+            TrackArtwork(
+                track = itemTrack,
+                modifier = Modifier.fillMaxSize(),
+                cornerRadius = 14.dp,
+                targetSizePx = 256
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = item.title,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        Text(
+            text = item.subtitle,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color.White.copy(alpha = 0.60f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Clean Liquid-Glass Empty State Card (D-04).
+ */
+@Composable
+private fun LibraryEmptyCard(
+    title: String,
+    description: String,
+    onExploreHome: () -> Unit,
+    onSearchMusic: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accent = LocalAccentColor.current
+
+    Column(
+        modifier = modifier
+            .clip(LIB_EMPTY_CARD_SHAPE)
+            .background(LiquidColors.SurfaceElevated.copy(alpha = 0.65f))
+            .border(
+                width = 0.8.dp,
+                brush = LIB_EMPTY_BORDER_BRUSH,
+                shape = LIB_EMPTY_CARD_SHAPE
+            )
+            .padding(horizontal = 24.dp, vertical = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .clip(CircleShape)
+                .background(accent.copy(alpha = 0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(32.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = title,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = description,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Normal,
+            color = Color.White.copy(alpha = 0.65f),
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(horizontal = 12.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = onSearchChange,
-                modifier = Modifier.weight(1f),
-                placeholder = { Text("Search songs, artists, albums...", fontSize = 13.sp) },
-                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = accent) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
+            LiquidButton(onClick = onExploreHome) {
+                Icon(
+                    imageVector = Icons.Rounded.Home,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Explore Home",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+            }
+
+            LiquidButton(onClick = onSearchMusic) {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Search Music",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Sub-view: Online Songs list (LBRY-02).
+ */
+@Composable
+private fun OnlineSongsSubView(
+    songs: List<Track>,
+    currentTrack: Track?,
+    isPlaying: Boolean,
+    onBack: () -> Unit,
+    onTrackClick: (Track, List<Track>) -> Unit,
+    onPlayNext: (Track) -> Unit,
+    onAddToQueue: (Track) -> Unit,
+    onNavigateToHome: () -> Unit,
+    onNavigateToSearch: () -> Unit,
+    bottomPadding: Dp
+) {
+    val accent = LocalAccentColor.current
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Sticky Header with '‹ Library'
+        SubViewHeader(
+            title = "Songs",
+            subtitle = "${songs.size} online tracks",
+            onBack = onBack
+        )
+
+        if (songs.isEmpty()) {
+            LibraryEmptyCard(
+                title = "No online songs yet",
+                description = "Songs you stream or like will be automatically collected here.",
+                onExploreHome = onNavigateToHome,
+                onSearchMusic = onNavigateToSearch,
+                modifier = Modifier.padding(20.dp)
+            )
+        } else {
+            val songKeys = remember(songs) { uniqueLazyTrackKeys(songs, "lib_song") }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
+            ) {
+                itemsIndexed(
+                    items = songs,
+                    key = { index, _ -> songKeys[index] },
+                    contentType = { _, _ -> "online_song_row" }
+                ) { _, track ->
+                    val isCurrent = currentTrack?.id == track.id
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onTrackClick(track, songs) }
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(LIB_SONG_THUMB_SHAPE)
+                        ) {
+                            TrackArtwork(
+                                track = track,
+                                modifier = Modifier.fillMaxSize(),
+                                cornerRadius = 10.dp,
+                                targetSizePx = 144
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = track.title,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isCurrent) accent else Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = track.artist,
+                                fontSize = 12.sp,
+                                color = Color.White.copy(alpha = 0.60f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        if (isCurrent && isPlaying) {
+                            SoundWaveVisualizer(
+                                isPlaying = true,
+                                barColor = accent,
+                                modifier = Modifier
+                                    .padding(horizontal = 8.dp)
+                                    .size(width = 16.dp, height = 14.dp)
+                            )
+                        }
+
+                        Text(
+                            text = track.durationFormatted,
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.45f),
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+
                         LiquidIconButton(
-                            icon = Icons.Rounded.Clear,
-                            onClick = { onSearchChange("") },
-                            contentDescription = "Clear",
+                            icon = Icons.Rounded.MoreVert,
+                            contentDescription = "Options",
+                            onClick = { onAddToQueue(track) },
                             size = 36.dp,
                             lighterStyle = true
                         )
                     }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = accent,
-                    unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
-                )
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            LiquidIconButton(
-                icon = Icons.Rounded.Refresh,
-                onClick = onRescanClick,
-                contentDescription = "Rescan",
-                size = 48.dp,
-                tint = accent,
-                lighterStyle = true
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Tabs: Songs, Albums, Artists, Folders + Grid/List toggle
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            LiquidSegmentedControl(
-                items = tabs,
-                selectedIndex = selectedTab,
-                onSelect = { selectedTab = it },
-                modifier = Modifier.weight(1f)
-            ) { tab ->
-                val count = when (tabs.indexOf(tab)) {
-                    0 -> filteredTracks.size
-                    1 -> albums.size
-                    2 -> artists.size
-                    else -> folders.size
                 }
-                if (count > 0) "$tab ($count)" else tab
             }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            LiquidIconButton(
-                icon = if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView,
-                onClick = { isGridView = !isGridView },
-                contentDescription = "Toggle Grid View",
-                size = 48.dp,
-                lighterStyle = true
-            )
         }
+    }
+}
 
-        Spacer(modifier = Modifier.height(8.dp))
+/**
+ * Sub-view: Online Playlists.
+ */
+@Composable
+private fun OnlinePlaylistsSubView(
+    playlists: List<OnlinePlaylist>,
+    onBack: () -> Unit,
+    onPlaylistClick: (OnlinePlaylist) -> Unit = {},
+    onNavigateToHome: () -> Unit,
+    onNavigateToSearch: () -> Unit,
+    bottomPadding: Dp
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        SubViewHeader(
+            title = "Playlists",
+            subtitle = "${playlists.size} playlists",
+            onBack = onBack
+        )
 
-        // Content Area
-        when (selectedTab) {
-            0 -> {
-                // Songs Tab
-                if (filteredTracks.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = if (searchQuery.isNotEmpty()) "No tracks matching \"$searchQuery\"" else "Library is empty. Click refresh to scan your music folder.",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.6f))
+        if (playlists.isEmpty()) {
+            LibraryEmptyCard(
+                title = "No online playlists",
+                description = "Saved playlists and mixes will appear here.",
+                onExploreHome = onNavigateToHome,
+                onSearchMusic = onNavigateToSearch,
+                modifier = Modifier.padding(20.dp)
+            )
+        } else {
+            val playlistKeys = remember(playlists) { uniqueLazyKeys(playlists) { "lib_pl_${it.id}" } }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
+            ) {
+                itemsIndexed(
+                    items = playlists,
+                    key = { index, _ -> playlistKeys[index] },
+                    contentType = { _, _ -> "online_playlist_row" }
+                ) { _, pl ->
+                    val plTrack = remember(pl.id, pl.artworkUrl) {
+                        Track(
+                            id = pl.id.hashCode().toLong(),
+                            title = pl.title,
+                            artist = pl.author,
+                            album = pl.title,
+                            durationMs = 0L,
+                            path = pl.artworkUrl ?: ""
                         )
                     }
-                } else if (isGridView) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = 160.dp),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onPlaylistClick(pl) }
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        items(filteredTracks, key = { it.id }) { track ->
-                            val isCurrent = currentTrack?.id == track.id
-                            GlassCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                isDark = true,
-                                onClick = { onTrackClick(track, filteredTracks) }
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(110.dp)
-                                            .clip(RoundedCornerShape(12.dp))
-                                            .background(if (isCurrent) accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.05f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (isCurrent && isPlaying) {
-                                            SoundWaveVisualizer(isPlaying = true, barColor = accent, maxHeight = 30.dp)
-                                        } else {
-                                            Icon(
-                                                imageVector = Icons.Rounded.MusicNote,
-                                                contentDescription = null,
-                                                tint = if (isCurrent) accent else Color.White.copy(alpha = 0.4f),
-                                                modifier = Modifier.size(36.dp)
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = track.title,
-                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = if (isCurrent) accent else Color.White
-                                    )
-                                    Text(
-                                        text = track.artist,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        color = Color.White.copy(alpha = 0.6f)
-                                    )
-                                }
-                            }
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(LIB_PLAYLIST_THUMB_SHAPE)
+                        ) {
+                            TrackArtwork(
+                                track = plTrack,
+                                modifier = Modifier.fillMaxSize(),
+                                cornerRadius = 12.dp,
+                                targetSizePx = 144
+                            )
                         }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = pl.title,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = if (pl.author.isNotBlank()) pl.author else "${pl.trackCount} songs",
+                                fontSize = 12.sp,
+                                color = Color.White.copy(alpha = 0.60f)
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.35f),
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
-                } else {
-                    LazyColumn(
-                        state = songsListState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Sub-view: Online Albums.
+ */
+@Composable
+private fun OnlineAlbumsSubView(
+    albums: List<OnlineAlbum>,
+    onBack: () -> Unit,
+    onAlbumClick: (OnlineAlbum) -> Unit = {},
+    onNavigateToHome: () -> Unit,
+    onNavigateToSearch: () -> Unit,
+    bottomPadding: Dp
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        SubViewHeader(
+            title = "Albums",
+            subtitle = "${albums.size} albums",
+            onBack = onBack
+        )
+
+        if (albums.isEmpty()) {
+            LibraryEmptyCard(
+                title = "No online albums",
+                description = "Albums from tracks you like and stream are organized here.",
+                onExploreHome = onNavigateToHome,
+                onSearchMusic = onNavigateToSearch,
+                modifier = Modifier.padding(20.dp)
+            )
+        } else {
+            val albumKeys = remember(albums) { uniqueLazyKeys(albums) { "lib_alb_${it.id}" } }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                gridItemsIndexed(
+                    items = albums,
+                    key = { index, _ -> albumKeys[index] },
+                    contentType = { _, _ -> "online_album_card" }
+                ) { _, album ->
+                    val albumTrack = remember(album.id, album.artworkUrl) {
+                        Track(
+                            id = album.id.hashCode().toLong(),
+                            title = album.title,
+                            artist = album.artist,
+                            album = album.title,
+                            durationMs = 0L,
+                            path = album.artworkUrl ?: ""
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onAlbumClick(album) }
                     ) {
-                        items(filteredTracks, key = { it.id }) { track ->
-                            val isCurrent = currentTrack?.id == track.id
-                            GlassCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                isDark = true,
-                                onClick = { onTrackClick(track, filteredTracks) }
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    TrackArtwork(
-                                        track = track,
-                                        modifier = Modifier.size(42.dp),
-                                        cornerRadius = 8.dp
-                                    )
-
-                                    Spacer(modifier = Modifier.width(12.dp))
-
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(
-                                                text = track.title,
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                                    color = if (isCurrent) accent else Color.White
-                                                ),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f, fill = false)
-                                            )
-                                            if (track.isHiRes || track.sampleRate >= 88200 || track.bitDepth > 16) {
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                GlassBadge(
-                                                    text = if (track.bitDepth > 16) "${track.bitDepth}b/${track.sampleRate / 1000}k" else "HI-RES",
-                                                    color = Color(0xFFF59E0B)
-                                                )
-                                            } else if (track.isLossless) {
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                GlassBadge(text = "LOSSLESS", color = accent)
-                                            }
-                                            if (track.path.startsWith("nodeconnect://")) {
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                GlassBadge(text = "NODE CONNECT", color = Color(0xFF06B6D4))
-                                            }
-                                        }
-
-                                        Spacer(modifier = Modifier.height(2.dp))
-
-                                        Text(
-                                            text = "${track.artist} • ${track.album}",
-                                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.6f)),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(8.dp))
-
-                                    Text(
-                                        text = track.durationFormatted,
-                                        style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.5f))
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            1 -> {
-                // Albums Tab
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = 160.dp),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(albums, key = { it.id }) { album ->
-                        GlassCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                val albumTracks = tracks.filter { it.albumId == album.id || it.album.equals(album.title, ignoreCase = true) }
-                                if (albumTracks.isNotEmpty()) onTrackClick(albumTracks.first(), albumTracks)
-                            }
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(110.dp)
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .background(Color.White.copy(alpha = 0.08f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.Rounded.Album, contentDescription = null, tint = accent, modifier = Modifier.size(40.dp))
-                                }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(album.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text("${album.artist} • ${album.trackCount} tracks", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
-                            }
-                        }
-                    }
-                }
-            }
-            2 -> {
-                // Artists Tab
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    items(artists, key = { it.id }) { artist ->
-                        GlassCard(
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                val artistTracks = tracks.filter { it.artistId == artist.id || it.artist.equals(artist.name, ignoreCase = true) }
-                                if (artistTracks.isNotEmpty()) onTrackClick(artistTracks.first(), artistTracks)
-                            }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(14.dp).fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
-                                    modifier = Modifier.size(40.dp).clip(CircleShape).background(accent.copy(alpha = 0.2f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(Icons.Rounded.Person, contentDescription = null, tint = accent)
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(artist.name, fontWeight = FontWeight.Bold)
-                                    Text("${artist.trackCount} tracks", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            3 -> {
-                // Folders Tab: Drill down to folder songs or show folder list
-                val activeFolder = selectedFolder
-                if (activeFolder != null) {
-                    val folderTracks = remember(tracks, activeFolder) {
-                        tracks.filter { it.path.startsWith(activeFolder.path) }
-                    }
-
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        // Folder Header with Back button and Play All
-                        Row(
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                                .aspectRatio(1f)
+                                .clip(LIB_ALBUM_CARD_SHAPE)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                LiquidIconButton(
-                                    icon = Icons.Rounded.ArrowBack,
-                                    onClick = { selectedFolder = null },
-                                    contentDescription = "Back to Folders",
-                                    size = 42.dp,
-                                    lighterStyle = true
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column {
-                                    Text(
-                                        text = activeFolder.name,
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = "${folderTracks.size} tracks • ${activeFolder.path}",
-                                        style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.5f)),
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-
-                            if (folderTracks.isNotEmpty()) {
-                                LiquidButton(
-                                    onClick = { onTrackClick(folderTracks.first(), folderTracks) },
-                                    lighterStyle = true
-                                ) {
-                                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Play All", color = Color.White, fontWeight = FontWeight.Bold)
-                                }
-                            }
+                            TrackArtwork(
+                                track = albumTrack,
+                                modifier = Modifier.fillMaxSize(),
+                                cornerRadius = 16.dp,
+                                targetSizePx = 256
+                            )
                         }
-
                         Spacer(modifier = Modifier.height(8.dp))
-
-                        LazyColumn(
-                            state = folderTracksListState,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            items(folderTracks, key = { it.id }) { track ->
-                                val isCurrent = currentTrack?.id == track.id
-                                GlassCard(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    isDark = true,
-                                    onClick = { onTrackClick(track, folderTracks) }
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        TrackArtwork(
-                                            track = track,
-                                            modifier = Modifier.size(42.dp),
-                                            cornerRadius = 8.dp
-                                        )
-
-                                        Spacer(modifier = Modifier.width(12.dp))
-
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = track.title,
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
-                                                    color = if (isCurrent) accent else Color.White
-                                                ),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                text = "${track.artist} • ${track.album}",
-                                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.6f)),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-
-                                        if (track.isLossless) {
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            GlassBadge(text = "LOSSLESS", color = accent)
-                                        }
-
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = track.durationFormatted,
-                                            style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.5f))
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        items(folders, key = { it.path }) { folder ->
-                            val folderSongCount = remember(tracks, folder.path) {
-                                tracks.count { it.path.startsWith(folder.path) }
-                            }
-                            GlassCard(
-                                modifier = Modifier.fillMaxWidth(),
-                                onClick = { selectedFolder = folder }
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp).fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(accent.copy(alpha = 0.2f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Icons.Rounded.Folder, contentDescription = null, tint = accent, modifier = Modifier.size(24.dp))
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(folder.name, fontWeight = FontWeight.Bold)
-                                        Text(
-                                            "$folderSongCount tracks • ${folder.path}",
-                                            fontSize = 11.sp,
-                                            color = Color.White.copy(alpha = 0.5f),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                    Icon(Icons.Rounded.ChevronRight, contentDescription = "Open Folder", tint = Color.White.copy(alpha = 0.4f))
-                                }
-                            }
-                        }
+                        Text(
+                            text = album.title,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = album.artist,
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.60f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Sub-view: Online Artists.
+ */
+@Composable
+private fun OnlineArtistsSubView(
+    artists: List<OnlineArtist>,
+    onBack: () -> Unit,
+    onNavigateToHome: () -> Unit,
+    onNavigateToSearch: () -> Unit,
+    bottomPadding: Dp
+) {
+    val accent = LocalAccentColor.current
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        SubViewHeader(
+            title = "Artists",
+            subtitle = "${artists.size} artists",
+            onBack = onBack
+        )
+
+        if (artists.isEmpty()) {
+            LibraryEmptyCard(
+                title = "No online artists",
+                description = "Artists of your saved and streamed music will appear here.",
+                onExploreHome = onNavigateToHome,
+                onSearchMusic = onNavigateToSearch,
+                modifier = Modifier.padding(20.dp)
+            )
+        } else {
+            val artistKeys = remember(artists) { uniqueLazyKeys(artists) { "lib_art_${it.id}" } }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
+            ) {
+                itemsIndexed(
+                    items = artists,
+                    key = { index, _ -> artistKeys[index] },
+                    contentType = { _, _ -> "online_artist_row" }
+                ) { _, artist ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { /* Detail navigation */ }
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .background(accent.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Person,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(26.dp)
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = artist.name,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color.White
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "${artist.trackCount} saved songs",
+                                fontSize = 12.sp,
+                                color = Color.White.copy(alpha = 0.55f)
+                            )
+                        }
+
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.35f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Sticky Glass Header for Sub-views ('‹ Library' back navigation).
+ */
+@Composable
+private fun SubViewHeader(
+    title: String,
+    subtitle: String,
+    onBack: () -> Unit
+) {
+    val accent = LocalAccentColor.current
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(ContinuousCapsule)
+                .clickable(onClick = onBack)
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.ArrowBack,
+                contentDescription = "Back",
+                tint = accent,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "Library",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = accent
+            )
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = title,
+                fontSize = 17.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color.White.copy(alpha = 0.50f)
+            )
         }
     }
 }

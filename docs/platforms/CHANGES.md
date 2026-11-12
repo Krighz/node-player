@@ -5,6 +5,62 @@
 
 ---
 
+### [2026-11-11] - Milestone v2.5: Phase 3 Motion System, Fluid Spring Physics & Zero-Allocation Transitions
+- **Centralized Motion Tokens & Dynamic Spring Resolvers (`REQ-MOT-01`)**:
+  - Centralized physics constants into `:core-ui` `MotionTokens.kt`: `Snappy` (damping 0.75, stiffness 600), `Smooth` (0.82, 380), `Bouncy` (0.65, 420), `Gentle` (0.90, 220), `ConvxPuck` (0.82, 380), `DragTracking` (0.95, 900), and `Instant` (1.0, 50000).
+  - Duration tokens: `DurationShort` (150ms), `DurationMedium` (300ms), `DurationLong` (500ms), and standardized easings (`EmphasizedEasing`, `DecelerateEasing`, `AccelerateEasing`).
+  - Dynamic physics resolvers `MotionTokens.resolveSpringSpec()` and `MotionTokens.resolveDuration()` responding deterministically to `motionLevel` (`FULL`, `REDUCED`, `OFF`), `reduceMotion` (OS accessibility), `animationPreset`, and `isPerformanceMode`.
+  - Zero-allocation touch interaction modifiers in `MotionModifiers.kt`: `pressScale`, `interactiveScale`, `fadeInOnLoad`, and `staggeredEntrance` deferring updates directly to `Modifier.graphicsLayer` to eliminate recomposition loops.
+  - Multiplatform composition local `LocalMotionConfig` wired into `SharedPlayerLayout.kt` (desktop/common) and `Theme.kt` (Android).
+- **Universal Screen & Sheet Transitions (`REQ-MOT-02`)**:
+  - Implemented `ScreenTransitions.kt` providing `fadeThrough()`, `sharedAxisX()`, `sharedAxisY()`, `sheetSpring()`, `sheetEnter()`, and `sheetExit()`.
+  - Wrapped top-level tab switches in `SharedPlayerLayout.kt` in `AnimatedContent` with `ScreenTransitions.fadeThrough(themeConfig)` and `SizeTransform(clip = false)`, eliminating abrupt screen cuts.
+  - Unified bottom sheet springs in `GlassContextMenuSheet.kt` and `HomeProfileSheet.kt` using `ScreenTransitions.sheetEnter(themeConfig)` and `sheetExit(themeConfig)`.
+  - Automatic fallback to snap specs and 0ms duration when motion is disabled or reduced.
+- **Container Transform & Shared Element Miniplayer Morphing (`REQ-MOT-03`)**:
+  - Implemented mathematical container morphing in `ContainerTransform.kt` (`ContainerTransformMath`) interpolating rect bounds, squircle corner radius ($20\text{dp} \to 0\text{dp}$), and asymmetric alpha ladders (mini-player controls fade out in $t \in [0.0, 0.25]$, fullscreen player controls fade in in $t \in [0.20, 1.0]$).
+  - Multiplatform Composable `ProgressContainerTransform` clipping dynamically with `ContinuousRoundedRectangle` on draw-phase GPU layers.
+  - Replaced modal overlay in `SharedPlayerLayout.kt` with continuous container morphing driven by `Animatable(0f)` `playerExpansionProgress` with `MotionTokens.Smooth`.
+  - Added 1:1 touch-tracking downward drag gesture on `NowPlayingView.kt` with velocity-sensitive fling snap back to fullscreen or collapse to miniplayer capsule.
+- **Motion Verification & Multiplatform Test Suites**:
+  - Added comprehensive test suites: `MotionTokensTest`, `MotionModifiersTest`, `ScreenTransitionTest`, `ContainerTransformMathTest`, `MotionSystemSuiteTest` in `:core-ui`, and `MotionSettingsSyncTest` in `:app-android`.
+  - 100% test pass rate across `:core-ui:desktopTest`, `:app-android:testDebugUnitTest`, `:app-desktop:test`, `:core-dsp:test`, `:core-model:test`, and `:core-common:test`.
+
+### [2026-11-11] - Milestone v2.5: Phase 2 Performance Fixes, Hot-Path Allocation & Memory Elimination
+- **Cold-Start Acceleration & Baseline Profiles (`REQ-PERF-05`)**:
+  - Cold-start median time reduced from **1422 ms to 644 ms (-54.7%)** on physical device (`4a505e5`).
+  - Added AndroidX `profileinstaller:1.3.1` and compiled startup baseline profile (`baseline-prof.txt`).
+  - Implemented deferred background init for `LocalAudioScanner` and audio notification channels.
+  - Pre-warmed AGSL RuntimeShaders (`GlassShaderCache`) and wired `reportFullyDrawn()` into Compose tree.
+- **Tail Frame Latency & Jank Elimination (`dumpsys gfxinfo`)**:
+  - S2 library scroll `p99` dropped from **250 ms to 93 ms (-62.8%)**; home scroll `p99` dropped from **133 ms to 89 ms (-33.1%)**.
+  - Now Playing & Lyrics (S5) janky frames dropped from **45.87% to 13.63% (-70.3% jank reduction)**.
+  - Eliminated offscreen GPU compositing (`CompositingStrategy.Offscreen`, `BlendMode.DstIn`) and per-line blur allocations in `FullScreenLyricsView.kt` and `AlbumArtGradientBackdrop.kt`.
+  - Replaced O(N) lyrics linear scans with binary search O(log N) lookup.
+- **Memory Footprint & Render Allocations**:
+  - Peak GPU memory reduced by **85–91%** across interaction scenarios (from 276–342 MB down to 24–41 MB).
+  - Bounded LRU `ArtworkCache` with explicit `inSampleSize` downsampling and direct stream decoding in Coil fetcher, eliminating raw JPEG re-encoding.
+  - Hoisted lazy item keys, item types, and shape/brush allocations across all scrolling lists.
+  - Moved `NodeLog` disk I/O off the UI thread via non-blocking daemon queue (`ArrayBlockingQueue(2048)`), eliminating StrictMode disk write violations.
+  - Configured Compose Compiler stability configuration (`compose_compiler_config.conf`), cutting unstable arguments by **65.2%**.
+
+### [2026-11-11] - Milestone v2.3: Phase 10 Polish, Windows Desktop Parity & Token Verification
+- **120 Hz Scroll Performance Optimization (`POL-01`)**:
+  - Implemented stable keys on all lazy item factories in `OnlineHomeView.kt`, `OfflineHomeView.kt`, `LibraryView.kt`, and `PlaylistDetailView.kt`.
+  - Replaced high-frequency per-pixel `LaunchedEffect(listState.firstVisibleItemScrollOffset)` scroll observers with `snapshotFlow { ... }.distinctUntilChanged()`.
+  - Pre-allocated `StartCenterOrigin = TransformOrigin(0f, 0.5f)` and `BaseLyricTextStyle` in `LyricLineItem.kt`, eliminating allocation overhead inside draw and graphicsLayer passes.
+- **Windows Desktop Parity (`POL-02`)**:
+  - Fixed `OpticalRailDock` puck vertical alignment by eliminating the hardcoded 62dp offset, restoring exact alignment: `selectedIndex * (tabHeightDp.value + tabSpacingDp.value)`.
+  - Embedded `DesktopModeRailSwitcher` directly below `OpticalRailDock` in `SharedPlayerLayout.kt` for instant Online/Offline switching in expanded desktop mode.
+- **Token Centralization & Zero Hardcoded Hex Elimination (`POL-03`)**:
+  - Centralized semantic color tokens into `LiquidColors` in `GlassTokens.kt` (`SlateDark`, `SlateDeep`, `SlateNavy`, `CyanDeep`, `GoldHiRes`, `SkyIce`, etc.).
+  - Replaced remaining hardcoded hex values across `OpticalRailDock.kt`, `ConvxLiquidDock.kt`, `ConvxMiniPlayer.kt`, `DeviceConnectPill.kt`, and `AudioFormatBadge.kt`.
+  - Verified all tokens with automated unit tests in `DesignTokensTest.kt`.
+- **Milestone Regression & Verification**:
+  - 100% tests passing across `:core-ui:desktopTest`, `:core-dsp:test`, `:core-network:test`, `:core-common:test`, `:app-android:testDebugUnitTest`, and `:app-desktop:test`.
+  - Zero architectural boundary violations (`ArchitectureBoundaryTest` passed).
+
+
 ### [2026-11-08] - Post-Port Hardware Fix 4: Equalizer & Settings Stack Overflow (SIGSEGV libhwui) Root Cause Fix & Stability Test
 - **Root Cause Discovered via adb logcat on Physical Device (Android 16 / realme RMX3853)**:
   - Opening Equalizer or Settings crashed with `Fatal signal 11 (SIGSEGV), code 2 (SEGV_ACCERR) ... Cause: stack pointer is not in a rw map; likely due to stack overflow. 512 total frames in libhwui.so (prepareTreeImpl -> prepareListAndChildren)`.

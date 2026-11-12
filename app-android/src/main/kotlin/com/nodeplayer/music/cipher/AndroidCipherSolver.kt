@@ -18,6 +18,11 @@ class AndroidCipherSolver(context: Context) : CipherSolver {
     private var cipherWebView: CipherWebView? = null
     private var currentPlayerHash: String? = null
 
+    override suspend fun getSignatureTimestamp(): Int? {
+        val playerJs = playerJsFetcher.getPlayerJs()?.first ?: return null
+        return Regex("""signatureTimestamp\s*[:=]\s*(\d+)""").find(playerJs)?.groupValues?.get(1)?.toIntOrNull()
+    }
+
     override suspend fun deobfuscateStreamUrl(signatureCipher: String, videoId: String): String? {
         return try {
             deobfuscateInternal(signatureCipher, videoId, isRetry = false)

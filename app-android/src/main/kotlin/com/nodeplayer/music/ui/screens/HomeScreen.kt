@@ -1,5 +1,9 @@
 package com.nodeplayer.music.ui.screens
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -15,6 +19,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -29,12 +34,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import com.nodeplayer.music.ui.components.UpdateBanner
 import com.nodeplayer.music.update.UpdateManager
 import com.nodeplayer.music.update.AppUpdateInfo
+import com.nodeplayer.model.AuthState
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -50,7 +57,14 @@ import com.nodeplayer.ui.components.DeviceConnectPill
 import com.nodeplayer.ui.components.DeviceConnectStatus
 import com.nodeplayer.ui.components.LiquidIconButton
 import com.nodeplayer.ui.screens.OnlineHomeView
+import com.nodeplayer.ui.screens.filterAndSortRecentTracks
+import com.nodeplayer.ui.screens.uniqueLazyTrackKeys
 import java.io.File
+
+private val HOME_BORDER_BRUSH = Brush.verticalGradient(
+    listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.05f))
+)
+private val SMART_CHIP_SHAPE_16 = ContinuousRoundedRectangle(16.dp)
 
 @Composable
 fun HomeScreen(
@@ -68,10 +82,22 @@ fun HomeScreen(
     onStartUpdate: (AppUpdateInfo) -> Unit = {},
     onCancelUpdate: () -> Unit = {},
     onInstallUpdate: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
+    onOpenOfflineMusic: () -> Unit = {},
+    onSignInClick: () -> Unit = {},
+    onSearchClick: () -> Unit = {},
+    currentRoute: String = "home",
+    dockScrollController: com.nodeplayer.ui.components.DockScrollController? = null,
+    onOpenCategory: ((com.nodeplayer.model.MoodGenre, List<com.nodeplayer.model.Playlist>) -> Unit)? = null,
+    onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
     val isOnline by AppModeState.isOnlineMode.collectAsState()
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val ytAuthState by com.nodeplayer.music.auth.YouTubeAccountManager.authState.collectAsState()
 
     AnimatedContent(
         targetState = isOnline,
@@ -84,14 +110,51 @@ fun HomeScreen(
     ) { online ->
         if (online) {
             val recentTracks = remember(allTracks) {
-                allTracks.filter { it.lastPlayedTimestamp > 0L }.sortedByDescending { it.lastPlayedTimestamp }
+                filterAndSortRecentTracks(allTracks)
             }
-            OnlineHomeView(
+            val account = (ytAuthState as? com.nodeplayer.model.AuthState.LoggedIn)?.account
+            if (currentRoute == "new" || currentRoute == "explore") {
+                com.nodeplayer.ui.screens.ExploreView(
+                    innerTubeClient = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get(),
+                    dockScrollController = dockScrollController,
+                    onCategoryClick = { category ->
+                        scope.launch {
+                            try {
+                                val playlists = withContext(Dispatchers.IO) {
+                                    com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+                                        .browseCategoryShelves(category.browseId, category.params).getOrThrow()
+                                }
+                                onOpenCategory?.invoke(category, playlists)
+                            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                android.widget.Toast.makeText(context, "Couldn't load this category. Please try again.", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize().statusBarsPadding()
+                )
+            } else OnlineHomeView(
                 currentTrack = currentTrack,
                 isPlaying = isPlaying,
                 onPlayTrack = onTrackClick,
                 onPlayPause = onPlayPauseClick,
                 recentTracks = recentTracks,
+                currentRoute = currentRoute,
+                dockScrollController = dockScrollController,
+                isLoggedIn = account != null,
+                accountId = account?.id,
+                accountName = account?.name,
+                accountEmail = account?.email,
+                avatarUrl = account?.avatarUrl,
+                channelHandle = account?.channelHandle,
+                onSearchClick = onSearchClick,
+                onOpenEqualizer = onOpenEqualizer,
+                onOpenSettings = onOpenSettings,
+                onOpenOfflineMusic = onOpenOfflineMusic,
+                onOpenDeviceConnect = onOpenNodeConnect,
+                onSignInClick = onSignInClick,
+                onOpenPlaylistDetail = onOpenPlaylistDetail,
                 modifier = Modifier.fillMaxSize().statusBarsPadding()
             )
         } else {
@@ -104,6 +167,7 @@ fun HomeScreen(
                 onOpenSmartPlaylists = onOpenSmartPlaylists,
                 onOpenStats = onOpenStats,
                 onOpenDuplicateFinder = onOpenDuplicateFinder,
+                onOpenSettings = onOpenSettings,
                 onOpenNodeConnect = onOpenNodeConnect,
                 nodeConnectStatus = nodeConnectStatus,
                 connectedDeviceCount = connectedDeviceCount,
@@ -126,6 +190,7 @@ private fun OfflineHomeScreenContent(
     onOpenSmartPlaylists: () -> Unit,
     onOpenStats: () -> Unit,
     onOpenDuplicateFinder: () -> Unit,
+    onOpenSettings: () -> Unit = {},
     onOpenNodeConnect: () -> Unit = {},
     nodeConnectStatus: DeviceConnectStatus = DeviceConnectStatus.DISCONNECTED,
     connectedDeviceCount: Int = 0,
@@ -205,7 +270,7 @@ private fun OfflineHomeScreenContent(
         contentPadding = PaddingValues(top = 16.dp, bottom = 120.dp)
     ) {
         // App Title & Quick Hub Header
-        item {
+        item(key = "offline_home_header", contentType = "home_header") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -244,9 +309,9 @@ private fun OfflineHomeScreenContent(
                         lighterStyle = true
                     )
                     LiquidIconButton(
-                        icon = Icons.Rounded.ContentCopy,
-                        onClick = onOpenDuplicateFinder,
-                        contentDescription = "Duplicate Finder",
+                        icon = Icons.Rounded.Settings,
+                        onClick = onOpenSettings,
+                        contentDescription = "Settings",
                         size = 38.dp,
                         lighterStyle = true
                     )
@@ -257,7 +322,7 @@ private fun OfflineHomeScreenContent(
 
         // In-App Update Banner (Follows glass appearance settings)
         if (availableUpdate != null) {
-            item {
+            item(key = "update_banner", contentType = "update_banner") {
                 UpdateBanner(
                     updateInfo = availableUpdate!!,
                     downloadStatus = downloadStatus,
@@ -282,7 +347,7 @@ private fun OfflineHomeScreenContent(
         }
 
         // Hero Card: Jump Back In
-        item {
+        item(key = "hero_jump_back_in", contentType = "hero_card") {
             val heroTrack = currentTrack ?: recentlyPlayed.firstOrNull() ?: allTracks.firstOrNull()
             if (heroTrack != null) {
                 Box(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -362,14 +427,19 @@ private fun OfflineHomeScreenContent(
 
         // Section 1: Recently Played Carousel
         if (recentlyPlayed.isNotEmpty()) {
-            item {
+            item(key = "shelf_recently_played", contentType = "track_carousel_shelf") {
+                val recentKeys = remember(recentlyPlayed) { uniqueLazyTrackKeys(recentlyPlayed, "recent") }
                 SectionHeader(title = "Recently Played", count = recentlyPlayed.size)
                 Spacer(modifier = Modifier.height(10.dp))
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(recentlyPlayed, key = { "recent_${it.id}" }) { track ->
+                    itemsIndexed(
+                        items = recentlyPlayed,
+                        key = { index, _ -> recentKeys[index] },
+                        contentType = { _, _ -> "track_carousel_card" }
+                    ) { _, track ->
                         TrackCarouselCard(
                             track = track,
                             isPlaying = isPlaying && currentTrack?.id == track.id,
@@ -383,14 +453,19 @@ private fun OfflineHomeScreenContent(
 
         // Section 2: Heavy Rotation ("On Repeat")
         if (heavyRotation.isNotEmpty()) {
-            item {
+            item(key = "shelf_heavy_rotation", contentType = "track_carousel_shelf") {
+                val heavyKeys = remember(heavyRotation) { uniqueLazyTrackKeys(heavyRotation, "heavy") }
                 SectionHeader(title = "Heavy Rotation", count = heavyRotation.size, subtitle = "Your most played anthems")
                 Spacer(modifier = Modifier.height(10.dp))
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(heavyRotation, key = { "heavy_${it.id}" }) { track ->
+                    itemsIndexed(
+                        items = heavyRotation,
+                        key = { index, _ -> heavyKeys[index] },
+                        contentType = { _, _ -> "track_carousel_card" }
+                    ) { _, track ->
                         TrackCarouselCard(
                             track = track,
                             badgeText = "${track.playCount}x plays",
@@ -405,7 +480,8 @@ private fun OfflineHomeScreenContent(
 
         // Section 3: Artist Spotlight (if available)
         if (artistSpotlightTracks.isNotEmpty() && topArtist != null) {
-            item {
+            item(key = "shelf_artist_spotlight", contentType = "track_carousel_shelf") {
+                val artistKeys = remember(artistSpotlightTracks) { uniqueLazyTrackKeys(artistSpotlightTracks, "artist") }
                 SectionHeader(
                     title = "Spotlight: $topArtist",
                     count = artistSpotlightTracks.size,
@@ -417,7 +493,11 @@ private fun OfflineHomeScreenContent(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(artistSpotlightTracks, key = { "artist_${it.id}" }) { track ->
+                    itemsIndexed(
+                        items = artistSpotlightTracks,
+                        key = { index, _ -> artistKeys[index] },
+                        contentType = { _, _ -> "track_carousel_card" }
+                    ) { _, track ->
                         TrackCarouselCard(
                             track = track,
                             badgeText = track.formatBadgeText,
@@ -431,7 +511,7 @@ private fun OfflineHomeScreenContent(
         }
 
         // Section 4: Quick Mixes Shelf
-        item {
+        item(key = "shelf_quick_mixes", contentType = "quick_mixes_shelf") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -460,7 +540,7 @@ private fun OfflineHomeScreenContent(
                 contentPadding = PaddingValues(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item {
+                item(key = "mix_lossless", contentType = "smart_playlist_chip") {
                     SmartPlaylistChip(
                         title = "Lossless Only",
                         subtitle = "${losslessTracks.size} tracks",
@@ -470,7 +550,7 @@ private fun OfflineHomeScreenContent(
                     )
                 }
                 if (favorites.isNotEmpty()) {
-                    item {
+                    item(key = "mix_loved", contentType = "smart_playlist_chip") {
                         SmartPlaylistChip(
                             title = "Loved Tracks",
                             subtitle = "${favorites.size} tracks",
@@ -480,7 +560,7 @@ private fun OfflineHomeScreenContent(
                         )
                     }
                 }
-                item {
+                item(key = "mix_recent", contentType = "smart_playlist_chip") {
                     SmartPlaylistChip(
                         title = "Recently Added",
                         subtitle = "${recentlyAdded.size} tracks",
@@ -489,7 +569,7 @@ private fun OfflineHomeScreenContent(
                         onClick = { if (recentlyAdded.isNotEmpty()) onTrackClick(recentlyAdded[0], recentlyAdded) }
                     )
                 }
-                item {
+                item(key = "mix_deep_cuts", contentType = "smart_playlist_chip") {
                     SmartPlaylistChip(
                         title = "Deep Cuts",
                         subtitle = "${longTracks.size} tracks (>5m)",
@@ -504,7 +584,8 @@ private fun OfflineHomeScreenContent(
 
         // Section 5: Hi-Res Studio Master Vault
         if (hiResVault.isNotEmpty()) {
-            item {
+            item(key = "shelf_hires_vault", contentType = "track_carousel_shelf") {
+                val hiResKeys = remember(hiResVault) { uniqueLazyTrackKeys(hiResVault, "hires") }
                 SectionHeader(
                     title = "Hi-Res Studio Masters",
                     count = hiResVault.size,
@@ -515,7 +596,11 @@ private fun OfflineHomeScreenContent(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(hiResVault, key = { "hires_${it.id}" }) { track ->
+                    itemsIndexed(
+                        items = hiResVault,
+                        key = { index, _ -> hiResKeys[index] },
+                        contentType = { _, _ -> "track_carousel_card" }
+                    ) { _, track ->
                         TrackCarouselCard(
                             track = track,
                             badgeText = "${track.bitDepth}-bit / ${(track.sampleRate / 1000.0).toInt()}k",
@@ -530,7 +615,8 @@ private fun OfflineHomeScreenContent(
 
         // Section 6: Fresh Discoveries (Untapped Library)
         if (freshDiscoveries.isNotEmpty()) {
-            item {
+            item(key = "shelf_fresh_discoveries", contentType = "track_carousel_shelf") {
+                val freshKeys = remember(freshDiscoveries) { uniqueLazyTrackKeys(freshDiscoveries, "fresh") }
                 SectionHeader(
                     title = "Fresh Discoveries",
                     count = freshDiscoveries.size,
@@ -541,7 +627,11 @@ private fun OfflineHomeScreenContent(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(freshDiscoveries, key = { "fresh_${it.id}" }) { track ->
+                    itemsIndexed(
+                        items = freshDiscoveries,
+                        key = { index, _ -> freshKeys[index] },
+                        contentType = { _, _ -> "track_carousel_card" }
+                    ) { _, track ->
                         TrackCarouselCard(
                             track = track,
                             badgeText = "New",
@@ -556,14 +646,19 @@ private fun OfflineHomeScreenContent(
 
         // Section 7: Rediscover Shelf
         if (rediscoverTracks.isNotEmpty()) {
-            item {
+            item(key = "shelf_rediscover", contentType = "track_carousel_shelf") {
+                val rediscoverKeys = remember(rediscoverTracks) { uniqueLazyTrackKeys(rediscoverTracks, "rediscover") }
                 SectionHeader(title = "Rediscover", count = rediscoverTracks.size, subtitle = "Tracks you haven't heard in a while")
                 Spacer(modifier = Modifier.height(10.dp))
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(rediscoverTracks, key = { "rediscover_${it.id}" }) { track ->
+                    itemsIndexed(
+                        items = rediscoverTracks,
+                        key = { index, _ -> rediscoverKeys[index] },
+                        contentType = { _, _ -> "track_carousel_card" }
+                    ) { _, track ->
                         TrackCarouselCard(
                             track = track,
                             isPlaying = isPlaying && currentTrack?.id == track.id,
@@ -636,16 +731,22 @@ private fun ArtworkThumbnail(
     cornerRadius: Dp,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val targetPx = with(LocalDensity.current) { size.roundToPx() }.coerceIn(96, 512)
     val squircleShape = remember(cornerRadius) { ContinuousRoundedRectangle(cornerRadius) }
+    val artworkRequest = remember(track.id, track.albumId, track.path, targetPx, context) {
+        ImageRequest.Builder(context)
+            .data(track)
+            .size(targetPx, targetPx)
+            .build()
+    }
     Box(
         modifier = modifier
             .size(size)
             .clip(squircleShape)
             .border(
                 1.dp,
-                Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.05f))
-                ),
+                HOME_BORDER_BRUSH,
                 squircleShape
             )
             .background(Color.White.copy(alpha = 0.08f)),
@@ -658,7 +759,7 @@ private fun ArtworkThumbnail(
             modifier = Modifier.size(size * 0.45f)
         )
         AsyncImage(
-            model = track,
+            model = artworkRequest,
             contentDescription = track.title,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
@@ -753,17 +854,14 @@ private fun SmartPlaylistChip(
     accentColor: Color,
     onClick: () -> Unit
 ) {
-    val chipShape = remember { ContinuousRoundedRectangle(16.dp) }
     Row(
         modifier = Modifier
-            .clip(chipShape)
+            .clip(SMART_CHIP_SHAPE_16)
             .background(Color.White.copy(alpha = 0.08f))
             .border(
                 1.dp,
-                Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.20f), Color.White.copy(alpha = 0.05f))
-                ),
-                chipShape
+                HOME_BORDER_BRUSH,
+                SMART_CHIP_SHAPE_16
             )
             .pressScale(targetScale = 0.96f, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),

@@ -12,9 +12,9 @@ class ConvxDockAndPlayerTest {
         val tabs = DEFAULT_CONVX_NAV_TABS
         assertEquals(4, tabs.size)
         assertEquals("home", tabs[0].route)
-        assertEquals("library", tabs[1].route)
-        assertEquals("equalizer", tabs[2].route)
-        assertEquals("settings", tabs[3].route)
+        assertEquals("explore", tabs[1].route)
+        assertEquals("library", tabs[2].route)
+        assertEquals("search", tabs[3].route)
     }
 
     @Test
@@ -37,9 +37,9 @@ class ConvxDockAndPlayerTest {
         val index1 = (touchX1 / tabWidthPx).toInt().coerceIn(0, totalTabs - 1)
         assertEquals(0, index1)
 
-        val touchX2 = 250f
+        val touchX2 = 150f
         val index2 = (touchX2 / tabWidthPx).toInt().coerceIn(0, totalTabs - 1)
-        assertEquals(2, index2)
+        assertEquals(1, index2)
 
         val touchXOut = 500f
         val indexOut = (touchXOut / tabWidthPx).toInt().coerceIn(0, totalTabs - 1)

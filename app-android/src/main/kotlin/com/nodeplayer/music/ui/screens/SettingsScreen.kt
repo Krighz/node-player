@@ -105,6 +105,7 @@ fun SettingsScreen(
     onNavigateToOpticalDiagnostics: () -> Unit = {},
     onPairNewDevice: () -> Unit = {},
     onRescanLibrary: () -> Unit,
+    onBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -154,11 +155,18 @@ fun SettingsScreen(
     var isExcludedTracksExpanded by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
     var activeSection by rememberSaveable { mutableStateOf<String?>(null) }
-    BackHandler(enabled = activeSection != null) {
-        activeSection = if (activeSection == "motion_playground") "customize_ui" else null
+    BackHandler(enabled = true) {
+        if (activeSection == "motion_playground") {
+            activeSection = "customize_ui"
+        } else if (activeSection != null) {
+            activeSection = null
+        } else {
+            onBack()
+        }
     }
     var showTopMenu by remember { mutableStateOf(false) }
     var showAdvancedSettings by remember { mutableStateOf(sharedPrefs.getBoolean("show_advanced_settings", false)) }
+    var showYouTubeLoginSheet by remember { mutableStateOf(false) }
 
     var updateCheckAuto by remember { mutableStateOf(UpdatePreferences.isCheckAutomatically(context)) }
     var updateWifiOnly by remember { mutableStateOf(UpdatePreferences.isWifiOnly(context)) }
@@ -186,6 +194,32 @@ fun SettingsScreen(
         return
     }
 
+    if (activeSection == "customize_ui") {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+        ) {
+            CustomizeUiScreen(
+                themeConfig = themeConfig,
+                onThemeConfigChange = onThemeConfigChange,
+                onApplySafeGraphicsMode = {
+                    onThemeConfigChange(
+                        themeConfig.copy(
+                            shaderMode = "OFF",
+                            blurRadiusDp = 0.0f,
+                            noiseGrainAlpha = 0f
+                        )
+                    )
+                },
+                onOpenMotionPlayground = { activeSection = "motion_playground" },
+                onBack = { activeSection = null },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        return
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -203,20 +237,36 @@ fun SettingsScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Settings",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White
                     )
-                )
-                Text(
-                    text = "Audio output, aesthetics & folder engine",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = Color.White.copy(alpha = 0.65f)
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Column {
+                    Text(
+                        text = "Settings",
+                        style = MaterialTheme.typography.headlineMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
                     )
-                )
+                    Text(
+                        text = "Audio output, aesthetics & folder engine",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = Color.White.copy(alpha = 0.65f)
+                        )
+                    )
+                }
             }
 
             Box {
@@ -504,6 +554,7 @@ fun SettingsScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    SettingsHubCard("Online & YouTube Account", "Online mode, sign-in, account playlists", Icons.Rounded.AccountCircle) { activeSection = "online_account" }
                     SettingsHubCard("Last.fm & Network", "Scrobbling, now playing, custom API keys", Icons.Rounded.CloudQueue) { activeSection = "lastfm" }
                     SettingsHubCard("Stats & Audio Analysis", "Audio quality analysis, genuine Hi-Res, DR", Icons.Rounded.BarChart) { activeSection = "stats" }
                     SettingsHubCard("Updates", "GitHub releases, auto-check, download manager", Icons.Rounded.SystemUpdate) { activeSection = "updates" }
@@ -525,6 +576,7 @@ fun SettingsScreen(
                     "customize_ui" -> "Customize UI"
                     "widgets" -> "Widgets & Lock Screen"
                     "lyrics" -> "Lyrics & Metadata"
+                    "online_account" -> "Online & YouTube Account"
                     "lastfm" -> "Last.fm & Network"
                     "stats" -> "Stats & Audio Analysis"
                     "updates" -> "Updates"
@@ -1278,6 +1330,51 @@ fun SettingsScreen(
                     valueRange = 0.0f..10.0f,
                     colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
                 )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Lyrics Settings
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Online Lyrics Lookup", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Search LRCLIB for line & word synced lyrics", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    LiquidToggle(
+                        checked = lrclibOptIn,
+                        onCheckedChange = {
+                            lrclibOptIn = it
+                            sharedPrefs.edit().putBoolean("auto_fetch_lyrics", it).apply()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Lyrics Cache", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Clear cached offline lyrics", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    Text(
+                        text = "Clear Cache",
+                        style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFFF5252), fontWeight = FontWeight.SemiBold),
+                        modifier = Modifier
+                            .clickable {
+                                com.nodeplayer.music.lyrics.LyricsManager.clearCache()
+                                Toast.makeText(context, "Lyrics cache cleared", Toast.LENGTH_SHORT).show()
+                            }
+                            .padding(vertical = 4.dp, horizontal = 8.dp)
+                    )
+                }
             }
         }
 
@@ -1286,13 +1383,10 @@ fun SettingsScreen(
                 }
 
         if (shouldShow("customize_ui")) {
-            CustomizeUiScreen(
+            com.nodeplayer.ui.screens.CustomizeUiView(
                 themeConfig = themeConfig,
                 onThemeConfigChange = onThemeConfigChange,
-                onApplySafeGraphicsMode = onApplySafeGraphicsMode,
-                onReportProblem = onReportProblem,
-                onOpenMotionPlayground = { activeSection = "motion_playground" },
-                
+                modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(20.dp))
         }
@@ -1655,59 +1749,211 @@ fun SettingsScreen(
 
                 }
 
-        if (shouldShow("lastfm")) {
-        // Online Streaming & YouTube Music Cloud Section
-        val isOnlineMode by com.nodeplayer.common.AppModeState.isOnlineMode.collectAsState()
+        if (shouldShow("online_account")) {
+            val isOnlineMode by com.nodeplayer.common.AppModeState.isOnlineMode.collectAsState()
+            val authState by com.nodeplayer.music.auth.YouTubeAccountManager.authState.collectAsState()
 
-        Text(
-            text = "ONLINE & STREAMING",
-            style = MaterialTheme.typography.labelSmall.copy(
-                letterSpacing = 1.5.sp,
-                fontWeight = FontWeight.Bold,
-                color = accent
+            Text(
+                text = "ONLINE MODE & YOUTUBE ACCOUNT",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = accent
+                )
             )
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "YouTube Music Online Mode",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
-                        )
-                        Text(
-                            text = if (isOnlineMode) "Active: Curated YouTube Music feeds, trending charts & high-res Opus streaming enabled"
-                            else "Inactive: 100% offline silence (zero network queries or background requests)",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = if (isOnlineMode) Color(0xFF00E5FF).copy(alpha = 0.9f) else Color.White.copy(alpha = 0.65f)
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Online Mode Toggle
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "YouTube Music Online Mode",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
                             )
+                            Text(
+                                text = if (isOnlineMode) "Active: Curated YouTube Music feeds, trending charts & high-res Opus streaming enabled"
+                                else "Inactive: 100% offline silence (zero network queries or background requests)",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = if (isOnlineMode) Color(0xFF00E5FF).copy(alpha = 0.9f) else Color.White.copy(alpha = 0.65f)
+                                )
+                            )
+                        }
+                        LiquidToggle(
+                            checked = isOnlineMode,
+                            onCheckedChange = { enabled ->
+                                com.nodeplayer.common.AppModeState.setOnlineMode(enabled)
+                                coroutineScope.launch {
+                                    com.nodeplayer.music.data.AppSettingsRepository.updateSetting(
+                                        context,
+                                        com.nodeplayer.music.data.AppSettingsRepository.KEY_IS_ONLINE_MODE,
+                                        enabled
+                                    )
+                                }
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF00E5FF), checkedTrackColor = Color(0xFF00E5FF).copy(alpha = 0.5f))
                         )
                     }
-                    LiquidToggle(
-                        checked = isOnlineMode,
-                        onCheckedChange = { enabled ->
-                            com.nodeplayer.common.AppModeState.setOnlineMode(enabled)
-                            coroutineScope.launch {
-                                com.nodeplayer.music.data.AppSettingsRepository.updateSetting(
-                                    context,
-                                    com.nodeplayer.music.data.AppSettingsRepository.KEY_IS_ONLINE_MODE,
-                                    enabled
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // YouTube Account Section
+                    when (val currentAuth = authState) {
+                        is com.nodeplayer.model.AuthState.LoggedIn -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (!currentAuth.account.avatarUrl.isNullOrBlank()) {
+                                    coil.compose.AsyncImage(
+                                        model = currentAuth.account.avatarUrl,
+                                        contentDescription = "Avatar",
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .border(1.dp, accent.copy(alpha = 0.5f), CircleShape)
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .clip(CircleShape)
+                                            .background(accent.copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Person,
+                                            contentDescription = null,
+                                            tint = accent,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.width(16.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = currentAuth.account.name,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = currentAuth.account.handle ?: currentAuth.account.email ?: "Signed in",
+                                        style = MaterialTheme.typography.bodySmall.copy(
+                                            color = Color.White.copy(alpha = 0.65f)
+                                        ),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Button(
+                                    onClick = { com.nodeplayer.music.auth.YouTubeAccountManager.logout() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(alpha = 0.12f))
+                                ) {
+                                    Text("Sign Out", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+                        is com.nodeplayer.model.AuthState.SessionExpired -> {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Warning,
+                                        contentDescription = null,
+                                        tint = Color(0xFFFFB74D),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Session Expired",
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFFFB74D)
+                                            )
+                                        )
+                                        Text(
+                                            text = "Your YouTube login has expired. Sign in again to access playlists.",
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = Color.White.copy(alpha = 0.7f)
+                                            )
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = { showYouTubeLoginSheet = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = accent),
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Text("Sign In Again")
+                                }
+                            }
+                        }
+                        is com.nodeplayer.model.AuthState.Loading -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    color = accent,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(
+                                    text = "Checking YouTube account…",
+                                    style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.7f))
                                 )
                             }
-                        },
-                        colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFF00E5FF), checkedTrackColor = Color(0xFF00E5FF).copy(alpha = 0.5f))
-                    )
+                        }
+                        is com.nodeplayer.model.AuthState.LoggedOut -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "YouTube Account",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    )
+                                    Text(
+                                        text = "Sign in to access your YouTube Music playlists & liked songs",
+                                        style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Button(
+                                    onClick = { showYouTubeLoginSheet = true },
+                                    enabled = isOnlineMode,
+                                    colors = ButtonDefaults.buttonColors(containerColor = accent)
+                                ) {
+                                    Text("Sign In", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+                    }
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        if (shouldShow("lastfm")) {
 
         // 6. Last.fm Scrobbling Section
         Text(
@@ -3723,8 +3969,12 @@ fun SettingsScreen(
         )
     }
 
-
-
+    if (showYouTubeLoginSheet) {
+        com.nodeplayer.music.ui.auth.YouTubeLoginSheet(
+            onDismiss = { showYouTubeLoginSheet = false },
+            onLoginSuccess = { showYouTubeLoginSheet = false }
+        )
+    }
 }
 
 

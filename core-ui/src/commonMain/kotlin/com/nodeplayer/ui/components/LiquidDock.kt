@@ -2,6 +2,7 @@ package com.nodeplayer.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -32,9 +33,8 @@ data class LiquidDockTab(
 
 val LIQUID_DOCK_TABS = listOf(
     LiquidDockTab(PlayerNavDestination.HOME, "Home", Icons.Rounded.Home),
-    LiquidDockTab(PlayerNavDestination.LIBRARY, "Library", Icons.Rounded.LibraryMusic),
-    LiquidDockTab(PlayerNavDestination.EQUALIZER, "Equalizer", Icons.Rounded.GraphicEq),
-    LiquidDockTab(PlayerNavDestination.SETTINGS, "Settings", Icons.Rounded.Settings)
+    LiquidDockTab(PlayerNavDestination.NEW, "New", Icons.Rounded.Explore),
+    LiquidDockTab(PlayerNavDestination.LIBRARY, "Library", Icons.Rounded.LibraryMusic)
 )
 
 /**

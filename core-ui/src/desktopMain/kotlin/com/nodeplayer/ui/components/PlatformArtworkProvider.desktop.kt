@@ -1,15 +1,97 @@
 package com.nodeplayer.ui.components
 
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asComposeImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import com.nodeplayer.model.Track
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import org.jetbrains.skia.Bitmap
+import org.jetbrains.skia.ColorAlphaType
+import org.jetbrains.skia.ColorType
 import org.jetbrains.skia.Image
+import org.jetbrains.skia.ImageInfo
+import org.jetbrains.skia.SamplingMode
 import java.io.File
 import java.io.FileInputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 actual object PlatformArtworkProvider {
 
-    actual suspend fun loadArtwork(track: Track): ImageBitmap? {
+    private val decodeSemaphore = Semaphore(4)
+
+    private fun decodeSampledDesktopBitmap(bytes: ByteArray, maxSizePx: Int): ImageBitmap? {
+        val targetPx = maxSizePx.coerceIn(96, 512)
+        val skiaImage = Image.makeFromEncoded(bytes)
+        val srcW = skiaImage.width
+        val srcH = skiaImage.height
+        if (srcW <= 0 || srcH <= 0) {
+            skiaImage.close()
+            return null
+        }
+        if (maxOf(srcW, srcH) <= targetPx * 2) {
+            return try {
+                skiaImage.toComposeImageBitmap()
+            } finally {
+                skiaImage.close()
+            }
+        }
+        val scale = targetPx.toFloat() / maxOf(srcW, srcH).toFloat()
+        val dstW = (srcW * scale).toInt().coerceAtLeast(1)
+        val dstH = (srcH * scale).toInt().coerceAtLeast(1)
+        val bitmap = Bitmap()
+        bitmap.allocN32Pixels(dstW, dstH)
+        val pixmap = bitmap.peekPixels()
+        return try {
+            if (pixmap != null && skiaImage.scalePixels(pixmap, SamplingMode.LINEAR, false)) {
+                bitmap.asComposeImageBitmap()
+            } else {
+                skiaImage.toComposeImageBitmap()
+            }
+        } finally {
+            skiaImage.close()
+        }
+    }
+
+    actual suspend fun loadArtwork(url: String, maxSizePx: Int): ImageBitmap? {
+        if (url.isBlank()) return null
+        val targetPx = maxSizePx.coerceIn(96, 512)
+        val cachedBytes = ArtworkCache.getBytes(url)
+        if (cachedBytes != null && cachedBytes.isNotEmpty()) {
+            return decodeSemaphore.withPermit {
+                try {
+                    decodeSampledDesktopBitmap(cachedBytes, targetPx)
+                } catch (_: Exception) {
+                    null
+                }
+            }
+        }
+        val resolvedUrl = if (url.startsWith("nodeplayer://youtube/")) {
+            val videoId = url.removePrefix("nodeplayer://youtube/")
+            "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+        } else {
+            url
+        }
+        return decodeSemaphore.withPermit {
+            try {
+                val uri = java.net.URI(resolvedUrl).toURL()
+                val conn = uri.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 4000
+                conn.readTimeout = 4000
+                conn.instanceFollowRedirects = true
+                val bytes = conn.inputStream.use { it.readBytes() }
+                if (bytes.isNotEmpty()) {
+                    ArtworkCache.putBytes(url, bytes)
+                    decodeSampledDesktopBitmap(bytes, targetPx)
+                } else null
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+
+    actual suspend fun loadArtwork(track: Track, maxSizePx: Int): ImageBitmap? {
         val path = track.path
         if (path.isBlank()) return null
 
@@ -18,44 +100,52 @@ actual object PlatformArtworkProvider {
             ?: ArtworkCache.getBytes(track.id.toString())
             ?: ArtworkCache.getBytes(track.title + track.artist)
         if (cachedBytes != null && cachedBytes.isNotEmpty()) {
-            return try {
-                val skiaImage = Image.makeFromEncoded(cachedBytes)
-                skiaImage.toComposeImageBitmap()
-            } catch (_: Exception) {
-                null
+            return decodeSemaphore.withPermit {
+                try {
+                    decodeSampledDesktopBitmap(cachedBytes, maxSizePx)
+                } catch (_: Exception) {
+                    null
+                }
             }
         }
 
         // 0.1 Check for YouTube Music remote/cached tracks: fetch thumbnail if online
-        if (path.startsWith("nodeplayer://youtube/")) {
-            val videoId = path.removePrefix("nodeplayer://youtube/")
-            return try {
-                val url = java.net.URI("https://i.ytimg.com/vi/$videoId/hqdefault.jpg").toURL()
-                val conn = url.openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 4000
-                conn.readTimeout = 4000
-                conn.instanceFollowRedirects = true
-                val bytes = conn.inputStream.use { it.readBytes() }
-                if (bytes.isNotEmpty()) {
-                    ArtworkCache.putBytes(path, bytes)
-                    val skiaImage = Image.makeFromEncoded(bytes)
-                    skiaImage.toComposeImageBitmap()
-                } else null
-            } catch (_: Exception) {
-                null
+        if (path.startsWith("nodeplayer://youtube/") || path.startsWith("http://") || path.startsWith("https://")) {
+            val resolvedUrl = if (path.startsWith("nodeplayer://youtube/")) {
+                val videoId = path.removePrefix("nodeplayer://youtube/")
+                "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+            } else {
+                path
+            }
+            return decodeSemaphore.withPermit {
+                try {
+                    val url = java.net.URI(resolvedUrl).toURL()
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 4000
+                    conn.readTimeout = 4000
+                    conn.instanceFollowRedirects = true
+                    val bytes = conn.inputStream.use { it.readBytes() }
+                    if (bytes.isNotEmpty()) {
+                        ArtworkCache.putBytes(path, bytes)
+                        decodeSampledDesktopBitmap(bytes, maxSizePx)
+                    } else null
+                } catch (_: Exception) {
+                    null
+                }
             }
         }
 
         val file = File(path)
         if (!file.exists() || !file.canRead()) return null
 
-        val bytes = extractDesktopArtworkBytes(file) ?: return null
-        ArtworkCache.putBytes(track.path, bytes)
-        return try {
-            val skiaImage = Image.makeFromEncoded(bytes)
-            skiaImage.toComposeImageBitmap()
-        } catch (_: Exception) {
-            null
+        return decodeSemaphore.withPermit {
+            val bytes = extractDesktopArtworkBytes(file) ?: return@withPermit null
+            ArtworkCache.putBytes(track.path, bytes)
+            try {
+                decodeSampledDesktopBitmap(bytes, maxSizePx)
+            } catch (_: Exception) {
+                null
+            }
         }
     }
 
@@ -224,4 +314,14 @@ actual object PlatformArtworkProvider {
             null
         }
     }
+}
+
+actual fun imageBitmapOf(pixels: IntArray, width: Int, height: Int): ImageBitmap {
+    val bitmap = Bitmap()
+    bitmap.allocPixels(ImageInfo(width, height, ColorType.BGRA_8888, ColorAlphaType.UNPREMUL))
+    val bytes = ByteBuffer.allocate(pixels.size * 4).order(ByteOrder.LITTLE_ENDIAN)
+    bytes.asIntBuffer().put(pixels)
+    bitmap.installPixels(bytes.array())
+    bitmap.setImmutable()
+    return bitmap.asComposeImageBitmap()
 }

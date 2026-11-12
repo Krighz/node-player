@@ -1,7 +1,7 @@
-<!-- refreshed: 2026-11-05 -->
+<!-- refreshed: 2026-11-11 -->
 # Architecture
 
-**Analysis Date:** 2026-11-05
+**Analysis Date:** 2026-11-11
 
 ## System Overview
 
@@ -53,6 +53,13 @@
 │  - AudioAnalysisModels, ThemeConfig │  - AudioDecoder, AudioOutput, Result  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+
+### 2026-11 Updates (Milestone v2.3 & Online Services)
+- **InnerTube / YouTube Music Integration:** Seamless fallback recommendations, home feed generation, dynamic shelves (core-network/recommender/, core-network/search/), and stream resolution using VisionOS/iOS clients to avoid playback 403s.
+- **Spotify Migration Bridge:** Cross-service matching engine (core-network/spotify/SpotifyTrackMatcher.kt) matching ISRC metadata and fuzzy Levenshtein distance with PKCE OAuth authentication.
+- **Synchronized Lyrics Engine:** LRCLIB network client (core-network/lyrics/LrcLibClient.kt) feeding interactive Apple Music-style lyrics (FullScreenLyricsView.kt, AppleMusicLyricsView.kt).
+- **Liquid Glass & Convx Dock:** Liquid backdrop shaders, gesture-driven auto-hiding dock (ConvxLiquidDock.kt, DockScrollController.kt), vertical equalizer sliders with horizontal Hz scrolling (LiquidVerticalSlider.kt, EqualizerView.kt), and full token-driven theming (GlassTokens.kt).
 
 ## Component Responsibilities
 

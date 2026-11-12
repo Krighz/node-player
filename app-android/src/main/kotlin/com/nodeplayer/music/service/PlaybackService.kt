@@ -96,7 +96,14 @@ class PlaybackService : MediaSessionService() {
         multicastLock = null
     }
     val statsTracker = com.nodeplayer.library.PlaybackStatsTracker()
-    private val scrobbledTrackIds = mutableSetOf<Long>()
+    private val statsLock = Any()
+    private val scrobbledTrackIds: MutableSet<Long> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    @Volatile
+    private var cachedLastFmSessionKey: String = ""
+    @Volatile
+    private var cachedLastFmScrobbleEnabled: Boolean = false
+    private var cachedPrefs: android.content.SharedPreferences? = null
+    private var prefsChangeListener: android.content.SharedPreferences.OnSharedPreferenceChangeListener? = null
 
     val player: ExoPlayer
         get() = crossfadeManager.activePlayer
@@ -118,14 +125,18 @@ class PlaybackService : MediaSessionService() {
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             isCurrentlyPlaying = isPlaying
-            statsTracker.onPlayStateChanged(isPlaying)
+            synchronized(statsLock) {
+                statsTracker.onPlayStateChanged(isPlaying)
+            }
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
             scheduleNextLyricUpdate()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             if (playbackState == Player.STATE_ENDED) {
-                statsTracker.onPlayStateChanged(false)
+                synchronized(statsLock) {
+                    statsTracker.onPlayStateChanged(false)
+                }
             }
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(this@PlaybackService)
             scheduleNextLyricUpdate()
@@ -137,7 +148,9 @@ class PlaybackService : MediaSessionService() {
             reason: Int
         ) {
             if (reason == Player.DISCONTINUITY_REASON_SEEK) {
-                statsTracker.onSeek()
+                synchronized(statsLock) {
+                    statsTracker.onSeek()
+                }
                 if (::nodeConnectHub.isInitialized) {
                     serviceScope.launch(Dispatchers.IO) {
                         nodeConnectHub.castService.flushSenderStream(newPosition.positionMs)
@@ -521,6 +534,20 @@ class PlaybackService : MediaSessionService() {
         instance = this
         onServiceCreated?.invoke(this)
         com.nodeplayer.music.playback.AudioCache.init(this)
+        serviceScope.launch(Dispatchers.IO) {
+            val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+            cachedLastFmSessionKey = prefs.getString("lastfm_session_key", "") ?: ""
+            cachedLastFmScrobbleEnabled = prefs.getBoolean("lastfm_scrobble_enabled", false)
+            val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+                when (key) {
+                    "lastfm_session_key" -> cachedLastFmSessionKey = sp.getString("lastfm_session_key", "") ?: ""
+                    "lastfm_scrobble_enabled" -> cachedLastFmScrobbleEnabled = sp.getBoolean("lastfm_scrobble_enabled", false)
+                }
+            }
+            prefs.registerOnSharedPreferenceChangeListener(listener)
+            cachedPrefs = prefs
+            prefsChangeListener = listener
+        }
         createNotificationChannel()
 
         setMediaNotificationProvider(
@@ -536,7 +563,9 @@ class PlaybackService : MediaSessionService() {
                 onTrackTransitionCallback?.invoke(track)
                 sleepTimerManager.onTrackChanged()
                 scrobbledTrackIds.remove(track.id)
-                statsTracker.onTrackStarted(track.id)
+                synchronized(statsLock) {
+                    statsTracker.onTrackStarted(track.id)
+                }
                 if (::nodeConnectHub.isInitialized && nodeConnectHub.castService.isCasting) {
                     val conn = nodeConnectHub.activeConnections.firstOrNull()
                     if (conn != null) {
@@ -565,11 +594,10 @@ class PlaybackService : MediaSessionService() {
                         )
                     }
                 }
-                serviceScope.launch(Dispatchers.IO) {
-                    val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
-                    val sk = prefs.getString("lastfm_session_key", "") ?: ""
-                    val enabled = prefs.getBoolean("lastfm_scrobble_enabled", false)
-                    if (enabled && sk.isNotBlank()) {
+                val sk = cachedLastFmSessionKey
+                val enabled = cachedLastFmScrobbleEnabled
+                if (enabled && sk.isNotBlank()) {
+                    serviceScope.launch(Dispatchers.IO) {
                         com.nodeplayer.music.library.LastFmClient.updateNowPlaying(track, sk)
                     }
                 }
@@ -615,24 +643,28 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch(Dispatchers.Main) {
             while (isActive) {
                 delay(3000L)
-                if (::crossfadeManager.isInitialized && crossfadeManager.activePlayer.isPlaying) {
-                    statsTracker.tick()
-                    val track = crossfadeManager.currentPlayingTrack
-                    if (track != null && !scrobbledTrackIds.contains(track.id)) {
-                        val listenedMs = statsTracker.currentTrackListenedMsValue
-                        if (com.nodeplayer.library.LastFmSigner.isEligibleForScrobble(track.durationMs / 1000L, listenedMs / 1000L)) {
-                            scrobbledTrackIds.add(track.id)
-                            val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
-                            val sk = prefs.getString("lastfm_session_key", "") ?: ""
-                            val enabled = prefs.getBoolean("lastfm_scrobble_enabled", false)
-                            if (enabled && sk.isNotBlank()) {
-                                kotlinx.coroutines.withContext(Dispatchers.IO) {
-                                    com.nodeplayer.music.library.LastFmClient.scrobble(
-                                        track = track,
-                                        timestampSec = System.currentTimeMillis() / 1000L,
-                                        sessionKey = sk,
-                                        context = this@PlaybackService
-                                    )
+                val isPlayingNow = ::crossfadeManager.isInitialized && crossfadeManager.activePlayer.isPlaying
+                val track = if (isPlayingNow) crossfadeManager.currentPlayingTrack else null
+                if (isPlayingNow) {
+                    withContext(Dispatchers.Default) {
+                        val listenedMs = synchronized(statsLock) {
+                            statsTracker.tick()
+                            statsTracker.currentTrackListenedMsValue
+                        }
+                        if (track != null && !scrobbledTrackIds.contains(track.id)) {
+                            if (com.nodeplayer.library.LastFmSigner.isEligibleForScrobble(track.durationMs / 1000L, listenedMs / 1000L)) {
+                                scrobbledTrackIds.add(track.id)
+                                val sk = cachedLastFmSessionKey
+                                val enabled = cachedLastFmScrobbleEnabled
+                                if (enabled && sk.isNotBlank()) {
+                                    withContext(Dispatchers.IO) {
+                                        com.nodeplayer.music.library.LastFmClient.scrobble(
+                                            track = track,
+                                            timestampSec = System.currentTimeMillis() / 1000L,
+                                            sessionKey = sk,
+                                            context = this@PlaybackService
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -784,10 +816,42 @@ class PlaybackService : MediaSessionService() {
             override suspend fun insertScannedFolders(folders: List<com.nodeplayer.model.MusicFolder>) {}
             override suspend fun setFolderEnabled(path: String, isEnabled: Boolean) {}
             override suspend fun setTracksHiddenForFolder(folderPrefix: String, isHidden: Boolean) {}
-            override fun getAllPlaylists(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Playlist>> = kotlinx.coroutines.flow.emptyFlow()
+            override fun getAllPlaylists(): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Playlist>> =
+                db?.playerDao()?.getAllPlaylists()?.let { flow ->
+                    kotlinx.coroutines.flow.flow {
+                        flow.collect { entities ->
+                            emit(entities.map { it.toPlaylist() })
+                        }
+                    }
+                } ?: kotlinx.coroutines.flow.emptyFlow()
             override suspend fun insertPlaylist(playlist: com.nodeplayer.model.Playlist): Long = 0L
-            override suspend fun deletePlaylist(playlistId: Long) {}
-            override fun getTracksForPlaylist(playlistId: Long): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Track>> = kotlinx.coroutines.flow.emptyFlow()
+            override suspend fun renamePlaylist(playlistId: Long, newName: String) { db?.playerDao()?.renamePlaylist(playlistId, newName) }
+            override suspend fun deletePlaylist(playlistId: Long) {
+                val p = db?.playerDao()?.getAllPlaylistsList()?.find { it.id == playlistId }
+                if (p != null) db?.playerDao()?.deletePlaylist(p)
+            }
+            override fun getTracksForPlaylist(playlistId: Long): kotlinx.coroutines.flow.Flow<List<com.nodeplayer.model.Track>> =
+                db?.playerDao()?.getTracksForPlaylist(playlistId)?.let { flow ->
+                    kotlinx.coroutines.flow.flow {
+                        flow.collect { entities ->
+                            emit(entities.map { it.toTrack() })
+                        }
+                    }
+                } ?: kotlinx.coroutines.flow.emptyFlow()
+            override suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long) {
+                val maxPos = db?.playerDao()?.getMaxPlaylistPosition(playlistId) ?: -1
+                db?.playerDao()?.insertPlaylistTracks(listOf(com.nodeplayer.music.data.PlaylistTrackCrossRef(playlistId, trackId, maxPos + 1)))
+            }
+            override suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
+                db?.playerDao()?.removeTrackFromPlaylist(playlistId, trackId)
+            }
+            override suspend fun reorderPlaylistTracks(playlistId: Long, orderedTrackIds: List<Long>) {
+                db?.playerDao()?.clearPlaylistTracks(playlistId)
+                val refs = orderedTrackIds.mapIndexed { idx, tid ->
+                    com.nodeplayer.music.data.PlaylistTrackCrossRef(playlistId, tid, idx)
+                }
+                db?.playerDao()?.insertPlaylistTracks(refs)
+            }
             override suspend fun updateTrackAudioAnalysis(id: Long, status: String, confidence: Float, cutoffHz: Float, lufs: Float, drScore: Int, drLabel: String) {}
             override suspend fun recordTrackPlayed(id: Long, timestamp: Long) { db?.playerDao()?.recordTrackPlayed(id, timestamp) }
         }
@@ -1005,6 +1069,11 @@ class PlaybackService : MediaSessionService() {
             sleepTimerManager.release()
         }
         lyricUpdateJob?.cancel()
+        prefsChangeListener?.let { listener ->
+            cachedPrefs?.unregisterOnSharedPreferenceChangeListener(listener)
+        }
+        prefsChangeListener = null
+        cachedPrefs = null
         serviceScope.cancel()
         try { player.removeListener(playerListener) } catch (_: Exception) {}
         headsetReceiver?.let {

@@ -120,6 +120,55 @@ fun LiquidSlider(
 }
 
 /**
+ * Liquid Glass Vertical Slider with isolated vertical drag gestures,
+ * center 0 dB detent notch line, and double-tap to reset.
+ */
+@Composable
+fun LiquidVerticalSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    valueRange: ClosedFloatingPointRange<Float> = -12f..12f,
+    steps: Int = 0,
+    height: Dp = 200.dp,
+    accentColor: Color? = null,
+    onDoubleTap: (() -> Unit)? = null,
+    onValueChangeFinished: (() -> Unit)? = null,
+    backdrop: Backdrop? = null
+) {
+    val controlsConfig = LocalGlassControlsConfig.current
+    val ambientBackdrop = LocalControlBackdrop.current
+    val effectiveSuppliedBackdrop = backdrop ?: ambientBackdrop
+    val resolved = controlsConfig.resolve(GlassComponentType.SLIDERS, inList = false)
+    val effectiveBackdrop = if (resolved.isPlainSquircle || !controlsConfig.masterEnabled) remember { emptyBackdrop() } else effectiveSuppliedBackdrop
+
+    Box(
+        modifier = modifier
+            .semantics {
+                progressBarRangeInfo = ProgressBarRangeInfo(
+                    current = value,
+                    range = valueRange,
+                    steps = steps
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        com.kyant.backdrop.catalog.components.LiquidVerticalSlider(
+            value = { value },
+            onValueChange = { if (enabled) onValueChange(it) },
+            valueRange = valueRange,
+            visibilityThreshold = if (steps > 0) (valueRange.endInclusive - valueRange.start) / steps.toFloat() else 0.001f,
+            backdrop = effectiveBackdrop,
+            height = height,
+            accentColor = accentColor,
+            onDoubleTap = onDoubleTap,
+            onValueChangeFinished = onValueChangeFinished
+        )
+    }
+}
+
+/**
  * Alias for [LiquidSlider] for backwards compatibility.
  */
 @Composable

@@ -2,14 +2,26 @@ package com.nodeplayer.music
 
 import android.app.Application
 import android.content.Context
+import android.graphics.drawable.BitmapDrawable
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
 import androidx.room.Room
+import coil.Coil
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import com.nodeplayer.common.logging.LogLevel
 import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.music.data.NodeDatabase
 import com.nodeplayer.music.library.AudioArtworkFetcher
 import com.nodeplayer.music.library.LibraryScanner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class NodePlayerApplication : Application(), ImageLoaderFactory {
 
@@ -18,6 +30,17 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             .components {
                 add(AudioArtworkFetcher.TrackFactory())
                 add(AudioArtworkFetcher.FileFactory())
+            }
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizePercent(0.20)
+                    .build()
+            }
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(128L * 1024 * 1024)
+                    .build()
             }
             .crossfade(true)
             .build()
@@ -28,6 +51,11 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
 
     lateinit var libraryScanner: LibraryScanner
         private set
+
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Volatile
+    private var asyncBootstrapStarted = false
 
     override fun onCreate() {
         super.onCreate()
@@ -47,15 +75,10 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
                 android.util.Log.println(androidPriority, tag, message)
             }
         }
-        NodeLog.initFileLogging(java.io.File(filesDir, "logs/node_connect.log"))
-        NodeLog.isVerbose = true
+        NodeLog.isVerbose = BuildConfig.DEBUG
+        // Keep GlassDebug opt-in so debug benchmarks and normal scrolling never pay per-frame nanoTime/logging overhead
+        com.nodeplayer.ui.debug.GlassDebug.isEnabled = false
         NodeLog.i("app/lifecycle", "NodePlayerApplication initialized")
-
-        com.nodeplayer.music.diagnostics.LocalCrashLogger.init(this)
-
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            com.kyant.backdrop.RuntimeShaderCache.warmUp()
-        }
 
         com.nodeplayer.common.media.CipherSolver.current = com.nodeplayer.music.cipher.AndroidCipherSolver(this)
 
@@ -77,11 +100,6 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             )
         }
 
-        // Pre-warm SharedPreferences on a background thread to prevent disk read stall on main thread
-        Thread {
-            getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
-        }.start()
-
         database = Room.databaseBuilder(
             applicationContext,
             NodeDatabase::class.java,
@@ -92,10 +110,66 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             .build()
 
         libraryScanner = LibraryScanner(applicationContext)
+        com.nodeplayer.network.cache.HomeFeedDiskCache.defaultCacheDir = cacheDir.resolve("home_feeds")
+
+        com.nodeplayer.ui.components.PlatformArtworkProvider.remoteImageFetcher = { url, maxSizePx ->
+            val targetPx = maxSizePx.coerceIn(
+                AudioArtworkFetcher.MIN_TARGET_SIZE_PX,
+                AudioArtworkFetcher.MAX_TARGET_SIZE_PX
+            )
+            val request = ImageRequest.Builder(this@NodePlayerApplication)
+                .data(url)
+                .size(targetPx, targetPx)
+                .allowHardware(false)
+                .build()
+            val result = Coil.imageLoader(this@NodePlayerApplication).execute(request)
+            if (result is SuccessResult) {
+                val bmp = (result.drawable as? BitmapDrawable)?.bitmap ?: result.drawable.toBitmap()
+                bmp.asImageBitmap()
+            } else {
+                null
+            }
+        }
+
+        startAsyncBootstrap()
+    }
+
+    private fun startAsyncBootstrap() {
+        if (asyncBootstrapStarted) return
+        synchronized(this) {
+            if (asyncBootstrapStarted) return
+            asyncBootstrapStarted = true
+        }
+        applicationScope.launch {
+            try {
+                if (BuildConfig.DEBUG) {
+                    ensureFileLoggingInitialized(this@NodePlayerApplication)
+                }
+                com.nodeplayer.music.diagnostics.LocalCrashLogger.init(this@NodePlayerApplication)
+                getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+                val sharedInnerTube = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+                com.nodeplayer.music.auth.YouTubeAccountManager.initialize(this@NodePlayerApplication, sharedInnerTube)
+                com.nodeplayer.music.lyrics.LyricsManager.initialize(this@NodePlayerApplication)
+            } catch (t: Throwable) {
+                NodeLog.w("app/lifecycle", "Async bootstrap partial failure: ${t.message}")
+            }
+        }
     }
 
     companion object {
         lateinit var instance: NodePlayerApplication
             private set
+
+        @Volatile
+        private var fileLoggingInitialized: Boolean = false
+
+        fun ensureFileLoggingInitialized(context: Context) {
+            if (fileLoggingInitialized) return
+            synchronized(this) {
+                if (fileLoggingInitialized) return
+                NodeLog.initFileLogging(java.io.File(context.filesDir, "logs/node_connect.log"))
+                fileLoggingInitialized = true
+            }
+        }
     }
 }

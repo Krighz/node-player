@@ -59,6 +59,21 @@ interface PlayerDao {
     @Query("SELECT * FROM playlists WHERE name = :name LIMIT 1")
     suspend fun getPlaylistByName(name: String): PlaylistEntity?
 
+    @Query("SELECT * FROM playlists WHERE externalId = :externalId LIMIT 1")
+    suspend fun getPlaylistByExternalId(externalId: String): PlaylistEntity?
+
+    @Query("UPDATE playlists SET name = :newName, updatedAt = :updatedAt WHERE id = :playlistId")
+    suspend fun renamePlaylist(playlistId: Long, newName: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM playlist_tracks WHERE playlistId = :playlistId AND trackId = :trackId")
+    suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long)
+
+    @Query("DELETE FROM playlist_tracks WHERE playlistId = :playlistId")
+    suspend fun clearPlaylistTracks(playlistId: Long)
+
+    @Query("SELECT MAX(position) FROM playlist_tracks WHERE playlistId = :playlistId")
+    suspend fun getMaxPlaylistPosition(playlistId: Long): Int?
+
     @Query("SELECT trackId FROM playlist_tracks WHERE playlistId = :playlistId ORDER BY position ASC")
     suspend fun getPlaylistTrackIds(playlistId: Long): List<Long>
 

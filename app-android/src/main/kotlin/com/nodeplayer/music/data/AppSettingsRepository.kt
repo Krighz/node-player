@@ -29,6 +29,8 @@ object AppSettingsRepository {
     val KEY_MINI_PLAYER_GESTURES_ENABLED = booleanPreferencesKey("mini_player_gestures_enabled")
     val KEY_CONTROLS_GLASS_ENABLED = booleanPreferencesKey("controls_glass_enabled")
     val KEY_IS_ONLINE_MODE = booleanPreferencesKey("is_online_mode")
+    val KEY_GLOBAL_LYRICS_OFFSET_MS = longPreferencesKey("global_lyrics_offset_ms")
+    val KEY_AUTO_FETCH_LYRICS = booleanPreferencesKey("auto_fetch_lyrics")
 
     // Settings
     val KEY_GLASS_CONTROLS_CONFIG = stringPreferencesKey("glass_controls_config_json")
@@ -68,7 +70,9 @@ object AppSettingsRepository {
         val lastFmSessionKey: String = "",
         val lastFmUsername: String = "",
         val glassControlsConfig: GlassControlsConfig = GlassControlsConfig.PRESET_BALANCED,
-        val isOnlineMode: Boolean = false
+        val isOnlineMode: Boolean = true,
+        val globalLyricsOffsetMs: Long = 0L,
+        val autoFetchLyrics: Boolean = true
     )
 
     fun getSettingsFlow(context: Context): Flow<AppSettings> {
@@ -102,7 +106,9 @@ object AppSettingsRepository {
                 lastFmSessionKey = prefs[KEY_LASTFM_SESSION_KEY] ?: "",
                 lastFmUsername = prefs[KEY_LASTFM_USERNAME] ?: "",
                 glassControlsConfig = glassControlsConfig,
-                isOnlineMode = prefs[KEY_IS_ONLINE_MODE] ?: false
+                isOnlineMode = prefs[KEY_IS_ONLINE_MODE] ?: true,
+                globalLyricsOffsetMs = prefs[KEY_GLOBAL_LYRICS_OFFSET_MS] ?: 0L,
+                autoFetchLyrics = prefs[KEY_AUTO_FETCH_LYRICS] ?: true
             )
         }
     }
@@ -129,6 +135,14 @@ object AppSettingsRepository {
 
     suspend fun updateSetting(context: Context, key: Preferences.Key<Int>, value: Int) {
         context.dataStore.edit { it[key] = value }
+    }
+
+    suspend fun updateSetting(context: Context, key: Preferences.Key<Long>, value: Long) {
+        context.dataStore.edit { it[key] = value }
+    }
+
+    fun getTrackOffsetKey(trackId: Long): Preferences.Key<Long> {
+        return longPreferencesKey("lyrics_offset_track_$trackId")
     }
 
     suspend fun resetToDefaults(context: Context) {

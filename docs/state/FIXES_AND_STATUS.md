@@ -1,6 +1,89 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Liquid Glass Native Rendering & Screen Stability Locked (Android 16 / realme)
+## Current Status: Milestone v2.5 Phase 3 Motion System & Universal Animation Verified (2026-11-11)
+
+### Milestone v2.5 Phase 3: Motion System, Spring Physics & Container Transform (2026-11-11)
+
+1. **Centralized Motion Tokens & Dynamic Physics Resolvers (`REQ-MOT-01`)**:
+   - Centralized spring physics tokens (`Snappy`, `Smooth`, `Bouncy`, `Gentle`, `ConvxPuck`, `DragTracking`, `Instant`) and duration constants (`DurationShort` 150ms, `DurationMedium` 300ms, `DurationLong` 500ms) in `:core-ui` `MotionTokens.kt`.
+   - Built dynamic resolvers `resolveSpringSpec()` and `resolveDuration()` responding deterministically to `motionLevel` (`FULL`, `REDUCED`, `OFF`), `reduceMotion` (OS accessibility scale), `animationPreset`, and `isPerformanceMode`.
+   - Developed reusable zero-allocation interaction modifiers in `MotionModifiers.kt`: `pressScale`, `interactiveScale`, `fadeInOnLoad`, and `staggeredEntrance` with changes applied strictly in `graphicsLayer` blocks.
+   - Ambient token propagation via `LocalMotionConfig` across Desktop/Common (`SharedPlayerLayout.kt`) and Android (`Theme.kt`).
+
+2. **Universal Screen Transitions & Sheet Springs (`REQ-MOT-02`)**:
+   - Standardized `ScreenTransitions.kt` providing fade-through, shared-axis ($X/Y$), and sheet transitions.
+   - Replaced instant tab switching in `SharedPlayerLayout.kt` with `AnimatedContent` utilizing `ScreenTransitions.fadeThrough(themeConfig)` and `SizeTransform(clip = false)`.
+   - Converted bottom sheets (`GlassContextMenuSheet.kt`, `HomeProfileSheet.kt`) from ad-hoc spring values to unified `ScreenTransitions.sheetEnter(themeConfig)` and `sheetExit(themeConfig)`.
+
+3. **Container Transform & Shared Element Miniplayer Morphing (`REQ-MOT-03`)**:
+   - Built `ContainerTransform.kt` featuring zero-allocation math engine (`ContainerTransformMath`) for bounding box interpolation, squircle radius transitions ($20\text{dp} \to 0\text{dp}$), and alpha crossfade ladders.
+   - Multiplatform `ProgressContainerTransform` clipping smoothly with `ContinuousRoundedRectangle` on GPU layers.
+   - Connected `SharedPlayerLayout.kt` miniplayer to `NowPlayingView` with `playerExpansionProgress` Animatable and interactive 1:1 touch downward drag gestures with velocity-sensitive fling snap.
+
+4. **Multiplatform Test Verification**:
+   - Added `MotionSystemSuiteTest.kt` in `:core-ui` and `MotionSettingsSyncTest.kt` in `:app-android`.
+   - Verified 100% test pass rate across multiplatform and Android suites:
+     - `:core-ui:desktopTest` passed
+     - `:app-android:testDebugUnitTest` passed
+     - `:app-desktop:test` passed
+     - `:core-dsp:test` passed
+     - `:core-model:test` passed
+     - `:core-common:test` passed
+   - Zero compilation warnings or boundary regressions.
+
+---
+
+### Milestone v2.5 Phase 2: Performance Fixes, Allocation Elimination & Cold-Start Optimization (2026-11-11)
+
+1. **Cold-Start Acceleration & Baseline Profiles (`REQ-PERF-05`)**:
+   - Device startup latency measured via `adb shell am start -W`: Median cold-start dropped from **1422 ms to 644 ms (-54.7%)**.
+   - Added AndroidX `profileinstaller:1.3.1` and compiled startup baseline profile (`baseline-prof.txt`).
+   - Deferred heavy I/O services (`LocalAudioScanner`, audio notification channels) off startup path.
+   - Pre-warmed AGSL RuntimeShaders (`GlassShaderCache`) and wired `reportFullyDrawn()` into Compose lifecycle.
+
+2. **Tail Frame Latency & Jank Elimination (`dumpsys gfxinfo`)**:
+   - Measured on Android device `4a505e5` across 7 scripted scenarios (S1–S7).
+   - S2 Library scroll `p99` dropped from **250 ms to 93 ms (-62.8%)**; S1 Home scroll `p99` dropped from **133 ms to 89 ms (-33.1%)**.
+   - Now Playing & Lyrics (S5) janky frames dropped from **45.87% to 13.63% (-70.3% jank reduction)**; `p90` dropped from **89 ms to 40 ms**.
+   - Dock Tab Switching (S6) janky frames dropped from **17.38% to 8.54% (-50.9%)**.
+   - Eliminated offscreen GPU compositing (`CompositingStrategy.Offscreen`, `BlendMode.DstIn`) and per-line blur allocations in lyrics and backdrop layers.
+   - Replaced O(N) linear lyrics scans with binary search O(log N) lookup.
+
+3. **Memory Footprint & UI Thread Decoupling**:
+   - Total GPU memory usage reduced by **85–91%** across interaction scenarios (from 276–342 MB down to 24–41 MB).
+   - Implemented bounded LRU `ArtworkCache` with explicit `inSampleSize` downsampling and direct stream decoding in Coil fetcher, eliminating raw JPEG re-encoding.
+   - Hoisted lazy item keys, item types, and shape/brush allocations across all scrolling lists.
+   - Moved `NodeLog` disk I/O off the UI thread via non-blocking daemon queue (`ArrayBlockingQueue(2048)`), eliminating StrictMode disk write violations.
+   - Configured Compose Compiler stability configuration (`compose_compiler_config.conf`), cutting unstable arguments by **65.2%**.
+
+4. **Multiplatform Test Verification**:
+   - 100% of unit tests pass: **124 test suites, 469/469 tests passed** across all 9 modules (`:core-common`, `:core-model`, `:core-dsp`, `:core-library`, `:core-network`, `:core-ui`, `:app-desktop`, `:app-android`).
+   - Zero crashes in `adb logcat -b crash -d` (0 crash reports).
+   - `ArchitectureBoundaryTest` verified 0 boundary violations.
+
+---
+
+### Milestone v2.3 Phase 10: Polish, Windows Desktop Parity & Token Verification (2026-11-11)
+
+1. **120 Hz Scroll Performance & Allocation Invariants (`POL-01`)**:
+   - Fixed item keys across all lazy lists in `OnlineHomeView.kt`, `OfflineHomeView.kt`, `LibraryView.kt`, `PlaylistDetailView.kt`, and `FullScreenLyricsView.kt`.
+   - Prevented unnecessary coroutine churn by replacing `LaunchedEffect(listState.firstVisibleItemScrollOffset)` with `snapshotFlow { ... }.distinctUntilChanged()`.
+   - Pre-allocated `StartCenterOrigin` and `BaseLyricTextStyle` in `LyricLineItem.kt` to eliminate allocations in the lyrics draw/composition pass.
+
+2. **Windows Desktop Layout Parity (`POL-02`)**:
+   - Fixed `OpticalRailDock.kt` puck position: `targetY = selectedIndex * (tabHeightDp.value + tabSpacingDp.value)`, eliminating the 62dp offset bug when `DesktopModeRailSwitcher` was extracted from inside the dock.
+   - Positioned `DesktopModeRailSwitcher` neatly below `OpticalRailDock` in `SharedPlayerLayout.kt` for responsive Online/Offline toggling on desktop.
+
+3. **Zero Hardcoded Colors & Token Centralization (`POL-03`)**:
+   - Centralized all semantic surfaces, accents, and borders in `LiquidColors` in `GlassTokens.kt`.
+   - Replaced inline `Color(0x...)` literals in `OpticalRailDock.kt`, `ConvxLiquidDock.kt`, `ConvxMiniPlayer.kt`, `DeviceConnectPill.kt`, and `AudioFormatBadge.kt`.
+   - All design tokens validated with `DesignTokensTest.kt`.
+
+4. **Multiplatform Test Verification**:
+   - 100% of unit tests pass across `:core-ui:desktopTest`, `:core-dsp:test`, `:core-network:test`, `:core-common:test`, `:app-desktop:test`, and `:app-android:testDebugUnitTest`.
+   - `ArchitectureBoundaryTest` verified 0 boundary violations.
+
+---
 
 ### Post-Port Hardware Bug Fix 4: Equalizer & Settings Stack Overflow (SIGSEGV libhwui) Root Cause Fix & Stability Test (2026-11-08)
 

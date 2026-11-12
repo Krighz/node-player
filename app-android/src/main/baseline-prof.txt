@@ -1,0 +1,67 @@
+# Baseline Profile for Node Player
+# Compiled cleanly by AGP profgen into assets/dexopt/baseline.prof + baseline.profm
+# and installed at runtime via androidx.profileinstaller.
+
+# 1. App Startup & Core Shell
+Lcom/nodeplayer/music/NodePlayerApplication*;
+HSPLcom/nodeplayer/music/NodePlayerApplication*;->**(**)**
+Lcom/nodeplayer/music/MainActivity*;
+HSPLcom/nodeplayer/music/MainActivity*;->**(**)**
+Lcom/nodeplayer/music/ui/PlayerViewModel*;
+HSPLcom/nodeplayer/music/ui/PlayerViewModel*;->**(**)**
+Lcom/nodeplayer/music/service/PlaybackService*;
+HSPLcom/nodeplayer/music/service/PlaybackService*;->**(**)**
+
+# 2. Backdrop & Liquid Glass Rendering
+Lcom/kyant/backdrop/**;
+HSPLcom/kyant/backdrop/**;->**(**)**
+Lcom/nodeplayer/ui/components/LiquidGlassBackgroundKt*;
+HSPLcom/nodeplayer/ui/components/LiquidGlassBackgroundKt*;->**(**)**
+Lcom/nodeplayer/music/ui/components/LiquidGlassBackgroundKt*;
+HSPLcom/nodeplayer/music/ui/components/LiquidGlassBackgroundKt*;->**(**)**
+Lcom/nodeplayer/ui/components/ConvxLiquidDockKt*;
+HSPLcom/nodeplayer/ui/components/ConvxLiquidDockKt*;->**(**)**
+Lcom/nodeplayer/ui/components/ConvxMiniPlayerKt*;
+HSPLcom/nodeplayer/ui/components/ConvxMiniPlayerKt*;->**(**)**
+Lcom/nodeplayer/ui/SharedPlayerLayoutKt*;
+HSPLcom/nodeplayer/ui/SharedPlayerLayoutKt*;->**(**)**
+
+# 3. Artwork Cache & Fetching Hot Paths
+Lcom/nodeplayer/ui/components/ArtworkCache*;
+HSPLcom/nodeplayer/ui/components/ArtworkCache*;->**(**)**
+Lcom/nodeplayer/ui/components/BoundedLruCache*;
+HSPLcom/nodeplayer/ui/components/BoundedLruCache*;->**(**)**
+Lcom/nodeplayer/ui/components/ArtworkLoaderKt*;
+HSPLcom/nodeplayer/ui/components/ArtworkLoaderKt*;->**(**)**
+Lcom/nodeplayer/ui/components/PlatformArtworkProvider*;
+HSPLcom/nodeplayer/ui/components/PlatformArtworkProvider*;->**(**)**
+Lcom/nodeplayer/music/library/AudioArtworkFetcher*;
+HSPLcom/nodeplayer/music/library/AudioArtworkFetcher*;->**(**)**
+
+# 4. Scrollable Lists, Now Playing & Lyrics
+Lcom/nodeplayer/ui/screens/OnlineHomeViewKt*;
+HSPLcom/nodeplayer/ui/screens/OnlineHomeViewKt*;->**(**)**
+Lcom/nodeplayer/ui/screens/LibraryViewKt*;
+HSPLcom/nodeplayer/ui/screens/LibraryViewKt*;->**(**)**
+Lcom/nodeplayer/ui/screens/PlaylistDetailViewKt*;
+HSPLcom/nodeplayer/ui/screens/PlaylistDetailViewKt*;->**(**)**
+Lcom/nodeplayer/ui/screens/GlassSearchViewKt*;
+HSPLcom/nodeplayer/ui/screens/GlassSearchViewKt*;->**(**)**
+Lcom/nodeplayer/music/ui/screens/HomeScreenKt*;
+HSPLcom/nodeplayer/music/ui/screens/HomeScreenKt*;->**(**)**
+Lcom/nodeplayer/music/ui/screens/LibraryScreenKt*;
+HSPLcom/nodeplayer/music/ui/screens/LibraryScreenKt*;->**(**)**
+Lcom/nodeplayer/ui/player/NowPlayingViewKt*;
+HSPLcom/nodeplayer/ui/player/NowPlayingViewKt*;->**(**)**
+Lcom/nodeplayer/ui/lyrics/FullScreenLyricsViewKt*;
+HSPLcom/nodeplayer/ui/lyrics/FullScreenLyricsViewKt*;->**(**)**
+Lcom/nodeplayer/ui/lyrics/WordByWordKaraokeTextKt*;
+HSPLcom/nodeplayer/ui/lyrics/WordByWordKaraokeTextKt*;->**(**)**
+
+# 5. Compose Runtime, Lazy Foundation & Layout Engine
+Landroidx/compose/runtime/ComposerImpl*;
+HSPLandroidx/compose/runtime/ComposerImpl*;->**(**)**
+Landroidx/compose/foundation/lazy/**;
+HSPLandroidx/compose/foundation/lazy/**;->**(**)**
+Landroidx/compose/ui/node/**;
+HSPLandroidx/compose/ui/node/**;->**(**)**

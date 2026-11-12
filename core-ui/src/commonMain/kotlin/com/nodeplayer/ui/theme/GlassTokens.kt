@@ -7,6 +7,54 @@ import com.nodeplayer.model.GlassQuality
 import com.nodeplayer.model.GlassThemeConfig
 
 /**
+ * Standard semantic palette for Node Player's Liquid Glass UI system.
+ * Eliminates inline Color(0x...) literals across screens per POL-03.
+ */
+object LiquidColors {
+    // Surfaces
+    val OledBlack: Color = Color(0xFF000000)
+    val SurfaceDark: Color = Color(0xFF0F1420)
+    val SurfaceElevated: Color = Color(0xFF161B26)
+    val SurfaceCard: Color = Color(0xFF1E232F)
+    val SurfaceDialog: Color = Color(0xFF12161F)
+    val SurfaceMuted: Color = Color(0xFF11141E)
+
+    // Slate & Deep Surfaces
+    val SlateDark: Color = Color(0xFF0F172A)
+    val SlateDeep: Color = Color(0xFF0F232A)
+    val SlateCharcoal: Color = Color(0xFF14171A)
+    val SlateNavy: Color = Color(0xFF1E2333)
+    val SlateGray: Color = Color(0xFF37474F)
+    val SlateBlueDark: Color = Color(0xFF263238)
+
+    // Accents & Semantics
+    val ElectricCyan: Color = Color(0xFF00E5FF)
+    val CyanGlow: Color = Color(0xFF00F0FF)
+    val CyanDeep: Color = Color(0xFF003840)
+    val CyanDark: Color = Color(0xFF004D40)
+    val CyanMuted: Color = Color(0xFF0097A7)
+    val SkyIce: Color = Color(0xFFBAE6FD)
+
+    val AmberWarning: Color = Color(0xFFFFB300)
+    val AmberWarm: Color = Color(0xFFF59E0B)
+    val AmberLight: Color = Color(0xFFFFE082)
+    val CoralRed: Color = Color(0xFFFF5252)
+    val EmeraldGreen: Color = Color(0xFF10B981)
+    val PurpleAccent: Color = Color(0xFF6366F1)
+    val OrangeBadge: Color = Color(0xFFFF9100)
+
+    // Hi-Res Gold Badges
+    val GoldHiRes: Color = Color(0xFFFFD700)
+    val GoldDark: Color = Color(0xFF261D00)
+    val GoldLight: Color = Color(0xFFFFECB3)
+    val GoldMuted: Color = Color(0xFFB8860B)
+
+    // Subtle borders & dividers
+    val DividerSubtle: Color = Color.White.copy(alpha = 0.08f)
+    val BorderSubtle: Color = Color.White.copy(alpha = 0.12f)
+}
+
+/**
  * Unified design tokens for the Liquid Glass system.
  * Governs corner roundness, optical refraction, specular rim highlight,
  * vibrancy, blur, and chromatic dispersion across Android and Windows.

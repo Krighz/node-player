@@ -6,10 +6,12 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.request.get
+import io.ktor.client.request.prepareGet
 import io.ktor.client.request.header
 import io.ktor.http.HttpStatusCode
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.io.Closeable
 
 /**
@@ -42,7 +44,7 @@ data class ResolvedStream(
  * - Highest audio bitrate format fallback
  */
 class StreamResolver(
-    private val innerTubeClient: InnerTubeClient = InnerTubeClient(),
+    val innerTubeClient: InnerTubeClient = InnerTubeClient(),
     private val cipherSolver: CipherSolver? = CipherSolver.current,
     probeEngine: HttpClientEngine? = null,
 ) : Closeable {
@@ -78,7 +80,11 @@ class StreamResolver(
         NodeLog.d(TAG, "Resolving stream for videoId=$videoId across clients")
         val errors = mutableListOf<String>()
 
-        for (client in CLIENT_ROTATION) {
+        val clients = if (!innerTubeClient.sessionCookie.isNullOrBlank()) {
+            listOf(YouTubeClient.WEB_REMIX) + CLIENT_ROTATION.filterNot { it == YouTubeClient.WEB_REMIX }
+        } else CLIENT_ROTATION
+        for (client in clients) {
+            currentCoroutineContext().ensureActive()
             NodeLog.d(TAG, "Attempting stream resolution for videoId=$videoId with client=${client.clientName}")
             val responseResult = innerTubeClient.getPlayerResponse(videoId, client)
 
@@ -119,6 +125,7 @@ class StreamResolver(
 
             var chosenCandidate: Pair<PlayerResponse.StreamingData.Format, String>? = null
 
+            var probeAttempted = false
             for (candidate in audioCandidates) {
                 var url = candidate.url
 
@@ -130,6 +137,7 @@ class StreamResolver(
                         try {
                             url = solver.deobfuscateStreamUrl(cipherString, videoId)
                         } catch (e: Exception) {
+                            if (e is CancellationException) throw e
                             NodeLog.w(TAG, "Cipher deobfuscation failed for itag ${candidate.itag}: ${e.message}")
                         }
                     } else {
@@ -151,12 +159,14 @@ class StreamResolver(
                                 url = transformed
                             }
                         } catch (e: Exception) {
+                            if (e is CancellationException) throw e
                             NodeLog.w(TAG, "n-parameter transform failed: ${e.message}")
                         }
                     }
                 }
 
                 // Active HTTP Range Probe validation
+                probeAttempted = true
                 if (verifyStreamUrl(url, client.userAgent)) {
                     chosenCandidate = candidate to url
                     break
@@ -165,9 +175,9 @@ class StreamResolver(
                 }
             }
 
-            // Fallback: If direct candidate URL exists but network probe timed out or had a transient error,
-            // fall back to the top candidate rather than discarding the working client.
-            if (chosenCandidate == null && audioCandidates.isNotEmpty()) {
+            // Fallback: Only if candidate URLs were present but no probe was attempted (e.g. all empty URLs)
+            // or if direct fallback is needed without probe failure
+            if (chosenCandidate == null && audioCandidates.isNotEmpty() && !probeAttempted) {
                 val directFallback = audioCandidates.firstOrNull { !it.url.isNullOrBlank() }
                 if (directFallback != null) {
                     NodeLog.i(TAG, "Using direct audio format itag=${directFallback.itag} as fallback for ${client.clientName}")
@@ -211,14 +221,14 @@ class StreamResolver(
      */
     internal suspend fun verifyStreamUrl(url: String, userAgent: String): Boolean {
         return try {
-            val response = probeClient.get(url) {
+            probeClient.prepareGet(url) {
                 header("Range", "bytes=0-1024")
                 header("User-Agent", userAgent)
+            }.execute { response ->
+                response.status == HttpStatusCode.PartialContent || response.status == HttpStatusCode.OK
             }
-            val status = response.status
-            NodeLog.d(TAG, "verifyStreamUrl: url=$url, status=$status")
-            status == HttpStatusCode.PartialContent || status == HttpStatusCode.OK
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             NodeLog.w(TAG, "Stream probe network error for $url: ${e.message}")
             false
         }
@@ -245,9 +255,9 @@ class StreamResolver(
         private const val PROBE_TIMEOUT_MS = 5_000L
 
         val CLIENT_ROTATION = listOf(
-            YouTubeClient.IOS,
-            YouTubeClient.ANDROID_VR,
             YouTubeClient.VISIONOS,
+            YouTubeClient.ANDROID_VR,
+            YouTubeClient.IOS,
             YouTubeClient.WEB_REMIX,
         )
     }

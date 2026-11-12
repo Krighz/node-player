@@ -7,18 +7,15 @@ import androidx.media3.datasource.BaseDataSource
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.HttpDataSource
+import com.nodeplayer.common.logging.NodeLog
 import java.io.IOException
 
 /**
  * Custom upstream [DataSource] that partitions requests to Google Video CDN streams
- * into small bounded range chunks (default 512 KB).
+ * into small bounded range chunks (default 512 KB) for iOS streams, while allowing
+ * unthrottled passthrough for non-iOS streams (e.g. ANDROID_VR).
  *
- * Background:
- * Google Video CDN servers (`*.googlevideo.com`) for iOS client playback reject open-ended
- * requests (e.g. without an upper Range boundary) with HTTP 403 Forbidden.
- * By clamping requests to explicit [chunkSize] windows (`Range: bytes=start-end`),
- * Google Video responds with HTTP 206 Partial Content, enabling reliable streaming
- * and seek operations without stalling or 403 authorization failures.
+ * Includes HTTP 403 Forbidden auto-recovery by refreshing the stream URL via [AudioCache].
  */
 @UnstableApi
 class RangedUpstreamDataSource(
@@ -44,10 +41,10 @@ class RangedUpstreamDataSource(
         spec = dataSpec
         remaining = dataSpec.length
         position = dataSpec.position
-        passthrough = !dataSpec.uri.isGoogleVideoUrl()
+        passthrough = !dataSpec.uri.requiresChunkedRanging()
 
         val length = if (passthrough) {
-            openChild(dataSpec.length)
+            openChildWithRetry(dataSpec.length)
         } else {
             openNextChunk()
             val available = upstream?.contentRangeLength()?.let { (it - position).coerceAtLeast(0L) }
@@ -110,7 +107,7 @@ class RangedUpstreamDataSource(
         if (remaining == 0L) return false
         val wanted = if (remaining == C.LENGTH_UNSET.toLong()) chunkSize else minOf(chunkSize, remaining)
         val length = try {
-            openChild(wanted)
+            openChildWithRetry(wanted)
         } catch (error: HttpDataSource.InvalidResponseCodeException) {
             if (error.responseCode != 416 || position == requireNotNull(spec).position) throw error
             remaining = 0
@@ -121,6 +118,27 @@ class RangedUpstreamDataSource(
             remaining = if (remaining == C.LENGTH_UNSET.toLong()) chunkRemaining else minOf(remaining, chunkRemaining)
         }
         return chunkRemaining > 0
+    }
+
+    private fun openChildWithRetry(length: Long): Long {
+        return try {
+            openChild(length)
+        } catch (e: HttpDataSource.InvalidResponseCodeException) {
+            if (e.responseCode == 403) {
+                NodeLog.w(TAG, "HTTP 403 encountered on chunk at pos=$position, attempting token/URL refresh")
+                val currentSpec = spec
+                if (currentSpec != null) {
+                    val freshUrl = AudioCache.refreshStreamUrl(currentSpec.uri.toString())
+                    if (!freshUrl.isNullOrBlank()) {
+                        NodeLog.i(TAG, "Stream URL refreshed successfully after 403, retrying connection")
+                        val newUri = Uri.parse(freshUrl)
+                        spec = currentSpec.buildUpon().setUri(newUri).build()
+                        return openChild(length)
+                    }
+                }
+            }
+            throw e
+        }
     }
 
     private fun openChild(length: Long): Long {
@@ -158,12 +176,23 @@ class RangedUpstreamDataSource(
     }
 
     companion object {
+        private const val TAG = "RangedUpstreamDS"
         const val DEFAULT_CHUNK_SIZE = 512L * 1024 // 512 KB chunks for GoogleVideo CDN
     }
 }
 
 internal fun Uri.isGoogleVideoUrl(): Boolean =
     scheme == "https" && (host == "googlevideo.com" || host.orEmpty().endsWith(".googlevideo.com"))
+
+/**
+ * Google Video streams originating from the iOS client (c=IOS) enforce subsegment bounded range slicing.
+ * Non-iOS streams (like ANDROID_VR or WEB) can stream continuously without forced 512 KB slicing.
+ */
+internal fun Uri.requiresChunkedRanging(): Boolean {
+    if (!isGoogleVideoUrl()) return false
+    val clientParam = getQueryParameter("c")
+    return clientParam.equals("IOS", ignoreCase = true)
+}
 
 @UnstableApi
 internal fun DataSource.contentRangeLength(): Long? = responseHeaders.entries

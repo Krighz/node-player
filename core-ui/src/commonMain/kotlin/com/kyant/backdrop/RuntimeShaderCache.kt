@@ -1,6 +1,9 @@
 package com.kyant.backdrop
 
+import com.kyant.backdrop.internal.AmbientHighlightShaderString
+import com.kyant.backdrop.internal.DefaultHighlightShaderString
 import com.kyant.backdrop.internal.RoundedRectRefractionShaderString
+import com.kyant.backdrop.internal.RoundedRectRefractionWithDispersionShaderString
 import org.intellij.lang.annotations.Language
 
 sealed interface RuntimeShaderCache {
@@ -30,10 +33,18 @@ internal class RuntimeShaderCacheImpl : RuntimeShaderCache {
         val Shared = RuntimeShaderCacheImpl()
 
         fun warmUp() {
-            try {
-                Shared.obtainRuntimeShader("lens", RoundedRectRefractionShaderString)
-            } catch (_: Throwable) {
-                // Ignore warmup failure on unsupported platforms
+            val shaders = listOf(
+                "Refraction" to RoundedRectRefractionShaderString,
+                "RefractionWithDispersion" to RoundedRectRefractionWithDispersionShaderString,
+                "Default" to DefaultHighlightShaderString,
+                "Ambient" to AmbientHighlightShaderString
+            )
+            for ((key, shaderString) in shaders) {
+                try {
+                    Shared.obtainRuntimeShader(key, shaderString)
+                } catch (_: Throwable) {
+                    // Ignore warmup failure on unsupported platforms
+                }
             }
         }
     }

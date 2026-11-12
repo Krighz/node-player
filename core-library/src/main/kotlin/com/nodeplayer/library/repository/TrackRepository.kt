@@ -20,8 +20,12 @@ interface TrackRepository {
 
     fun getAllPlaylists(): Flow<List<Playlist>>
     suspend fun insertPlaylist(playlist: Playlist): Long
+    suspend fun renamePlaylist(playlistId: Long, newName: String)
     suspend fun deletePlaylist(playlistId: Long)
     fun getTracksForPlaylist(playlistId: Long): Flow<List<Track>>
+    suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long)
+    suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long)
+    suspend fun reorderPlaylistTracks(playlistId: Long, orderedTrackIds: List<Long>)
 
     suspend fun updateTrackAudioAnalysis(
         id: Long,

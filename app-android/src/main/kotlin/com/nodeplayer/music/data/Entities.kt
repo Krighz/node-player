@@ -163,8 +163,21 @@ data class ScrobbleQueueEntity(
 data class PlaylistEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
-    val createdAt: Long = System.currentTimeMillis()
-)
+    val source: String = "local", // "local", "youtube", "spotify"
+    val externalId: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
+) {
+    fun toPlaylist(trackCount: Int = 0): com.nodeplayer.model.Playlist = com.nodeplayer.model.Playlist(
+        id = id,
+        name = name,
+        trackCount = trackCount,
+        source = source,
+        externalId = externalId,
+        createdAt = createdAt,
+        updatedAt = updatedAt
+    )
+}
 
 @Entity(tableName = "playlist_tracks", primaryKeys = ["playlistId", "trackId"])
 data class PlaylistTrackCrossRef(

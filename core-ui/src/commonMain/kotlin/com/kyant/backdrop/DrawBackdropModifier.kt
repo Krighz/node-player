@@ -307,7 +307,9 @@ private class DrawBackdropNode(
                 else IntOffset.Zero
             drawLayer(layer)
         } else {
-            GlassDebug.logThrottled("DrawBackdrop", "drawBackdropLayer skipped: graphicsLayer is null")
+            if (GlassDebug.isEnabled) {
+                GlassDebug.logThrottled("DrawBackdrop", "drawBackdropLayer skipped: graphicsLayer is null")
+            }
         }
     }
 
@@ -327,21 +329,29 @@ private class DrawBackdropNode(
         }
 
         onDrawBehind?.invoke(this)
-        val drawStart = System.nanoTime()
-        drawBackdropLayer()
-        val drawDuration = System.nanoTime() - drawStart
-        GlassDebug.recordDrawDuration(drawDuration)
+        if (GlassDebug.isEnabled) {
+            val drawStart = System.nanoTime()
+            drawBackdropLayer()
+            val drawDuration = System.nanoTime() - drawStart
+            GlassDebug.recordDrawDuration(drawDuration)
+        } else {
+            drawBackdropLayer()
+        }
 
         onDrawSurface?.invoke(this)
         drawContent()
         onDrawFront?.invoke(this)
 
-        exportedBackdrop?.graphicsLayer?.let { layer ->
-            recordLayer(layer) {
-                onDrawBehind?.invoke(this)
-                drawBackdropLayer()
-                onDrawSurface?.invoke(this)
-                onDrawFront?.invoke(this)
+        exportedBackdrop?.let { target ->
+            if (target !== backdrop) {
+                target.graphicsLayer?.let { layer ->
+                    recordLayer(layer) {
+                        onDrawBehind?.invoke(this)
+                        drawBackdropLayer()
+                        onDrawSurface?.invoke(this)
+                        onDrawFront?.invoke(this)
+                    }
+                }
             }
         }
     }
@@ -373,22 +383,26 @@ private class DrawBackdropNode(
 
     private fun updateEffects() {
         if (!isRenderEffectSupported()) {
-            GlassDebug.logThrottled("UpdateEffects", "isRenderEffectSupported() returned false")
+            if (GlassDebug.isEnabled) {
+                GlassDebug.logThrottled("UpdateEffects", "isRenderEffectSupported() returned false")
+            }
             return
         }
 
         updateEffectsCount++
-        val start = System.nanoTime()
+        val start = if (GlassDebug.isEnabled) System.nanoTime() else 0L
         try {
             effectScope.apply(effects)
             graphicsLayer?.renderEffect = effectScope.renderEffect
             padding = effectScope.padding
-            val duration = System.nanoTime() - start
-            GlassDebug.recordUpdateDuration(duration)
-            GlassDebug.logThrottled(
-                "UpdateEffects",
-                "Run #$updateEffectsCount: size=${effectScope.size}, hasRenderEffect=${effectScope.renderEffect != null}, padding=${effectScope.padding}, duration=${duration / 1_000_000f}ms"
-            )
+            if (GlassDebug.isEnabled) {
+                val duration = System.nanoTime() - start
+                GlassDebug.recordUpdateDuration(duration)
+                GlassDebug.logThrottled(
+                    "UpdateEffects",
+                    "Run #$updateEffectsCount: size=${effectScope.size}, hasRenderEffect=${effectScope.renderEffect != null}, padding=${effectScope.padding}, duration=${duration / 1_000_000f}ms"
+                )
+            }
         } catch (t: Throwable) {
             GlassDebug.logError("UpdateEffects", "Failed to update backdrop effects (run #$updateEffectsCount): ${t.message}", t)
             NodeLog.e("Backdrop", "Failed to update backdrop effects: ${t.message}", t)

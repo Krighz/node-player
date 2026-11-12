@@ -11,6 +11,7 @@ import androidx.media3.datasource.cache.CacheKeyFactory
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import com.nodeplayer.common.logging.NodeLog
+import kotlinx.coroutines.launch
 import java.io.File
 
 /**
@@ -31,12 +32,78 @@ object AudioCache {
 
     // In-memory cache for resolved HTTPS stream URLs by videoId with expiration check
     private val resolvedStreamUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
+    // In-memory cache for the client User-Agent used to resolve each stream URL (or videoId)
+    private val resolvedUserAgents = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    fun cacheResolvedUrl(videoId: String, url: String) {
+    fun cacheResolvedUrl(videoId: String, url: String, userAgent: String? = null) {
         resolvedStreamUrls[videoId] = url
+        if (!userAgent.isNullOrBlank()) {
+            resolvedUserAgents[videoId] = userAgent
+            resolvedUserAgents[url] = userAgent
+        }
     }
 
-    fun getCachedResolvedUrl(videoId: String): String? = resolvedStreamUrls[videoId]
+    fun getCachedResolvedUrl(videoId: String): String? {
+        val url = resolvedStreamUrls[videoId] ?: return null
+        val expiresAt = Regex("[?&]expire=([0-9]+)").find(url)?.groupValues?.get(1)?.toLongOrNull()
+        if (expiresAt != null && expiresAt <= System.currentTimeMillis() / 1000L + 60L) {
+            invalidateUrl(videoId)
+            return null
+        }
+        return url
+    }
+
+    fun getUserAgentForUrl(url: String): String? =
+        resolvedUserAgents[url] ?: extractVideoId(url)?.let { resolvedUserAgents[it] }
+
+    fun invalidateUrl(urlOrVideoId: String) {
+        val videoId = extractVideoId(urlOrVideoId) ?: urlOrVideoId
+        val previousUrl = resolvedStreamUrls.remove(videoId)
+        previousUrl?.let { resolvedUserAgents.remove(it) }
+        resolvedUserAgents.remove(videoId)
+        resolvedUserAgents.remove(urlOrVideoId)
+        NodeLog.i(TAG, "Invalidated cached stream URL for $urlOrVideoId (videoId=$videoId)")
+    }
+
+    @Volatile
+    private var globalStreamResolver: com.nodeplayer.network.innertube.StreamResolver? = null
+
+    fun getStreamResolver(): com.nodeplayer.network.innertube.StreamResolver {
+        return globalStreamResolver ?: synchronized(this) {
+            globalStreamResolver ?: com.nodeplayer.network.innertube.StreamResolver(
+                innerTubeClient = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+            ).also { globalStreamResolver = it }
+        }
+    }
+
+    /**
+     * Re-resolves a stream URL for [videoIdOrUrl] after invalidating stale cache entries.
+     */
+    fun refreshStreamUrl(videoIdOrUrl: String): String? {
+        val videoId = extractVideoId(videoIdOrUrl) ?: videoIdOrUrl
+        invalidateUrl(videoId)
+        return try {
+            val resolver = getStreamResolver()
+            val result = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                resolver.resolveStream(videoId)
+            }
+            if (result.isSuccess) {
+                val resolved = result.getOrThrow()
+                val clientUa = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
+                    .firstOrNull { it.clientName.equals(resolved.clientName, ignoreCase = true) }?.userAgent
+                    ?: com.nodeplayer.network.innertube.YouTubeClient.ANDROID_VR.userAgent
+                cacheResolvedUrl(videoId, resolved.streamUrl, clientUa)
+                NodeLog.i(TAG, "Successfully refreshed stream URL for videoId=$videoId via ${resolved.clientName}")
+                resolved.streamUrl
+            } else {
+                NodeLog.w(TAG, "Failed to refresh stream URL for videoId=$videoId: ${result.exceptionOrNull()?.message}")
+                null
+            }
+        } catch (e: Exception) {
+            NodeLog.w(TAG, "Error refreshing stream URL for $videoIdOrUrl: ${e.message}")
+            null
+        }
+    }
 
     val cache: SimpleCache?
         get() = simpleCacheInstance
@@ -154,14 +221,27 @@ object AudioCache {
     }
 
     /**
-     * Builds a DataSource.Factory wrapping DefaultHttpDataSource with CacheDataSource.
+     * Builds a DataSource.Factory wrapping dynamic DefaultHttpDataSource with CacheDataSource.
      */
     fun createDataSourceFactory(context: Context): DataSource.Factory {
-        val httpFactory = DefaultHttpDataSource.Factory()
-            .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0")
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(20_000)
+        val httpFactory = DataSource.Factory {
+            val defaultUa = com.nodeplayer.network.innertube.YouTubeClient.VISIONOS.userAgent
+            val client = DefaultHttpDataSource.Factory()
+                .setUserAgent(defaultUa)
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(15_000)
+                .setReadTimeoutMs(20_000)
+                .createDataSource()
+
+            object : DataSource by client {
+                override fun open(dataSpec: androidx.media3.datasource.DataSpec): Long {
+                    val url = dataSpec.uri.toString()
+                    val targetUa = getUserAgentForUrl(url) ?: defaultUa
+                    client.setRequestProperty("User-Agent", targetUa)
+                    return client.open(dataSpec)
+                }
+            }
+        }
 
         val cache = simpleCacheInstance
         return if (cache != null) {
@@ -184,7 +264,7 @@ object AudioCache {
      */
     fun createResolvingDataSourceFactory(
         context: Context,
-        streamResolver: com.nodeplayer.network.innertube.StreamResolver = com.nodeplayer.network.innertube.StreamResolver()
+        streamResolver: com.nodeplayer.network.innertube.StreamResolver = getStreamResolver()
     ): DataSource.Factory {
         val baseFactory = createDataSourceFactory(context)
         return androidx.media3.datasource.ResolvingDataSource.Factory(baseFactory) { dataSpec ->
@@ -198,42 +278,105 @@ object AudioCache {
             }
 
             val cacheKey = "nodeplayer_yt_$videoId"
-            if (isVideoIdCached(videoId)) {
-                NodeLog.d(TAG, "Serving cached YouTube stream for videoId=$videoId (key=$cacheKey)")
-                val cachedHttps = getCachedResolvedUrl(videoId)
-                return@Factory if (cachedHttps != null) {
-                    dataSpec.withUri(Uri.parse(cachedHttps)).buildUpon().setKey(cacheKey).build()
-                } else {
-                    dataSpec.buildUpon().setKey(cacheKey).build()
+
+            // 1. Check if we already have a live resolved HTTPS URL in memory
+            var liveUrl = getCachedResolvedUrl(videoId)
+
+            // 2. If no valid HTTPS URL is known yet, resolve it synchronously (works for both cache misses and cached tracks needing upstream)
+            if (liveUrl.isNullOrBlank()) {
+                if (!com.nodeplayer.common.AppModeState.isOnlineMode.value) {
+                    if (isVideoIdCached(videoId)) {
+                        NodeLog.d(TAG, "Offline mode: Playing cached track for videoId=$videoId (no refresh)")
+                        return@Factory dataSpec.buildUpon().setKey(cacheKey).build()
+                    } else {
+                        NodeLog.w(TAG, "Offline mode active: Cannot resolve online YouTube track for videoId=$videoId")
+                        throw java.io.IOException("Track not available offline (videoId: $videoId)")
+                    }
                 }
+
+                NodeLog.i(TAG, "Resolving stream synchronously on loader thread for videoId=$videoId")
+                val resolvedResult = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                    streamResolver.resolveStream(videoId)
+                }
+
+                if (resolvedResult.isFailure) {
+                    val err = resolvedResult.exceptionOrNull()
+                    NodeLog.e(TAG, "Stream resolution failed for videoId=$videoId: ${err?.message}", err)
+                    throw java.io.IOException("Stream resolution failed for videoId: $videoId", err)
+                }
+
+                val resolved = resolvedResult.getOrThrow()
+                liveUrl = resolved.streamUrl
+                val clientUa = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
+                    .firstOrNull { it.clientName.equals(resolved.clientName, ignoreCase = true) }?.userAgent
+                    ?: com.nodeplayer.network.innertube.YouTubeClient.ANDROID_VR.userAgent
+                cacheResolvedUrl(videoId, liveUrl, clientUa)
+                NodeLog.i(TAG, "Resolved live stream for videoId=$videoId successfully (client=${resolved.clientName}), applying CDN URL")
             }
 
-            // Check if we already have a live resolved HTTPS URL in memory
-            val existingUrl = getCachedResolvedUrl(videoId)
-            if (!existingUrl.isNullOrBlank()) {
-                return@Factory dataSpec.withUri(Uri.parse(existingUrl)).buildUpon().setKey(cacheKey).build()
-            }
+            // Always provide the real HTTPS URL and the stable cacheKey to CacheDataSource
+            val resolvedUri = Uri.parse(liveUrl)
+            val finalSpec = dataSpec.withUri(resolvedUri).buildUpon().setKey(cacheKey).build()
 
-            if (!com.nodeplayer.common.AppModeState.isOnlineMode.value) {
-                NodeLog.w(TAG, "Offline mode active: Cannot resolve online YouTube track for videoId=$videoId")
-                throw java.io.IOException("Track not available offline (videoId: $videoId)")
-            }
+            // CacheDataSource writes the bytes consumed by playback. A second full download
+            // here competed with startup buffering and could hold the same cache span.
+            finalSpec
+        }
+    }
 
-            NodeLog.i(TAG, "Resolving stream synchronously on loader thread for videoId=$videoId")
-            val resolvedResult = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                streamResolver.resolveStream(videoId)
-            }
+    private val activePreloads = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+    private val preloadScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
-            if (resolvedResult.isFailure) {
-                val err = resolvedResult.exceptionOrNull()
-                NodeLog.e(TAG, "Stream resolution failed for videoId=$videoId: ${err?.message}", err)
-                throw java.io.IOException("Stream resolution failed for videoId: $videoId", err)
-            }
+    /**
+     * Downloads the full audio stream into [SimpleCache] in the background using Media3's [CacheWriter].
+     * Once cached, the entire song is played locally from disk without network reliance or seeking lags.
+     */
+    fun preloadEntireTrack(context: Context, videoId: String, streamUrl: String, cacheKey: String = "nodeplayer_yt_$videoId") {
+        val cache = simpleCacheInstance ?: return
+        if (activePreloads.putIfAbsent(cacheKey, true) != null) {
+            return // Already caching or cached
+        }
 
-            val streamUrl = resolvedResult.getOrThrow().streamUrl
-            cacheResolvedUrl(videoId, streamUrl)
-            NodeLog.i(TAG, "Resolved live stream for videoId=$videoId successfully, applying CDN URL")
-            dataSpec.withUri(Uri.parse(streamUrl)).buildUpon().setKey(cacheKey).build()
+        preloadScope.launch {
+            try {
+                val ua = getUserAgentForUrl(streamUrl) ?: com.nodeplayer.network.innertube.YouTubeClient.VISIONOS.userAgent
+                val upstream = DefaultHttpDataSource.Factory()
+                    .setUserAgent(ua)
+                    .setAllowCrossProtocolRedirects(true)
+                    .setConnectTimeoutMs(15_000)
+                    .setReadTimeoutMs(20_000)
+                    .createDataSource()
+
+                val dataSpec = androidx.media3.datasource.DataSpec.Builder()
+                    .setUri(Uri.parse(streamUrl))
+                    .setKey(cacheKey)
+                    .build()
+
+                val cacheWriter = androidx.media3.datasource.cache.CacheWriter(
+                    CacheDataSource.Factory()
+                        .setCache(cache)
+                        .setUpstreamDataSourceFactory { upstream }
+                        .setCacheKeyFactory(keyFactory)
+                        .createDataSource(),
+                    dataSpec,
+                    null, // temporary buffer
+                    object : androidx.media3.datasource.cache.CacheWriter.ProgressListener {
+                        override fun onProgress(requestLength: Long, bytesCached: Long, newBytesCached: Long) {
+                            if (requestLength > 0 && bytesCached >= requestLength) {
+                                NodeLog.i(TAG, "Completed 100% full background caching for videoId=$videoId ($bytesCached bytes)")
+                            }
+                        }
+                    }
+                )
+
+                NodeLog.i(TAG, "Starting full background track cache download for videoId=$videoId")
+                cacheWriter.cache()
+                NodeLog.i(TAG, "Full background track cached successfully for videoId=$videoId")
+            } catch (e: Exception) {
+                NodeLog.w(TAG, "Background preloading failed or interrupted for videoId=$videoId: ${e.message}")
+            } finally {
+                activePreloads.remove(cacheKey)
+            }
         }
     }
 

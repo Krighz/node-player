@@ -128,6 +128,9 @@ android {
         compose = true
         buildConfig = true
     }
+    composeCompiler {
+        stabilityConfigurationFile.set(rootProject.layout.projectDirectory.file("compose_compiler_config.conf"))
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -146,6 +149,9 @@ dependencies {
     implementation(project(":core-network"))
     implementation(project(":integration-api"))
     implementation(project(":core-ui"))
+
+    // Security / EncryptedSharedPreferences (Hardware Keystore backed AES-256-GCM)
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Ktor client (required by core-network StreamResolver)
     val ktorVersion = "2.3.12"
@@ -191,6 +197,7 @@ dependencies {
 
     // Core
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
 
     // CameraX and ZXing Core for QR Scanner (100% offline, pure local)
     val cameraxVersion = "1.3.3"

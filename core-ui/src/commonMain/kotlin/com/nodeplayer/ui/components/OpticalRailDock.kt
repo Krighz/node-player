@@ -40,6 +40,7 @@ import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.theme.LiquidColors
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.MotionTokens
@@ -86,7 +87,7 @@ fun OpticalRailDock(
     val tabHeightDp = 84.dp
     val tabSpacingDp = 8.dp
 
-    val targetY = 62.dp.value + selectedIndex * (tabHeightDp.value + tabSpacingDp.value)
+    val targetY = selectedIndex * (tabHeightDp.value + tabSpacingDp.value)
 
     val animatedY by animateFloatAsState(
         targetValue = targetY,
@@ -121,7 +122,7 @@ fun OpticalRailDock(
                     { Highlight.Default.copy(alpha = 0.85f * themeConfig.lensRimSpecular) }
                 } else null,
                 onDrawSurface = {
-                    drawRect(Color(0xFF0F172A).copy(alpha = (themeConfig.effectiveTintAlpha * 0.75f).coerceIn(0.12f, 0.85f)))
+                    drawRect(LiquidColors.SlateDark.copy(alpha = (themeConfig.effectiveTintAlpha * 0.75f).coerceIn(0.12f, 0.85f)))
                 }
             )
             .border(
@@ -167,7 +168,7 @@ fun OpticalRailDock(
                                     colors = listOf(
                                         Color.White.copy(alpha = 0.22f),
                                         accent.copy(alpha = 0.30f),
-                                        Color(0xFF0F172A).copy(alpha = 0.45f)
+                                        LiquidColors.SlateDark.copy(alpha = 0.45f)
                                     ),
                                     radius = 160f
                                 )
@@ -179,7 +180,7 @@ fun OpticalRailDock(
                         brush = Brush.linearGradient(
                             colors = listOf(
                                 Color.White.copy(alpha = if (rimActive) 0.70f else 0.30f),
-                                Color(0xFFBAE6FD).copy(alpha = 0.40f),
+                                LiquidColors.SkyIce.copy(alpha = 0.40f),
                                 Color.White.copy(alpha = 0.25f)
                             )
                         ),
@@ -264,10 +265,10 @@ fun DesktopModeRailSwitcher(
             .width(68.dp)
             .height(54.dp)
             .clip(capsuleShape)
-            .background(if (isOnline) Color(0xFF0F232A).copy(alpha = 0.75f) else Color(0xFF14171A).copy(alpha = 0.70f))
+            .background(if (isOnline) LiquidColors.SlateDeep.copy(alpha = 0.75f) else LiquidColors.SlateCharcoal.copy(alpha = 0.70f))
             .border(
                 width = 1.dp,
-                color = if (isOnline) Color(0xFF00E5FF).copy(alpha = 0.40f) else Color.White.copy(alpha = 0.12f),
+                color = if (isOnline) LiquidColors.ElectricCyan.copy(alpha = 0.40f) else LiquidColors.BorderSubtle,
                 shape = capsuleShape
             )
             .clickable(
@@ -294,15 +295,15 @@ fun DesktopModeRailSwitcher(
                         if (isOnline) {
                             Brush.verticalGradient(
                                 listOf(
-                                    Color(0xFF00E5FF).copy(alpha = 0.90f),
-                                    Color(0xFF0097A7).copy(alpha = 0.85f)
+                                    LiquidColors.ElectricCyan.copy(alpha = 0.90f),
+                                    LiquidColors.CyanMuted.copy(alpha = 0.85f)
                                 )
                             )
                         } else {
                             Brush.verticalGradient(
                                 listOf(
-                                    Color(0xFF37474F).copy(alpha = 0.85f),
-                                    Color(0xFF263238).copy(alpha = 0.90f)
+                                    LiquidColors.SlateGray.copy(alpha = 0.85f),
+                                    LiquidColors.SlateBlueDark.copy(alpha = 0.90f)
                                 )
                             )
                         }
@@ -327,7 +328,7 @@ fun DesktopModeRailSwitcher(
                     Icon(
                         imageVector = Icons.Rounded.Cloud,
                         contentDescription = "Online Mode",
-                        tint = if (isOnline) Color(0xFF004D40) else Color.White.copy(alpha = 0.45f),
+                        tint = if (isOnline) LiquidColors.CyanDark else Color.White.copy(alpha = 0.45f),
                         modifier = Modifier.size(15.dp)
                     )
                 }
@@ -339,7 +340,7 @@ fun DesktopModeRailSwitcher(
                     Icon(
                         imageVector = Icons.Rounded.CloudOff,
                         contentDescription = "Offline Mode",
-                        tint = if (!isOnline) Color(0xFF81C784) else Color.White.copy(alpha = 0.45f),
+                        tint = if (!isOnline) LiquidColors.EmeraldGreen else Color.White.copy(alpha = 0.45f),
                         modifier = Modifier.size(15.dp)
                     )
                 }

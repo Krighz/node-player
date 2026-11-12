@@ -1,345 +1,546 @@
 package com.nodeplayer.ui.player
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Cast
+import androidx.compose.material.icons.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import com.nodeplayer.library.LrcParser
+import com.nodeplayer.model.LyricWord
 import com.nodeplayer.model.Lyrics
+import com.nodeplayer.model.LyricsLine
 import com.nodeplayer.model.Track
-import com.kyant.backdrop.backdrops.emptyBackdrop
-import com.kyant.backdrop.drawBackdrop
-import com.kyant.backdrop.effects.blur
-import com.kyant.backdrop.effects.lens
-import com.kyant.backdrop.highlight.Highlight
-import com.kyant.backdrop.shadow.Shadow
-import com.nodeplayer.ui.components.AudioFormatBadge
-import com.nodeplayer.ui.components.GlassBadge
-import com.nodeplayer.ui.components.GlassCard
-import com.nodeplayer.ui.components.LiquidIconButton
-import com.nodeplayer.ui.components.LiquidGlassIconButton
-import com.nodeplayer.ui.components.LiquidGlassSlider
-import com.nodeplayer.ui.components.SoundWaveVisualizer
-import com.nodeplayer.ui.components.TrackArtwork
-import com.nodeplayer.ui.components.onScrubberWheel
-import com.nodeplayer.ui.theme.LocalAccentColor
-import com.nodeplayer.ui.theme.pressScale
+import com.nodeplayer.ui.lyrics.findActiveLyricIndex
+import com.nodeplayer.ui.theme.PaletteExtractor
+import com.nodeplayer.ui.theme.PaletteExtractor.toComposeColor
+import kotlin.math.abs
 
+fun findActiveLyricText(lines: List<LyricsLine>, positionMs: Long): String? {
+    val idx = findActiveLyricIndex(lines, positionMs)
+    return if (idx in lines.indices) lines[idx].text else null
+}
+
+fun findActiveLyricLine(lines: List<LyricsLine>, positionMs: Long): LyricsLine? {
+    val idx = findActiveLyricIndex(lines, positionMs)
+    return if (idx in lines.indices) lines[idx] else null
+}
+
+fun calculateLyricLineCharsSungProgress(line: LyricsLine, currentPositionMs: Long): Float {
+    if (currentPositionMs < line.timestampMs) return 0f
+    val words = line.words
+    if (words.isEmpty()) {
+        val end = line.endTimeMs ?: (line.timestampMs + 3500L)
+        val duration = (end - line.timestampMs).coerceAtLeast(1L)
+        if (currentPositionMs >= end) return 1f
+        return ((currentPositionMs - line.timestampMs).toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+    }
+
+    val totalChars = words.sumOf { it.text.length }.coerceAtLeast(1)
+    var sungChars = 0f
+    for (word in words) {
+        sungChars += word.charsSungAt(currentPositionMs)
+    }
+    return (sungChars / totalChars.toFloat()).coerceIn(0f, 1f)
+}
+
+/**
+ * State 1: Now Playing Screen (full-screen, edge-to-edge, matching reference `nowplaying-1.png`).
+ *
+ * Visual hierarchy:
+ * - Top drag handle & "Playing from <source>" context label.
+ * - Huge album art bleeding smoothly into the gradient backdrop behind all content.
+ * - Title row at ~62% screen height with song title, tinted artist, and round translucent three-dots button.
+ * - Single-line lyric preview line directly above the timeline (opens State 2 on tap).
+ * - Custom NowPlayingTimeline with elapsed and remaining minus time.
+ * - Large transport glyphs (Previous, large Play/Pause, Next) with zero volume bar on screen.
+ * - Bottom row: 3 round tinted buttons (Lyrics, Node Connect, Playback options) + "This phone" label.
+ */
 @Composable
 fun NowPlayingView(
     currentTrack: Track?,
     isPlaying: Boolean,
-    positionMs: Long,
+    positionMs: Long = 0L,
     durationMs: Long,
     queue: List<Track> = emptyList(),
     currentQueueIndex: Int = 0,
     lrcContent: String? = null,
+    audioOutputName: String = "This phone",
+    sourceLabel: String = "Search",
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
     onSeek: (Long) -> Unit,
-    onSelectQueueItem: (Int) -> Unit = {},
+    onOpenLyrics: () -> Unit,
+    onOpenNodeConnect: () -> Unit,
+    onOpenPlaybackOptions: () -> Unit,
+    onOpenThreeDotsMenu: () -> Unit,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    positionProvider: () -> Long = { positionMs },
+    onDragDelta: ((Float) -> Unit)? = null,
+    onDragEnd: ((Float) -> Unit)? = null
 ) {
-    val accent = LocalAccentColor.current
-    var showQueue by remember { mutableStateOf(false) }
-    val lyrics = remember(lrcContent) {
-        if (!lrcContent.isNullOrBlank()) LrcParser.parse(lrcContent) else Lyrics(trackId = 0L)
-    }
-
     if (currentTrack == null) return
 
-    var isDragging by remember { mutableStateOf(false) }
-    var dragFraction by remember { mutableStateOf(0f) }
-    val progress = if (durationMs > 0) (positionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
-    val displayFraction = if (isDragging) dragFraction else progress
+    val cachedPalette = remember(currentTrack.id, currentTrack.path) {
+        PaletteExtractor.getCachedPalette(currentTrack)
+    }
+    val vibrantColor = cachedPalette?.vibrant?.toComposeColor() ?: Color(0xFFD4883B)
+    val darkMutedColor = cachedPalette?.darkMuted?.toComposeColor() ?: Color(0xFF0A0A0C)
+    val accentTint = PaletteExtractor.ensureContrastAgainstDark(vibrantColor, darkMutedColor)
 
-    fun formatTime(ms: Long): String {
-        val totalSec = (ms / 1000).coerceAtLeast(0L)
-        val m = totalSec / 60
-        val s = totalSec % 60
-        return "%d:%02d".format(m, s)
+    val lyrics = remember(lrcContent, currentTrack.id) {
+        if (!lrcContent.isNullOrBlank()) LrcParser.parse(lrcContent, currentTrack.id) else Lyrics(trackId = currentTrack.id)
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF070912).copy(alpha = 0.94f))
-            .padding(24.dp)
-    ) {
-        // Top Header: Close button, Now Playing title, Queue toggle
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            LiquidIconButton(
-                icon = Icons.Rounded.KeyboardArrowDown,
-                onClick = onClose,
-                contentDescription = "Close",
-                size = 48.dp
-            )
-
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "PLAYING FROM QUEUE",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.6f),
-                    letterSpacing = 1.sp
-                )
-                Text(
-                    text = currentTrack.album,
-                    fontSize = 12.sp,
-                    color = Color.White.copy(alpha = 0.8f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            LiquidIconButton(
-                icon = Icons.Rounded.QueueMusic,
-                onClick = { showQueue = !showQueue },
-                contentDescription = "Queue",
-                tint = if (showQueue) accent else Color.White,
-                size = 48.dp
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        if (showQueue) {
-            // Queue View
-            Text(
-                text = "Up Next (${queue.size} tracks)",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            LazyColumn(
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                itemsIndexed(queue) { index, track ->
-                    val isCurrent = index == currentQueueIndex
-                    GlassCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = { onSelectQueueItem(index) }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "${index + 1}",
-                                fontSize = 12.sp,
-                                color = if (isCurrent) accent else Color.White.copy(alpha = 0.4f),
-                                modifier = Modifier.width(28.dp)
-                            )
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = track.title,
-                                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (isCurrent) accent else Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = track.artist,
-                                    fontSize = 11.sp,
-                                    color = Color.White.copy(alpha = 0.6f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+            .pointerInput(onDragDelta, onDragEnd) {
+                if (onDragDelta != null) {
+                    var accumulatedVelocity = 0f
+                    detectDragGestures(
+                        onDragEnd = {
+                            onDragEnd?.invoke(accumulatedVelocity)
+                        },
+                        onDrag = { change, dragAmount ->
+                            if (abs(dragAmount.y) > abs(dragAmount.x) * 1.2f) {
+                                change.consume()
+                                accumulatedVelocity = dragAmount.y
+                                onDragDelta(dragAmount.y)
                             }
-                            Text(track.durationFormatted, fontSize = 11.sp, color = Color.White.copy(alpha = 0.5f))
+                        }
+                    )
+                } else {
+                    detectDragGestures { change, dragAmount ->
+                        if (dragAmount.y > 35f && abs(dragAmount.y) > abs(dragAmount.x) * 1.5f) {
+                            change.consume()
+                            onClose()
                         }
                     }
                 }
             }
-        } else if (lyrics.lines.isNotEmpty()) {
-            // Live Synced Lyrics View
-            val currentLineIndex = remember(positionMs, lyrics) {
-                if (lyrics.lines.isEmpty()) -1
-                else {
-                    val idx = lyrics.lines.indexOfLast { it.timestampMs <= positionMs }
-                    if (idx >= 0) idx else 0
-                }
-            }
-            val listState = rememberLazyListState()
-
-            LaunchedEffect(currentLineIndex) {
-                if (currentLineIndex in lyrics.lines.indices) {
-                    listState.animateScrollToItem((currentLineIndex - 2).coerceAtLeast(0))
-                }
-            }
-
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(vertical = 40.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                itemsIndexed(lyrics.lines) { index, line ->
-                    val isCurrent = index == currentLineIndex
-                    Text(
-                        text = line.text,
-                        fontSize = if (isCurrent) 22.sp else 16.sp,
-                        fontWeight = if (isCurrent) FontWeight.ExtraBold else FontWeight.Medium,
-                        color = if (isCurrent) Color.White else Color.White.copy(alpha = 0.35f),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSeek(line.timestampMs) }
-                            .padding(horizontal = 16.dp)
-                    )
-                }
-            }
+    ) {
+        // Underlying ArtworkMeshBackdrop beneath all player layers (D-05, D-08)
+        val artworkUrl = remember(currentTrack.id, currentTrack.path) {
+            currentTrack.path.takeIf { it.isNotBlank() } ?: currentTrack.id.toString()
+        }
+        val themeConfig = com.nodeplayer.ui.theme.LocalGlassThemeConfig.current
+        if (themeConfig.animatedBackdrop) {
+            ArtworkMeshBackdrop(artworkUrl = artworkUrl, modifier = Modifier.fillMaxSize())
         } else {
-            // Artwork Centerpiece
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                TrackArtwork(
-                    track = currentTrack,
-                    modifier = Modifier.size(280.dp),
-                    cornerRadius = 24.dp
-                )
-            }
+            Box(Modifier.fillMaxSize().background(Color.Black))
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        // Subtle top legibility scrim so status bar and drag handle remain legible on high-luminance artwork covers
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.45f),
+                            Color.Transparent
+                        )
+                    )
+                )
+        )
 
-        // Bottom Track Details & Format Badges
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        // Foreground controls layer
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = currentTrack.title,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = currentTrack.artist,
-                    style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.7f)),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            AudioFormatBadge(
-                track = currentTrack,
-                modifier = Modifier.padding(start = 8.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Scrubber Slider — Liquid Glass
-        Column {
-            LiquidGlassSlider(
-                value = displayFraction.coerceIn(0f, 1f),
-                onValueChange = { frac ->
-                    isDragging = true
-                    dragFraction = frac
-                },
+            // 1. Top Section: Centered drag handle & "Playing from <source>"
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .onScrubberWheel { deltaY ->
-                        val stepMs = 5000L
-                        val newPos = if (deltaY < 0f) positionMs + stepMs else positionMs - stepMs
-                        onSeek(newPos.coerceIn(0L, durationMs))
-                    }
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .padding(top = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val currentDisplayMs = if (isDragging) (dragFraction * durationMs).toLong() else positionMs
-                Text(formatTime(currentDisplayMs), fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
-                Text(formatTime(durationMs), fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
-            }
-        }
+                Box(
+                    modifier = Modifier
+                        .size(width = 36.dp, height = 4.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color.White.copy(alpha = 0.45f))
+                        .clickable { onClose() }
+                )
 
-        Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
-        // Center Playback Control Buttons — Liquid Glass
-        val density = androidx.compose.ui.platform.LocalDensity.current
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            LiquidGlassIconButton(
-                icon = Icons.Rounded.SkipPrevious,
-                onClick = onPrevious,
-                contentDescription = "Previous",
-                size = 56.dp
-            )
-
-            // Hero Play/Pause — large liquid glass lens bubble
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .drawBackdrop(
-                        shape = { CircleShape },
-                        effects = {
-                            lens(
-                                refractionHeight = with(density) { 20f.dp.toPx() },
-                                refractionAmount = with(density) { 18f.dp.toPx() },
-                                chromaticAberration = true
-                            )
-                            blur(with(density) { 14f.dp.toPx() })
-                        },
-                        highlight = { Highlight(width = 1.2.dp, alpha = 0.9f) },
-                        shadow = { Shadow(color = Color.Black.copy(alpha = 0.35f)) }
-                    )
-                    .background(accent.copy(alpha = 0.85f), CircleShape)
-                    .pressScale(targetScale = 0.92f, onClick = onPlayPause),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = Color(0xFF131728),
-                    modifier = Modifier.size(36.dp)
+                Text(
+                    text = "Playing from $sourceLabel",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White.copy(alpha = 0.70f)
                 )
             }
 
-            LiquidGlassIconButton(
-                icon = Icons.Rounded.SkipNext,
-                onClick = onNext,
-                contentDescription = "Next",
-                size = 56.dp
-            )
-        }
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val artworkSize = minOf(maxWidth, maxHeight, 360.dp)
+                com.nodeplayer.ui.components.TrackArtwork(
+                    track = currentTrack,
+                    modifier = Modifier.size(artworkSize),
+                    cornerRadius = 24.dp,
+                    targetSizePx = 512
+                )
+            }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            // 2. Lower Content Section: Title row, lyric preview, timeline, transport & bottom row
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Title Row: Title + Artist on left, Round three-dots on right
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = currentTrack.title,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = currentTrack.artist,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = accentTint.copy(alpha = 0.85f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    // Round Three-Dots Button (Translucent Tinted Circle)
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(accentTint.copy(alpha = 0.22f))
+                            .clickable { onOpenThreeDotsMenu() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.MoreHoriz,
+                            contentDescription = "Menu",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Single preview line of current lyric (taps into full lyrics)
+                NowPlayingLyricPreview(
+                    lyrics = lyrics,
+                    positionProvider = positionProvider,
+                    onOpenLyrics = onOpenLyrics
+                )
+
+                // Custom non-M3 Timeline
+                NowPlayingTimeline(
+                    durationMs = durationMs,
+                    accentColor = accentTint,
+                    onSeek = onSeek,
+                    positionProvider = positionProvider
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Large Transport Row: Previous, Large Play/Pause, Next (Filled glyphs, white)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .clickable { onPrevious() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.SkipPrevious,
+                            contentDescription = "Previous",
+                            tint = Color.White,
+                            modifier = Modifier.size(38.dp)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(CircleShape)
+                            .clickable { onPlayPause() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = Color.White,
+                            modifier = Modifier.size(58.dp)
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(CircleShape)
+                            .clickable { onNext() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.SkipNext,
+                            contentDescription = "Next",
+                            tint = Color.White,
+                            modifier = Modifier.size(38.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(28.dp))
+
+                // Bottom Row: 3 round tinted buttons (Lyrics, Node Connect, Playback options)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceAround,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 1. Lyrics Button (speech-bubble)
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(accentTint.copy(alpha = 0.18f))
+                            .clickable { onOpenLyrics() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.ChatBubbleOutline,
+                            contentDescription = "Lyrics",
+                            tint = Color.White.copy(alpha = if (lyrics.lines.isNotEmpty()) 0.95f else 0.45f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // 2. Node Connect Button (cast icon)
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(accentTint.copy(alpha = 0.18f))
+                            .clickable { onOpenNodeConnect() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Cast,
+                            contentDescription = "Node Connect",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // 3. Playback Options Button (three lines)
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(accentTint.copy(alpha = 0.18f))
+                            .clickable { onOpenPlaybackOptions() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.FormatListBulleted,
+                            contentDescription = "Playback Options",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Centered Output Device Label
+                Text(
+                    text = audioOutputName,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.70f),
+                    modifier = Modifier
+                        .clickable { onOpenNodeConnect() }
+                        .padding(4.dp)
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+        }
     }
+}
+
+@Composable
+fun NowPlayingLyricPreview(
+    lyrics: Lyrics,
+    positionProvider: () -> Long,
+    onOpenLyrics: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val currentPositionProvider = androidx.compose.runtime.rememberUpdatedState(positionProvider)
+
+    // Fast-path index lookup driven by positionProvider
+    val activeLine by remember(lyrics) {
+        derivedStateOf {
+            if (lyrics.lines.isEmpty()) null
+            else findActiveLyricLine(lyrics.lines, currentPositionProvider.value())
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 28.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .clickable(onClick = onOpenLyrics)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        val line = activeLine
+        if (line != null && line.text.isNotBlank()) {
+            if (line.isWordSynced) {
+                // Word-synced karaoke progress wipe
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    // Base inactive text rendered dimmed
+                    Text(
+                        text = line.text,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.50f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    // Overlay sung text rendered in pure white clipped to sung progress fraction
+                    Text(
+                        text = line.text,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.drawWithContent {
+                            val pos = currentPositionProvider.value()
+                            val progress = calculateLyricLineCharsSungProgress(line, pos)
+                            if (progress >= 1f) {
+                                drawContent()
+                            } else if (progress > 0f) {
+                                clipRect(
+                                    left = 0f,
+                                    top = 0f,
+                                    right = size.width * progress,
+                                    bottom = size.height
+                                ) {
+                                    this@drawWithContent.drawContent()
+                                }
+                            }
+                        }
+                    )
+                }
+            } else {
+                // Standard LRC line-synced preview
+                Text(
+                    text = line.text,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.90f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        } else {
+            // Instrumental break / intro placeholder
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.GraphicEq,
+                    contentDescription = "Instrumental",
+                    tint = Color.White.copy(alpha = 0.40f),
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = "Instrumental",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Normal,
+                    color = Color.White.copy(alpha = 0.40f),
+                    maxLines = 1
+                )
+            }
+        }
+    }
+    Spacer(modifier = Modifier.height(10.dp))
 }

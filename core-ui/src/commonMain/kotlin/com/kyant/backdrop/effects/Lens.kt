@@ -23,22 +23,30 @@ fun BackdropEffectScope.lens(
     chromaticAberration: Boolean = false
 ) {
     if (!isRuntimeShaderSupported()) {
-        GlassDebug.logThrottled("Lens", "RuntimeShader not supported on this platform/API")
+        if (GlassDebug.isEnabled) {
+            GlassDebug.logThrottled("Lens", "RuntimeShader not supported on this platform/API")
+        }
         return
     }
     if (refractionHeight <= 0f || refractionAmount <= 0f) {
-        GlassDebug.logThrottled("Lens", "refractionHeight ($refractionHeight) or amount ($refractionAmount) <= 0")
+        if (GlassDebug.isEnabled) {
+            GlassDebug.logThrottled("Lens", "refractionHeight ($refractionHeight) or amount ($refractionAmount) <= 0")
+        }
         return
     }
     if (!size.isSpecified || size.width <= 0f || size.height <= 0f) {
-        GlassDebug.logThrottled("Lens", "Size not specified or zero: size=$size")
+        if (GlassDebug.isEnabled) {
+            GlassDebug.logThrottled("Lens", "Size not specified or zero: size=$size")
+        }
         return
     }
 
-    GlassDebug.logThrottled(
-        "Lens",
-        "Executing lens: size=$size, height=$refractionHeight, amount=$refractionAmount, chromatic=$chromaticAberration"
-    )
+    if (GlassDebug.isEnabled) {
+        GlassDebug.logThrottled(
+            "Lens",
+            "Executing lens: size=$size, height=$refractionHeight, amount=$refractionAmount, chromatic=$chromaticAberration"
+        )
+    }
 
     if (padding > 0f) {
         padding = (padding - refractionHeight).fastCoerceAtLeast(0f)
@@ -46,7 +54,9 @@ fun BackdropEffectScope.lens(
 
     try {
         val cornerRadii = cornerRadii ?: run {
-            GlassDebug.logThrottled("Lens", "cornerRadii returned null for shape=$shape")
+            if (GlassDebug.isEnabled) {
+                GlassDebug.logThrottled("Lens", "cornerRadii returned null for shape=$shape")
+            }
             return
         }
         val shader =
@@ -74,7 +84,9 @@ fun BackdropEffectScope.lens(
         }
         val effect = RuntimeShaderEffect(shader, "content")
         effect(effect)
-        GlassDebug.logThrottled("Lens", "RuntimeShaderEffect successfully chained to renderEffect")
+        if (GlassDebug.isEnabled) {
+            GlassDebug.logThrottled("Lens", "RuntimeShaderEffect successfully chained to renderEffect")
+        }
     } catch (t: Throwable) {
         GlassDebug.logError("Lens", "Lens shader creation/uniform error: ${t.message}", t)
         NodeLog.e("Backdrop", "Lens shader creation/uniform error: ${t.message}", t)

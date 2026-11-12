@@ -136,29 +136,37 @@ class StreamResolverTest {
         var requestedClients = mutableListOf<String>()
 
         val innerTubeEngine = MockEngine { request ->
-            val clientName = request.headers["X-YouTube-Client-Name"] ?: "unknown"
-            requestedClients.add(clientName)
-
-            // Primary client is IOS (clientId = "5") -> Return 403 / error playability
-            if (clientName == "5") {
+            if (request.url.toString().contains("sw.js_data")) {
                 respond(
-                    content = samplePlayerResponse(status = "ERROR"),
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
-            } else if (clientName == "28") {
-                // ANDROID_VR (clientId = "28") -> Return valid player response with format 251
-                respond(
-                    content = samplePlayerResponse(status = "OK", formats = listOf(format251)),
+                    content = ")]}'\n[[null,null,[[null,null,null,null,null,null,null,null,null,null,null,null,null,\"VISITOR_123\"]]]]",
                     status = HttpStatusCode.OK,
                     headers = headersOf(HttpHeaders.ContentType, "application/json")
                 )
             } else {
-                respond(
-                    content = samplePlayerResponse(status = "ERROR"),
-                    status = HttpStatusCode.OK,
-                    headers = headersOf(HttpHeaders.ContentType, "application/json")
-                )
+                val clientName = request.headers["X-YouTube-Client-Name"] ?: "unknown"
+                requestedClients.add(clientName)
+
+                // Primary client is VISIONOS (clientId = "101") -> Return 403 / error playability
+                if (clientName == "101") {
+                    respond(
+                        content = samplePlayerResponse(status = "ERROR"),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                } else if (clientName == "28") {
+                    // Secondary client is ANDROID_VR (clientId = "28") -> Return valid player response with format 140
+                    respond(
+                        content = samplePlayerResponse(status = "OK", formats = listOf(format140)),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                } else {
+                    respond(
+                        content = samplePlayerResponse(status = "ERROR"),
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json")
+                    )
+                }
             }
         }
 
@@ -176,12 +184,12 @@ class StreamResolverTest {
         assertTrue(result.isSuccess)
         val stream = result.getOrThrow()
         assertEquals("ANDROID_VR", stream.clientName)
-        assertEquals(251, stream.itag)
-        assertEquals("https://googlevideo.com/playback?itag=251", stream.streamUrl)
+        assertEquals(140, stream.itag)
+        assertEquals("https://googlevideo.com/playback?itag=140", stream.streamUrl)
         assertEquals(-5.5, stream.loudnessDb ?: 0.0, 0.01)
 
-        // Verify rotation sequence tried IOS (5) first, then ANDROID_VR (28)
-        assertEquals(listOf("5", "28"), requestedClients)
+        // Verify rotation sequence tried VISIONOS (101) first, then ANDROID_VR (28)
+        assertEquals(listOf("101", "28"), requestedClients)
 
         innerTubeClient.close()
         resolver.close()

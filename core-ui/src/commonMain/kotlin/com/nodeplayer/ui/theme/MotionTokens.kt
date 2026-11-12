@@ -1,24 +1,32 @@
 package com.nodeplayer.ui.theme
 
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.Dp
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.model.MotionLevel
 
+/**
+ * Centralized motion tokens, duration constants, easing curves, and physics resolvers
+ * for Node Player's fluid iOS-grade animation system.
+ */
 object MotionTokens {
+
+    // --- Standard Duration Constants (ms) ---
+    const val DurationShort: Int = 150
+    const val DurationMedium: Int = 300
+    const val DurationLong: Int = 500
+
+    // --- Standard Easing Curves ---
+    val EmphasizedEasing: Easing = CubicBezierEasing(0.2f, 0.0f, 0.0f, 1.0f)
+    val DecelerateEasing: Easing = LinearOutSlowInEasing
+    val AccelerateEasing: Easing = FastOutSlowInEasing
 
     /**
      * Convx-matched critically damped spring for the selection puck.
@@ -88,49 +96,43 @@ object MotionTokens {
         config: GlassThemeConfig,
         defaultSpec: AnimationSpec<Float> = Smooth
     ): AnimationSpec<Float> {
-        if (config.reduceMotion || config.motionLevel == MotionLevel.OFF || config.animationPreset == "OFF" || config.isPerformanceMode) {
+        if (config.reduceMotion || config.motionLevel == MotionLevel.OFF || config.animationPreset.uppercase() == "OFF" || config.isPerformanceMode) {
             return Instant
         }
         if (config.motionLevel == MotionLevel.REDUCED) {
             return Gentle
         }
+        val speedFactor = config.motionSpeed.coerceIn(0.5f, 2.0f)
         return when (config.animationPreset.uppercase()) {
-            "SNAPPY" -> Snappy
-            "BOUNCY" -> Bouncy
-            "GENTLE" -> Gentle
+            "SNAPPY" -> if (speedFactor == 1.0f) Snappy else spring(dampingRatio = 0.75f, stiffness = 600f * speedFactor)
+            "BOUNCY" -> if (speedFactor == 1.0f) Bouncy else spring(dampingRatio = 0.65f, stiffness = 420f * speedFactor)
+            "GENTLE" -> if (speedFactor == 1.0f) Gentle else spring(dampingRatio = 0.90f, stiffness = 220f * speedFactor)
+            "MINIMAL" -> spring(dampingRatio = 0.95f, stiffness = 700f * speedFactor)
+            "CUSTOM" -> spring(
+                dampingRatio = config.springBounciness.coerceIn(0.3f, 1.0f),
+                stiffness = config.springStiffness.coerceIn(150f, 1000f) * speedFactor
+            )
+            "SMOOTH" -> if (speedFactor == 1.0f) Smooth else spring(dampingRatio = 0.82f, stiffness = 380f * speedFactor)
             else -> defaultSpec
         }
     }
-}
 
-/**
- * High-performance fluid press scale modifier with spring physics and zero stutter.
- */
-fun Modifier.pressScale(
-    targetScale: Float = 0.96f,
-    onClick: (() -> Unit)? = null
-): Modifier = composed {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) targetScale else 1.0f,
-        animationSpec = MotionTokens.Snappy,
-        label = "PressScale"
-    )
-
-    this
-        .graphicsLayer {
-            scaleX = scale
-            scaleY = scale
+    /**
+     * Resolves the animation duration in milliseconds based on motion settings.
+     * When motion is disabled, returns 0 ms for immediate transition.
+     */
+    fun resolveDuration(
+        config: GlassThemeConfig,
+        baseDurationMillis: Int = DurationMedium
+    ): Int {
+        if (config.reduceMotion || config.motionLevel == MotionLevel.OFF || config.animationPreset.uppercase() == "OFF" || config.isPerformanceMode) {
+            return 0
         }
-        .then(
-            if (onClick != null) {
-                Modifier.clickable(
-                    interactionSource = interactionSource,
-                    indication = null,
-                    onClick = onClick
-                )
-            } else Modifier
-        )
+        if (config.motionLevel == MotionLevel.REDUCED) {
+            return DurationShort
+        }
+        val speedFactor = config.motionSpeed.coerceIn(0.5f, 2.0f)
+        // Higher motionSpeed means faster animation -> shorter duration
+        return (baseDurationMillis / speedFactor).toInt().coerceAtLeast(1)
+    }
 }
