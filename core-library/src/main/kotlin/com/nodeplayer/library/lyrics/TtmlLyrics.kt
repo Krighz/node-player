@@ -216,7 +216,7 @@ object TtmlLyrics {
 
         pieces.forEach { piece ->
             when (piece) {
-                is Piece.Text -> when {
+              piece.text.isBlank() -> if ('\n' !in piece.text && '\r' !in piece.text) flush()
                     piece.text.isBlank() -> flush()
                     timed -> current.append(piece.text)
                     else -> Unit
