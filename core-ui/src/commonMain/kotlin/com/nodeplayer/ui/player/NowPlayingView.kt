@@ -32,6 +32,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,11 +45,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
+import com.nodeplayer.model.AlbumArtPalette
+import com.nodeplayer.ui.components.PlatformArtworkProvider
+import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.library.LrcParser
 import com.nodeplayer.model.LyricWord
 import com.nodeplayer.model.Lyrics
@@ -126,8 +129,23 @@ fun NowPlayingView(
 ) {
     if (currentTrack == null) return
 
-    val cachedPalette = remember(currentTrack.id, currentTrack.path) {
-        PaletteExtractor.getCachedPalette(currentTrack)
+    // The palette is looked up once and never refreshed by a plain remember{}: if artwork finishes
+    // loading after this screen opens, the colors would stay on the orange fallback forever.
+    // produceState re-runs per track, extracts the vibrant color when the cache is empty, derives the
+    // full palette and caches it so other screens (lyrics, backdrops) get the same colors.
+    val cachedPalette by produceState<AlbumArtPalette?>(
+        initialValue = PaletteExtractor.getCachedPalette(currentTrack),
+        currentTrack.id,
+        currentTrack.path
+    ) {
+        value = PaletteExtractor.getCachedPalette(currentTrack) ?: run {
+            val extracted = PlatformArtworkProvider.extractVibrantColor(currentTrack)
+            extracted?.let { color ->
+                PaletteExtractor.derivePaletteFromBaseColor(color).also { palette ->
+                    PaletteExtractor.cachePalette(currentTrack, palette)
+                }
+            }
+        }
     }
     val vibrantColor = cachedPalette?.vibrant?.toComposeColor() ?: Color(0xFFD4883B)
     val darkMutedColor = cachedPalette?.darkMuted?.toComposeColor() ?: Color(0xFF0A0A0C)
@@ -169,12 +187,10 @@ fun NowPlayingView(
         val artworkUrl = remember(currentTrack.id, currentTrack.path) {
             currentTrack.path.takeIf { it.isNotBlank() } ?: currentTrack.id.toString()
         }
-        val themeConfig = com.nodeplayer.ui.theme.LocalGlassThemeConfig.current
-        if (themeConfig.animatedBackdrop) {
-            ArtworkMeshBackdrop(artworkUrl = artworkUrl, modifier = Modifier.fillMaxSize())
-        } else {
-            Box(Modifier.fillMaxSize().background(Color.Black))
-        }
+        ArtworkMeshBackdrop(
+            artworkUrl = artworkUrl,
+            modifier = Modifier.fillMaxSize()
+        )
 
         // Subtle top legibility scrim so status bar and drag handle remain legible on high-luminance artwork covers
         Box(
@@ -224,16 +240,19 @@ fun NowPlayingView(
                 )
             }
 
-            BoxWithConstraints(
-                modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 16.dp),
+            // Hero Album Art in upper section with smooth squircle border
+            Box(
+                modifier = Modifier
+                    .weight(1.0f)
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val artworkSize = minOf(maxWidth, maxHeight, 360.dp)
-                com.nodeplayer.ui.components.TrackArtwork(
+                TrackArtwork(
                     track = currentTrack,
-                    modifier = Modifier.size(artworkSize),
-                    cornerRadius = 24.dp,
-                    targetSizePx = 512
+                    modifier = Modifier
+                        .size(300.dp),
+                    cornerRadius = 24.dp
                 )
             }
 

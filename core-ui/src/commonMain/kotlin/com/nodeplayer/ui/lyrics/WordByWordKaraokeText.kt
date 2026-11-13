@@ -14,16 +14,24 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -33,6 +41,145 @@ import com.nodeplayer.model.LyricAlignment
 import com.nodeplayer.model.LyricWord
 import com.nodeplayer.model.LyricsLine
 import kotlin.math.abs
+
+private val WIPE_FEATHER = 18.dp
+
+private fun TextLayoutResult.xOn(offset: Int, visualLine: Int, inset: Float = 0f): Float {
+    val lineStart = getLineStart(visualLine)
+    val lineEndVisible = getLineEnd(visualLine, visibleEnd = true)
+    val lineLeft = getLineLeft(visualLine) + inset
+    val lineRight = getLineRight(visualLine) + inset
+
+    val rtl = getParagraphDirection(lineStart.coerceIn(0, (layoutInput.text.length - 1).coerceAtLeast(0))) ==
+              ResolvedTextDirection.Rtl
+
+    return when {
+        offset <= lineStart -> if (rtl) lineRight else lineLeft
+        offset >= lineEndVisible -> if (rtl) lineLeft else lineRight
+        else -> (getHorizontalPosition(offset, usePrimaryDirection = true) + inset)
+            .coerceIn(lineLeft, lineRight)
+    }
+}
+
+private fun horizontalAt(
+    layout: TextLayoutResult,
+    chars: Float,
+    visualLine: Int,
+    spans: List<IntRange>,
+): Float {
+    val lineStart = layout.getLineStart(visualLine)
+    val lineEndVisible = layout.getLineEnd(visualLine, visibleEnd = true)
+    val lineEndAll = layout.getLineEnd(visualLine, visibleEnd = false)
+    val word = spans.firstOrNull { chars >= it.first && chars < it.last + 1 }
+    if (word != null && word.first >= lineStart && word.last + 1 <= lineEndVisible) {
+        val from = layout.xOn(word.first, visualLine, 0f)
+        val to = layout.xOn(word.last + 1, visualLine, 0f)
+        return from + (to - from) * (chars - word.first) / (word.last + 1 - word.first)
+    }
+    val index = chars.toInt().coerceIn(lineStart, lineEndAll)
+    val here = layout.xOn(index, visualLine, 0f)
+    val rawNext = index + 1
+    val textLen = layout.layoutInput.text.length
+    val spills: Boolean = layout.getLineForOffset(rawNext.coerceIn(0, textLen)) != visualLine
+    val next: Float = if (spills) {
+        if (rawNext > lineEndVisible) {
+            val rtl = layout.getParagraphDirection(
+                visualLine.coerceAtMost(lineEndAll).coerceIn(0, (textLen - 1).coerceAtLeast(0))
+            ) == ResolvedTextDirection.Rtl
+            val farLeft = layout.getLineLeft(visualLine)
+            val farRight = layout.getLineRight(visualLine)
+            if (rtl) farLeft else farRight
+        } else {
+            layout.xOn(rawNext.coerceAtMost(lineEndVisible), visualLine, 0f)
+        }
+    } else {
+        layout.xOn(rawNext, visualLine, 0f)
+    }
+    return here + (next - here) * (chars - index)
+}
+
+private fun ContentDrawScope.sweepText(
+    layout: TextLayoutResult,
+    revealedChars: Float,
+    spans: List<IntRange>,
+    feather: Boolean = true,
+) {
+    if (revealedChars <= 0f) return
+    val textLen = layout.layoutInput.text.length
+    if (revealedChars >= textLen) {
+        drawContent()
+        return
+    }
+
+    val offset = layout.getLineStart(0).coerceIn(0, (layout.layoutInput.text.length - 1).coerceAtLeast(0))
+    val rtl = layout.getParagraphDirection(offset) == ResolvedTextDirection.Rtl
+
+    for (visualLine in 0 until layout.lineCount) {
+        val lineStart = layout.getLineStart(visualLine)
+        val lineEndVisible = layout.getLineEnd(visualLine, visibleEnd = true)
+        val lineEndAll = layout.getLineEnd(visualLine, visibleEnd = false)
+
+        if (revealedChars <= lineStart) return
+
+        val cut = revealedChars < lineEndAll
+        val charPos = if (cut) {
+            horizontalAt(layout, revealedChars, visualLine, spans)
+        } else {
+            if (rtl) layout.getLineLeft(visualLine) else layout.getLineRight(visualLine)
+        }
+
+        val lineLeft = layout.getLineLeft(visualLine)
+        val lineRight = layout.getLineRight(visualLine)
+        val safeCharPos = charPos.coerceIn(lineLeft, lineRight)
+
+        val featherPx = if (feather && cut) {
+            minOf(
+                WIPE_FEATHER.toPx(),
+                if (rtl) lineRight - safeCharPos else safeCharPos - lineLeft,
+            )
+        } else {
+            0f
+        }
+        val lead = if (rtl) {
+            (safeCharPos - featherPx).coerceAtLeast(lineLeft)
+        } else {
+            (safeCharPos + featherPx).coerceAtMost(lineRight)
+        }
+
+        val (clipLeft, clipRight) = if (rtl) {
+            lead to lineRight
+        } else {
+            lineLeft to lead
+        }
+
+        if (clipLeft >= clipRight) continue
+
+        val top = layout.getLineTop(visualLine)
+        val bottom = layout.getLineBottom(visualLine)
+        clipRect(
+            left = clipLeft,
+            top = top,
+            right = clipRight,
+            bottom = bottom,
+        ) {
+            this@sweepText.drawContent()
+        }
+
+        if (featherPx >= 0.5f) {
+            clipRect(top = top, bottom = bottom) {
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        0f to Color.White,
+                        1f to Color.Transparent,
+                        startX = safeCharPos,
+                        endX = if (rtl) safeCharPos - featherPx else safeCharPos + featherPx,
+                    ),
+                    blendMode = BlendMode.DstIn,
+                )
+            }
+        }
+    }
+}
 
 /**
  * Calculation helper for word-by-word or line-level sweep fill progress.
@@ -105,6 +252,66 @@ object KaraokeProgressMath {
     }
 }
 
+/**
+ * Character ranges of each word inside [LyricsLine.text] (words are joined by one space).
+ * Empty for line-synced lyrics.
+ */
+private val LyricsLine.sweepSpans: List<IntRange>
+    get() {
+        if (words.isEmpty()) return emptyList()
+        val spans = ArrayList<IntRange>(words.size)
+        var offset = 0
+        for (word in words) {
+            val length = word.text.length
+            if (length > 0) spans += offset until (offset + length)
+            offset += length + 1
+        }
+        return spans
+    }
+
+/**
+ * How many characters of [LyricsLine.text] are revealed at [positionMs] (fractional, so the sweep
+ * glides). Interpolates inside syllables when present, else inside the word; line-synced lyrics
+ * spread the line's duration evenly over its text.
+ */
+private fun LyricsLine.revealedChars(positionMs: Long): Float {
+    if (positionMs < timestampMs) return 0f
+    if (words.isEmpty()) {
+        val end = endTimeMs?.takeIf { it > timestampMs } ?: (timestampMs + 3500L)
+        if (positionMs >= end) return text.length.toFloat()
+        val fraction = (positionMs - timestampMs).toFloat() / (end - timestampMs).toFloat()
+        return text.length * fraction.coerceIn(0f, 1f)
+    }
+    var offset = 0
+    for (word in words) {
+        val length = word.text.length
+        if (positionMs <= word.startMs) return offset.toFloat()
+        if (positionMs < word.endMs) {
+            var revealedInWord = 0f
+            if (word.syllables.isNotEmpty()) {
+                for (syllable in word.syllables) {
+                    if (positionMs >= syllable.endMs) {
+                        revealedInWord = syllable.endChar.toFloat()
+                    } else {
+                        if (positionMs > syllable.startMs) {
+                            val duration = (syllable.endMs - syllable.startMs).coerceAtLeast(1L).toFloat()
+                            val fraction = ((positionMs - syllable.startMs) / duration).coerceIn(0f, 1f)
+                            revealedInWord = syllable.startChar + (syllable.endChar - syllable.startChar) * fraction
+                        }
+                        break
+                    }
+                }
+            } else {
+                val duration = (word.endMs - word.startMs).coerceAtLeast(1L).toFloat()
+                revealedInWord = length * ((positionMs - word.startMs) / duration).coerceIn(0f, 1f)
+            }
+            return offset + revealedInWord.coerceIn(0f, length.toFloat())
+        }
+        offset += length + 1
+    }
+    return text.length.toFloat()
+}
+
 private val StartCenterOrigin = TransformOrigin(0f, 0.5f)
 private val EndCenterOrigin = TransformOrigin(1f, 0.5f)
 
@@ -167,7 +374,7 @@ fun WordByWordKaraokeText(
     }
 
     // Base color for active text is pure white with subtle opacity; inactive uses dimmed palette
-    val activeBaseColor = remember(activeColor) { activeColor.copy(alpha = 0.50f) }
+    val activeBaseColor = remember(activeColor) { activeColor.copy(alpha = 0.35f) }
     val dimmedInactiveColor = remember(inactiveColor) { inactiveColor.copy(alpha = 0.65f) }
 
     Column(
@@ -194,6 +401,7 @@ fun WordByWordKaraokeText(
             contentAlignment = boxAlignment
         ) {
             if (isActive) {
+                var textLayout by remember(line.text) { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = boxAlignment
@@ -202,6 +410,7 @@ fun WordByWordKaraokeText(
                         text = line.text,
                         style = textStyle,
                         color = activeBaseColor,
+                        onTextLayout = { textLayout = it },
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -211,25 +420,17 @@ fun WordByWordKaraokeText(
                         color = if (accentSweepColor != Color.Unspecified) accentSweepColor else activeColor,
                         modifier = Modifier
                             .fillMaxWidth()
+                            // Offscreen layer: the feather uses BlendMode.DstIn, which must only
+                            // affect this text, not the backdrop (that was the black bar).
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                             .drawWithContent {
+                                val layout = textLayout
                                 val pos = currentPositionProvider()
-                                val sweepProgress = KaraokeProgressMath.calculateLineSweepProgress(
-                                    currentPositionMs = pos,
-                                    timestampMs = line.timestampMs,
-                                    endTimeMs = line.endTimeMs,
-                                    words = line.words
-                                )
-                                if (sweepProgress >= 1f) {
+                                val revealed = line.revealedChars(pos)
+                                if (layout != null && revealed > 0f) {
+                                    sweepText(layout, revealed, line.sweepSpans)
+                                } else if (revealed >= line.text.length) {
                                     drawContent()
-                                } else if (sweepProgress > 0f) {
-                                    clipRect(
-                                        left = 0f,
-                                        top = 0f,
-                                        right = size.width * sweepProgress,
-                                        bottom = size.height
-                                    ) {
-                                        this@drawWithContent.drawContent()
-                                    }
                                 }
                             }
                     )
@@ -263,48 +464,40 @@ fun WordByWordKaraokeText(
                     .padding(top = 4.dp),
                 contentAlignment = boxAlignment
             ) {
-                if (isActive) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = boxAlignment
-                    ) {
-                        Text(
-                            text = bgLine.text,
-                            style = bgTextStyle,
-                            color = activeBaseColor.copy(alpha = 0.40f),
-                            modifier = Modifier.fillMaxWidth()
-                        )
+            if (isActive) {
+                var bgTextLayout by remember(bgLine.text) { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = boxAlignment
+                ) {
+                    Text(
+                        text = bgLine.text,
+                        style = bgTextStyle,
+                        color = activeColor.copy(alpha = 0.25f),
+                        onTextLayout = { bgTextLayout = it },
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-                        Text(
-                            text = bgLine.text,
-                            style = bgTextStyle,
-                            color = (if (accentSweepColor != Color.Unspecified) accentSweepColor else activeColor).copy(alpha = 0.85f),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .drawWithContent {
-                                    val pos = currentPositionProvider()
-                                    val sweepProgress = KaraokeProgressMath.calculateLineSweepProgress(
-                                        currentPositionMs = pos,
-                                        timestampMs = bgLine.timestampMs,
-                                        endTimeMs = bgLine.endTimeMs,
-                                        words = bgLine.words
-                                    )
-                                    if (sweepProgress >= 1f) {
-                                        drawContent()
-                                    } else if (sweepProgress > 0f) {
-                                        clipRect(
-                                            left = 0f,
-                                            top = 0f,
-                                            right = size.width * sweepProgress,
-                                            bottom = size.height
-                                        ) {
-                                            this@drawWithContent.drawContent()
-                                        }
-                                    }
+                    Text(
+                        text = bgLine.text,
+                        style = bgTextStyle,
+                        color = (if (accentSweepColor != Color.Unspecified) accentSweepColor else activeColor).copy(alpha = 0.85f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                            .drawWithContent {
+                                val layout = bgTextLayout
+                                val pos = currentPositionProvider()
+                                val revealed = bgLine.revealedChars(pos)
+                                if (layout != null && revealed > 0f) {
+                                    sweepText(layout, revealed, bgLine.sweepSpans)
+                                } else if (revealed >= bgLine.text.length) {
+                                    drawContent()
                                 }
-                        )
-                    }
-                } else {
+                            }
+                    )
+                }
+            } else {
                     Text(
                         text = bgLine.text,
                         style = bgTextStyle,

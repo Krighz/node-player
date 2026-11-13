@@ -56,6 +56,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -163,7 +164,22 @@ fun FullScreenLyricsView(
     }
 
     // Dynamic palette resolution
-    val cachedPalette = remember(track) { PaletteExtractor.getCachedPalette(track) }
+    // Same fix as Now Playing: a plain remember{} reads the cache once and never updates, so if the
+    // palette wasn't cached yet the backdrop stayed on DEFAULT_OBSIDIAN for the whole song.
+    val cachedPalette by produceState<AlbumArtPalette?>(
+        initialValue = PaletteExtractor.getCachedPalette(track),
+        track?.id,
+        track?.path
+    ) {
+        val current = track
+        value = if (current == null) null else PaletteExtractor.getCachedPalette(current) ?: run {
+            PlatformArtworkProvider.extractVibrantColor(current)?.let { color ->
+                PaletteExtractor.derivePaletteFromBaseColor(color).also { derived ->
+                    PaletteExtractor.cachePalette(current, derived)
+                }
+            }
+        }
+    }
     val palette = cachedPalette ?: AlbumArtPalette.DEFAULT_OBSIDIAN
     val accentTint = remember(palette, defaultAccent) {
         PaletteExtractor.ensureContrastAgainstDark(Color(palette.accent), Color(palette.darkMuted))
