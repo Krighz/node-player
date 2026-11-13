@@ -216,8 +216,12 @@ object TtmlLyrics {
 
         pieces.forEach { piece ->
             when (piece) {
-              piece.text.isBlank() -> if ('\n' !in piece.text && '\r' !in piece.text) flush()
-                    piece.text.isBlank() -> flush()
+                is Piece.Text -> when {
+                    // Whitespace between spans ends a word, unless it's just a line break from
+                    // pretty-printed XML.
+                    piece.text.isBlank() -> {
+                        if ('\n' !in piece.text && '\r' !in piece.text) flush()
+                    }
                     timed -> current.append(piece.text)
                     else -> Unit
                 }
