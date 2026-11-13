@@ -49,6 +49,57 @@ data class LyricsLine(
 ) {
     val timeMs: Long get() = timestampMs
     val isWordSynced: Boolean get() = words.isNotEmpty()
+
+    val wordSpans: List<IntRange> by lazy(LazyThreadSafetyMode.NONE) {
+        var offset = 0
+        words.map { word ->
+            val start = text.indexOf(word.text, offset).takeIf { it >= 0 } ?: offset
+            val end = start + word.text.length
+            offset = end
+            start until end
+        }
+    }
+
+    val sweepSpans: List<IntRange> by lazy(LazyThreadSafetyMode.NONE) {
+        words.flatMapIndexed { index, word ->
+            val span = wordSpans.getOrNull(index) ?: (0 until 0)
+            if (word.syllables.isEmpty()) {
+                listOf(span)
+            } else {
+                word.syllables.map { (span.first + it.startChar) until (span.first + it.endChar) }
+            }
+        }
+    }
+
+    /**
+     * How many characters of [text] have been sung at [positionMs], matching BitChord's 1-to-1 algorithm.
+     */
+    fun revealedChars(positionMs: Long): Float {
+        if (text.isEmpty()) return 0f
+        if (words.isEmpty()) {
+            val end = endTimeMs ?: (timestampMs + 3500L)
+            if (positionMs <= timestampMs) return 0f
+            if (positionMs >= end) return text.length.toFloat()
+            val duration = (end - timestampMs).coerceAtLeast(1L)
+            return ((positionMs - timestampMs).toFloat() / duration.toFloat()) * text.length
+        }
+        var offset = 0
+        words.forEachIndexed { index, word ->
+            val start = text.indexOf(word.text, offset).takeIf { it >= 0 } ?: offset
+            val end = start + word.text.length
+            if (positionMs < word.startMs) return start.toFloat()
+            if (positionMs < word.endMs) return start + word.charsSungAt(positionMs)
+            val next = words.getOrNull(index + 1)
+            if (next != null && positionMs < next.startMs) {
+                val gapStart = text.indexOf(next.text, end).takeIf { it >= 0 } ?: end
+                val pause = (next.startMs - word.endMs).coerceAtLeast(1L)
+                val through = (positionMs - word.endMs).toFloat() / pause
+                return end + through * (gapStart - end)
+            }
+            offset = end
+        }
+        return text.length.toFloat()
+    }
 }
 
 data class Lyrics(

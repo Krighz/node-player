@@ -84,6 +84,10 @@ object YouTubeAccountManager {
         val previousCookie = client.sessionCookie
         _authState.value = AuthState.Loading
         client.sessionCookie = cookie
+        client.pageId = pageId
+        client.dataSyncId = dataSyncId
+        client.authUser = authUser
+        if (visitorData != null) client.visitorData = visitorData
 
         try {
             val account = client.fetchAccountInfo().getOrThrow()

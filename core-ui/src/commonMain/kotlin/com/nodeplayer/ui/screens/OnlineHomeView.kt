@@ -741,13 +741,13 @@ fun VideoCard16x9(
 
     Column(
         modifier = modifier
-            .width(220.dp)
+            .width(260.dp)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
     ) {
         Box(
             modifier = Modifier
-                .width(220.dp)
-                .height(124.dp)
+                .width(260.dp)
+                .height(146.dp)
                 .clip(cardShape)
                 .border(
                     width = if (isCurrent) 1.5.dp else 1.dp,
@@ -895,12 +895,12 @@ fun AudioSquircleCard1x1(
 
     Column(
         modifier = modifier
-            .width(136.dp)
+            .width(160.dp)
             .clickable(interactionSource = interactionSource, indication = null) { onClick() }
     ) {
         Box(
             modifier = Modifier
-                .size(136.dp)
+                .size(160.dp)
                 .clip(cardShape)
                 .border(
                     width = if (isCurrent) 1.5.dp else 1.dp,

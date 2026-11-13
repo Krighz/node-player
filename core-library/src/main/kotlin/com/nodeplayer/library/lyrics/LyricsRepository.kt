@@ -199,7 +199,7 @@ class LyricsRepository(
         val trimmed = lineText.trim()
         if (trimmed.isEmpty()) return emptyList()
 
-        val tokens = trimmed.split(Regex("\\s+"))
+        val tokens = trimmed.split(Regex("\\s+")).filter { it.isNotBlank() }
         if (tokens.isEmpty()) return emptyList()
 
         val totalChars = tokens.sumOf { it.length }
@@ -219,8 +219,7 @@ class LyricsRepository(
             }
 
             val wordEnd = if (isLast) lineEndMs else currentStart + wordDuration
-            val wordWithSpace = if (isLast) token else "$token "
-            words.add(LyricWord(text = wordWithSpace, startMs = currentStart, endMs = wordEnd))
+            words.add(LyricWord(text = token, startMs = currentStart, endMs = wordEnd))
             currentStart = wordEnd
         }
 

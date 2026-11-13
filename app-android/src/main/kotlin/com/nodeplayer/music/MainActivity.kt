@@ -31,7 +31,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import com.nodeplayer.music.ui.screens.CategoryPlaylistsScreen
 import com.nodeplayer.ui.screens.DetailMediaHeader
+import com.nodeplayer.ui.screens.ExploreView
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -209,6 +211,7 @@ class MainActivity : ComponentActivity() {
                 var activeCategory by remember { mutableStateOf<Pair<com.nodeplayer.model.MoodGenre, List<com.nodeplayer.model.Playlist>>?>(null) }
                 var loadingCategoryPlaylistId by remember { mutableStateOf<String?>(null) }
                 var activePlaylistDetail by remember { mutableStateOf<Pair<com.nodeplayer.ui.screens.DetailMediaHeader, List<com.nodeplayer.model.Track>>?>(null) }
+                var activeCategoryForPlaylists by remember { mutableStateOf<com.nodeplayer.model.MoodGenre?>(null) }
 
                 // Spotify Transfer State
                 var showSpotifyDialog by remember { mutableStateOf(false) }
@@ -233,6 +236,8 @@ class MainActivity : ComponentActivity() {
                         isLyricsExpanded = false
                     } else if (isNowPlayingExpanded) {
                         isNowPlayingExpanded = false
+                    } else if (activeCategoryForPlaylists != null) {
+                        activeCategoryForPlaylists = null
                     } else if (activePlaylistDetail != null) {
                         activePlaylistDetail = null
                     } else if (activeCategory != null) {
@@ -464,7 +469,14 @@ class MainActivity : ComponentActivity() {
                                 }
                             )
                         } else when (currentRoute) {
-                            "home", "new", "explore" -> com.nodeplayer.music.ui.screens.HomeScreen(
+                            "new", "explore" -> ExploreView(
+                                onCategoryClick = { category ->
+                                    activeCategoryForPlaylists = category
+                                },
+                                dockScrollController = dockScrollController,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            "home" -> com.nodeplayer.music.ui.screens.HomeScreen(
                                 allTracks = allTracks,
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
