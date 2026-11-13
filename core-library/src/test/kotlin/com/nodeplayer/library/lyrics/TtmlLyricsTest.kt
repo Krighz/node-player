@@ -56,6 +56,17 @@ class TtmlLyricsTest {
     }
 
     @Test
+    fun testExplicitSpaceBetweenTimedSpansSeparatesWords() {
+        val ttml = """
+            <tt><body><div><p begin="1s" end="3s"><span begin="1s" end="2s">Good</span> <span begin="2s" end="3s">morning</span></p></div></body></tt>
+        """.trimIndent()
+
+        val line = TtmlLyrics.parse(ttml).lines.single()
+        assertEquals("Good morning", line.text)
+        assertEquals(listOf("Good", "morning"), line.words.map { it.text })
+    }
+
+    @Test
     fun testParseBackingVocalsAttachedToBackground() {
         val ttml = """
             <tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
