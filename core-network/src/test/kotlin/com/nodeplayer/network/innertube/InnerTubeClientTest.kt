@@ -249,7 +249,7 @@ class InnerTubeClientTest {
                     headers = headersOf(HttpHeaders.ContentType, "application/json")
                 )
             } else {
-                assertEquals("https://music.youtube.com/youtubei/v1/player", request.url.toString())
+                assertEquals("https://www.youtube.com/youtubei/v1/player", request.url.toString())
                 val responseBody = """
                 {
                   "playabilityStatus": {

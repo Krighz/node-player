@@ -31,6 +31,12 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.add
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -97,13 +103,18 @@ class InnerTubeClient(
             if (!headers.contains("User-Agent")) header("User-Agent", clientContext.userAgent)
             if (!headers.contains("X-YouTube-Client-Name")) header("X-YouTube-Client-Name", clientContext.clientId)
             if (!headers.contains("X-YouTube-Client-Version")) header("X-YouTube-Client-Version", clientContext.clientVersion)
-            if (!headers.contains("Origin")) header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
-            if (!headers.contains("Referer")) header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
+
+            val isNativeClient = clientContext.clientName in setOf("ANDROID_VR", "VISIONOS", "IOS", "TVHTML5", "TVHTML5_SIMPLY_EMBEDDED_PLAYER") ||
+                clientContext.clientName.startsWith("TVHTML5") || clientContext.clientName.startsWith("ANDROID_VR")
+            if (!isNativeClient) {
+                if (!headers.contains("Origin")) header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                if (!headers.contains("Referer")) header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
+            }
             contentType(ContentType.Application.Json)
 
             val supportsSession = headers["X-YouTube-Client-Name"] in setOf(
                 YouTubeClient.WEB_REMIX.clientId, YouTubeClient.ANDROID_MUSIC.clientId,
-                YouTubeClient.IOS_MUSIC.clientId, YouTubeClient.TVHTML5_SIMPLY_EMBEDDED_PLAYER.clientId
+                YouTubeClient.IOS_MUSIC.clientId
             )
             sessionCookie?.takeIf { supportsSession }?.let { cookie ->
                 header(HttpHeaders.Cookie, cookie)
@@ -146,9 +157,9 @@ class InnerTubeClient(
     /**
      * Executes a raw InnerTube browse request for [browseId] and optional [params] using [YouTubeClient.WEB_REMIX].
      */
-    suspend fun browse(browseId: String, params: String? = null): Result<BrowseResponse> = runCatching {
+    suspend fun browse(browseId: String? = null, params: String? = null, continuation: String? = null): Result<BrowseResponse> = runCatching {
         val client = YouTubeClient.WEB_REMIX
-        NodeLog.d(TAG, "Fetching browse feed (browseId=$browseId, params=$params, client=${client.clientName})")
+        NodeLog.d(TAG, "Fetching browse feed (browseId=$browseId, params=$params, continuation=$continuation, client=${client.clientName})")
         withRetry {
             httpClient.post("browse") {
                 header("User-Agent", client.userAgent)
@@ -160,7 +171,8 @@ class InnerTubeClient(
                     BrowseBody(
                         context = client.toContext(locale),
                         browseId = browseId,
-                        params = params
+                        params = params,
+                        continuation = continuation
                     )
                 )
             }.body<BrowseResponse>()
@@ -655,14 +667,29 @@ class InnerTubeClient(
         val signatureTimestamp = if (client.useSignatureTimestamp) {
             com.nodeplayer.common.media.CipherSolver.current?.getSignatureTimestamp()
         } else null
+
+        val isNative = client.clientName in setOf("ANDROID_VR", "VISIONOS", "IOS", "TVHTML5", "TVHTML5_SIMPLY_EMBEDDED_PLAYER") ||
+            client.clientName.startsWith("TVHTML5") || client.clientName.startsWith("ANDROID_VR")
+        val playerUrl = if (isNative) "https://www.youtube.com/youtubei/v1/player" else "https://music.youtube.com/youtubei/v1/player"
+
         withRetry {
-            httpClient.post("player") {
+            httpClient.post(playerUrl) {
                 header("User-Agent", client.userAgent)
                 header("X-YouTube-Client-Name", client.clientId)
                 header("X-YouTube-Client-Version", client.clientVersion)
+                if (isNative) {
+                    headers.remove("Origin")
+                    headers.remove("Referer")
+                    if (client.isEmbedded) {
+                        header("Referer", "https://www.youtube.com/embed/$videoId")
+                    }
+                } else {
+                    header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                    header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
+                }
                 setBody(
                     PlayerBody(
-                        context = client.toContext(locale, visitorData = visitorData),
+                        context = client.toContext(locale, visitorData = visitorData, embedVideoId = videoId),
                         videoId = videoId,
                         playbackContext = signatureTimestamp?.let {
                             PlayerBody.PlaybackContext(PlayerBody.PlaybackContext.ContentPlaybackContext(it))
@@ -1031,6 +1058,83 @@ class InnerTubeClient(
         NodeLog.e(TAG, "Failed to fetch user playlists", e)
     }
 
+    /**
+     * Creates a playlist on YouTube Music and returns the created playlistId.
+     * Optionally takes initial [videoIds] to populate upon creation.
+     */
+    suspend fun createPlaylist(
+        title: String,
+        description: String = "",
+        privacyStatus: String = "PRIVATE",
+        videoIds: List<String> = emptyList()
+    ): Result<String> = runCatching {
+        check(!sessionCookie.isNullOrBlank()) { "Sign in required to create YouTube playlist" }
+        val client = YouTubeClient.WEB_REMIX
+        val payload = buildJsonObject {
+            put("context", json.encodeToJsonElement(client.toContext(locale)))
+            put("title", title)
+            if (description.isNotBlank()) put("description", description)
+            put("privacyStatus", privacyStatus)
+            if (videoIds.isNotEmpty()) {
+                put("videoIds", buildJsonArray {
+                    videoIds.forEach { add(JsonPrimitive(it)) }
+                })
+            }
+        }
+        val response = withRetry {
+            httpClient.post("playlist/create") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
+                setBody(payload)
+            }.bodyAsText()
+        }
+        val root = json.parseToJsonElement(response).jsonObject
+        val playlistId = root["playlistId"]?.jsonPrimitive?.contentOrNull
+            ?: throw IllegalStateException("Failed to create playlist: $response")
+        NodeLog.i(TAG, "Created YouTube playlist: $playlistId (\"$title\", initialVideos=${videoIds.size})")
+        playlistId
+    }.onFailure { e ->
+        NodeLog.e(TAG, "Failed to create YouTube playlist '$title'", e)
+    }
+
+    /**
+     * Adds tracks by [videoIds] to an existing YouTube Music playlist via edit_playlist.
+     */
+    suspend fun addTracksToPlaylist(
+        playlistId: String,
+        videoIds: List<String>
+    ): Result<Unit> = runCatching {
+        if (videoIds.isEmpty()) return@runCatching
+        check(!sessionCookie.isNullOrBlank()) { "Sign in required to edit YouTube playlist" }
+        val client = YouTubeClient.WEB_REMIX
+        val cleanId = if (playlistId.startsWith("VL")) playlistId.removePrefix("VL") else playlistId
+        val actions = buildJsonArray {
+            videoIds.forEach { vid ->
+                add(buildJsonObject {
+                    put("action", "ACTION_ADD_VIDEO")
+                    put("addedVideoId", vid)
+                })
+            }
+        }
+        val payload = buildJsonObject {
+            put("context", json.encodeToJsonElement(client.toContext(locale)))
+            put("playlistId", cleanId)
+            put("actions", actions)
+        }
+        withRetry {
+            httpClient.post("browse/edit_playlist") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
+                setBody(payload)
+            }
+        }
+        NodeLog.i(TAG, "Added ${videoIds.size} tracks to YouTube playlist $cleanId")
+    }.onFailure { e ->
+        NodeLog.e(TAG, "Failed to add tracks to YouTube playlist $playlistId", e)
+    }
+
     /** Playlist cards can carry their browse endpoint in the title, not only at card level. */
     private fun playlistIdForRenderer(item: JsonObject): String? =
         renderers(item, setOf("browseEndpoint")).firstNotNullOfOrNull {
@@ -1066,6 +1170,8 @@ class InnerTubeClient(
                     header("User-Agent", client.userAgent)
                     header("X-YouTube-Client-Name", client.clientId)
                     header("X-YouTube-Client-Version", client.clientVersion)
+                    header("Origin", YouTubeClient.ORIGIN_YOUTUBE_MUSIC)
+                    header("Referer", YouTubeClient.REFERER_YOUTUBE_MUSIC)
                     if (next != null && legacyContinuation) {
                         url.parameters.append("ctoken", next)
                         url.parameters.append("continuation", next)
@@ -1079,6 +1185,9 @@ class InnerTubeClient(
             }
             val root = json.parseToJsonElement(response)
             check(root is JsonObject && root["error"] == null) { "YouTube playlist request failed" }
+            if (root["contents"]?.jsonObject?.containsKey("messageRenderer") == true) {
+                throw IllegalStateException("Playlist unavailable")
+            }
             pages.add(response)
             val legacy = renderers(root, setOf("nextContinuationData", "reloadContinuationData"))
                 .firstNotNullOfOrNull { it["continuation"]?.jsonPrimitive?.contentOrNull }
@@ -1166,41 +1275,33 @@ class InnerTubeClient(
         try {
             val root = json.parseToJsonElement(jsonText).jsonObject
 
-            val contents = renderers(root, setOf(
-                "musicPlaylistShelfRenderer", "musicShelfRenderer",
-                "musicPlaylistShelfContinuation", "musicShelfContinuation", "appendContinuationItemsAction"
-            ))
-            check(contents.isNotEmpty()) { "YouTube returned an unsupported playlist layout" }
-            contents.forEach { shelf ->
-                val items = (shelf["contents"] ?: shelf["continuationItems"]) as? JsonArray
-                items?.forEach { itemElement ->
-                    val responsiveItem = itemElement.jsonObject["musicResponsiveListItemRenderer"]?.jsonObject
-                    if (responsiveItem != null) {
-                        val videoId = responsiveItem["navigationEndpoint"]?.jsonObject
-                            ?.get("watchEndpoint")?.jsonObject?.get("videoId")?.jsonPrimitive?.content
-                            ?: responsiveItem["playlistItemData"]?.jsonObject?.get("videoId")?.jsonPrimitive?.content
-                            ?: responsiveItem["menu"]?.jsonObject
-                                ?.get("menuRenderer")?.jsonObject
-                                ?.get("topLevelButtons")?.jsonArray
-                                ?.firstOrNull()?.jsonObject
-                                ?.get("likeButtonRenderer")?.jsonObject
-                                ?.get("target")?.jsonObject
-                                ?.get("videoId")?.jsonPrimitive?.content
-                            ?: responsiveItem["overlay"]?.jsonObject
-                                ?.get("musicItemThumbnailOverlayRenderer")?.jsonObject
-                                ?.get("content")?.jsonObject
-                                ?.get("musicPlayButtonRenderer")?.jsonObject
-                                ?.get("playNavigationEndpoint")?.jsonObject
-                                ?.get("watchEndpoint")?.jsonObject
-                                ?.get("videoId")?.jsonPrimitive?.content
+            val responsiveItems = renderers(root, setOf("musicResponsiveListItemRenderer"))
+            responsiveItems.forEach { responsiveItem ->
+                val videoId = responsiveItem["navigationEndpoint"]?.jsonObject
+                    ?.get("watchEndpoint")?.jsonObject?.get("videoId")?.jsonPrimitive?.content
+                    ?: responsiveItem["playlistItemData"]?.jsonObject?.get("videoId")?.jsonPrimitive?.content
+                    ?: responsiveItem["menu"]?.jsonObject
+                        ?.get("menuRenderer")?.jsonObject
+                        ?.get("topLevelButtons")?.jsonArray
+                        ?.firstOrNull()?.jsonObject
+                        ?.get("likeButtonRenderer")?.jsonObject
+                        ?.get("target")?.jsonObject
+                        ?.get("videoId")?.jsonPrimitive?.content
+                    ?: responsiveItem["overlay"]?.jsonObject
+                        ?.get("musicItemThumbnailOverlayRenderer")?.jsonObject
+                        ?.get("content")?.jsonObject
+                        ?.get("musicPlayButtonRenderer")?.jsonObject
+                        ?.get("playNavigationEndpoint")?.jsonObject
+                        ?.get("watchEndpoint")?.jsonObject
+                        ?.get("videoId")?.jsonPrimitive?.content
 
-                        val flexCols = responsiveItem["flexColumns"]?.jsonArray
-                        val title = flexCols?.getOrNull(0)?.jsonObject
-                            ?.get("musicResponsiveListItemFlexColumnRenderer")?.jsonObject
-                            ?.get("text")?.jsonObject
-                            ?.get("runs")?.jsonArray
-                            ?.firstOrNull()?.jsonObject
-                            ?.get("text")?.jsonPrimitive?.content ?: "Unknown Title"
+                val flexCols = responsiveItem["flexColumns"]?.jsonArray
+                val title = flexCols?.getOrNull(0)?.jsonObject
+                    ?.get("musicResponsiveListItemFlexColumnRenderer")?.jsonObject
+                    ?.get("text")?.jsonObject
+                    ?.get("runs")?.jsonArray
+                    ?.firstOrNull()?.jsonObject
+                    ?.get("text")?.jsonPrimitive?.content ?: "Unknown Title"
 
                         val subRuns = flexCols?.getOrNull(1)?.jsonObject
                             ?.get("musicResponsiveListItemFlexColumnRenderer")?.jsonObject
@@ -1219,25 +1320,22 @@ class InnerTubeClient(
                             ?.get("text")?.jsonPrimitive?.content
                             ?: subRuns?.lastOrNull()?.jsonObject?.get("text")?.jsonPrimitive?.content
 
-                        if (!videoId.isNullOrBlank()) {
-                            tracks.add(
-                                Track(
-                                    id = generateSyntheticTrackId(videoId),
-                                    title = title,
-                                    artist = artist,
-                                    album = album,
-                                    durationMs = parseDurationMs(durationStr),
-                                    path = "nodeplayer://youtube/$videoId",
-                                    formatDescription = "YouTube Audio"
-                                )
-                            )
-                        }
-                    }
+                if (!videoId.isNullOrBlank()) {
+                    tracks.add(
+                        Track(
+                            id = generateSyntheticTrackId(videoId),
+                            title = title,
+                            artist = artist,
+                            album = album,
+                            durationMs = parseDurationMs(durationStr),
+                            path = "nodeplayer://youtube/$videoId",
+                            formatDescription = "YouTube Audio"
+                        )
+                    )
                 }
             }
         } catch (e: Exception) {
             NodeLog.w(TAG, "Error parsing playlist tracks JSON: ${e.message}")
-            throw e
         }
         return tracks
     }

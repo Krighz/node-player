@@ -2,6 +2,7 @@ package com.nodeplayer.ui.components
 
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,14 +12,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Cloud
+import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material.icons.rounded.Explore
-import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Cloud
-import androidx.compose.material.icons.rounded.CloudOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -29,22 +28,16 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
-import com.nodeplayer.common.AppModeState
-import com.nodeplayer.model.GlassThemeConfig
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.backdrops.emptyBackdrop
 import com.kyant.backdrop.drawBackdrop
@@ -53,17 +46,17 @@ import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
-import com.nodeplayer.ui.component.shapes.ContinuousCapsule
-import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
-import androidx.compose.animation.core.spring
+import com.nodeplayer.common.AppModeState
 import com.nodeplayer.model.GlassComponentType
+import com.nodeplayer.ui.component.shapes.ContinuousCapsule
+import com.nodeplayer.ui.debug.GlassDebug
 import com.nodeplayer.ui.theme.LiquidColors
-import com.nodeplayer.ui.theme.LocalGlassControlsConfig
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassControlsConfig
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.MotionTokens
-import com.nodeplayer.ui.debug.GlassDebug
 import com.nodeplayer.ui.theme.pressScale
+import kotlin.math.roundToInt
 
 data class ConvxNavTabItem(
     val route: String,
@@ -79,12 +72,10 @@ val DEFAULT_CONVX_NAV_TABS = listOf(
 )
 
 /**
- * Convx-style Floating Liquid Glass Capsule Dock.
- * Features:
- * - Continuous squircle capsule shape with Kyant0 SDF lens refraction & specular rim.
- * - Sliding lens puck with spring physics and finger tracking.
- * - Layer separation: text and icons rendered strictly in a clean pass above glass (no torn text).
- * - Circular glass Search button on the right edge.
+ * Symmetrical Floating Liquid Glass Capsule Dock.
+ * - Equal-width slots inside a centered 56dp continuous capsule.
+ * - Circular 48dp optical lens puck centered cleanly on each active icon (4dp symmetric inset).
+ * - Optional companion 56dp circular glass Search orb with matched vertical alignment.
  */
 @Composable
 fun ConvxLiquidDock(
@@ -108,32 +99,44 @@ fun ConvxLiquidDock(
     val density = LocalDensity.current
     val isDark = themeConfig.themeMode != "LIGHT"
 
-    val lensActive = themeConfig.dockGlassLensEnabled && shaderEnabled && !isPerformanceMode && themeConfig.glassStrength != "OFF" && !resolvedDock.isPlainSquircle && controlsConfig.masterEnabled
+    val lensActive = themeConfig.dockGlassLensEnabled &&
+        shaderEnabled &&
+        !isPerformanceMode &&
+        themeConfig.glassStrength != "OFF" &&
+        !resolvedDock.isPlainSquircle &&
+        controlsConfig.masterEnabled
     val rimActive = themeConfig.dockGlassRimEnabled && themeConfig.glassStrength != "OFF"
     val puckActive = themeConfig.dockGlassPuckEnabled
 
     if (GlassDebug.isEnabled) {
         GlassDebug.logThrottled(
             "ConvxLiquidDock",
-            "lensActive=$lensActive (dockGlassLens=${themeConfig.dockGlassLensEnabled}, shaderEnabled=$shaderEnabled, !perf=${!isPerformanceMode}, strength=${themeConfig.glassStrength}, !plain=${!resolvedDock.isPlainSquircle}, master=${controlsConfig.masterEnabled}), " +
-                "rimActive=$rimActive, puckActive=$puckActive, blurDp=${resolvedDock.blurDp}, lensH=${resolvedDock.lensHeightDp}, lensAmt=${resolvedDock.lensAmountDp}, backdrop=${backdrop::class.simpleName}"
+            "lensActive=$lensActive, rimActive=$rimActive, puckActive=$puckActive, blurDp=${resolvedDock.blurDp}"
         )
     }
 
     val selectedIndex = items.indexOfFirst { it.route == selectedRoute }.coerceAtLeast(0)
     var pillWidthPx by remember { mutableIntStateOf(0) }
-    val tabWidthPx = if (pillWidthPx > 0 && items.isNotEmpty()) pillWidthPx.toFloat() / items.size.toFloat() else 0f
+
+    val dockHeightDp = 56.dp
+    val innerHorizontalPaddingDp = 4.dp
+    val puckDiameterDp = 48.dp
+    val innerPaddingPx = with(density) { innerHorizontalPaddingDp.toPx() }
+    val puckRadiusPx = with(density) { (puckDiameterDp / 2).toPx() }
+
+    val innerWidthPx = (pillWidthPx.toFloat() - innerPaddingPx * 2f).coerceAtLeast(1f)
+    val tabWidthPx = if (pillWidthPx > 0 && items.isNotEmpty()) innerWidthPx / items.size.toFloat() else 0f
 
     var isDragging by remember { mutableStateOf(false) }
     var dragTouchXPx by remember { mutableFloatStateOf(0f) }
 
-    val puckDiameterDp = 50.dp
-    val puckRadiusPx = with(density) { (puckDiameterDp / 2).toPx() }
-
     val targetCenterXPx = if (isDragging && tabWidthPx > 0f) {
-        dragTouchXPx.coerceIn(puckRadiusPx + 4f, (pillWidthPx.toFloat() - puckRadiusPx - 4f).coerceAtLeast(puckRadiusPx + 4f))
+        dragTouchXPx.coerceIn(
+            innerPaddingPx + puckRadiusPx,
+            (pillWidthPx.toFloat() - innerPaddingPx - puckRadiusPx).coerceAtLeast(innerPaddingPx + puckRadiusPx)
+        )
     } else if (tabWidthPx > 0f) {
-        (selectedIndex + 0.5f) * tabWidthPx
+        innerPaddingPx + (selectedIndex + 0.5f) * tabWidthPx
     } else {
         0f
     }
@@ -156,7 +159,7 @@ fun ConvxLiquidDock(
     )
 
     val currentActiveIndex = if (tabWidthPx > 0f) {
-        (animatedPuckCenterXPx / tabWidthPx).toInt().coerceIn(0, items.size - 1)
+        ((animatedPuckCenterXPx - innerPaddingPx) / tabWidthPx).toInt().coerceIn(0, items.size - 1)
     } else {
         selectedIndex
     }
@@ -167,15 +170,23 @@ fun ConvxLiquidDock(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Main tabs capsule container
+        // Symmetrical centered capsule container
         Box(
             modifier = Modifier
-                .weight(1f, fill = false)
-                .height(60.dp)
+                .then(
+                    if (effectiveSearchButtonVisible) {
+                        Modifier.weight(1f)
+                    } else {
+                        Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 360.dp)
+                    }
+                )
+                .height(dockHeightDp)
                 .onSizeChanged { pillWidthPx = it.width }
                 .then(
                     if (lensActive) {
@@ -226,7 +237,7 @@ fun ConvxLiquidDock(
                             )
                     }
                 )
-                .pointerInput(items.size) {
+                .pointerInput(items.size, innerPaddingPx, tabWidthPx) {
                     detectDragGestures(
                         onDragStart = { offset ->
                             isDragging = true
@@ -234,7 +245,7 @@ fun ConvxLiquidDock(
                         },
                         onDragEnd = {
                             if (tabWidthPx > 0f) {
-                                val target = (dragTouchXPx / tabWidthPx).toInt().coerceIn(0, items.size - 1)
+                                val target = ((dragTouchXPx - innerPaddingPx) / tabWidthPx).toInt().coerceIn(0, items.size - 1)
                                 val targetRoute = items[target].route
                                 if (targetRoute == "search") {
                                     onSearchClick()
@@ -254,24 +265,24 @@ fun ConvxLiquidDock(
                     )
                 }
         ) {
-            // Layer 1: Sliding circular lens bead (lightweight luminous pill — outer capsule owns hero lens+blur)
+            // Layer 1: Symmetrical circular optical lens puck (exact 4dp inset top/bottom & sub-pixel icon center)
             if (puckActive && pillWidthPx > 0) {
                 val puckBrush = remember(accent, resolvedDock.tintOpacity, isDark) {
-                    val coreAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.55f else 0.42f)).coerceIn(0.22f, 0.72f)
+                    val coreAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.58f else 0.45f)).coerceIn(0.24f, 0.75f)
                     Brush.radialGradient(
                         listOf(
                             accent.copy(alpha = coreAlpha),
-                            accent.copy(alpha = coreAlpha * 0.45f),
+                            accent.copy(alpha = coreAlpha * 0.42f),
                             Color.Transparent
                         )
                     )
                 }
                 val puckBorderBrush = remember(resolvedDock.highlightStrength) {
-                    val topAlpha = (0.72f * resolvedDock.highlightStrength).coerceIn(0.25f, 0.90f)
+                    val topAlpha = (0.75f * resolvedDock.highlightStrength).coerceIn(0.25f, 0.92f)
                     Brush.verticalGradient(
                         listOf(
                             Color.White.copy(alpha = topAlpha),
-                            Color.White.copy(alpha = 0.14f)
+                            Color.White.copy(alpha = 0.16f)
                         )
                     )
                 }
@@ -280,7 +291,7 @@ fun ConvxLiquidDock(
                         .offset {
                             IntOffset(
                                 x = (animatedPuckCenterXPx - puckRadiusPx).roundToInt(),
-                                y = 5.dp.roundToPx()
+                                y = ((dockHeightDp - puckDiameterDp) / 2).roundToPx()
                             )
                         }
                         .size(puckDiameterDp)
@@ -294,11 +305,11 @@ fun ConvxLiquidDock(
                 )
             }
 
-            // Layer 2: Foreground tabs (strictly un-refracted above glass)
+            // Layer 2: Equal-weight symmetrical foreground tabs
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 4.dp),
+                    .padding(horizontal = innerHorizontalPaddingDp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 items.forEachIndexed { index, item ->
@@ -335,13 +346,13 @@ fun ConvxLiquidDock(
                         Icon(
                             imageVector = item.icon,
                             contentDescription = item.title,
-                            tint = if (isSelected) accent else Color.White.copy(alpha = 0.65f),
-                            modifier = Modifier.size(22.dp)
+                            tint = if (isSelected) Color.White else Color.White.copy(alpha = 0.65f),
+                            modifier = Modifier.size(21.dp)
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = item.title,
-                            fontSize = 11.sp,
+                            fontSize = 10.5.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
                             color = if (isSelected) Color.White else Color.White.copy(alpha = 0.65f),
                             maxLines = 1
@@ -351,23 +362,23 @@ fun ConvxLiquidDock(
             }
         }
 
-        // Circular Glass Search Button (lightweight surface + hairline border; hero lens+blur reserved for main Dock & MiniPlayer)
+        // Symmetrical 56dp Circular Glass Search Orb (matches dockHeightDp = 56.dp)
         if (effectiveSearchButtonVisible) {
             Spacer(modifier = Modifier.width(10.dp))
             val searchAlpha = (resolvedDock.tintOpacity * (if (isDark) 0.72f else 0.58f)).coerceIn(0.25f, 0.85f)
             val searchColor = if (isDark) LiquidColors.SurfaceElevated else Color.White
             val searchBorderBrush = remember(rimActive, rimSpecular) {
-                val topAlpha = if (rimActive) (0.35f * rimSpecular.coerceAtLeast(0.4f)).coerceIn(0.15f, 0.45f) else 0.14f
+                val topAlpha = if (rimActive) (0.40f * rimSpecular.coerceAtLeast(0.4f)).coerceIn(0.18f, 0.50f) else 0.16f
                 Brush.verticalGradient(
                     listOf(
                         Color.White.copy(alpha = topAlpha),
-                        Color.White.copy(alpha = 0.10f)
+                        Color.White.copy(alpha = 0.12f)
                     )
                 )
             }
             Box(
                 modifier = Modifier
-                    .size(54.dp)
+                    .size(dockHeightDp)
                     .pressScale(onClick = onSearchClick)
                     .clip(searchShape)
                     .background(searchColor.copy(alpha = searchAlpha))
@@ -382,7 +393,7 @@ fun ConvxLiquidDock(
                     imageVector = Icons.Rounded.Search,
                     contentDescription = "Search",
                     tint = Color.White,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(23.dp)
                 )
             }
         }
@@ -431,7 +442,6 @@ fun ModeToggleCapsule(
             .padding(2.dp),
         contentAlignment = Alignment.CenterStart
     ) {
-        // Sliding dual-state puck
         Box(
             modifier = Modifier
                 .offset(x = puckOffset)
@@ -461,7 +471,6 @@ fun ModeToggleCapsule(
                 )
         )
 
-        // Dual icons row
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically

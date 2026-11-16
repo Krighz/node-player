@@ -27,7 +27,9 @@ import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.AudioOutputInfo
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.model.ReplayGainMode
+import com.nodeplayer.model.presence.PresenceStatus
 import com.nodeplayer.ui.LocalBottomBarPadding
+import com.nodeplayer.ui.components.DiscordRichPresenceCard
 import com.nodeplayer.ui.components.GlassBadge
 import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.LiquidButton
@@ -58,9 +60,24 @@ fun SettingsView(
     onOpenEqualizer: () -> Unit = {},
     onOpenSyncCenter: () -> Unit = {},
     onOpenOpticalTest: () -> Unit = {},
+    onOpenAudioConverter: () -> Unit = {},
     trackCount: Int = 0,
     nodeConnectEnabled: Boolean = true,
     onToggleNodeConnect: (Boolean) -> Unit = {},
+    showDiscordSettings: Boolean = false,
+    discordStatus: PresenceStatus = PresenceStatus.DISABLED,
+    discordEnabled: Boolean = false,
+    onToggleDiscordEnabled: (Boolean) -> Unit = {},
+    discordIncognito: Boolean = false,
+    onToggleDiscordIncognito: (Boolean) -> Unit = {},
+    discordShowCover: Boolean = true,
+    onToggleDiscordShowCover: (Boolean) -> Unit = {},
+    discordShowAlbum: Boolean = true,
+    onToggleDiscordShowAlbum: (Boolean) -> Unit = {},
+    discordShowWhilePaused: Boolean = false,
+    onToggleDiscordShowWhilePaused: (Boolean) -> Unit = {},
+    discordAppId: String = "",
+    onDiscordAppIdChange: (String) -> Unit = {},
     themeConfig: GlassThemeConfig = LocalGlassThemeConfig.current,
     onThemeConfigChange: (GlassThemeConfig) -> Unit = {},
     isExpanded: Boolean = true,
@@ -198,6 +215,13 @@ fun SettingsView(
                             accent = accent
                         )
                     }
+
+                    if (matchesFilter("converter", "flac", "opus", "transcode", "batch", "convert", "library", "compress")) {
+                        AudioConverterCard(
+                            onOpenAudioConverter = onOpenAudioConverter,
+                            accent = accent
+                        )
+                    }
                 }
 
                 // Right Column
@@ -210,6 +234,25 @@ fun SettingsView(
                             nodeConnectEnabled = nodeConnectEnabled,
                             onToggleNodeConnect = onToggleNodeConnect,
                             onOpenSyncCenter = onOpenSyncCenter,
+                            accent = accent
+                        )
+                    }
+
+                    if (showDiscordSettings && matchesFilter("discord", "rpc", "rich presence", "presence", "listening")) {
+                        DiscordRichPresenceCard(
+                            status = discordStatus,
+                            enabled = discordEnabled,
+                            onToggleEnabled = onToggleDiscordEnabled,
+                            isIncognito = discordIncognito,
+                            onToggleIncognito = onToggleDiscordIncognito,
+                            showCover = discordShowCover,
+                            onToggleShowCover = onToggleDiscordShowCover,
+                            showAlbum = discordShowAlbum,
+                            onToggleShowAlbum = onToggleDiscordShowAlbum,
+                            showWhilePaused = discordShowWhilePaused,
+                            onToggleShowWhilePaused = onToggleDiscordShowWhilePaused,
+                            appId = discordAppId,
+                            onAppIdChange = onDiscordAppIdChange,
                             accent = accent
                         )
                     }
@@ -248,8 +291,29 @@ fun SettingsView(
                 if (matchesFilter("connect", "node connect", "cast", "sync")) {
                     NodeConnectCard(nodeConnectEnabled, onToggleNodeConnect, onOpenSyncCenter, accent)
                 }
+                if (showDiscordSettings && matchesFilter("discord", "rpc", "rich presence", "presence", "listening")) {
+                    DiscordRichPresenceCard(
+                        status = discordStatus,
+                        enabled = discordEnabled,
+                        onToggleEnabled = onToggleDiscordEnabled,
+                        isIncognito = discordIncognito,
+                        onToggleIncognito = onToggleDiscordIncognito,
+                        showCover = discordShowCover,
+                        onToggleShowCover = onToggleDiscordShowCover,
+                        showAlbum = discordShowAlbum,
+                        onToggleShowAlbum = onToggleDiscordShowAlbum,
+                        showWhilePaused = discordShowWhilePaused,
+                        onToggleShowWhilePaused = onToggleDiscordShowWhilePaused,
+                        appId = discordAppId,
+                        onAppIdChange = onDiscordAppIdChange,
+                        accent = accent
+                    )
+                }
                 if (matchesFilter("library", "folder", "rescan")) {
                     MusicFoldersCard(currentMusicFolder, trackCount, onSelectMusicFolder, onRescanLibrary, accent)
+                }
+                if (matchesFilter("converter", "flac", "opus", "transcode", "batch", "convert", "library", "compress")) {
+                    AudioConverterCard(onOpenAudioConverter, accent)
                 }
                 if (matchesFilter("appearance", "glass", "oled", "shader", "diagnostics", "optical", "test")) {
                     AppearanceAndGlassCard(themeConfig, onThemeConfigChange, onOpenCustomizeUi, onOpenOpticalTest, accent)
@@ -522,6 +586,49 @@ private fun MusicFoldersCard(
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Rescan", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
+            }
+        }
+    }
+}
+
+// 3b. FLAC to Opus Converter Card
+@Composable
+private fun AudioConverterCard(
+    onOpenAudioConverter: () -> Unit,
+    accent: Color
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Transform, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("FLAC to Opus Converter", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                }
+                GlassBadge(text = "CONVERTER", color = accent)
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "Batch transcode lossless FLAC audio to compact Opus files with atomic replacement safety",
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.65f)
+            )
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            LiquidButton(
+                onClick = onOpenAudioConverter,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Rounded.Transform, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Open Audio Converter", fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

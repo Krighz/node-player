@@ -73,7 +73,8 @@ enum class LibrarySubDestination {
     PLAYLISTS,
     ARTISTS,
     ALBUMS,
-    SONGS
+    SONGS,
+    DOWNLOADS
 }
 
 /**
@@ -107,6 +108,8 @@ fun LibraryView(
     onNavigateToSearch: () -> Unit = {},
     onOpenPlaylistDetail: ((OnlinePlaylist) -> Unit)? = null,
     onOpenAlbumDetail: ((OnlineAlbum) -> Unit)? = null,
+    downloadedTracks: List<Track> = emptyList(),
+    onOpenDownloadQueue: (() -> Unit)? = null,
     dockScrollController: DockScrollController? = null,
     backdrop: Backdrop = remember { emptyBackdrop() },
     modifier: Modifier = Modifier
@@ -159,6 +162,7 @@ fun LibraryView(
                 LibrarySubDestination.NONE -> {
                     LibraryRootView(
                         libraryState = libraryState,
+                        downloadedCount = downloadedTracks.size,
                         onNavigateSub = { subDestination = it },
                         onTrackClick = onTrackClick,
                         onNavigateToHome = onNavigateToHome,
@@ -211,6 +215,19 @@ fun LibraryView(
                         bottomPadding = bottomBarPadding
                     )
                 }
+                LibrarySubDestination.DOWNLOADS -> {
+                    DownloadedSongsSubView(
+                        songs = downloadedTracks,
+                        currentTrack = currentTrack,
+                        isPlaying = isPlaying,
+                        onBack = { subDestination = LibrarySubDestination.NONE },
+                        onTrackClick = onTrackClick,
+                        onPlayNext = onPlayNext,
+                        onAddToQueue = onAddToQueue,
+                        onOpenDownloadQueue = onOpenDownloadQueue ?: {},
+                        bottomPadding = bottomBarPadding
+                    )
+                }
             }
         }
     }
@@ -223,6 +240,7 @@ fun LibraryView(
 @Composable
 private fun LibraryRootView(
     libraryState: OnlineLibraryState,
+    downloadedCount: Int = 0,
     onNavigateSub: (LibrarySubDestination) -> Unit,
     onTrackClick: (Track, List<Track>) -> Unit,
     onNavigateToHome: () -> Unit,
@@ -300,6 +318,17 @@ private fun LibraryRootView(
                     icon = Icons.Rounded.MusicNote,
                     count = libraryState.songs.size,
                     onClick = { onNavigateSub(LibrarySubDestination.SONGS) }
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 56.dp, end = 16.dp),
+                    color = Color.White.copy(alpha = 0.08f),
+                    thickness = 0.5.dp
+                )
+                LibraryNavRow(
+                    title = "Downloads",
+                    icon = Icons.Rounded.CloudDownload,
+                    count = downloadedCount,
+                    onClick = { onNavigateSub(LibrarySubDestination.DOWNLOADS) }
                 )
             }
         }
@@ -725,6 +754,183 @@ private fun OnlineSongsSubView(
                                     .size(width = 16.dp, height = 14.dp)
                             )
                         }
+
+                        Text(
+                            text = track.durationFormatted,
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.45f),
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+
+                        LiquidIconButton(
+                            icon = Icons.Rounded.MoreVert,
+                            contentDescription = "Options",
+                            onClick = { onAddToQueue(track) },
+                            size = 36.dp,
+                            lighterStyle = true
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Sub-view: Offline Downloaded Songs list.
+ */
+@Composable
+private fun DownloadedSongsSubView(
+    songs: List<Track>,
+    currentTrack: Track?,
+    isPlaying: Boolean,
+    onBack: () -> Unit,
+    onTrackClick: (Track, List<Track>) -> Unit,
+    onPlayNext: (Track) -> Unit,
+    onAddToQueue: (Track) -> Unit,
+    onOpenDownloadQueue: () -> Unit,
+    bottomPadding: Dp
+) {
+    val accent = LocalAccentColor.current
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                SubViewHeader(
+                    title = "Downloads",
+                    subtitle = "${songs.size} offline tracks",
+                    onBack = onBack
+                )
+            }
+
+            LiquidButton(
+                onClick = onOpenDownloadQueue,
+                modifier = Modifier.height(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Downloading,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Queue", color = Color.White, fontSize = 12.sp)
+            }
+        }
+
+        if (songs.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(20.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        imageVector = Icons.Rounded.DownloadDone,
+                        contentDescription = null,
+                        tint = Color.White.copy(alpha = 0.3f),
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "No downloaded tracks yet",
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "Download songs from search, catalog shelves, or now playing screen for offline playback.",
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 13.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    LiquidButton(onClick = onOpenDownloadQueue) {
+                        Text("View Active Queue", color = Color.White)
+                    }
+                }
+            }
+        } else {
+            val songKeys = remember(songs) { uniqueLazyTrackKeys(songs, "dl_song") }
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(top = 8.dp, bottom = bottomPadding)
+            ) {
+                itemsIndexed(
+                    items = songs,
+                    key = { index, _ -> songKeys[index] },
+                    contentType = { _, _ -> "downloaded_song_row" }
+                ) { _, track ->
+                    val isCurrent = currentTrack?.id == track.id
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onTrackClick(track, songs) }
+                            .padding(horizontal = 20.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(LIB_SONG_THUMB_SHAPE)
+                        ) {
+                            TrackArtwork(
+                                track = track,
+                                modifier = Modifier.fillMaxSize(),
+                                cornerRadius = 10.dp,
+                                targetSizePx = 144
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(14.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = track.title,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isCurrent) accent else Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = track.artist,
+                                fontSize = 13.sp,
+                                color = Color.White.copy(alpha = 0.60f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        if (isCurrent && isPlaying) {
+                            SoundWaveVisualizer(
+                                isPlaying = true,
+                                barColor = accent,
+                                modifier = Modifier
+                                    .padding(horizontal = 8.dp)
+                                    .size(width = 16.dp, height = 14.dp)
+                            )
+                        }
+
+                        Icon(
+                            imageVector = Icons.Rounded.CheckCircle,
+                            contentDescription = "Downloaded",
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier
+                                .padding(horizontal = 6.dp)
+                                .size(16.dp)
+                        )
 
                         Text(
                             text = track.durationFormatted,

@@ -39,6 +39,7 @@ import com.nodeplayer.ui.components.SoundWaveVisualizer
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.ui.theme.ColorUtils
 import com.nodeplayer.ui.theme.LocalAccentColor
+import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 
 private val PLAYLIST_HERO_SHAPE = ContinuousRoundedRectangle(20.dp)
 private val PLAYLIST_HERO_BORDER_BRUSH = Brush.verticalGradient(
@@ -85,6 +86,7 @@ fun PlaylistDetailView(
     onToggleSaveLibrary: (DetailMediaHeader) -> Unit = {},
     onTrackOptionsClick: (Track) -> Unit = {},
     backdrop: Backdrop = remember { emptyBackdrop() },
+    isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -126,11 +128,14 @@ fun PlaylistDetailView(
     }
 
     val totalDurationMs = remember(tracks) { tracks.sumOf { it.durationMs } }
+    val themeConfig = LocalGlassThemeConfig.current
+    val isOled = themeConfig.isOledBlack || themeConfig.themeMode == "OLED"
+    val baseBackgroundColor = if (isOled) Color.Black else Color(0xFF262626)
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(baseBackgroundColor)
     ) {
         // Dynamic Ambient Glow Gradient Backdrop (PLAY-02, D-03)
         Box(
@@ -337,6 +342,19 @@ fun PlaylistDetailView(
                     color = Color.White.copy(alpha = 0.08f),
                     thickness = 0.5.dp
                 )
+            }
+
+            if (isLoading && tracks.isEmpty()) {
+                item(key = "playlist_loading_spinner") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = accent)
+                    }
+                }
             }
 
             // Track List Items (PLAY-03)

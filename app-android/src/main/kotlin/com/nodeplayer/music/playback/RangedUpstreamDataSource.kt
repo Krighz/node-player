@@ -61,27 +61,32 @@ class RangedUpstreamDataSource(
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (length == 0) return 0
+        if (passthrough) return requireNotNull(upstream).read(buffer, offset, length)
         if (remaining == 0L) return C.RESULT_END_OF_INPUT
 
-        if (!passthrough && chunkRemaining == 0L) {
-            closeUpstream()
-            if (!openNextChunk()) return C.RESULT_END_OF_INPUT
+        // When a chunk completes, transition to the next chunk without terminating the stream
+        repeat(MAX_EMPTY_RANGES) {
+            if (chunkRemaining == 0L) {
+                closeUpstream()
+                if (!openNextChunk()) return C.RESULT_END_OF_INPUT
+            }
+
+            val wanted = minOf(length.toLong(), chunkRemaining).toInt()
+            val read = requireNotNull(upstream).read(buffer, offset, wanted)
+
+            if (read != C.RESULT_END_OF_INPUT) {
+                position += read
+                chunkRemaining -= read
+                if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
+                bytesTransferred(read)
+                return read
+            }
+
+            // Chunk reached EOF; mark chunk empty so the next iteration opens the next chunk
+            chunkRemaining = 0L
         }
 
-        val allowed = if (remaining == C.LENGTH_UNSET.toLong()) length else minOf(length.toLong(), remaining).toInt()
-        val wanted = if (passthrough) allowed else minOf(allowed.toLong(), chunkRemaining).toInt()
-        val read = requireNotNull(upstream).read(buffer, offset, wanted)
-
-        if (read == C.RESULT_END_OF_INPUT) {
-            closeUpstream()
-            remaining = 0
-        } else if (read > 0) {
-            position += read
-            if (!passthrough) chunkRemaining -= read
-            if (remaining != C.LENGTH_UNSET.toLong()) remaining -= read
-            bytesTransferred(read)
-        }
-        return read
+        return C.RESULT_END_OF_INPUT
     }
 
     override fun getUri(): Uri? = upstream?.uri ?: spec?.uri
@@ -128,12 +133,21 @@ class RangedUpstreamDataSource(
                 NodeLog.w(TAG, "HTTP 403 encountered on chunk at pos=$position, attempting token/URL refresh")
                 val currentSpec = spec
                 if (currentSpec != null) {
-                    val freshUrl = AudioCache.refreshStreamUrl(currentSpec.uri.toString())
-                    if (!freshUrl.isNullOrBlank()) {
-                        NodeLog.i(TAG, "Stream URL refreshed successfully after 403, retrying connection")
-                        val newUri = Uri.parse(freshUrl)
-                        spec = currentSpec.buildUpon().setUri(newUri).build()
-                        return openChild(length)
+                    // Extract clean videoId from dataSpec.key ("nodeplayer_yt_<id>") or URL lookup
+                    val videoId = currentSpec.key?.removePrefix("nodeplayer_yt_")
+                        ?: AudioCache.getVideoIdForUrl(currentSpec.uri.toString())
+                        ?: AudioCache.extractVideoId(currentSpec.uri.toString())
+
+                    if (!videoId.isNullOrBlank()) {
+                        val freshUrl = AudioCache.refreshStreamUrl(videoId)
+                        if (!freshUrl.isNullOrBlank()) {
+                            NodeLog.i(TAG, "Stream URL refreshed successfully for videoId=$videoId after 403, retrying connection")
+                            val newUri = Uri.parse(freshUrl)
+                            spec = currentSpec.buildUpon().setUri(newUri).build()
+                            return openChild(length)
+                        }
+                    } else {
+                        NodeLog.w(TAG, "Could not resolve videoId from spec key='${currentSpec.key}' for 403 refresh")
                     }
                 }
             }
@@ -177,7 +191,8 @@ class RangedUpstreamDataSource(
 
     companion object {
         private const val TAG = "RangedUpstreamDS"
-        const val DEFAULT_CHUNK_SIZE = 512L * 1024 // 512 KB chunks for GoogleVideo CDN
+        const val DEFAULT_CHUNK_SIZE = 128L * 1024 // 128 KB chunks
+        private const val MAX_EMPTY_RANGES = 3
     }
 }
 
@@ -191,7 +206,7 @@ internal fun Uri.isGoogleVideoUrl(): Boolean =
 internal fun Uri.requiresChunkedRanging(): Boolean {
     if (!isGoogleVideoUrl()) return false
     val clientParam = getQueryParameter("c")
-    return clientParam.equals("IOS", ignoreCase = true)
+    return clientParam.isNullOrBlank() || clientParam.equals("IOS", ignoreCase = true) || clientParam.equals("IPADOS", ignoreCase = true)
 }
 
 @UnstableApi

@@ -1,36 +1,66 @@
 package com.nodeplayer.ui.player
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Cast
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.FormatQuote
+import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.VolumeDown
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -38,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
@@ -50,6 +81,7 @@ import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.clipRect
 import com.nodeplayer.model.AlbumArtPalette
+import com.nodeplayer.ui.components.ArtworkCache
 import com.nodeplayer.ui.components.PlatformArtworkProvider
 import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.library.LrcParser
@@ -111,8 +143,8 @@ fun NowPlayingView(
     queue: List<Track> = emptyList(),
     currentQueueIndex: Int = 0,
     lrcContent: String? = null,
-    audioOutputName: String = "This phone",
-    sourceLabel: String = "Search",
+    audioOutputName: String = "krighz's Phone",
+    sourceLabel: String = "Music videos",
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -122,42 +154,157 @@ fun NowPlayingView(
     onOpenPlaybackOptions: () -> Unit,
     onOpenThreeDotsMenu: () -> Unit,
     onClose: () -> Unit,
+    videoContent: (@Composable (Modifier) -> Unit)? = null,
+    palette: AlbumArtPalette? = null,
+    onPaletteChanged: ((AlbumArtPalette) -> Unit)? = null,
+    onDominantColorExtracted: ((Color) -> Unit)? = null,
+    volume: Float = 0.75f,
+    onVolumeChange: ((Float) -> Unit)? = null,
     modifier: Modifier = Modifier,
     positionProvider: () -> Long = { positionMs },
     onDragDelta: ((Float) -> Unit)? = null,
-    onDragEnd: ((Float) -> Unit)? = null
+    onDragEnd: ((Float) -> Unit)? = null,
+    isVideoActive: Boolean = false,
+    isVideoAvailable: Boolean = false,
+    hasRenderedFirstFrame: Boolean = false,
+    currentHeight: Int? = null,
+    availableHeights: List<Int> = emptyList(),
+    videoAspect: Float = 16f / 9f,
+    onToggleVideo: ((Boolean) -> Unit)? = null,
+    onSelectQuality: ((Int?) -> Unit)? = null,
+    onOpenFullscreenCinema: (() -> Unit)? = null,
+    artZoomScale: Float = 1.03f,
+    artVerticalOffsetDp: Int = 0
 ) {
     if (currentTrack == null) return
 
-    // The palette is looked up once and never refreshed by a plain remember{}: if artwork finishes
-    // loading after this screen opens, the colors would stay on the orange fallback forever.
-    // produceState re-runs per track, extracts the vibrant color when the cache is empty, derives the
-    // full palette and caches it so other screens (lyrics, backdrops) get the same colors.
-    val cachedPalette by produceState<AlbumArtPalette?>(
-        initialValue = PaletteExtractor.getCachedPalette(currentTrack),
+    val coverBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
+        initialValue = null,
         currentTrack.id,
         currentTrack.path
     ) {
-        value = PaletteExtractor.getCachedPalette(currentTrack) ?: run {
-            val extracted = PlatformArtworkProvider.extractVibrantColor(currentTrack)
-            extracted?.let { color ->
-                PaletteExtractor.derivePaletteFromBaseColor(color).also { palette ->
-                    PaletteExtractor.cachePalette(currentTrack, palette)
+        value = PlatformArtworkProvider.loadArtwork(currentTrack, ArtworkCache.HERO_TARGET_SIZE_PX)
+    }
+
+    val cachedPalette by produceState<AlbumArtPalette?>(
+        initialValue = palette ?: PaletteExtractor.getCachedPalette(currentTrack),
+        currentTrack.id,
+        currentTrack.path,
+        coverBitmap,
+        palette
+    ) {
+        val existing = palette ?: PaletteExtractor.getCachedPalette(currentTrack)
+        value = if (existing != null && !existing.isFallback) {
+            existing
+        } else {
+            coverBitmap?.let { bmp ->
+                PaletteExtractor.extractFromBitmap(bmp).also { extracted ->
+                    PaletteExtractor.cachePalette(currentTrack, extracted)
+                    onPaletteChanged?.invoke(extracted)
+                }
+            } ?: existing ?: PlatformArtworkProvider.extractVibrantColor(currentTrack)?.let { color ->
+                PaletteExtractor.derivePaletteFromBaseColor(color).also { derived ->
+                    PaletteExtractor.cachePalette(currentTrack, derived)
+                    onPaletteChanged?.invoke(derived)
                 }
             }
         }
     }
-    val vibrantColor = cachedPalette?.vibrant?.toComposeColor() ?: Color(0xFFD4883B)
-    val darkMutedColor = cachedPalette?.darkMuted?.toComposeColor() ?: Color(0xFF0A0A0C)
-    val accentTint = PaletteExtractor.ensureContrastAgainstDark(vibrantColor, darkMutedColor)
+    val rawVibrant = cachedPalette?.vibrant?.toComposeColor() ?: Color(0xFF1E293B)
+    val rawDominant = cachedPalette?.dominant?.toComposeColor() ?: Color(0xFF0F172A)
+    val rawDarkMuted = cachedPalette?.darkMuted?.toComposeColor() ?: Color(0xFF090A0F)
+    val rawAccent = cachedPalette?.accent?.toComposeColor() ?: rawVibrant
+
+    val animatedVibrant by animateColorAsState(
+        targetValue = rawVibrant,
+        animationSpec = tween(450),
+        label = "NPVibrant"
+    )
+    val animatedDominant by animateColorAsState(
+        targetValue = rawDominant,
+        animationSpec = tween(450),
+        label = "NPDominant"
+    )
+    val animatedDarkMuted by animateColorAsState(
+        targetValue = rawDarkMuted,
+        animationSpec = tween(450),
+        label = "NPDarkMuted"
+    )
+    val animatedAccent by animateColorAsState(
+        targetValue = rawAccent,
+        animationSpec = tween(450),
+        label = "NPAccent"
+    )
+
+    val accentTint = PaletteExtractor.ensureContrastAgainstDark(animatedVibrant, animatedDarkMuted)
+
+    LaunchedEffect(animatedVibrant) {
+        onDominantColorExtracted?.invoke(animatedVibrant)
+    }
+
+    val isMusicVideo = remember(currentTrack.id, currentTrack.mimeType, currentTrack.formatDescription, sourceLabel, isVideoActive) {
+        isVideoActive ||
+        currentTrack.mimeType.contains("video", ignoreCase = true) ||
+        currentTrack.formatDescription.contains("video", ignoreCase = true) ||
+        sourceLabel.contains("video", ignoreCase = true) ||
+        currentTrack.path.contains("video", ignoreCase = true) ||
+        currentTrack.genre?.contains("video", ignoreCase = true) == true
+    }
+
+    val heroAspectRatio by animateFloatAsState(
+        targetValue = if (isVideoActive) videoAspect else 1f,
+        animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+        label = "HeroAspectMorph"
+    )
+
+    var isFavorite by remember(currentTrack.id) { mutableStateOf(currentTrack.isFavorite) }
+    var internalVolume by remember { mutableFloatStateOf(volume) }
+    val effectiveVolume = onVolumeChange?.let { volume } ?: internalVolume
 
     val lyrics = remember(lrcContent, currentTrack.id) {
         if (!lrcContent.isNullOrBlank()) LrcParser.parse(lrcContent, currentTrack.id) else Lyrics(trackId = currentTrack.id)
     }
 
-    Box(
+    val ambientGlowColor = remember(animatedVibrant, animatedAccent, animatedDominant, rawVibrant, rawAccent, rawDominant) {
+        val vibrantLuma = 0.2126f * rawVibrant.red + 0.7152f * rawVibrant.green + 0.0722f * rawVibrant.blue
+        val accentLuma = 0.2126f * rawAccent.red + 0.7152f * rawAccent.green + 0.0722f * rawAccent.blue
+        if (rawVibrant != Color.Unspecified && vibrantLuma > 0.03f) {
+            animatedVibrant
+        } else if (rawAccent != Color.Unspecified && accentLuma > 0.03f) {
+            animatedAccent
+        } else {
+            animatedDominant
+        }
+    }
+
+    val bottomScrimBrush = remember {
+        Brush.verticalGradient(
+            0.0f to Color.Transparent,
+            0.50f to Color.Black.copy(alpha = 0.20f),
+            1.0f to Color.Black.copy(alpha = 0.55f)
+        )
+    }
+
+    val topArtworkFadeBrush = remember {
+        Brush.verticalGradient(
+            0.0f to Color.Transparent,
+            0.60f to Color.Transparent,
+            1.0f to Color.Black.copy(alpha = 0.88f)
+        )
+    }
+
+    val topStatusBarScrimBrush = remember {
+        Brush.verticalGradient(
+            0.0f to Color.Black.copy(alpha = 0.70f),
+            0.45f to Color.Black.copy(alpha = 0.30f),
+            1.0f to Color.Transparent
+        )
+    }
+
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
+            .background(Color(0xFF000000))
             .pointerInput(onDragDelta, onDragEnd) {
                 if (onDragDelta != null) {
                     var accumulatedVelocity = 0f
@@ -183,48 +330,145 @@ fun NowPlayingView(
                 }
             }
     ) {
-        // Underlying ArtworkMeshBackdrop beneath all player layers (D-05, D-08)
-        val artworkUrl = remember(currentTrack.id, currentTrack.path) {
-            currentTrack.path.takeIf { it.isNotBlank() } ?: currentTrack.id.toString()
+        val screenHeight = maxHeight
+
+        // Layer 1: Replicated Blurred Artwork Backdrop in the bottom portion (expanded scale so vibrant accents radiate downward)
+        coverBitmap?.let { bmp ->
+            Image(
+                bitmap = bmp,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = 1.35f
+                        scaleY = 1.35f
+                        alpha = 0.70f
+                    }
+                    .blur(90.dp)
+            )
         }
-        ArtworkMeshBackdrop(
-            artworkUrl = artworkUrl,
-            modifier = Modifier.fillMaxSize()
+
+        // Layer 2: Radiant Vibrant Ambient Mesh Glow centered at ~68% behind playback controls
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithCache {
+                    val radialBrush = Brush.radialGradient(
+                        colors = listOf(
+                            ambientGlowColor.copy(alpha = 0.65f),
+                            ambientGlowColor.copy(alpha = 0.28f),
+                            Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.5f, size.height * 0.68f),
+                        radius = size.width * 0.85f
+                    )
+                    onDrawBehind {
+                        drawRect(radialBrush)
+                    }
+                }
+        )
+        // Soft single contrast scrim ensuring crisp white text legibility without extinguishing glow
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(bottomScrimBrush)
         )
 
-        // Subtle top legibility scrim so status bar and drag handle remain legible on high-luminance artwork covers
+        // Calculate available hero height: spans from y=0 down to the top of the title row
+        val bottomControlsReservedHeight = 340.dp
+        val availableHeroHeight = (screenHeight - bottomControlsReservedHeight).coerceAtLeast(260.dp)
+        val effectiveHeroHeight = (availableHeroHeight + artVerticalOffsetDp.dp).coerceAtLeast(200.dp)
+
+        // Layer 3: Top Full-Bleed Artwork / Video
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp)
-                .background(
-                    androidx.compose.ui.graphics.Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.45f),
-                            Color.Transparent
-                        )
-                    )
+                .height(effectiveHeroHeight)
+                .align(Alignment.TopCenter)
+        ) {
+            if (!isVideoActive) {
+                // Still Artwork: 100% full-width, zero horizontal padding, zero corner clipping, starting at y = 0
+                TrackArtwork(
+                    track = currentTrack,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            translationY = artVerticalOffsetDp.dp.toPx()
+                        },
+                    contentScale = ContentScale.Crop,
+                    cornerRadius = 0.dp,
+                    targetSizePx = ArtworkCache.HERO_TARGET_SIZE_PX,
+                    scale = artZoomScale
                 )
+
+                // Smooth gradient dissolve at the bottom edge of the artwork: blends into blurred glow
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(90.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(topArtworkFadeBrush)
+                )
+            } else {
+                // Video Mode: 16:9 Video centered in hero area cleanly above track title
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(videoAspect)
+                        .align(Alignment.Center)
+                        .graphicsLayer {
+                            scaleX = 1.02f
+                            scaleY = 1.02f
+                        }
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        videoContent?.invoke(Modifier.fillMaxSize())
+                    }
+
+                    // Dissolve gradient at the bottom edge of video
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(36.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(
+                                Brush.verticalGradient(
+                                    0.0f to Color.Transparent,
+                                    1.0f to Color.Black.copy(alpha = 0.60f)
+                                )
+                            )
+                    )
+                }
+            }
+        }
+
+        // Layer 4: Top Status Bar & Header Scrim
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(130.dp)
+                .align(Alignment.TopCenter)
+                .background(topStatusBarScrimBrush)
         )
 
-        // Foreground controls layer
-        Column(
+        // Layer 5A: Top Header (Drag handle + "Playing from ...") & Top-Right Video Controls
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .statusBarsPadding()
+                .padding(top = 8.dp)
         ) {
-            // 1. Top Section: Centered drag handle & "Playing from <source>"
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
+                modifier = Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
                     modifier = Modifier
-                        .size(width = 36.dp, height = 4.dp)
+                        .size(width = 38.dp, height = 4.dp)
                         .clip(RoundedCornerShape(2.dp))
                         .background(Color.White.copy(alpha = 0.45f))
                         .clickable { onClose() }
@@ -233,35 +477,161 @@ fun NowPlayingView(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
-                    text = "Playing from $sourceLabel",
+                    text = if (isMusicVideo) "Playing from Music videos" else "Playing from $sourceLabel",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Normal,
                     color = Color.White.copy(alpha = 0.70f)
                 )
             }
 
-            // Hero Album Art in upper section with smooth squircle border
-            Box(
-                modifier = Modifier
-                    .weight(1.0f)
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                TrackArtwork(
-                    track = currentTrack,
+            // Top-right video controls (placed in Layer 5A on top of Layer 4 scrim)
+            if (!isVideoActive && isVideoAvailable && onToggleVideo != null) {
+                Box(
                     modifier = Modifier
-                        .size(300.dp),
-                    cornerRadius = 24.dp
-                )
-            }
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 12.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .clickable { onToggleVideo.invoke(true) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.PlayArrow,
+                            contentDescription = "Play Video",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "Video",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                }
+            } else if (isVideoActive) {
+                var showQualityMenu by remember { mutableStateOf(false) }
 
-            // 2. Lower Content Section: Title row, lyric preview, timeline, transport & bottom row
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Title Row: Title + Artist on left, Round three-dots on right
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Quality badge pill ("480p" etc.)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .clickable { showQualityMenu = !showQualityMenu }
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (currentHeight != null) "${currentHeight}p" else "Auto",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+
+                    // Fullscreen expand pill
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .clickable { onOpenFullscreenCinema?.invoke() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Fullscreen,
+                            contentDescription = "Fullscreen",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    // Dedicated Stop Video button
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .clickable { onToggleVideo?.invoke(false) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Stop Video",
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+
+                if (showQualityMenu) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 40.dp, end = 12.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color.Black.copy(alpha = 0.90f))
+                            .padding(6.dp)
+                    ) {
+                        Column {
+                            Text(
+                                text = "Auto",
+                                fontSize = 12.sp,
+                                color = if (currentHeight == null) Color.Cyan else Color.White,
+                                fontWeight = if (currentHeight == null) FontWeight.Bold else FontWeight.Normal,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onSelectQuality?.invoke(null)
+                                        showQualityMenu = false
+                                    }
+                                    .padding(vertical = 4.dp, horizontal = 6.dp)
+                            )
+                            val heights = if (availableHeights.isNotEmpty()) availableHeights else listOf(1080, 720, 480, 360)
+                            heights.forEach { h ->
+                                Text(
+                                    text = "${h}p",
+                                    fontSize = 12.sp,
+                                    color = if (currentHeight == h) Color.Cyan else Color.White,
+                                    fontWeight = if (currentHeight == h) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            onSelectQuality?.invoke(h)
+                                            showQualityMenu = false
+                                        }
+                                        .padding(vertical = 4.dp, horizontal = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Layer 5B: Bottom Controls (Title, Artist, Star, Menu, Lyrics, Timeline, Transport, Volume, Bottom Row, Device)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+                // Title Row: Title & Artist on left, Star + 3-dots on right (Match Screenshot 3)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -270,7 +640,7 @@ fun NowPlayingView(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = currentTrack.title,
-                            fontSize = 24.sp,
+                            fontSize = 22.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
                             maxLines = 1,
@@ -279,9 +649,9 @@ fun NowPlayingView(
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = currentTrack.artist,
-                            fontSize = 18.sp,
+                            fontSize = 15.sp,
                             fontWeight = FontWeight.Normal,
-                            color = accentTint.copy(alpha = 0.85f),
+                            color = Color.White.copy(alpha = 0.70f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -289,44 +659,66 @@ fun NowPlayingView(
 
                     Spacer(modifier = Modifier.width(12.dp))
 
-                    // Round Three-Dots Button (Translucent Tinted Circle)
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(accentTint.copy(alpha = 0.22f))
-                            .clickable { onOpenThreeDotsMenu() },
-                        contentAlignment = Alignment.Center
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Rounded.MoreHoriz,
-                            contentDescription = "Menu",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
+                        // Circular Star (favorite) button
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2C2C2E).copy(alpha = 0.75f))
+                                .clickable { isFavorite = !isFavorite },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                contentDescription = "Favorite",
+                                tint = if (isFavorite) Color(0xFFFBBF24) else Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // Circular ••• button
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF2C2C2E).copy(alpha = 0.75f))
+                                .clickable { onOpenThreeDotsMenu() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreHoriz,
+                                contentDescription = "Menu",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Single preview line of current lyric (taps into full lyrics)
+                // Single-line live lyric preview ("{activeLyricLine} >")
                 NowPlayingLyricPreview(
                     lyrics = lyrics,
                     positionProvider = positionProvider,
                     onOpenLyrics = onOpenLyrics
                 )
 
-                // Custom non-M3 Timeline
+                // Scrubber with elapsed (0:40) and negative remaining (-3:02) timestamps
                 NowPlayingTimeline(
                     durationMs = durationMs,
-                    accentColor = accentTint,
+                    accentColor = Color.White,
                     onSeek = onSeek,
                     positionProvider = positionProvider
                 )
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // Large Transport Row: Previous, Large Play/Pause, Next (Filled glyphs, white)
+                // Large Transport Row: Previous, Large Play/Pause, Next
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly,
@@ -334,7 +726,7 @@ fun NowPlayingView(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(54.dp)
                             .clip(CircleShape)
                             .clickable { onPrevious() },
                         contentAlignment = Alignment.Center
@@ -349,7 +741,7 @@ fun NowPlayingView(
 
                     Box(
                         modifier = Modifier
-                            .size(80.dp)
+                            .size(76.dp)
                             .clip(CircleShape)
                             .clickable { onPlayPause() },
                         contentAlignment = Alignment.Center
@@ -358,13 +750,13 @@ fun NowPlayingView(
                             imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                             contentDescription = if (isPlaying) "Pause" else "Play",
                             tint = Color.White,
-                            modifier = Modifier.size(58.dp)
+                            modifier = Modifier.size(54.dp)
                         )
                     }
 
                     Box(
                         modifier = Modifier
-                            .size(56.dp)
+                            .size(54.dp)
                             .clip(CircleShape)
                             .clickable { onNext() },
                         contentAlignment = Alignment.Center
@@ -378,74 +770,131 @@ fun NowPlayingView(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Bottom Row: 3 round tinted buttons (Lyrics, Node Connect, Playback options)
+                // Sleek Volume Bar with low and high speaker icons (Match Screenshot 3)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.VolumeDown,
+                        contentDescription = "Volume Low",
+                        tint = Color.White.copy(alpha = 0.65f),
+                        modifier = Modifier.size(18.dp)
+                    )
+
+                    // Volume slider bar with interactive touch/drag
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(28.dp)
+                            .pointerInput(onVolumeChange) {
+                                detectTapGestures { offset ->
+                                    val newFraction = (offset.x / size.width.toFloat()).coerceIn(0f, 1f)
+                                    if (onVolumeChange != null) {
+                                        onVolumeChange(newFraction)
+                                    } else {
+                                        internalVolume = newFraction
+                                    }
+                                }
+                            }
+                            .pointerInput(onVolumeChange) {
+                                detectDragGestures { change, _ ->
+                                    change.consume()
+                                    val newFraction = (change.position.x / size.width.toFloat()).coerceIn(0f, 1f)
+                                    if (onVolumeChange != null) {
+                                        onVolumeChange(newFraction)
+                                    } else {
+                                        internalVolume = newFraction
+                                    }
+                                }
+                            },
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.25f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(effectiveVolume.coerceIn(0f, 1f))
+                                    .fillMaxHeight()
+                                    .background(Color.White)
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.Rounded.VolumeUp,
+                        contentDescription = "Volume High",
+                        tint = Color.White.copy(alpha = 0.65f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                // Bottom Row: Lyrics quote button, Cast button, Queue button, and Device label (Match Screenshot 3)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceAround,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 1. Lyrics Button (speech-bubble)
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(accentTint.copy(alpha = 0.18f))
-                            .clickable { onOpenLyrics() },
-                        contentAlignment = Alignment.Center
+                    // 1. Lyrics quote button
+                    IconButton(
+                        onClick = onOpenLyrics,
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.ChatBubbleOutline,
+                            imageVector = Icons.Rounded.FormatQuote,
                             contentDescription = "Lyrics",
-                            tint = Color.White.copy(alpha = if (lyrics.lines.isNotEmpty()) 0.95f else 0.45f),
-                            modifier = Modifier.size(20.dp)
+                            tint = Color.White.copy(alpha = 0.75f),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
-                    // 2. Node Connect Button (cast icon)
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(accentTint.copy(alpha = 0.18f))
-                            .clickable { onOpenNodeConnect() },
-                        contentAlignment = Alignment.Center
+                    // 2. Cast button
+                    IconButton(
+                        onClick = onOpenNodeConnect,
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.Cast,
-                            contentDescription = "Node Connect",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            contentDescription = "Node Connect Cast",
+                            tint = Color.White.copy(alpha = 0.75f),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
 
-                    // 3. Playback Options Button (three lines)
-                    Box(
-                        modifier = Modifier
-                            .size(46.dp)
-                            .clip(CircleShape)
-                            .background(accentTint.copy(alpha = 0.18f))
-                            .clickable { onOpenPlaybackOptions() },
-                        contentAlignment = Alignment.Center
+                    // 3. Queue button
+                    IconButton(
+                        onClick = onOpenPlaybackOptions,
+                        modifier = Modifier.size(40.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.FormatListBulleted,
-                            contentDescription = "Playback Options",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+                            contentDescription = "Queue",
+                            tint = Color.White.copy(alpha = 0.75f),
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                // Centered Output Device Label
+                // Centered Output Device Label: "krighz's Phone"
                 Text(
-                    text = audioOutputName,
+                    text = audioOutputName.ifBlank { "krighz's Phone" },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color.White.copy(alpha = 0.70f),
+                    color = Color.White.copy(alpha = 0.65f),
                     modifier = Modifier
                         .clickable { onOpenNodeConnect() }
                         .padding(4.dp)
@@ -455,7 +904,6 @@ fun NowPlayingView(
             }
         }
     }
-}
 
 @Composable
 fun NowPlayingLyricPreview(

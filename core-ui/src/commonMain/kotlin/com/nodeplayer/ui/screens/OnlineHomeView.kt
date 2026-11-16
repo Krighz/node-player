@@ -50,10 +50,18 @@ import com.nodeplayer.ui.components.DockScrollController
 import com.nodeplayer.ui.components.HomeProfileSheet
 import com.nodeplayer.ui.components.PlatformArtworkProvider
 import com.nodeplayer.ui.components.TrackArtwork
+import com.nodeplayer.ui.components.YourMixShelf
+import com.nodeplayer.ui.components.GlassBadge
+import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.LiquidColors
+import com.nodeplayer.library.taste.TasteRecommendationEngine
+import com.nodeplayer.model.MoodBucket
+import com.nodeplayer.model.bucketFor
+import com.nodeplayer.network.innertube.InnerTubeTasteHistoryAdapter
+import java.time.LocalTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
@@ -120,6 +128,9 @@ fun OnlineHomeView(
     onSignInClick: () -> Unit = {},
     onRescanClick: () -> Unit = {},
     onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
+    onOpenCategory: ((com.nodeplayer.model.MoodGenre, List<com.nodeplayer.model.Playlist>) -> Unit)? = null,
+    onCategoryClick: ((com.nodeplayer.model.MoodGenre) -> Unit)? = null,
+    onNavigateToExplore: (() -> Unit)? = null,
     listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier
 ) {
@@ -149,6 +160,35 @@ fun OnlineHomeView(
     var categories by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<List<MoodGenreSection>>(emptyList()) }
     var categorySections by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<List<YouTubeSection>?>(null) }
     var actionJob by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<Job?>(null) }
+
+    var yourMixTracks by remember(isLoggedIn, accountId) { mutableStateOf<List<Track>>(emptyList()) }
+    var isYourMixLoading by remember(isLoggedIn, accountId) { mutableStateOf(true) }
+    var isYourMixFallback by remember(isLoggedIn, accountId) { mutableStateOf(false) }
+
+    val tasteEngine = remember(isLoggedIn, accountId) {
+        val adapter = InnerTubeTasteHistoryAdapter(SharedInnerTubeProvider.get())
+        TasteRecommendationEngine(adapter)
+    }
+
+    suspend fun loadYourMix() {
+        isYourMixLoading = true
+        try {
+            val stationRes = withContext(Dispatchers.IO) {
+                tasteEngine.generateTasteStationDetailed()
+            }
+            stationRes.onSuccess { station ->
+                yourMixTracks = station.tracks
+                isYourMixFallback = station.isFallback
+            }.onFailure {
+                isYourMixFallback = true
+            }
+        } catch (_: Throwable) {
+            isYourMixFallback = true
+        } finally {
+            isYourMixLoading = false
+        }
+    }
+
     DisposableEffect(isLoggedIn, accountId, currentRoute) {
         onDispose { actionJob?.cancel() }
     }
@@ -157,6 +197,7 @@ fun OnlineHomeView(
         isRefreshing = true
         errorMessage = null
         try {
+            scope.launch { loadYourMix() }
             val result = withContext(Dispatchers.IO) {
                 val innerClient = SharedInnerTubeProvider.get()
                 if (currentRoute == "new" || currentRoute == "explore") {
@@ -204,8 +245,13 @@ fun OnlineHomeView(
     }
 
     LaunchedEffect(isLoggedIn, accountId) {
-        categories = withContext(Dispatchers.IO) {
-            SharedInnerTubeProvider.get().browseMoodAndGenres().getOrDefault(emptyList())
+        launch {
+            categories = withContext(Dispatchers.IO) {
+                SharedInnerTubeProvider.get().browseMoodAndGenres().getOrDefault(emptyList())
+            }
+        }
+        launch {
+            loadYourMix()
         }
     }
 
@@ -227,6 +273,28 @@ fun OnlineHomeView(
         uniqueLazyKeys(orderedShelves) { it.title }
     }
     val shelfListStates = remember { mutableMapOf<String, LazyListState>() }
+
+    val currentHour = remember { LocalTime.now().hour }
+    val greetingText = remember(currentHour) {
+        when (currentHour) {
+            in 5..11 -> "Good morning"
+            in 12..16 -> "Good afternoon"
+            in 17..21 -> "Good evening"
+            else -> "Good night"
+        }
+    }
+    val activeMoodBucket = remember(currentHour) {
+        bucketFor(currentHour, MoodBucket.DEFAULT_BUCKETS)
+    }
+    val matchingMoodCategory = remember(categories, activeMoodBucket) {
+        if (activeMoodBucket == null) null
+        else {
+            val allItems = categories.flatMap { it.items }
+            allItems.firstOrNull { item ->
+                activeMoodBucket.categoryKeywords.any { kw -> item.title.contains(kw, ignoreCase = true) }
+            }
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -429,6 +497,34 @@ fun OnlineHomeView(
                 }
             }
 
+            // Greeting directly above Your Mix per Decision 2
+            item(key = "home_greeting_section", contentType = "greeting") {
+                Text(
+                    text = greetingText,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(vertical = 2.dp)
+                )
+            }
+
+            // Shelf: "Your Mix" (First shelf directly under the greeting per Decision 2)
+            item(key = "home_your_mix_shelf", contentType = "your_mix_shelf") {
+                YourMixShelf(
+                    tracks = yourMixTracks,
+                    isLoading = isYourMixLoading,
+                    isFallback = isYourMixFallback,
+                    onTrackClick = { track, remainder ->
+                        onPlayTrack(track, remainder)
+                    },
+                    onPlayAll = { tracks ->
+                        if (tracks.isNotEmpty()) {
+                            onPlayTrack(tracks.first(), tracks)
+                        }
+                    }
+                )
+            }
+
             if (categorySections != null) {
                 item(key = "category_back") {
                     Text("‹  All recommendations", color = accent, modifier = Modifier.clickable { categorySections = null })
@@ -541,6 +637,83 @@ fun OnlineHomeView(
                         message = errorMessage ?: "Failed to load feed",
                         onRetry = { actionJob?.cancel(); actionJob = scope.launch { refreshFeed() } }
                     )
+                }
+            }
+
+            // Active Contextual Mood Shelf at bottom of feed
+            if (activeMoodBucket != null && matchingMoodCategory != null) {
+                item(key = "home_contextual_mood_shelf", contentType = "mood_shelf") {
+                    GlassCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp, bottom = 8.dp)
+                            .clickable {
+                                actionJob?.cancel()
+                                errorMessage = null
+                                actionJob = scope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        SharedInnerTubeProvider.get().browseCategoryShelves(
+                                            matchingMoodCategory.browseId,
+                                            matchingMoodCategory.params
+                                        )
+                                    }
+                                    coroutineContext.ensureActive()
+                                    result.onSuccess { playlists ->
+                                        val available = playlists.mapNotNull { playlist ->
+                                            playlist.externalId?.takeIf { it.isNotBlank() }
+                                                ?.let { YouTubePlaylistSummary(id = it, title = playlist.name) }
+                                        }
+                                        if (available.isNotEmpty()) {
+                                            categorySections = listOf(
+                                                YouTubeSection(
+                                                    title = activeMoodBucket.title,
+                                                    items = emptyList(),
+                                                    playlists = available
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = activeMoodBucket.title,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    GlassBadge(
+                                        text = matchingMoodCategory.title,
+                                        color = accent
+                                    )
+                                }
+                                Text(
+                                    text = activeMoodBucket.subtitle,
+                                    fontSize = 12.sp,
+                                    color = Color.White.copy(alpha = 0.65f)
+                                )
+                            }
+
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowForward,
+                                contentDescription = "Open mood playlists",
+                                tint = accent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
         }

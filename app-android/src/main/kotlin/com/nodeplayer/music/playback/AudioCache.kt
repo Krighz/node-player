@@ -25,7 +25,7 @@ object AudioCache {
 
     private const val TAG = "AudioCache"
     const val MAX_CACHE_BYTES = 512L * 1024 * 1024 // 512 MB
-    private const val CACHE_DIR_NAME = "audio_cache"
+    const val CACHE_DIR_NAME = "audio_cache"
 
     @Volatile
     private var simpleCacheInstance: SimpleCache? = null
@@ -34,12 +34,46 @@ object AudioCache {
     private val resolvedStreamUrls = java.util.concurrent.ConcurrentHashMap<String, String>()
     // In-memory cache for the client User-Agent used to resolve each stream URL (or videoId)
     private val resolvedUserAgents = java.util.concurrent.ConcurrentHashMap<String, String>()
+    // In-memory cache for extra request headers (e.g. Referer, Origin) by URL or videoId
+    private val resolvedHeaders = java.util.concurrent.ConcurrentHashMap<String, Map<String, String>>()
+    // In-memory cache for mapping resolved HTTPS stream URLs back to their videoId
+    private val urlToVideoId = java.util.concurrent.ConcurrentHashMap<String, String>()
 
-    fun cacheResolvedUrl(videoId: String, url: String, userAgent: String? = null) {
+    internal val sharedOkHttpClient by lazy {
+        okhttp3.OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                val request = chain.request()
+                NodeLog.i(TAG, "OkHttp Request: ${request.method} ${request.url.toString().take(120)}, headers=${request.headers}")
+                val response = chain.proceed(request)
+                NodeLog.i(TAG, "OkHttp Response: code=${response.code}, headers=${response.headers}")
+                response
+            }
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
+    }
+
+    fun getVideoIdForUrl(url: String): String? = urlToVideoId[url]
+
+    fun cacheResolvedUrl(
+        videoId: String,
+        url: String,
+        userAgent: String? = null,
+        headers: Map<String, String>? = null
+    ) {
         resolvedStreamUrls[videoId] = url
+        urlToVideoId[url] = videoId
         if (!userAgent.isNullOrBlank()) {
             resolvedUserAgents[videoId] = userAgent
             resolvedUserAgents[url] = userAgent
+            resolvedUserAgents["nodeplayer_yt_$videoId"] = userAgent
+        }
+        if (!headers.isNullOrEmpty()) {
+            resolvedHeaders[videoId] = headers
+            resolvedHeaders[url] = headers
+            resolvedHeaders["nodeplayer_yt_$videoId"] = headers
         }
     }
 
@@ -54,14 +88,23 @@ object AudioCache {
     }
 
     fun getUserAgentForUrl(url: String): String? =
-        resolvedUserAgents[url] ?: extractVideoId(url)?.let { resolvedUserAgents[it] }
+        resolvedUserAgents[url]
+            ?: extractVideoId(url)?.let { resolvedUserAgents[it] }
+            ?: extractVideoId(url)?.let { resolvedUserAgents["nodeplayer_yt_$it"] }
 
     fun invalidateUrl(urlOrVideoId: String) {
         val videoId = extractVideoId(urlOrVideoId) ?: urlOrVideoId
         val previousUrl = resolvedStreamUrls.remove(videoId)
-        previousUrl?.let { resolvedUserAgents.remove(it) }
+        previousUrl?.let {
+            resolvedUserAgents.remove(it)
+            resolvedHeaders.remove(it)
+            urlToVideoId.remove(it)
+        }
+        urlToVideoId.remove(urlOrVideoId)
         resolvedUserAgents.remove(videoId)
         resolvedUserAgents.remove(urlOrVideoId)
+        resolvedHeaders.remove(videoId)
+        resolvedHeaders.remove(urlOrVideoId)
         NodeLog.i(TAG, "Invalidated cached stream URL for $urlOrVideoId (videoId=$videoId)")
     }
 
@@ -80,24 +123,63 @@ object AudioCache {
      * Re-resolves a stream URL for [videoIdOrUrl] after invalidating stale cache entries.
      */
     fun refreshStreamUrl(videoIdOrUrl: String): String? {
-        val videoId = extractVideoId(videoIdOrUrl) ?: videoIdOrUrl
+        val isVideo = videoIdOrUrl.startsWith("video_")
+        val cleanInput = videoIdOrUrl.removePrefix("video_").removePrefix("nodeplayer_yt_")
+        val videoId = extractVideoId(cleanInput) ?: cleanInput
+        val cacheKey = if (isVideo) "video_$videoId" else videoId
+
+        invalidateUrl(cacheKey)
         invalidateUrl(videoId)
         return try {
-            val resolver = getStreamResolver()
-            val result = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                resolver.resolveStream(videoId)
-            }
-            if (result.isSuccess) {
-                val resolved = result.getOrThrow()
-                val clientUa = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
-                    .firstOrNull { it.clientName.equals(resolved.clientName, ignoreCase = true) }?.userAgent
-                    ?: com.nodeplayer.network.innertube.YouTubeClient.ANDROID_VR.userAgent
-                cacheResolvedUrl(videoId, resolved.streamUrl, clientUa)
-                NodeLog.i(TAG, "Successfully refreshed stream URL for videoId=$videoId via ${resolved.clientName}")
-                resolved.streamUrl
+            if (isVideo) {
+                try {
+                    NewPipeFallback.init(sharedOkHttpClient)
+                    val (npUrl, npHeaders) = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                        NewPipeFallback.resolveVideoStream(videoId)
+                    }
+                    cacheResolvedUrl(cacheKey, npUrl, npHeaders["User-Agent"], npHeaders)
+                    NodeLog.i(TAG, "Successfully refreshed video stream URL for videoId=$videoId via NewPipe")
+                    return npUrl
+                } catch (e: Exception) {
+                    NodeLog.w(TAG, "NewPipe video refresh failed: ${e.message}, trying StreamResolver")
+                }
+
+                val resolver = getStreamResolver()
+                val result = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                    resolver.resolveVideoStream(videoId)
+                }
+                if (result.isSuccess) {
+                    val resolved = result.getOrThrow()
+                    val clientUa = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
+                        .firstOrNull { it.clientName.equals(resolved.clientName, ignoreCase = true) }?.userAgent
+                        ?: com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
+                    cacheResolvedUrl(cacheKey, resolved.streamUrl, clientUa)
+                    NodeLog.i(TAG, "Successfully refreshed video stream URL for videoId=$videoId via ${resolved.clientName}")
+                    resolved.streamUrl
+                } else null
             } else {
-                NodeLog.w(TAG, "Failed to refresh stream URL for videoId=$videoId: ${result.exceptionOrNull()?.message}")
-                null
+                val resolver = getStreamResolver()
+                val result = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                    resolver.resolveStream(videoId)
+                }
+                if (result.isSuccess) {
+                    val resolved = result.getOrThrow()
+                    val clientUa = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
+                        .firstOrNull { it.clientName.equals(resolved.clientName, ignoreCase = true) }?.userAgent
+                        ?: com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
+                    cacheResolvedUrl(videoId, resolved.streamUrl, clientUa)
+                    NodeLog.i(TAG, "Successfully refreshed stream URL for videoId=$videoId via ${resolved.clientName}")
+                    resolved.streamUrl
+                } else {
+                    NodeLog.w(TAG, "Failed to refresh stream URL for videoId=$videoId via StreamResolver (${result.exceptionOrNull()?.message}), attempting NewPipeFallback...")
+                    NewPipeFallback.init(sharedOkHttpClient)
+                    val (npUrl, npHeaders) = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                        NewPipeFallback.resolveStream(videoId)
+                    }
+                    cacheResolvedUrl(videoId, npUrl, npHeaders["User-Agent"], npHeaders)
+                    NodeLog.i(TAG, "Successfully refreshed stream URL for videoId=$videoId via NewPipe")
+                    npUrl
+                }
             }
         } catch (e: Exception) {
             NodeLog.w(TAG, "Error refreshing stream URL for $videoIdOrUrl: ${e.message}")
@@ -118,6 +200,7 @@ object AudioCache {
      */
     fun extractVideoId(url: String): String? {
         val trimmed = url.trim()
+        urlToVideoId[trimmed]?.let { return it }
         if (trimmed.startsWith("nodeplayer://youtube/", ignoreCase = true)) {
             val after = trimmed.substring("nodeplayer://youtube/".length).trimStart('/')
             return after.substringBefore('?').substringBefore('#').substringBefore('/').takeIf { it.isNotBlank() }
@@ -196,6 +279,7 @@ object AudioCache {
             val evictor = LeastRecentlyUsedCacheEvictor(MAX_CACHE_BYTES)
             val databaseProvider = StandaloneDatabaseProvider(context)
             simpleCacheInstance = SimpleCache(cacheDir, evictor, databaseProvider)
+            NewPipeFallback.init(sharedOkHttpClient)
             NodeLog.i(TAG, "Initialized SimpleCache at ${cacheDir.absolutePath} with 512MB LRU limit")
         } catch (e: Exception) {
             NodeLog.e(TAG, "Failed to initialize AudioCache: ${e.message}", e)
@@ -225,33 +309,83 @@ object AudioCache {
      */
     fun createDataSourceFactory(context: Context): DataSource.Factory {
         val httpFactory = DataSource.Factory {
-            val defaultUa = com.nodeplayer.network.innertube.YouTubeClient.VISIONOS.userAgent
-            val client = DefaultHttpDataSource.Factory()
-                .setUserAgent(defaultUa)
-                .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(15_000)
-                .setReadTimeoutMs(20_000)
-                .createDataSource()
+            object : DataSource {
+                private var delegate: DataSource? = null
 
-            object : DataSource by client {
+                override fun addTransferListener(transferListener: androidx.media3.datasource.TransferListener) {}
+
                 override fun open(dataSpec: androidx.media3.datasource.DataSpec): Long {
                     val url = dataSpec.uri.toString()
-                    val targetUa = getUserAgentForUrl(url) ?: defaultUa
-                    client.setRequestProperty("User-Agent", targetUa)
-                    return client.open(dataSpec)
+                    val key = dataSpec.key
+                    val customHeaders = resolvedHeaders[url]
+                        ?: (if (key != null) resolvedHeaders[key] else null)
+                        ?: extractVideoId(url)?.let { vid -> resolvedHeaders[vid] ?: resolvedHeaders["nodeplayer_yt_$vid"] }
+                        ?: emptyMap()
+
+                    val targetUa = customHeaders["User-Agent"]
+                        ?: resolvedUserAgents[url]
+                        ?: (if (key != null) resolvedUserAgents[key] else null)
+                        ?: extractVideoId(url)?.let { vid -> resolvedUserAgents[vid] ?: resolvedUserAgents["nodeplayer_yt_$vid"] }
+                        ?: getUserAgentForUrl(url)
+                        ?: if (url.contains("c=WEB") || url.contains("c=WEB_REMIX")) {
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"
+                        } else {
+                            com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
+                        }
+
+                    NodeLog.i(TAG, "Opening HTTP stream: targetUa='$targetUa', key='$key', url=${url.take(100)}")
+
+                    val factory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(sharedOkHttpClient)
+                        .setUserAgent(targetUa)
+
+                    val defaultReqProps = androidx.media3.datasource.HttpDataSource.RequestProperties()
+                    if (url.contains("c=WEB") || url.contains("c=WEB_REMIX") || customHeaders.containsKey("Referer")) {
+                        defaultReqProps.set("Referer", customHeaders["Referer"] ?: "https://www.youtube.com/")
+                        defaultReqProps.set("Origin", customHeaders["Origin"] ?: "https://www.youtube.com")
+                    }
+                    customHeaders.forEach { (k, v) ->
+                        if (!k.equals("User-Agent", ignoreCase = true)) {
+                            defaultReqProps.set(k, v)
+                        }
+                    }
+                    factory.setDefaultRequestProperties(defaultReqProps.getSnapshot())
+
+                    val realSource = factory.createDataSource()
+                    delegate = realSource
+                    return try {
+                        realSource.open(dataSpec)
+                    } catch (e: Exception) {
+                        NodeLog.e(TAG, "HTTP stream open FAILED: targetUa='$targetUa', key='$key', err=${e.message}", e)
+                        throw e
+                    }
+                }
+
+                override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+                    return delegate?.read(buffer, offset, length) ?: -1
+                }
+
+                override fun getUri(): android.net.Uri? = delegate?.uri
+
+                override fun getResponseHeaders(): Map<String, List<String>> =
+                    delegate?.responseHeaders ?: emptyMap()
+
+                override fun close() {
+                    delegate?.close()
+                    delegate = null
                 }
             }
         }
 
         val cache = simpleCacheInstance
+        val rangedFactory = RangedUpstreamDataSource.Factory(httpFactory)
         return if (cache != null) {
-            CacheDataSource.Factory()
+            androidx.media3.datasource.cache.CacheDataSource.Factory()
                 .setCache(cache)
-                .setUpstreamDataSourceFactory(httpFactory)
+                .setUpstreamDataSourceFactory(rangedFactory)
                 .setCacheKeyFactory(keyFactory)
-                .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+                .setFlags(androidx.media3.datasource.cache.CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         } else {
-            httpFactory
+            rangedFactory
         }
     }
 
@@ -299,19 +433,30 @@ object AudioCache {
                     streamResolver.resolveStream(videoId)
                 }
 
-                if (resolvedResult.isFailure) {
-                    val err = resolvedResult.exceptionOrNull()
-                    NodeLog.e(TAG, "Stream resolution failed for videoId=$videoId: ${err?.message}", err)
-                    throw java.io.IOException("Stream resolution failed for videoId: $videoId", err)
+                if (resolvedResult.isSuccess) {
+                    val resolved = resolvedResult.getOrThrow()
+                    liveUrl = resolved.streamUrl
+                    val clientUa = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
+                        .firstOrNull { it.clientName.equals(resolved.clientName, ignoreCase = true) }?.userAgent
+                        ?: com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
+                    cacheResolvedUrl(videoId, liveUrl, clientUa)
+                    NodeLog.i(TAG, "Resolved live stream for videoId=$videoId successfully (client=${resolved.clientName}), applying CDN URL")
+                } else {
+                    NodeLog.w(TAG, "StreamResolver failed for videoId=$videoId (${resolvedResult.exceptionOrNull()?.message}), attempting NewPipeFallback...")
+                    try {
+                        NewPipeFallback.init(sharedOkHttpClient)
+                        val (npUrl, npHeaders) = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                            NewPipeFallback.resolveStream(videoId)
+                        }
+                        liveUrl = npUrl
+                        cacheResolvedUrl(videoId, liveUrl, npHeaders["User-Agent"], npHeaders)
+                        NodeLog.i(TAG, "Resolved stream via NewPipe fallback successfully for videoId=$videoId")
+                    } catch (e: Exception) {
+                        val err = resolvedResult.exceptionOrNull()
+                        NodeLog.e(TAG, "Both StreamResolver and NewPipe fallback failed for videoId=$videoId: ${e.message}", e)
+                        throw java.io.IOException("Stream resolution failed for videoId: $videoId", err ?: e)
+                    }
                 }
-
-                val resolved = resolvedResult.getOrThrow()
-                liveUrl = resolved.streamUrl
-                val clientUa = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
-                    .firstOrNull { it.clientName.equals(resolved.clientName, ignoreCase = true) }?.userAgent
-                    ?: com.nodeplayer.network.innertube.YouTubeClient.ANDROID_VR.userAgent
-                cacheResolvedUrl(videoId, liveUrl, clientUa)
-                NodeLog.i(TAG, "Resolved live stream for videoId=$videoId successfully (client=${resolved.clientName}), applying CDN URL")
             }
 
             // Always provide the real HTTPS URL and the stable cacheKey to CacheDataSource
@@ -339,7 +484,7 @@ object AudioCache {
 
         preloadScope.launch {
             try {
-                val ua = getUserAgentForUrl(streamUrl) ?: com.nodeplayer.network.innertube.YouTubeClient.VISIONOS.userAgent
+                val ua = getUserAgentForUrl(streamUrl) ?: com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
                 val upstream = DefaultHttpDataSource.Factory()
                     .setUserAgent(ua)
                     .setAllowCrossProtocolRedirects(true)

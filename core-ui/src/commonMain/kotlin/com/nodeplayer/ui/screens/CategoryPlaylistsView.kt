@@ -33,13 +33,20 @@ fun CategoryPlaylistsView(
     playlists: List<Playlist>,
     onBack: () -> Unit,
     onOpenPlaylist: (Playlist) -> Unit,
-    loadingPlaylistId: String? = null
+    loadingPlaylistId: String? = null,
+    isLoading: Boolean = false
 ) {
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 20.dp)) {
         TextButton(onClick = onBack) { Text("‹  Categories") }
         Text(title, style = MaterialTheme.typography.headlineMedium)
         Text("Playlists", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 12.dp))
-        if (playlists.isEmpty()) Text("No playlists available in this category.")
+        if (isLoading && playlists.isEmpty()) {
+            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else if (playlists.isEmpty()) {
+            Text("No playlists available in this category.")
+        }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(140.dp),
             contentPadding = PaddingValues(bottom = LocalBottomBarPadding.current + 20.dp),

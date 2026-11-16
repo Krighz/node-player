@@ -36,4 +36,11 @@ dist/
 
 # GSD planning (local-only preference)
 .planning/
--e "\nconvx-research/\n*.png\nINDEX.md\nPROMPT-EXPLORE-LYRICS-TASTE.md\nRELEASE_NOTES_v1.8.0.md\nSHA256SUMS.txt\ndocs/FUNCTION_INDEX.md" 
+convx-research/
+*.png
+*.lnk
+INDEX.md
+PROMPT-EXPLORE-LYRICS-TASTE.md
+RELEASE_NOTES_v1.8.0.md
+SHA256SUMS.txt
+docs/FUNCTION_INDEX.md 

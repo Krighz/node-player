@@ -70,6 +70,8 @@ object NodeThemeSerializer {
         theme.put("dockGlassLensEnabled", config.dockGlassLensEnabled)
         theme.put("dockGlassRimEnabled", config.dockGlassRimEnabled)
         theme.put("dockGlassPuckEnabled", config.dockGlassPuckEnabled)
+        theme.put("artZoomScale", config.artZoomScale.toDouble())
+        theme.put("artVerticalOffsetDp", config.artVerticalOffsetDp)
 
         root.put("themeConfig", theme)
         return root.toString(2)
@@ -133,7 +135,9 @@ object NodeThemeSerializer {
                 reduceMotion = theme.optBoolean("reduceMotion", def.reduceMotion),
                 dockGlassLensEnabled = theme.optBoolean("dockGlassLensEnabled", def.dockGlassLensEnabled),
                 dockGlassRimEnabled = theme.optBoolean("dockGlassRimEnabled", def.dockGlassRimEnabled),
-                dockGlassPuckEnabled = theme.optBoolean("dockGlassPuckEnabled", def.dockGlassPuckEnabled)
+                dockGlassPuckEnabled = theme.optBoolean("dockGlassPuckEnabled", def.dockGlassPuckEnabled),
+                artZoomScale = theme.optDouble("artZoomScale", def.artZoomScale.toDouble()).toFloat(),
+                artVerticalOffsetDp = theme.optInt("artVerticalOffsetDp", def.artVerticalOffsetDp)
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse theme JSON", e)

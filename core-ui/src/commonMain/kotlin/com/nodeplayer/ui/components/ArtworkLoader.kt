@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -65,6 +66,7 @@ object ArtworkCache {
     const val MAX_MEMORY_ENTRIES = 300
     const val MAX_BYTE_ENTRIES = 200
     const val DEFAULT_TARGET_SIZE_PX = 256
+    const val HERO_TARGET_SIZE_PX = 1080
 
     private val memoryCache = BoundedLruCache<String, ImageBitmap>(MAX_MEMORY_ENTRIES)
     private val byteCache = BoundedLruCache<String, ByteArray>(MAX_BYTE_ENTRIES)
@@ -91,12 +93,40 @@ object ArtworkCache {
 }
 
 @Composable
+fun CanvasArtwork(
+    canvasItem: com.nodeplayer.model.video.CanvasItem? = null,
+    fallbackTrack: Track? = null,
+    modifier: Modifier = Modifier,
+    cornerRadius: Dp = 12.dp,
+    canvasContent: (@Composable (Modifier) -> Unit)? = null
+) {
+    if (canvasItem != null && canvasContent != null) {
+        val squircleShape = remember(cornerRadius) { ContinuousRoundedRectangle(cornerRadius) }
+        Box(
+            modifier = modifier
+                .clip(squircleShape)
+                .fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            canvasContent(Modifier.fillMaxSize())
+        }
+    } else {
+        TrackArtwork(
+            track = fallbackTrack,
+            modifier = modifier,
+            cornerRadius = cornerRadius
+        )
+    }
+}
+
+@Composable
 fun TrackArtwork(
     track: Track?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     cornerRadius: Dp = 12.dp,
-    targetSizePx: Int = ArtworkCache.DEFAULT_TARGET_SIZE_PX
+    targetSizePx: Int = ArtworkCache.DEFAULT_TARGET_SIZE_PX,
+    scale: Float = 1.0f
 ) {
     val accent = LocalAccentColor.current
     val cacheKey = track?.path ?: track?.id?.toString() ?: ""
@@ -133,23 +163,38 @@ fun TrackArtwork(
             listOf(accent.copy(alpha = 0.22f), Color.White.copy(alpha = 0.05f))
         )
     }
-    Box(
-        modifier = modifier
+    val boxModifier = if (cornerRadius > 0.dp) {
+        modifier
             .clip(squircleShape)
             .border(
                 1.dp,
                 borderBrush,
                 squircleShape
             )
-            .background(backgroundBrush),
+            .background(backgroundBrush)
+    } else {
+        modifier
+    }
+    Box(
+        modifier = boxModifier,
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
+            val imageModifier = if (scale != 1.0f) {
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                    }
+            } else {
+                Modifier.fillMaxSize()
+            }
             Image(
                 bitmap = bitmap!!,
                 contentDescription = track?.title ?: "Artwork",
                 contentScale = contentScale,
-                modifier = Modifier.fillMaxSize()
+                modifier = imageModifier
             )
         } else {
             Icon(

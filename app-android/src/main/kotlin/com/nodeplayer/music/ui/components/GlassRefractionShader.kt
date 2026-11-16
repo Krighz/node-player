@@ -3,7 +3,6 @@ package com.nodeplayer.music.ui.components
 import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
 import android.os.Build
-import android.os.SystemClock
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -25,16 +24,6 @@ internal const val AGSL_REFRACTION_SRC = """
     uniform float2 size;
     uniform float refractionIndex;
     uniform float chromaticFringe;
-    uniform float grainStrength;
-    uniform float time;
-
-    // Hardened hash: modulo guard eliminates high-input float precision degradation on mobile GPUs
-    float hash(float2 p) {
-        float2 safeP = p - 1024.0 * floor(p / 1024.0);
-        float3 p3 = fract(float3(safeP.xyx) * 0.1031);
-        p3 += dot(p3, p3.yzx + 33.33);
-        return fract((p3.x + p3.y) * p3.z);
-    }
 
     half4 main(float2 fragCoord) {
         // Strict boundary guard: discard any pixel outside this layer's real assigned size
@@ -64,17 +53,7 @@ internal const val AGSL_REFRACTION_SRC = """
         half4 cG = contents.eval(uvG * safeSize);
         half4 cB = contents.eval(uvB * safeSize);
 
-        float3 col = float3(cR.r, cG.g, cB.b);
-
-        // Optional subtle film grain (safely wrapped time)
-        if (grainStrength > 0.001) {
-            float wrappedTime = time - 3600.0 * floor(time / 3600.0);
-            float grain = (hash(fragCoord + float2(wrappedTime, wrappedTime * 1.618)) - 0.5) * 0.028 * grainStrength;
-            col += float3(grain, grain, grain);
-        }
-
-        // Clamp final colour and return premultiplied alpha
-        col = clamp(col, 0.0, 1.0);
+        float3 col = clamp(float3(cR.r, cG.g, cB.b), 0.0, 1.0);
         float alpha = clamp(cG.a, 0.0, 1.0);
 
         return half4(col * alpha, alpha);
@@ -82,17 +61,14 @@ internal const val AGSL_REFRACTION_SRC = """
 """
 
 /**
- * Hardened AGSL optical glass lens refraction modifier.
- * - Enforces layer clipping to prevent shader spilling beyond assigned bounds.
- * - Measures real node size with onSizeChanged and discards zero/NaN/huge sizes.
- * - Normalizes coordinates, guards divisions with epsilons, and outputs premultiplied alpha.
+ * Cached AGSL optical glass lens refraction modifier (grain-free, zero per-frame effect rebuilds).
  */
 fun Modifier.glassRefraction(
     shape: Shape = RoundedCornerShape(32.dp),
     enabled: Boolean = true,
     refractionIndex: Float = 0.85f,
     chromaticFringe: Float = 1.0f,
-    grainStrength: Float = 0.0f
+    @Suppress("UNUSED_PARAMETER") grainStrength: Float = 0.0f
 ): Modifier = composed {
     if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
         return@composed this.clip(shape)
@@ -100,49 +76,35 @@ fun Modifier.glassRefraction(
 
     var measuredSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val shader = remember {
-        try {
-            RuntimeShader(AGSL_REFRACTION_SRC)
-        } catch (_: Throwable) {
+    val cachedEffect = remember(measuredSize, refractionIndex, chromaticFringe) {
+        val w = measuredSize.width.toFloat()
+        val h = measuredSize.height.toFloat()
+        if (w <= 0f || h <= 0f || w.isNaN() || h.isNaN() || w > 4096f || h > 4096f) {
             null
+        } else {
+            try {
+                val shader = RuntimeShader(AGSL_REFRACTION_SRC)
+                shader.setFloatUniform("size", w, h)
+                shader.setFloatUniform("refractionIndex", refractionIndex)
+                shader.setFloatUniform("chromaticFringe", chromaticFringe)
+                RenderEffect.createRuntimeShaderEffect(shader, "contents").asComposeRenderEffect()
+            } catch (_: Throwable) {
+                null
+            }
         }
-    }
-
-    if (shader == null) {
-        return@composed this.clip(shape)
     }
 
     this
         .clip(shape)
         .onSizeChanged { newSize ->
-            measuredSize = newSize
+            if (measuredSize != newSize) {
+                measuredSize = newSize
+            }
         }
         .graphicsLayer {
-            val w = if (measuredSize.width > 0) measuredSize.width.toFloat() else size.width
-            val h = if (measuredSize.height > 0) measuredSize.height.toFloat() else size.height
-
-            // Skip drawing when size is zero, NaN, or huge (> 4096 px)
-            if (w <= 0f || h <= 0f || w.isNaN() || h.isNaN() || w > 4096f || h > 4096f) {
-                renderEffect = null
-                return@graphicsLayer
-            }
-
             clip = true
             this.shape = shape
-
-            try {
-                shader.setFloatUniform("size", w, h)
-                shader.setFloatUniform("refractionIndex", refractionIndex)
-                shader.setFloatUniform("chromaticFringe", chromaticFringe)
-                shader.setFloatUniform("grainStrength", grainStrength)
-                val safeTime = (SystemClock.elapsedRealtime() % 3600000L).toFloat() / 1000f
-                shader.setFloatUniform("time", safeTime)
-
-                val effect = RenderEffect.createRuntimeShaderEffect(shader, "contents")
-                renderEffect = effect.asComposeRenderEffect()
-            } catch (_: Throwable) {
-                renderEffect = null
-            }
+            renderEffect = cachedEffect
         }
 }
 
@@ -167,15 +129,6 @@ internal const val AGSL_LENS_BUBBLE_SRC = """
     uniform float chromaticFringe;
     uniform float rimStrength;
     uniform float4 rimColor;
-    uniform float grainStrength;
-    uniform float time;
-
-    float hash(float2 p) {
-        float2 safeP = p - 1024.0 * floor(p / 1024.0);
-        float3 p3 = fract(float3(safeP.xyx) * 0.1031);
-        p3 += dot(p3, p3.yzx + 33.33);
-        return fract((p3.x + p3.y) * p3.z);
-    }
 
     half4 main(float2 fragCoord) {
         if (fragCoord.x < 0.0 || fragCoord.x > size.x || fragCoord.y < 0.0 || fragCoord.y > size.y) {
@@ -195,11 +148,11 @@ internal const val AGSL_LENS_BUBBLE_SRC = """
         float mag = 1.0 + magnification * clamp(1.0 - r * r, 0.0, 1.0);
         float2 magDelta = delta / max(mag, 0.01);
 
-        // 2. Pure smooth optical magnification with zero ring artifact in the middle field
+        // 2. Pure smooth optical magnification
         float edgeBend = smoothstep(0.85, 1.0, r) * 0.03 * refractionIndex;
         float2 displacedDelta = magDelta + delta * edgeBend;
 
-        // 3. Subtle perimeter fringe (only at the extreme boundary, not in the field)
+        // 3. Subtle perimeter fringe
         float fringe = smoothstep(0.88, 1.0, r) * 0.006 * chromaticFringe;
         float2 uvR = clamp(float2(0.5, 0.5) + displacedDelta * (1.0 + fringe), 0.0, 1.0);
         float2 uvG = clamp(float2(0.5, 0.5) + displacedDelta, 0.0, 1.0);
@@ -209,24 +162,14 @@ internal const val AGSL_LENS_BUBBLE_SRC = """
         half4 cG = contents.eval(uvG * safeSize);
         half4 cB = contents.eval(uvB * safeSize);
 
-        float3 col = float3(cR.r, cG.g, cB.b);
-
-        // 4. Subtle tactile grain (clean optical glass, zero artificial ring in field)
-        if (grainStrength > 0.001) {
-            float wrappedTime = time - 3600.0 * floor(time / 3600.0);
-            float grain = (hash(fragCoord + float2(wrappedTime, wrappedTime * 1.618)) - 0.5) * 0.02 * grainStrength;
-            col += float3(grain, grain, grain);
-        }
-
-        col = clamp(col, 0.0, 1.0);
+        float3 col = clamp(float3(cR.r, cG.g, cB.b), 0.0, 1.0);
         float alpha = clamp(cG.a, 0.0, 1.0);
         return half4(col * alpha, alpha);
     }
 """
 
 /**
- * Optical Magnifying Lens Bubble modifier for the floating dock.
- * Magnifies the background with convex radial curvature, prismatic dispersion, and specular rim.
+ * Cached Optical Magnifying Lens Bubble modifier for the floating dock (grain-free).
  */
 fun Modifier.glassLensBubble(
     shape: Shape = RoundedCornerShape(26.dp),
@@ -236,7 +179,7 @@ fun Modifier.glassLensBubble(
     chromaticFringe: Float = 1.0f,
     rimStrength: Float = 0.85f,
     rimColor: Color = Color.White,
-    grainStrength: Float = 0.0f
+    @Suppress("UNUSED_PARAMETER") grainStrength: Float = 0.0f
 ): Modifier = composed {
     if (!enabled || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
         return@composed this.clip(shape)
@@ -244,50 +187,37 @@ fun Modifier.glassLensBubble(
 
     var measuredSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val shader = remember {
-        try {
-            RuntimeShader(AGSL_LENS_BUBBLE_SRC)
-        } catch (_: Throwable) {
+    val cachedEffect = remember(measuredSize, magnification, refractionIndex, chromaticFringe, rimStrength, rimColor) {
+        val w = measuredSize.width.toFloat()
+        val h = measuredSize.height.toFloat()
+        if (w <= 0f || h <= 0f || w.isNaN() || h.isNaN() || w > 4096f || h > 4096f) {
             null
-        }
-    }
-
-    if (shader == null) {
-        return@composed this.clip(shape)
-    }
-
-    this
-        .clip(shape)
-        .onSizeChanged { newSize ->
-            measuredSize = newSize
-        }
-        .graphicsLayer {
-            val w = if (measuredSize.width > 0) measuredSize.width.toFloat() else size.width
-            val h = if (measuredSize.height > 0) measuredSize.height.toFloat() else size.height
-
-            if (w <= 0f || h <= 0f || w.isNaN() || h.isNaN() || w > 4096f || h > 4096f) {
-                renderEffect = null
-                return@graphicsLayer
-            }
-
-            clip = true
-            this.shape = shape
-
+        } else {
             try {
+                val shader = RuntimeShader(AGSL_LENS_BUBBLE_SRC)
                 shader.setFloatUniform("size", w, h)
                 shader.setFloatUniform("magnification", magnification)
                 shader.setFloatUniform("refractionIndex", refractionIndex)
                 shader.setFloatUniform("chromaticFringe", chromaticFringe)
                 shader.setFloatUniform("rimStrength", rimStrength)
                 shader.setFloatUniform("rimColor", rimColor.red, rimColor.green, rimColor.blue, rimColor.alpha)
-                shader.setFloatUniform("grainStrength", grainStrength)
-                val safeTime = (SystemClock.elapsedRealtime() % 3600000L).toFloat() / 1000f
-                shader.setFloatUniform("time", safeTime)
-
-                val effect = RenderEffect.createRuntimeShaderEffect(shader, "contents")
-                renderEffect = effect.asComposeRenderEffect()
+                RenderEffect.createRuntimeShaderEffect(shader, "contents").asComposeRenderEffect()
             } catch (_: Throwable) {
-                renderEffect = null
+                null
             }
+        }
+    }
+
+    this
+        .clip(shape)
+        .onSizeChanged { newSize ->
+            if (measuredSize != newSize) {
+                measuredSize = newSize
+            }
+        }
+        .graphicsLayer {
+            clip = true
+            this.shape = shape
+            renderEffect = cachedEffect
         }
 }

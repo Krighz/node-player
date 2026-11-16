@@ -37,7 +37,12 @@ data class YouTubeClient(
     val isEmbedded: Boolean = false,
     val useWebPoTokens: Boolean = false,
 ) {
-    fun toContext(locale: YouTubeLocale, visitorData: String? = null, dataSyncId: String? = null) = Context(
+    fun toContext(
+        locale: YouTubeLocale,
+        visitorData: String? = null,
+        dataSyncId: String? = null,
+        embedVideoId: String? = null
+    ) = Context(
         client = Context.Client(
             clientName = clientName,
             clientVersion = clientVersion,
@@ -50,6 +55,11 @@ data class YouTubeClient(
             hl = locale.hl,
             visitorData = visitorData
         ),
+        thirdParty = if (isEmbedded && embedVideoId != null) {
+            Context.ThirdParty("https://www.youtube.com/embed/$embedVideoId")
+        } else if (isEmbedded) {
+            Context.ThirdParty("https://www.youtube.com")
+        } else null,
         user = Context.User(
             onBehalfOfUser = if (loginSupported) dataSyncId else null
         ),
@@ -83,10 +93,33 @@ data class YouTubeClient(
             clientVersion = "2.0",
             clientId = "85",
             userAgent = "Mozilla/5.0 (PlayStation; PlayStation 4/12.02) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15",
-            loginSupported = true,
+            loginSupported = false,
             loginRequired = false,
             useSignatureTimestamp = true,
             isEmbedded = true,
+            friendlyName = "TVHTML5 Simply Embedded",
+        )
+
+        val TVHTML5 = YouTubeClient(
+            clientName = "TVHTML5",
+            clientVersion = "7.20260707.07.00",
+            clientId = "7",
+            userAgent = "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)",
+            friendlyName = "TV HTML5",
+            loginSupported = true,
+            useSignatureTimestamp = true,
+            useWebPoTokens = true,
+        )
+
+        val TVHTML5_SAMSUNG = YouTubeClient(
+            clientName = "TVHTML5",
+            clientVersion = "5.20260707",
+            clientId = "7",
+            userAgent = "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1",
+            deviceMake = "Samsung",
+            friendlyName = "TV HTML5 Samsung",
+            loginSupported = false,
+            useSignatureTimestamp = true,
         )
 
         val ANDROID_VR_1_65_10 = YouTubeClient(
@@ -113,7 +146,27 @@ data class YouTubeClient(
             clientVersion = "21.03.1",
             clientId = "5",
             userAgent = "com.google.ios.youtube/21.03.1 (iPhone16,2; U; CPU iOS 18_2 like Mac OS X;)",
+            osName = "iOS",
             osVersion = "18.2.22C152",
+            deviceMake = "Apple",
+            deviceModel = "iPhone16,2",
+            friendlyName = "iOS",
+            loginSupported = false,
+            useSignatureTimestamp = false
+        )
+
+        val IPADOS = YouTubeClient(
+            clientName = "IOS",
+            clientVersion = "21.03.1",
+            clientId = "5",
+            userAgent = "com.google.ios.youtube/21.03.1 (iPad14,1; U; CPU OS 18_2 like Mac OS X;)",
+            osName = "iOS",
+            osVersion = "18.2.22C152",
+            deviceMake = "Apple",
+            deviceModel = "iPad14,1",
+            friendlyName = "iPadOS",
+            loginSupported = false,
+            useSignatureTimestamp = false
         )
 
         val VISIONOS = YouTubeClient(
@@ -573,8 +626,15 @@ data class ItemSectionRenderer(
     data class Content(
         val musicResponsiveListItemRenderer: MusicResponsiveListItemRenderer? = null,
         val musicShelfRenderer: MusicShelfRenderer? = null,
+        val messageRenderer: MessageRenderer? = null,
     )
 }
+
+@Serializable
+data class MessageRenderer(
+    val text: Runs? = null,
+    val trackingParams: String? = null
+)
 
 @Serializable
 data class MusicCarouselShelfRenderer(

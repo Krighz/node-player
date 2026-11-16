@@ -275,6 +275,8 @@ data class GlassThemeConfig(
     val dockGlassLensEnabled: Boolean = true,
     val dockGlassRimEnabled: Boolean = true,
     val dockGlassPuckEnabled: Boolean = true,
+    val artZoomScale: Float = 1.03f,
+    val artVerticalOffsetDp: Int = 0,
     val dockAutoHideEnabled: Boolean = true,
     val dockAutoHideMiniPlayer: Boolean = true,
     val dockScrollSensitivity: Float = 1.0f,

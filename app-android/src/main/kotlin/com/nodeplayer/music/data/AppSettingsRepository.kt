@@ -31,6 +31,7 @@ object AppSettingsRepository {
     val KEY_IS_ONLINE_MODE = booleanPreferencesKey("is_online_mode")
     val KEY_GLOBAL_LYRICS_OFFSET_MS = longPreferencesKey("global_lyrics_offset_ms")
     val KEY_AUTO_FETCH_LYRICS = booleanPreferencesKey("auto_fetch_lyrics")
+    val KEY_YOUTUBE_VIDEO_QUALITY = stringPreferencesKey("youtube_video_quality")
 
     // Settings
     val KEY_GLASS_CONTROLS_CONFIG = stringPreferencesKey("glass_controls_config_json")
@@ -72,7 +73,8 @@ object AppSettingsRepository {
         val glassControlsConfig: GlassControlsConfig = GlassControlsConfig.PRESET_BALANCED,
         val isOnlineMode: Boolean = true,
         val globalLyricsOffsetMs: Long = 0L,
-        val autoFetchLyrics: Boolean = true
+        val autoFetchLyrics: Boolean = true,
+        val youtubeVideoQuality: String = "480"
     )
 
     fun getSettingsFlow(context: Context): Flow<AppSettings> {
@@ -108,7 +110,8 @@ object AppSettingsRepository {
                 glassControlsConfig = glassControlsConfig,
                 isOnlineMode = prefs[KEY_IS_ONLINE_MODE] ?: true,
                 globalLyricsOffsetMs = prefs[KEY_GLOBAL_LYRICS_OFFSET_MS] ?: 0L,
-                autoFetchLyrics = prefs[KEY_AUTO_FETCH_LYRICS] ?: true
+                autoFetchLyrics = prefs[KEY_AUTO_FETCH_LYRICS] ?: true,
+                youtubeVideoQuality = prefs[KEY_YOUTUBE_VIDEO_QUALITY] ?: "480"
             )
         }
     }

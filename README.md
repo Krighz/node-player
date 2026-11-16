@@ -37,12 +37,18 @@
 ## 🌟 What Makes Node Player Special?
 
 - **⚡ 120 Hz Fluid Refresh Rate**: Automatically queries and locks onto the display's peak refresh rate (measured 120 Hz on supported displays) for buttery smooth scrolling, zero-jank dock transitions, and responsive controls. Includes user controls in Settings: Auto, 60 Hz, 120 Hz, Highest available.
-- **🌊 Hardware-Accelerated Liquid Glass UI**: Custom Android 13+ AGSL shaders and Skia renderers executing real-time chromatic aberration, lens refraction, and rim specular highlights powered by Kyant backdrop components.
+- **🌊 Hardware-Accelerated Liquid Glass UI**: Custom Android 13+ AGSL shaders and Skia renderers executing real-time chromatic aberration, lens refraction, and rim specular highlights powered by Kyant backdrop components with `#262626` base charcoal dark mode and pure `#000000` OLED subpixel shutdown.
+- **🎤 Synchronized Full-Screen Karaoke Lyrics**: Word-by-word karaoke sweep text with bundled `Inter` typography, instrument-break rhythmic countdown dots, auto-collapsing distraction-free playback dock, and bottom-left jump navigation.
+- **🔊 Hardware-Synced System Volume Slider**: Real-time bidirectional synchronization between the on-screen volume slider and Android's `AudioManager.STREAM_MUSIC`, mirroring physical hardware volume buttons seamlessly.
+- **📺 16:9 Widescreen Music Video Player**: Dynamic aspect ratio morphing from square album art to 16:9 widescreen playback for music videos with conditional stream quality badges (`480p`) and fullscreen controls.
+- **🌐 YouTube Music Online Discovery & Profile Hydration**: 6 dynamic shelves (Top Picks, Recents, Find Your Mood, Albums/Singles, Music Videos, Trending) with authentic Google account avatar and channel handle hydration.
 - **🖥️ Dual-Platform Shared UI (Windows & Android)**: Powered by Jetpack Compose Multiplatform. A single unified design system shared across Android portrait, Android landscape, and Windows desktop 16:9.
 - **🎛️ Studio-Grade 32-Bit Float DSP Chain**: 10-band biquad parametric equalizer with tight $\pm0.1\text{ dB}$ precision at band centres, linear pass-through soft-knee limiter, zero-allocation XorShift TPDF dither, ISO 226 loudness contour, and psychoacoustic bass boost.
 - **🔀 Dual-Player Continuous Crossfade**: Dual isolated audio playback engines providing smooth, gapless transitions with configurable mathematical curves (*Equal Power*, *Linear*, *Logarithmic*) and automatic live-album gapless detection.
 - **🔄 Node Connect P2P Ecosystem**: Seamless TLS socket device pairing, Wi-Fi casting of lossless PCM audio, and state synchronization between Android and Windows with zero configuration.
 - **🛡️ Privacy-First & Offline-First**: Zero telemetry, zero analytics, zero ads. Includes an autonomous 512MB LRU audio cache for offline replay. Licensed under Apache 2.0.
+
+> **Latest Updates:** For a comprehensive, detailed breakdown of recent improvements, fixes, and architectural refinements, see [WHATS_CHANGED_AFTER_1.8.md](WHATS_CHANGED_AFTER_1.8.md) and [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

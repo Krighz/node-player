@@ -5,6 +5,130 @@
 
 ---
 
+### [2026-11-16] - Features v2: Phase F06 - Decoupled Dual-Engine Video Architecture & Audiophile Sync
+- **True Dual-Engine Decoupling (Audio Master + Silent Secondary Video Player)**:
+  - Audio playback on `PlaybackService.activePlayer` remains completely decoupled and acts strictly as the time master: never stopped, reset, or assigned a `MergingMediaSource` during video toggle.
+  - Silent secondary `MusicVideoEngine` decodes video on an isolated ExoPlayer (`volume = 0f`, audio track disabled).
+  - 250ms clock sync loop with $\pm 25$ ms deadzone, smooth rate-nudging ($\pm 10\%$) for 25–450 ms drift, and 1,500 ms cooldown macro-drift seek jumps.
+- **Priority-Based Surface Claiming**:
+  - `SurfacePriority` levels (`FULLSCREEN_CINEMA` > `NOW_PLAYING_CARD` > `MINI_PLAYER`) cleanly manage decoder binding.
+  - 4-second release grace period prevents unnecessary decoder teardown during navigation transitions.
+- **Zero-Allocation Layout & Aspect Ratio Fitting**:
+  - `VideoAspectMath.calculateDimensions` provides Contain (Fit) and Cover (Crop) geometric aspect fitting inside zero-allocation Compose `Modifier.layout`.
+  - Smooth 320ms alpha crossfade from album art to video upon first rendered frame.
+- **Multi-Tier Artwork & Fullscreen Landscape Cinema**:
+  - `FullscreenVideoPlayer` (`MusicVideoLayout.kt`) provides edge-to-edge landscape playback with 3.5s auto-hide controls and frosted glass quality switcher (`VideoQualitySheet.kt`).
+  - Added pure Kotlin `CanvasModels.kt` and `CanvasArtwork` in `core-ui`.
+
+---
+
+### [2026-11-16] - Features v2: Phase F06 - Music Video Playback & Cinema Player
+- **Top 16:9 Embedded Player in Now Playing**:
+  - `NowPlayingView.kt`: Animated hero card aspect-ratio morphing between 1:1 (audio) and 16:9 (video) with `animateFloatAsState` spring physics.
+  - Interactive Quality badge pill (e.g. "480p") that taps to open a liquid-glass dropdown menu with available heights (1080p, 720p, 480p, 360p, Auto).
+  - Dedicated "Stop Video" button in Now Playing hero card to immediately revert to album art and audio-only mode.
+  - "Play Video" badge button on album art when an audio track has an associated music video available.
+  - Default is audio-only playback (`video_auto_play = false`), preserving data and battery unless explicitly toggled.
+  - Removed redundant Volume slider from `QuickSettingsSheet.kt` to avoid duplication with `NowPlayingView`.
+- **Strict PTS Audio/Video Lip-Sync & Seamless Stream Handoff**:
+  - Android ExoPlayer master audio clock synchronization via hardware audio sink: attaching `VideoSurface` directly to `PlaybackService.instance.player` guarantees hardware PTS lip-sync.
+  - Position-preserving stream handoff: switching between video and audio preserves `currentPosition` down to the exact millisecond (`seekTo(currentPos)`), completely preventing restarts from 0:00 or drifting.
+  - Dual-surface architecture: `TextureView` (`view_video_texture.xml`) for squircle-clipped 16:9 hero card to prevent glass punch-through artifacts; `SurfaceView` (`view_video_surface.xml`) for full-screen `FullscreenCinemaPlayer`.
+- **Fullscreen Cinema Player (`FullscreenCinemaPlayer.kt`)**:
+  - Immersive fullscreen liquid-glass overlay controls with single-tap toggle and configurable auto-hide timer.
+  - Dual-zone vertical drag gestures: left half for screen brightness, right half for system audio volume with real-time feedback badges.
+  - 10-second double-tap seek with directional animated ripple badges (`resolveDoubleTapSeekDeltaMs`).
+  - Resolution dropdown menu and interactive timeline scrubber.
+- **Background Data Saver & Picture-in-Picture (PiP)**:
+  - Configured `android:supportsPictureInPicture="true"` and `configChanges` in `AndroidManifest.xml`.
+  - `MainActivity.kt`: Enters PiP on `onUserLeaveHint()` when video is playing and `video_pip` is enabled; restores UI on `onPictureInPictureModeChanged()`.
+  - Data saver: when app moves to background outside of PiP, dynamically disables video track via ExoPlayer `TrackSelectionParameters`, streaming audio-only.
+- **Desktop Multiplatform Video Player (`DesktopVideoPlayer.kt`)**:
+  - Built on `uk.co.caprica:vlcj:4.8.3` via Compose `SwingPanel` embedding `EmbeddedMediaPlayerComponent`.
+  - Periodic drift correction keeping A/V sync within 150ms.
+  - Graceful fallback when VLC is not installed on the host machine.
+  - Wired into `SharedPlayerLayout.kt` and `Main.kt`.
+- **Settings Registry & Verification**:
+  - Registered 8 settings under `SettingSubsection.MUSIC_VIDEOS` (`video_auto_play`, `video_default_quality`, `video_seek_step_s`, `video_gestures`, `video_pip`, `video_background_audio_only`, `video_controls_autohide_s`, `video_show_quality_pill`).
+  - All tests passing: `VideoQualityMathTest`, `SettingsRegistryTest`, `StreamResolverVideoTest`, `AndroidVideoEngineTest`, `DesktopVideoPlayerTest`.
+  - Multiplatform compilation 100% green: `:app-android`, `:app-desktop`, `:core-ui`, `:core-network`, `:core-model`.
+
+---
+
+### [2026-11-15] - Features v2: Verification Round 1 & Bug Fixes (F00–F05)
+- **Bug B1: YouTube Playlist Creation on Import**:
+  - Implemented `InnerTubeClient.createPlaylist` and `InnerTubeClient.addTracksToPlaylist` in `core-network`.
+  - Wired automatic remote YouTube playlist creation in `PlayerViewModel.createPlaylistWithTracks` when authenticated.
+  - Video IDs extracted from matched online tracks (`nodeplayer://youtube/...`, `watch?v=...`, `youtu.be/...`), skipping and logging local-only tracks.
+  - Verified via `YouTubePlaylistCreateTest` (3 tests passed).
+- **Bug B2: File Picker & Multi-Charset Import**:
+  - Expanded file picker MIME filter in `MainActivity.kt` from `text/*` to `*/*`, resolving greyed out CSV/TXT files across Android file providers.
+  - Added `LaunchedEffect(initialText)` in `PlaylistImportSheet.kt` to synchronize file contents directly into the UI state upon selection.
+  - Added `UniversalPlaylistParser.decodeBytesWithFallback` supporting UTF-8 BOM, UTF-16 LE/BE, and Windows-1252.
+  - Verified via `UniversalPlaylistParserTest` (5 new tests passed).
+- **Bug B3: Audio Cache Directory Alignment**:
+  - Corrected `NodePlayerApplication.kt` storage category path from `"media_cache"` to `AudioCache.CACHE_DIR_NAME` (`"audio_cache"`).
+  - Verified via `AudioCacheStorageCategoryTest`.
+
+---
+
+### [2026-11-15] - Features v2: Phase F05 - FLAC to Opus Batch Converter
+- **Multiplatform Batch Transcode Engine (`AudioTranscoder`)**:
+  - Defined pure data models in `core-model/src/main/kotlin/com/nodeplayer/model/converter/ConverterModels.kt`: `TranscodePreset`, `TranscodeJob`, `TranscodeBatchSummary`, and `AudioTranscoder`.
+  - Implemented mathematical models in `ConverterMath.kt`: exact byte size projection `estimatedOutputBytes(durationMs, bitrateKbps)`, human-readable disk formatting `formatDiskSize(bytes)`, and ReplayGain to Opus R128 Q7.8 offset conversion `replayGainToR128Q78(replayGainDb)`.
+  - Implemented `DesktopFFmpegTranscoder` in `app-desktop` via `ProcessBuilder` with `-progress pipe:1` live stream parsing, clean process cancellation, temporary file cleanup, and test-decode verification. Zero runtime downloading: resolves custom configured path, adjacent bundled binary (`ffmpeg.exe`/`ffmpeg`), or system PATH.
+  - Implemented `AndroidFFmpegTranscoder` in `app-android` using `dev.ffmpegkit-maintained:ffmpeg-kit-audio:6.0.4` (LGPL 3.0), providing in-process native Opus transcoding with thread-safe callbacks.
+  - Implemented `TranscodeQueueManager` in `:core-library` featuring Semaphore-controlled multi-worker concurrency, recursive directory scanning, skip-existing output check, and an **Atomic Replace-Original Safety Gate** (source FLAC is never deleted until `.tmp.opus` verifies and atomic rename succeeds).
+- **Settings Registry & Privacy**:
+  - Added `SettingSubsection.AUDIO_CONVERTER("audio_converter", "Audio Converter")` in `SettingsRegistry.kt`.
+  - Registered 13 settings under `SettingSection.LIBRARY_FILES`: `convert_default_preset`, `convert_custom_bitrate`, `convert_vbr`, `convert_application`, `convert_compression_level`, `convert_keep_original`, `convert_output_mode`, `convert_output_folder`, `convert_name_template`, `convert_workers`, `convert_write_r128`, `convert_ffmpeg_path`, and `convert_rescan_after`.
+  - Documented FFmpeg and `ffmpeg-kit-audio` under `THIRD_PARTY_LICENSES.md`.
+- **Liquid Glass UI & Navigation**:
+  - Implemented `AudioConverterView` in `core-ui`: quality preset selector chips (`192`, `128`, `96`, `CUSTOM`), custom accordion with bitrate/VBR/application/compression controls, disk savings projection card, destination options, destructive replace-original confirmation dialog, multi-worker progress indicator, and batch summary dialog.
+  - Wired navigation from `SettingsView.kt` (`core-ui`), `SettingsScreen.kt` (`app-android`), and `SharedPlayerLayout.kt` under `Library & Files > FLAC to Opus Converter`.
+- **Verification & Testing**:
+  - 100% test pass rate across `ConverterMathTest`, `DesktopFFmpegTranscoderTest`, `TranscodeQueueManagerTest`, `SettingsRegistryTest`, and `ThemeMatrixCharacterizationTest`.
+  - Verified 9/9 symbols in `WIRING-F05.md` via `scripts/wiring-check.ps1` with defs=1 and non-test uses >= 1. Zero compiler errors, zero build failures.
+
+---
+
+### [2026-11-15] - Features v2: Phase F04 - Discord Rich Presence
+- **Windows Desktop Local Discord IPC Named Pipe (`PresenceTransport`)**:
+  - Implemented `DiscordIpcTransport` in `app-desktop` connecting to `\\.\pipe\discord-ipc-0..9` via `RandomAccessFile`.
+  - Implemented little-endian 8-byte frame encoder/decoder in `DiscordFrameCodec` (`:core-network`).
+  - Added `DiscordActivityBuilder` with string sanitation (clamping to 2..128 characters), timestamp calculations, and cover artwork URL / asset key fallback.
+  - Implemented `PresenceController` with 15-second debouncing rate-limiter, track change/seek detection, pause clearing, incognito mode, and exponential backoff reconnection.
+- **Settings & Privacy**:
+  - Registered 6 desktop-targeted settings in `SettingsRegistry` under `ONLINE_CONNECT_NETWORK > DISCORD_PRESENCE`: `discord_enabled`, `discord_incognito`, `discord_show_cover`, `discord_show_album`, `discord_show_while_paused`, and `discord_app_id`.
+  - Filtered out desktop-only settings on Android in `SettingsScreen.kt`.
+  - Implemented liquid glass `DiscordRichPresenceCard` in `SettingsView.kt`.
+  - Added quick Incognito toggle in `HomeProfileSheet.kt`.
+- **Verification & Testing**:
+  - 100% test pass rate across `DiscordFrameCodecTest`, `DiscordActivityBuilderTest`, `PresenceControllerTest`, `SettingsRegistryTest`, and `ThemeMatrixCharacterizationTest`.
+  - Verified 10/10 symbols in `WIRING-F04.md` via `scripts/wiring-check.ps1`.
+
+---
+
+### [2026-11-14] - Post-v1.8.0: Liquid Chrome Overhaul, Real Volume Hardware Sync & Theme Standardization
+- **Standard Dark Mode Theme Color (`#262626`) & OLED Black Isolation**:
+  - Unified default dark mode background to `#262626` across `Theme.kt`, `LiquidGlassBackground.kt`, and `GlassTheme.kt` with `#303030` elevated card surfaces.
+  - Eliminated hardcoded `Color.Black` roots in `OnlineHomeView.kt`, `PlaylistDetailView.kt`, and `LibraryScreen.kt`, wiring dynamic checks (`isOledBlack || themeMode == "OLED"`) to preserve 100% pitch black for OLED displays while rendering `#262626` in standard dark mode.
+- **`FullScreenLyricsView.kt` Chrome & Navigation Polish**:
+  - Initialized `controlsVisible = false` so full-screen lyrics starts with bottom controls collapsed by default.
+  - Resolved scroll auto-popup bug by removing `registerInteraction()` triggers from `listState.isScrollInProgress`, ensuring manual reading/scrolling never brings controls up unexpectedly.
+  - Redesigned top header: centered `36.dp` × `4.dp` drag handle pill, `48.dp` × `42.dp` rounded thumbnail, title/artist typography, favorite star toggle, and dynamic context action button (`MoreHoriz` when controls open, `Share` when collapsed).
+  - Stripped out bottom black gradient vignette scrim overlay, allowing dynamic artwork palette to flow cleanly to the bottom display edge.
+  - Replaced large centered "Jump to current" pill with a compact `36.dp` circular white button (`ArrowDownward`, `Color.White.copy(alpha = 0.16f)`) anchored at `Alignment.BottomStart`.
+  - Preserved word-by-word karaoke sweep engine, `Inter` typography, and timing sync 100% untouched.
+- **`NowPlayingView.kt` Hardware Volume Sync & 16:9 Video Refinements**:
+  - Integrated real Android `AudioManager.STREAM_MUSIC` volume slider in `MainActivity.kt` with touch/drag seeking and real-time `"android.media.VOLUME_CHANGED_ACTION"` broadcast listener.
+  - Wrapped 480p stream quality badge and fullscreen expand buttons in `if (isMusicVideo)` so they display exclusively during music video playback.
+- **YouTube Music Discovery & Account Personalization**:
+  - Multi-shelf home layout (Top Picks, Recents, Find Your Mood with duotone filters, Albums & Singles, 16:9 Music Videos, Trending).
+  - Authentic Google/YouTube avatar thumbnail and handle hydration in `HomeProfileSheet` with encrypted `SecureSessionStore` persistence.
+
+---
+
 ### [2026-11-11] - Milestone v2.5: Phase 3 Motion System, Fluid Spring Physics & Zero-Allocation Transitions
 - **Centralized Motion Tokens & Dynamic Spring Resolvers (`REQ-MOT-01`)**:
   - Centralized physics constants into `:core-ui` `MotionTokens.kt`: `Snappy` (damping 0.75, stiffness 600), `Smooth` (0.82, 380), `Bouncy` (0.65, 420), `Gentle` (0.90, 220), `ConvxPuck` (0.82, 380), `DragTracking` (0.95, 900), and `Instant` (1.0, 50000).

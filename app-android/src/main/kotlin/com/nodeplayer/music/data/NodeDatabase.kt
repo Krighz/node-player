@@ -41,6 +41,9 @@ interface PlayerDao {
     @Query("DELETE FROM tracks")
     suspend fun clearTracks()
 
+    @Query("DELETE FROM tracks WHERE id = :id")
+    suspend fun deleteTrackById(id: Long)
+
     @Query("UPDATE tracks SET playCount = playCount + 1 WHERE id = :id")
     suspend fun incrementPlayCount(id: Long)
 

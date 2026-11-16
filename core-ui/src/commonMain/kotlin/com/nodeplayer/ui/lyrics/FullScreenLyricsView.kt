@@ -12,9 +12,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,20 +35,23 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
+import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.ChatBubble
 import androidx.compose.material.icons.rounded.MoreHoriz
-import androidx.compose.material.icons.rounded.Navigation
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material.icons.rounded.Star
+import androidx.compose.material.icons.rounded.StarBorder
+import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -68,10 +71,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,9 +86,9 @@ import com.nodeplayer.model.AlbumArtPalette
 import com.nodeplayer.model.Lyrics
 import com.nodeplayer.model.LyricsLine
 import com.nodeplayer.model.Track
-import com.nodeplayer.ui.components.PlatformArtworkProvider
 import com.nodeplayer.ui.components.GlassControlSurface
 import com.nodeplayer.ui.components.LiquidButton
+import com.nodeplayer.ui.components.PlatformArtworkProvider
 import com.nodeplayer.ui.player.NowPlayingTimeline
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.PaletteExtractor
@@ -115,9 +120,9 @@ fun findActiveLyricIndex(lines: List<LyricsLine>, positionMs: Long): Int {
  * Full-screen synchronized lyrics view (State 2 & State 3).
  *
  * Conforms to LYR-01..LYR-06 and ARCH-01..ARCH-04:
- * - Slowly drifting radial ambient gradients from album art palette (LYR-01).
+ * - Slowly drifting radial ambient gradients from the whole album art palette (LYR-01).
  * - Header: thumbnail, title, artist, top drag handle, and three-dots button.
- * - Active line word-by-word sweep fill with soft edge glow (LYR-02, LYR-03).
+ * - Active line word-by-word sweep fill with soft edge glow and per-word bounce (LYR-02, LYR-03).
  * - Instrumental gap indicator with 3 softly pulsing rhythmic dots (LYR-04).
  * - Smooth auto-scroll with manual drag pause and "Jump to current" button (LYR-05).
  * - Tap to seek on any line (LYR-05).
@@ -134,6 +139,7 @@ fun FullScreenLyricsView(
     isLoading: Boolean = false,
     isOnlineMode: Boolean = true,
     audioOutputName: String = "This phone",
+    palette: AlbumArtPalette? = null,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -147,6 +153,7 @@ fun FullScreenLyricsView(
     onOpenOffsetControls: () -> Unit = {},
     lyricsConfig: com.nodeplayer.model.LyricsViewConfig = com.nodeplayer.model.LyricsViewConfig(),
     onKeepScreenOn: (Boolean) -> Unit = {},
+    hoistedDominantColor: Color? = null,
     modifier: Modifier = Modifier,
     positionProvider: () -> Long = { currentPositionMs }
 ) {
@@ -163,43 +170,60 @@ fun FullScreenLyricsView(
         }
     }
 
-    // Dynamic palette resolution
-    // Same fix as Now Playing: a plain remember{} reads the cache once and never updates, so if the
-    // palette wasn't cached yet the backdrop stayed on DEFAULT_OBSIDIAN for the whole song.
-    val cachedPalette by produceState<AlbumArtPalette?>(
-        initialValue = PaletteExtractor.getCachedPalette(track),
+    // Load album artwork once so both the palette extractor and header thumbnail share it
+    val coverBitmap by produceState<ImageBitmap?>(
+        initialValue = null,
         track?.id,
         track?.path
     ) {
-        val current = track
-        value = if (current == null) null else PaletteExtractor.getCachedPalette(current) ?: run {
-            PlatformArtworkProvider.extractVibrantColor(current)?.let { color ->
+        value = track?.let { PlatformArtworkProvider.loadArtwork(it) }
+    }
+
+    // Dynamic multi-swatch palette resolution directly from the album artwork bitmap
+    val cachedPalette by produceState<AlbumArtPalette?>(
+        initialValue = palette ?: PaletteExtractor.getCachedPalette(track),
+        track?.id,
+        track?.path,
+        coverBitmap,
+        palette
+    ) {
+        val existing = palette ?: PaletteExtractor.getCachedPalette(track)
+        value = if (existing != null && !existing.isFallback) {
+            existing
+        } else {
+            coverBitmap?.let { bmp ->
+                PaletteExtractor.extractFromBitmap(bmp).also { extracted ->
+                    track?.let { PaletteExtractor.cachePalette(it, extracted) }
+                }
+            } ?: existing ?: track?.let { PlatformArtworkProvider.extractVibrantColor(it) }?.let { color ->
                 PaletteExtractor.derivePaletteFromBaseColor(color).also { derived ->
-                    PaletteExtractor.cachePalette(current, derived)
+                    PaletteExtractor.cachePalette(track, derived)
                 }
             }
         }
     }
-    val palette = cachedPalette ?: AlbumArtPalette.DEFAULT_OBSIDIAN
-    val accentTint = remember(palette, defaultAccent) {
-        PaletteExtractor.ensureContrastAgainstDark(Color(palette.accent), Color(palette.darkMuted))
+    val effectivePalette = cachedPalette ?: palette ?: AlbumArtPalette.DEFAULT_OBSIDIAN
+    val accentTint = remember(effectivePalette, defaultAccent) {
+        PaletteExtractor.ensureContrastAgainstDark(Color(effectivePalette.accent), Color(effectivePalette.darkMuted))
     }
 
     var userScrolledManually by remember { mutableStateOf(false) }
-    var lastInteractionTime by remember { mutableStateOf(0L) }
-    var showControls by remember { mutableStateOf(true) }
+    var controlsVisible by remember { mutableStateOf(false) }
+    var interactionTick by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    var isFavorite by remember(track?.id) { mutableStateOf(track?.isFavorite ?: false) }
 
-    // Inactivity auto-hide timer for controls (State 2 -> State 3)
-    LaunchedEffect(showControls, lastInteractionTime, lyricsConfig.autoHideDelaySec) {
-        if (showControls && lyricsConfig.autoHideDelaySec > 0) {
-            delay(lyricsConfig.autoHideDelaySec * 1000L)
-            showControls = false
+    fun registerInteraction() {
+        if (controlsVisible) {
+            interactionTick++
         }
     }
 
-    fun registerInteraction() {
-        showControls = true
-        lastInteractionTime = System.currentTimeMillis()
+    // Auto-collapse playback controls after 3.5 seconds when playing
+    LaunchedEffect(isPlaying, controlsVisible, interactionTick) {
+        if (isPlaying && controlsVisible) {
+            delay(3500L)
+            controlsVisible = false
+        }
     }
 
     // Active line detection — O(log N) binary search via derivedStateOf reading currentPositionProvider
@@ -211,35 +235,27 @@ fun FullScreenLyricsView(
         }
     }
 
-    // Auto-scroll logic: spring smooth scroll to keep active lyric in upper third
-    LaunchedEffect(activeIndex, userScrolledManually) {
-        if (!userScrolledManually && activeIndex >= 0 && activeIndex < lines.size) {
+    // Auto-scroll logic: spring smooth scroll only when !listState.isScrollInProgress so it never fights user touch
+    LaunchedEffect(activeIndex) {
+        if (!userScrolledManually && !listState.isScrollInProgress && activeIndex >= 0 && activeIndex < lines.size) {
             val targetScrollIndex = (activeIndex - 1).coerceAtLeast(0)
             listState.animateScrollToItem(targetScrollIndex)
         }
     }
 
     // Auto-resume auto-scroll after 6s of manual scroll inactivity
-    LaunchedEffect(userScrolledManually, lastInteractionTime) {
+    LaunchedEffect(userScrolledManually) {
         if (userScrolledManually) {
             delay(6000L)
             userScrolledManually = false
         }
     }
 
-    // Monitor list scrolling: restore controls when at top or when scrolling back to active line (COL-04)
-    LaunchedEffect(listState, activeIndex) {
-        snapshotFlow {
-            listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
-        }.collect { (firstIndex, offset) ->
-            if (firstIndex == 0 && offset == 0) {
-                showControls = true
-                lastInteractionTime = System.currentTimeMillis()
-            } else if (activeIndex >= 0 && (firstIndex == activeIndex || firstIndex == (activeIndex - 1).coerceAtLeast(0))) {
-                if (!showControls && userScrolledManually) {
-                    showControls = true
-                    lastInteractionTime = System.currentTimeMillis()
-                }
+    // Monitor list scrolling: pause auto-scroll during manual drag (NEVER brings controls back up)
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { inProgress ->
+            if (inProgress) {
+                userScrolledManually = true
             }
         }
     }
@@ -247,19 +263,20 @@ fun FullScreenLyricsView(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .background(Color(effectivePalette.darkMuted).copy(alpha = 1f))
             .pointerInput(Unit) {
                 detectTapGestures {
-                    // Tap on screen toggles / restores controls
-                    showControls = !showControls
-                    if (showControls) {
-                        lastInteractionTime = System.currentTimeMillis()
+                    // Tapping anywhere on the lyrics view toggles controls
+                    controlsVisible = !controlsVisible
+                    if (controlsVisible) {
+                        interactionTick++
                     }
                 }
             }
     ) {
-        // 1. Single Backdrop Layer: Ambient Drifting Gradient
-        AmbientLyricsBackdrop(
-            palette = palette,
+        // 1. Single Backdrop Layer: 100% Opaque Ambient Drifting Album Art Palette Gradient
+        LyricsPaletteBackdrop(
+            palette = effectivePalette,
             modifier = Modifier.fillMaxSize()
         )
 
@@ -275,7 +292,8 @@ fun FullScreenLyricsView(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 10.dp, bottom = 4.dp),
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, bottom = 4.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     // Drag pill handle
@@ -283,103 +301,114 @@ fun FullScreenLyricsView(
                         modifier = Modifier
                             .width(36.dp)
                             .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color.White.copy(alpha = 0.40f))
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.35f))
                             .clickable { onClose() }
                     )
 
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier
                             .widthIn(max = columnWidth)
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                        // Left: Rounded album/video thumbnail (48.dp x 42.dp, RoundedCornerShape(10.dp))
+                        Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .padding(end = 12.dp)
+                                .size(width = 48.dp, height = 42.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color.White.copy(alpha = 0.12f)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            // Rounded album thumbnail
-                            var coverBitmap by remember(track) { mutableStateOf<ImageBitmap?>(null) }
-                            LaunchedEffect(track) {
-                                if (track != null) {
-                                    coverBitmap = PlatformArtworkProvider.loadArtwork(track)
-                                }
-                            }
-
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.White.copy(alpha = 0.08f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                val bmp = coverBitmap
-                                if (bmp != null) {
-                                    Image(
-                                        bitmap = bmp,
-                                        contentDescription = "Cover",
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = track?.title ?: "No track playing",
-                                    fontSize = 17.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                            val bmp = coverBitmap
+                            if (bmp != null) {
+                                Image(
+                                    bitmap = bmp,
+                                    contentDescription = "Cover",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
                                 )
-                                Text(
-                                    text = track?.artist ?: "",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Normal,
-                                    color = Color.White.copy(alpha = 0.65f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Rounded.MusicNote,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.60f),
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
 
-                        // Round translucent action button (Three-dots in State 2, Share in State 3 - COL-03)
-                        Box(
+                        // Center: Song title above artist name
+                        Column(
                             modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(Color.White.copy(alpha = 0.14f))
-                                .clickable {
-                                    registerInteraction()
-                                    if (showControls) {
-                                        onOpenMenu()
-                                    } else {
-                                        onShare()
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
+                                .weight(1f)
+                                .padding(horizontal = 12.dp)
                         ) {
-                            AnimatedContent(
-                                targetState = showControls,
-                                transitionSpec = {
-                                    fadeIn(spring(stiffness = 400f)) togetherWith fadeOut(spring(stiffness = 400f))
-                                },
-                                label = "HeaderActionTransition"
-                            ) { isState2 ->
+                            Text(
+                                text = track?.title ?: "No track playing",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = track?.artist ?: "",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = Color.White.copy(alpha = 0.65f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        // Right: Two circular translucent icon buttons (38.dp, CircleShape, Color.White.copy(alpha = 0.12f))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Favorite Star button
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.12f))
+                                    .clickable {
+                                        isFavorite = !isFavorite
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Icon(
-                                    imageVector = if (isState2) Icons.Rounded.MoreHoriz else Icons.Rounded.Share,
-                                    contentDescription = if (isState2) "More Options" else "Share Lyrics",
+                                    imageVector = if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                    contentDescription = "Favorite",
+                                    tint = if (isFavorite) Color(0xFFFBBF24) else Color.White,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                            }
+
+                            // More Options (controlsVisible == true) or Share (controlsVisible == false)
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.12f))
+                                    .clickable {
+                                        if (controlsVisible) {
+                                            onOpenMenu()
+                                        } else {
+                                            onShare()
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (controlsVisible) Icons.Rounded.MoreHoriz else Icons.Rounded.Share,
+                                    contentDescription = if (controlsVisible) "More Options" else "Share",
                                     tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(19.dp)
                                 )
                             }
                         }
@@ -446,21 +475,6 @@ fun FullScreenLyricsView(
                             }
                         }
                     } else {
-                        // Synced Immersive Lyrics View — fixed contentPadding + lightweight scrim overlay (P03)
-                        val scrimColor = remember(palette.darkMuted) {
-                            Color(palette.darkMuted)
-                        }
-                        val scrimBrush = remember(scrimColor) {
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, scrimColor.copy(alpha = 0.85f))
-                            )
-                        }
-                        val jumpPillOffsetPx by animateFloatAsState(
-                            targetValue = if (showControls) 0f else with(LocalDensity.current) { 94.dp.toPx() },
-                            animationSpec = spring(stiffness = 380f),
-                            label = "JumpPillOffset"
-                        )
-
                         Box(
                             modifier = Modifier
                                 .widthIn(max = columnWidth)
@@ -470,9 +484,10 @@ fun FullScreenLyricsView(
                             LazyColumn(
                                 state = listState,
                                 contentPadding = PaddingValues(
-                                    top = 32.dp,
+                                    top = 28.dp,
                                     bottom = 200.dp
                                 ),
+                                verticalArrangement = Arrangement.spacedBy(20.dp),
                                 modifier = Modifier.fillMaxSize()
                             ) {
                                 itemsIndexed(
@@ -491,7 +506,7 @@ fun FullScreenLyricsView(
                                         },
                                         activeColor = Color.White,
                                         inactiveColor = Color.White.copy(alpha = 0.55f),
-                                        fontSize = lyricsConfig.fontSizeSp.sp
+                                        fontSize = 28.sp
                                     )
 
                                     // Instrumental gap indicator check
@@ -524,64 +539,40 @@ fun FullScreenLyricsView(
                                 }
                             }
 
-                            // Lightweight bottom edge gradient overlay instead of offscreen DstIn layer
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .height(100.dp)
-                                    .background(scrimBrush)
-                            )
-
-                            // Floating "Jump to current" pill
-                            if (userScrolledManually) {
+                            // Small white icon button anchored in bottom-left corner (Task 1.4)
+                            if (userScrolledManually && activeIndex >= 0) {
                                 Box(
                                     modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(bottom = 130.dp)
-                                        .graphicsLayer { translationY = jumpPillOffsetPx }
-                                ) {
-                                    GlassControlSurface(
-                                        modifier = Modifier
-                                            .clip(CircleShape)
-                                            .clickable {
-                                                registerInteraction()
-                                                userScrolledManually = false
-                                                if (activeIndex >= 0 && activeIndex < lines.size) {
-                                                    coroutineScope.launch {
-                                                        listState.animateScrollToItem((activeIndex - 1).coerceAtLeast(0))
-                                                    }
+                                        .align(Alignment.BottomStart)
+                                        .padding(start = 20.dp, bottom = 16.dp)
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(Color.White.copy(alpha = 0.16f))
+                                        .clickable {
+                                            userScrolledManually = false
+                                            if (activeIndex >= 0 && activeIndex < lines.size) {
+                                                coroutineScope.launch {
+                                                    listState.animateScrollToItem((activeIndex - 1).coerceAtLeast(0))
                                                 }
                                             }
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Navigation,
-                                                contentDescription = null,
-                                                tint = accentTint,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = "Jump to current",
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = Color.White
-                                            )
-                                        }
-                                    }
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.ArrowDownward,
+                                        contentDescription = "Jump to current",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
                                 }
                             }
                         }
                     }
                 }
 
-                // Bottom Playback Controls (State 2 visible, auto-collapsing in State 3)
+                // Bottom Playback Controls (Auto-collapses after 3.5s when playing)
                 AnimatedVisibility(
-                    visible = showControls,
+                    visible = controlsVisible,
                     enter = fadeIn(spring(stiffness = 380f)) + slideInVertically(spring(stiffness = 380f)) { it },
                     exit = fadeOut(spring(stiffness = 380f)) + slideOutVertically(spring(stiffness = 380f)) { it }
                 ) {

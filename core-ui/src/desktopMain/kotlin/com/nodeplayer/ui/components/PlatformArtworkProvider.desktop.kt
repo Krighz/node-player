@@ -22,7 +22,7 @@ actual object PlatformArtworkProvider {
     private val decodeSemaphore = Semaphore(4)
 
     private fun decodeSampledDesktopBitmap(bytes: ByteArray, maxSizePx: Int): ImageBitmap? {
-        val targetPx = maxSizePx.coerceIn(96, 512)
+        val targetPx = maxSizePx.coerceIn(96, 2048)
         val skiaImage = Image.makeFromEncoded(bytes)
         val srcW = skiaImage.width
         val srcH = skiaImage.height
@@ -56,7 +56,7 @@ actual object PlatformArtworkProvider {
 
     actual suspend fun loadArtwork(url: String, maxSizePx: Int): ImageBitmap? {
         if (url.isBlank()) return null
-        val targetPx = maxSizePx.coerceIn(96, 512)
+        val targetPx = maxSizePx.coerceIn(96, 2048)
         val cachedBytes = ArtworkCache.getBytes(url)
         if (cachedBytes != null && cachedBytes.isNotEmpty()) {
             return decodeSemaphore.withPermit {

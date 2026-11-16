@@ -247,6 +247,61 @@ fun main() = application {
     val currentLrc by engine.currentLrc.collectAsState()
     val isExclusiveMode by engine.isExclusiveMode.collectAsState()
 
+    val discordTransport = remember {
+        com.nodeplayer.desktop.discord.DiscordIpcTransport(
+            clientIdProvider = { settingsStore.getString(com.nodeplayer.network.discord.PresenceController.KEY_APP_ID, "") }
+        )
+    }
+    val presenceController = remember {
+        com.nodeplayer.network.discord.PresenceController(
+            transport = discordTransport,
+            store = settingsStore,
+            scope = coroutineScope
+        )
+    }
+    val discordStatus by presenceController.status.collectAsState()
+    val discordIncognito by presenceController.isIncognito.collectAsState()
+    var discordEnabled by remember { mutableStateOf(settingsStore.getBoolean(com.nodeplayer.network.discord.PresenceController.KEY_ENABLED, false)) }
+    var discordShowCover by remember { mutableStateOf(settingsStore.getBoolean(com.nodeplayer.network.discord.PresenceController.KEY_SHOW_COVER, true)) }
+    var isDesktopVideoActive by remember { mutableStateOf(false) }
+    var discordShowAlbum by remember { mutableStateOf(settingsStore.getBoolean(com.nodeplayer.network.discord.PresenceController.KEY_SHOW_ALBUM, true)) }
+    var discordShowWhilePaused by remember { mutableStateOf(settingsStore.getBoolean(com.nodeplayer.network.discord.PresenceController.KEY_SHOW_WHILE_PAUSED, false)) }
+    var discordAppId by remember { mutableStateOf(settingsStore.getString(com.nodeplayer.network.discord.PresenceController.KEY_APP_ID, "")) }
+
+    val desktopTranscoder = remember {
+        com.nodeplayer.desktop.converter.DesktopFFmpegTranscoder(
+            ffmpegPathProvider = { settingsStore.getString("convert_ffmpeg_path", "") }
+        )
+    }
+    val transcodeQueueManager = remember {
+        com.nodeplayer.library.converter.TranscodeQueueManager(
+            transcoder = desktopTranscoder,
+            externalScope = coroutineScope
+        )
+    }
+
+    LaunchedEffect(currentTrack, isPlaying, positionMs, durationMs) {
+        val track = currentTrack
+        if (track != null) {
+            val presenceState = com.nodeplayer.model.presence.PresenceState(
+                title = track.title,
+                artist = track.artist,
+                album = track.album,
+                coverUrl = if (track.path.startsWith("http")) track.path else null,
+                durationMs = durationMs,
+                positionMs = positionMs,
+                isPlaying = isPlaying
+            )
+            presenceController.updatePlayback(presenceState)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            presenceController.close()
+        }
+    }
+
     fun refreshLibrary() {
         coroutineScope.launch(Dispatchers.IO) {
             val loaded = database.getAllTracks()
@@ -385,6 +440,19 @@ fun main() = application {
                 queue = queue,
                 currentQueueIndex = currentQueueIndex,
                 lrcContent = currentLrc,
+                videoContent = { mod ->
+                    com.nodeplayer.desktop.video.DesktopVideoSurface(
+                        streamUrl = currentTrack?.path,
+                        isPlaying = isPlaying,
+                        positionMs = positionMs,
+                        modifier = mod
+                    )
+                },
+                isVideoActive = isDesktopVideoActive,
+                isVideoAvailable = currentTrack?.path?.contains("video", ignoreCase = true) == true ||
+                    currentTrack?.path?.startsWith("nodeplayer://youtube/") == true ||
+                    currentTrack?.path?.startsWith("http") == true,
+                onToggleVideo = { isDesktopVideoActive = it },
                 audioEffectConfig = audioEffectConfig,
                 themeConfig = themeConfig,
                 audioOutputInfo = AudioOutputInfo(
@@ -395,6 +463,39 @@ fun main() = application {
                     format = "WASAPI 32-bit Float"
                 ),
                 isExclusiveMode = isExclusiveMode,
+                showDiscordSettings = true,
+                discordStatus = discordStatus,
+                discordEnabled = discordEnabled,
+                onToggleDiscordEnabled = { enabled ->
+                    discordEnabled = enabled
+                    settingsStore.putBoolean(com.nodeplayer.network.discord.PresenceController.KEY_ENABLED, enabled)
+                    presenceController.refreshState()
+                },
+                discordIncognito = discordIncognito,
+                onToggleDiscordIncognito = { incognito ->
+                    presenceController.setIncognito(incognito)
+                },
+                discordShowCover = discordShowCover,
+                onToggleDiscordShowCover = { sc ->
+                    discordShowCover = sc
+                    settingsStore.putBoolean(com.nodeplayer.network.discord.PresenceController.KEY_SHOW_COVER, sc)
+                },
+                discordShowAlbum = discordShowAlbum,
+                onToggleDiscordShowAlbum = { sa ->
+                    discordShowAlbum = sa
+                    settingsStore.putBoolean(com.nodeplayer.network.discord.PresenceController.KEY_SHOW_ALBUM, sa)
+                },
+                discordShowWhilePaused = discordShowWhilePaused,
+                onToggleDiscordShowWhilePaused = { sp ->
+                    discordShowWhilePaused = sp
+                    settingsStore.putBoolean(com.nodeplayer.network.discord.PresenceController.KEY_SHOW_WHILE_PAUSED, sp)
+                },
+                discordAppId = discordAppId,
+                onDiscordAppIdChange = { id ->
+                    discordAppId = id
+                    settingsStore.putString(com.nodeplayer.network.discord.PresenceController.KEY_APP_ID, id)
+                    presenceController.refreshState()
+                },
                 nodeConnectEnabled = isNodeConnectOn,
                 connectedDeviceCount = connectedDeviceCount,
                 onToggleNodeConnect = { enabled ->
@@ -505,7 +606,8 @@ fun main() = application {
                     }
                 },
                 sleepTimerRemainingSec = engine.sleepTimerRemainingSeconds.collectAsState().value,
-                onSetSleepTimer = { engine.setSleepTimer(it) }
+                onSetSleepTimer = { engine.setSleepTimer(it) },
+                transcodeQueueManager = transcodeQueueManager
             )
 
             var pendingAllowPrompt by remember { mutableStateOf<Pair<String, (Boolean, Boolean) -> Unit>?>(null) }

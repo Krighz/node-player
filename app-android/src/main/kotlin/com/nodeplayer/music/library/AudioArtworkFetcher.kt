@@ -39,15 +39,32 @@ class AudioArtworkFetcher(
         // Online tracks have no MediaStore album ID. Use Coil's shared HTTP/disk cache.
         if (path.startsWith("nodeplayer://youtube/")) {
             val videoId = path.removePrefix("nodeplayer://youtube/").substringBefore('?').substringBefore('/')
-            val request = coil.request.ImageRequest.Builder(context)
-                .data("https://i.ytimg.com/vi/$videoId/hqdefault.jpg")
-                .size(targetW, targetH)
-                .allowHardware(false)
-                .build()
-            val result = coil.Coil.imageLoader(context).execute(request)
-            return (result as? coil.request.SuccessResult)?.let {
-                DrawableResult(it.drawable, isSampled = true, dataSource = it.dataSource)
+            val variants = listOf(
+                "https://i.ytimg.com/vi/$videoId/maxresdefault.jpg",
+                "https://i.ytimg.com/vi/$videoId/hq720.jpg",
+                "https://i.ytimg.com/vi/$videoId/sddefault.jpg",
+                "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+            )
+            for (url in variants) {
+                val request = coil.request.ImageRequest.Builder(context)
+                    .data(url)
+                    .size(targetW, targetH)
+                    .allowHardware(false)
+                    .build()
+                val result = coil.Coil.imageLoader(context).execute(request)
+                if (result is coil.request.SuccessResult) {
+                    val rawBmp = (result.drawable as? BitmapDrawable)?.bitmap
+                        ?: (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                        ?: drawableToBitmap(result.drawable)
+                    val cropped = cropYouTubeLetterbox(rawBmp)
+                    return DrawableResult(
+                        drawable = BitmapDrawable(context.resources, cropped),
+                        isSampled = true,
+                        dataSource = result.dataSource
+                    )
+                }
             }
+            return null
         }
 
         // 0. Check in-memory byte cache for Node Connect virtual streams/tracks
@@ -137,6 +154,29 @@ class AudioArtworkFetcher(
         return null
     }
 
+    private fun cropYouTubeLetterbox(bitmap: Bitmap): Bitmap {
+        val aspect = bitmap.width.toFloat() / bitmap.height.toFloat()
+        if (aspect in 1.30f..1.36f) {
+            val trimPx = (bitmap.height * 0.125f).toInt()
+            val activeHeight = (bitmap.height * 0.75f).toInt()
+            if (trimPx > 0 && activeHeight > 0 && trimPx + activeHeight <= bitmap.height) {
+                return Bitmap.createBitmap(bitmap, 0, trimPx, bitmap.width, activeHeight)
+            }
+        }
+        return bitmap
+    }
+
+    private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable): Bitmap {
+        if (drawable is BitmapDrawable && drawable.bitmap != null) return drawable.bitmap
+        val width = drawable.intrinsicWidth.coerceAtLeast(1)
+        val height = drawable.intrinsicHeight.coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return bitmap
+    }
+
     private fun decodeSampledDrawable(bytes: ByteArray, maxDim: Int): BitmapDrawable? {
         val boundsOpts = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
@@ -146,10 +186,11 @@ class AudioArtworkFetcher(
         val sampleSize = computeBitmapSampleSize(boundsOpts.outWidth, boundsOpts.outHeight, maxDim)
         val decodeOpts = BitmapFactory.Options().apply {
             inSampleSize = sampleSize
-            inPreferredConfig = Bitmap.Config.RGB_565
+            inPreferredConfig = if (maxDim >= 512) Bitmap.Config.ARGB_8888 else Bitmap.Config.RGB_565
         }
         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts) ?: return null
-        return BitmapDrawable(context.resources, bitmap)
+        val cropped = cropYouTubeLetterbox(bitmap)
+        return BitmapDrawable(context.resources, cropped)
     }
 
     class FileFactory : Fetcher.Factory<File> {
@@ -171,7 +212,7 @@ class AudioArtworkFetcher(
     companion object {
         const val DEFAULT_TARGET_SIZE_PX = 256
         const val MIN_TARGET_SIZE_PX = 96
-        const val MAX_TARGET_SIZE_PX = 512
+        const val MAX_TARGET_SIZE_PX = 1440
 
         val AUDIO_EXTENSIONS = setOf("flac", "mp3", "m4a", "aac", "ogg", "opus", "wav", "alac", "aiff", "wma")
 

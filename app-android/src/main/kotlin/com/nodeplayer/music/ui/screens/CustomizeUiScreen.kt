@@ -1,23 +1,24 @@
 package com.nodeplayer.music.ui.screens
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.*
@@ -28,9 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,7 +44,6 @@ import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.ui.components.LiquidChip
 import com.nodeplayer.ui.components.LiquidSlider
 import com.nodeplayer.ui.components.LiquidToggle
-import java.io.File
 import kotlin.math.roundToInt
 
 @Composable
@@ -70,7 +68,7 @@ fun CustomizeUiScreen(
                     val json = stream.bufferedReader().readText()
                     val loaded = NodeThemeSerializer.fromJson(json)
                     if (loaded != null) {
-                        onThemeConfigChange(loaded)
+                        onThemeConfigChange(loaded.copy(glassTexture = 0.0f, noiseGrainAlpha = 0.0f))
                         Toast.makeText(context, "Theme imported successfully", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(context, "Invalid theme file", Toast.LENGTH_LONG).show()
@@ -125,8 +123,7 @@ fun CustomizeUiScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         GlassCard(
-            modifier = Modifier.fillMaxWidth(),
-            
+            modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
 
@@ -164,11 +161,9 @@ fun CustomizeUiScreen(
                                 shape = previewShape,
                                 enabled = themeConfig.isShaderActive(true),
                                 refractionIndex = 0.85f * (themeConfig.lensRefractionStrength / 0.85f),
-                                chromaticFringe = themeConfig.chromaticFringeValue(),
-                                grainStrength = themeConfig.grainStrengthValue()
+                                chromaticFringe = themeConfig.chromaticFringeValue()
                             )
                             .glassSurface(
-                                
                                 shape = previewShape,
                                 tintAlpha = themeConfig.effectiveTintAlpha
                             )
@@ -211,7 +206,7 @@ fun CustomizeUiScreen(
                             }
                         }
 
-                        // Mini Dock Preview
+                        // Symmetrical Mini Dock Preview
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -224,43 +219,39 @@ fun CustomizeUiScreen(
                                     .height(38.dp)
                                     .clip(RoundedCornerShape(19.dp))
                                     .background(Color.White.copy(alpha = 0.15f))
-                                    .padding(horizontal = 6.dp),
+                                    .padding(horizontal = 4.dp),
                                 contentAlignment = Alignment.CenterStart
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .width(54.dp)
-                                        .height(28.dp)
+                                        .size(30.dp)
                                         .glassLensBubble(
-                                            shape = RoundedCornerShape(14.dp),
+                                            shape = CircleShape,
                                             enabled = themeConfig.isShaderActive(true),
                                             magnification = 0.22f,
                                             refractionIndex = 0.65f * (themeConfig.lensRefractionStrength / 0.85f),
                                             chromaticFringe = themeConfig.chromaticFringeValue(),
                                             rimStrength = themeConfig.lensRimSpecular,
-                                            rimColor = Color.White.copy(alpha = 0.90f * themeConfig.lensRimSpecular),
-                                            grainStrength = themeConfig.grainStrengthValue()
+                                            rimColor = Color.White.copy(alpha = 0.90f * themeConfig.lensRimSpecular)
                                         )
                                         .background(
                                             Brush.verticalGradient(
                                                 listOf(
-                                                    Color.White.copy(alpha = 0.15f * themeConfig.lensRimSpecular),
-                                                    Color.White.copy(alpha = 0.02f),
-                                                    Color.White.copy(alpha = 0.08f * themeConfig.lensRimSpecular)
+                                                    Color.White.copy(alpha = 0.18f * themeConfig.lensRimSpecular),
+                                                    Color.White.copy(alpha = 0.04f)
                                                 )
                                             ),
-                                            shape = RoundedCornerShape(14.dp)
+                                            shape = CircleShape
                                         )
                                         .border(
                                             width = 1.dp,
                                             brush = Brush.verticalGradient(
                                                 listOf(
                                                     Color.White.copy(alpha = 0.85f * themeConfig.lensRimSpecular),
-                                                    Color(0xFFBAE6FD).copy(alpha = 0.35f * themeConfig.lensRimSpecular),
-                                                    Color.White.copy(alpha = 0.40f * themeConfig.lensRimSpecular)
+                                                    Color.White.copy(alpha = 0.25f * themeConfig.lensRimSpecular)
                                                 )
                                             ),
-                                            shape = RoundedCornerShape(14.dp)
+                                            shape = CircleShape
                                         )
                                 )
                                 Row(
@@ -269,9 +260,9 @@ fun CustomizeUiScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Icon(Icons.Rounded.Home, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Rounded.Explore, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
                                     Icon(Icons.Rounded.LibraryMusic, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-                                    Icon(Icons.Rounded.GraphicEq, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-                                    Icon(Icons.Rounded.Settings, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                                    Icon(Icons.Rounded.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
                                 }
                             }
 
@@ -292,7 +283,7 @@ fun CustomizeUiScreen(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // 2. Presets (Obsidian Liquid, Frost Pearl, Amber Flare, Neon Aurora, Stealth OLED, Minimal Glass)
+                // 2. Presets
                 Text(
                     text = "THEME PRESETS",
                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = accent, letterSpacing = 1.sp)
@@ -314,7 +305,7 @@ fun CustomizeUiScreen(
                     )
                     presets.forEach { (name, presetConfig) ->
                         OutlinedButton(
-                            onClick = { onThemeConfigChange(presetConfig) },
+                            onClick = { onThemeConfigChange(presetConfig.copy(glassTexture = 0.0f, noiseGrainAlpha = 0.0f)) },
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = Color.White,
                                 containerColor = Color.White.copy(alpha = 0.05f)
@@ -352,13 +343,7 @@ fun CustomizeUiScreen(
                         LiquidChip(
                             selected = themeConfig.themeMode == mode,
                             onClick = { onThemeConfigChange(themeConfig.copy(themeMode = mode, isOledBlack = mode == "OLED")) },
-                            label = { Text(label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accent.copy(alpha = 0.35f),
-                                selectedLabelColor = Color.White,
-                                containerColor = Color.White.copy(alpha = 0.06f),
-                                labelColor = Color.White.copy(alpha = 0.75f)
-                            )
+                            label = { Text(label, fontSize = 12.sp) }
                         )
                     }
                 }
@@ -374,31 +359,30 @@ fun CustomizeUiScreen(
                         LiquidChip(
                             selected = themeConfig.accentSource == src,
                             onClick = { onThemeConfigChange(themeConfig.copy(accentSource = src, useDynamicAccent = src == "ARTWORK")) },
-                            label = { Text(label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accent.copy(alpha = 0.35f),
-                                selectedLabelColor = Color.White,
-                                containerColor = Color.White.copy(alpha = 0.06f),
-                                labelColor = Color.White.copy(alpha = 0.75f)
-                            )
+                            label = { Text(label, fontSize = 12.sp) }
                         )
                     }
                 }
 
-                if (themeConfig.accentSource == "PRESET") {
-                    Spacer(modifier = Modifier.height(10.dp))
-                    val swatches = listOf(
-                        0xFF6366F1 to "Indigo",
-                        0xFF06B6D4 to "Cyan",
-                        0xFF10B981 to "Emerald",
-                        0xFFF59E0B to "Amber",
-                        0xFFF43F5E to "Rose",
-                        0xFF8B5CF6 to "Violet"
-                    )
+                AnimatedVisibility(
+                    visible = themeConfig.accentSource == "PRESET",
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
+                        val swatches = listOf(
+                            0xFF6366F1 to "Indigo",
+                            0xFF06B6D4 to "Cyan",
+                            0xFF10B981 to "Emerald",
+                            0xFFF59E0B to "Amber",
+                            0xFFF43F5E to "Rose",
+                            0xFF8B5CF6 to "Violet"
+                        )
                         swatches.forEach { (argb, _) ->
                             val isSel = themeConfig.fixedAccentColorArgb == argb
                             Box(
@@ -418,7 +402,7 @@ fun CustomizeUiScreen(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 
-                // 4. Glass Appearance Sliders
+                // 4. Glass Appearance Sliders (Grain Slider Completely Removed)
                 Text("GLASS APPEARANCE", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = accent, letterSpacing = 1.sp))
                 Spacer(modifier = Modifier.height(6.dp))
 
@@ -430,8 +414,7 @@ fun CustomizeUiScreen(
                 LiquidSlider(
                     value = themeConfig.glassOpacity,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(glassOpacity = it, isFullyTransparent = false)) },
-                    valueRange = 0f..1f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0f..1f
                 )
 
                 // Blur Strength
@@ -442,20 +425,7 @@ fun CustomizeUiScreen(
                 LiquidSlider(
                     value = themeConfig.blurStrength,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(blurStrength = it)) },
-                    valueRange = 0f..1f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
-                )
-
-                // Glass Texture
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Glass Texture (Grain)", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
-                    Text("${(themeConfig.glassTexture * 100).roundToInt()}%", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
-                }
-                LiquidSlider(
-                    value = themeConfig.glassTexture,
-                    onValueChange = { onThemeConfigChange(themeConfig.copy(glassTexture = it)) },
-                    valueRange = 0f..1f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0f..1f
                 )
 
                 // Rim Highlight
@@ -466,8 +436,7 @@ fun CustomizeUiScreen(
                 LiquidSlider(
                     value = themeConfig.edgeHighlightStrength,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(edgeHighlightStrength = it)) },
-                    valueRange = 0f..1f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0f..1f
                 )
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -478,8 +447,7 @@ fun CustomizeUiScreen(
                     }
                     LiquidToggle(
                         checked = themeConfig.isFullyTransparent,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isFullyTransparent = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(isFullyTransparent = it)) }
                     )
                 }
 
@@ -491,8 +459,7 @@ fun CustomizeUiScreen(
                     }
                     LiquidToggle(
                         checked = themeConfig.keepTextReadable,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(keepTextReadable = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(keepTextReadable = it)) }
                     )
                 }
 
@@ -509,8 +476,7 @@ fun CustomizeUiScreen(
                 LiquidSlider(
                     value = themeConfig.lensRefractionStrength,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(lensRefractionStrength = it)) },
-                    valueRange = 0.20f..1.50f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0.20f..1.50f
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -521,8 +487,7 @@ fun CustomizeUiScreen(
                 LiquidSlider(
                     value = themeConfig.lensRimSpecular,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(lensRimSpecular = it)) },
-                    valueRange = 0f..1f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0f..1f
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
@@ -551,13 +516,7 @@ fun CustomizeUiScreen(
                         LiquidChip(
                             selected = themeConfig.backgroundAnimationStyle == styleKey,
                             onClick = { onThemeConfigChange(themeConfig.copy(backgroundAnimationStyle = styleKey)) },
-                            label = { Text(styleName, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accent.copy(alpha = 0.35f),
-                                selectedLabelColor = Color.White,
-                                containerColor = Color.White.copy(alpha = 0.06f),
-                                labelColor = Color.White.copy(alpha = 0.75f)
-                            )
+                            label = { Text(styleName, fontSize = 12.sp) }
                         )
                     }
                 }
@@ -570,8 +529,7 @@ fun CustomizeUiScreen(
                 LiquidSlider(
                     value = themeConfig.backgroundAnimationSpeed,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(backgroundAnimationSpeed = it)) },
-                    valueRange = 0.2f..3.0f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0.2f..3.0f
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -582,8 +540,7 @@ fun CustomizeUiScreen(
                 LiquidSlider(
                     value = themeConfig.backgroundAnimationIntensity,
                     onValueChange = { onThemeConfigChange(themeConfig.copy(backgroundAnimationIntensity = it)) },
-                    valueRange = 0.1f..1.0f,
-                    colors = SliderDefaults.colors(thumbColor = accent, activeTrackColor = accent)
+                    valueRange = 0.1f..1.0f
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -597,13 +554,7 @@ fun CustomizeUiScreen(
                         LiquidChip(
                             selected = themeConfig.backgroundColorSource == src,
                             onClick = { onThemeConfigChange(themeConfig.copy(backgroundColorSource = src)) },
-                            label = { Text(label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accent.copy(alpha = 0.35f),
-                                selectedLabelColor = Color.White,
-                                containerColor = Color.White.copy(alpha = 0.06f),
-                                labelColor = Color.White.copy(alpha = 0.75f)
-                            )
+                            label = { Text(label, fontSize = 12.sp) }
                         )
                     }
                 }
@@ -616,8 +567,7 @@ fun CustomizeUiScreen(
                     }
                     LiquidToggle(
                         checked = themeConfig.animateOnlyWhilePlaying,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(animateOnlyWhilePlaying = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(animateOnlyWhilePlaying = it)) }
                     )
                 }
 
@@ -640,13 +590,7 @@ fun CustomizeUiScreen(
                         LiquidChip(
                             selected = themeConfig.fontFamily == f,
                             onClick = { onThemeConfigChange(themeConfig.copy(fontFamily = f)) },
-                            label = { Text(label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accent.copy(alpha = 0.35f),
-                                selectedLabelColor = Color.White,
-                                containerColor = Color.White.copy(alpha = 0.06f),
-                                labelColor = Color.White.copy(alpha = 0.75f)
-                            )
+                            label = { Text(label, fontSize = 12.sp) }
                         )
                     }
                 }
@@ -669,13 +613,7 @@ fun CustomizeUiScreen(
                                     )
                                 )
                             },
-                            label = { Text(label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accent.copy(alpha = 0.35f),
-                                selectedLabelColor = Color.White,
-                                containerColor = Color.White.copy(alpha = 0.06f),
-                                labelColor = Color.White.copy(alpha = 0.75f)
-                            )
+                            label = { Text(label, fontSize = 12.sp) }
                         )
                     }
                 }
@@ -691,13 +629,7 @@ fun CustomizeUiScreen(
                         LiquidChip(
                             selected = themeConfig.spacingDensity == d,
                             onClick = { onThemeConfigChange(themeConfig.copy(spacingDensity = d)) },
-                            label = { Text(label, fontSize = 12.sp) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = accent.copy(alpha = 0.35f),
-                                selectedLabelColor = Color.White,
-                                containerColor = Color.White.copy(alpha = 0.06f),
-                                labelColor = Color.White.copy(alpha = 0.75f)
-                            )
+                            label = { Text(label, fontSize = 12.sp) }
                         )
                     }
                 }
@@ -727,8 +659,7 @@ fun CustomizeUiScreen(
                     }
                     LiquidToggle(
                         checked = themeConfig.showDockSearchButton,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(showDockSearchButton = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(showDockSearchButton = it)) }
                     )
                 }
 
@@ -740,8 +671,7 @@ fun CustomizeUiScreen(
                     }
                     LiquidToggle(
                         checked = themeConfig.showMiniPlayerWave,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(showMiniPlayerWave = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(showMiniPlayerWave = it)) }
                     )
                 }
 
@@ -753,10 +683,37 @@ fun CustomizeUiScreen(
                     }
                     LiquidToggle(
                         checked = themeConfig.formatBadgeVisible,
-                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(formatBadgeVisible = it)) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        onCheckedChange = { onThemeConfigChange(themeConfig.copy(formatBadgeVisible = it)) }
                     )
                 }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                // Now Playing Hero & Artwork Controls
+                Text("NOW PLAYING HERO & ARTWORK", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = accent, letterSpacing = 1.sp))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Artwork Zoom & Overscan
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Artwork Zoom & Overscan", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("%.2fx".format(themeConfig.artZoomScale), style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
+                }
+                LiquidSlider(
+                    value = themeConfig.artZoomScale,
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(artZoomScale = it)) },
+                    valueRange = 1.00f..1.15f
+                )
+
+                // Video / Artwork Vertical Alignment
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Hero Vertical Alignment", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                    Text("${themeConfig.artVerticalOffsetDp} dp", style = MaterialTheme.typography.bodySmall.copy(color = accent, fontWeight = FontWeight.Bold))
+                }
+                LiquidSlider(
+                    value = themeConfig.artVerticalOffsetDp.toFloat(),
+                    onValueChange = { onThemeConfigChange(themeConfig.copy(artVerticalOffsetDp = it.roundToInt())) },
+                    valueRange = -40f..40f
+                )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 
@@ -768,7 +725,7 @@ fun CustomizeUiScreen(
                     FilledTonalButton(
                         onClick = {
                             try {
-                                val file = NodeThemeSerializer.exportToFile(context, themeConfig)
+                                val file = NodeThemeSerializer.exportToFile(context, themeConfig.copy(glassTexture = 0.0f, noiseGrainAlpha = 0.0f))
                                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                                 val sendIntent = Intent(Intent.ACTION_SEND).apply {
                                     type = "application/json"
@@ -828,7 +785,7 @@ fun CustomizeUiScreen(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedButton(
-                    onClick = { onThemeConfigChange(GlassThemeConfig()) },
+                    onClick = { onThemeConfigChange(GlassThemeConfig(glassTexture = 0.0f, noiseGrainAlpha = 0.0f)) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White.copy(alpha = 0.85f))
                 ) {

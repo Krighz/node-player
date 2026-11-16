@@ -141,6 +141,25 @@ android {
     }
 }
 
+val newPipeExtractorRaw: Configuration by configurations.creating {
+    isTransitive = false
+    isCanBeConsumed = false
+}
+
+dependencies {
+    newPipeExtractorRaw("com.github.TeamNewPipe:NewPipeExtractor:v0.26.3")
+}
+
+val newPipeExtractorStripped = tasks.register<org.gradle.api.tasks.bundling.Jar>("stripNewPipeExtractorUtils") {
+    archiveFileName.set("NewPipeExtractor-v0.26.3-noutils.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("intermediates/newpipe"))
+    from(provider { newPipeExtractorRaw.map { zipTree(it) } }) {
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+        exclude("org/schabi/newpipe/extractor/utils/Utils.class")
+        exclude("org/schabi/newpipe/extractor/utils/Utils$*.class")
+    }
+}
+
 dependencies {
     implementation(project(":core-common"))
     implementation(project(":core-model"))
@@ -152,6 +171,17 @@ dependencies {
 
     // Security / EncryptedSharedPreferences (Hardware Keystore backed AES-256-GCM)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // On-device audio transcoding (LGPL)
+    implementation("dev.ffmpegkit-maintained:ffmpeg-kit-audio:6.0.4")
+
+    // NewPipeExtractor (failsafe stream resolution without 1 MiB cap)
+    implementation(files(newPipeExtractorStripped))
+    implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0a5d5ef20ca7ef09549996")
+    implementation("com.google.code.findbugs:jsr305:3.0.2")
+    implementation("org.jsoup:jsoup:1.17.2")
+    implementation("org.mozilla:rhino:1.7.14")
+    implementation("org.mozilla:rhino-engine:1.7.14")
 
     // Ktor client (required by core-network StreamResolver)
     val ktorVersion = "2.3.12"
@@ -178,6 +208,7 @@ dependencies {
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
+    implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
 
     // Palette & Coil
     implementation("androidx.palette:palette-ktx:1.0.0")

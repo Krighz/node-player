@@ -90,6 +90,8 @@ fun HomeScreen(
     currentRoute: String = "home",
     dockScrollController: com.nodeplayer.ui.components.DockScrollController? = null,
     onOpenCategory: ((com.nodeplayer.model.MoodGenre, List<com.nodeplayer.model.Playlist>) -> Unit)? = null,
+    onCategoryClick: ((com.nodeplayer.model.MoodGenre) -> Unit)? = null,
+    onNavigateToExplore: (() -> Unit)? = null,
     onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
@@ -118,19 +120,7 @@ fun HomeScreen(
                     innerTubeClient = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get(),
                     dockScrollController = dockScrollController,
                     onCategoryClick = { category ->
-                        scope.launch {
-                            try {
-                                val playlists = withContext(Dispatchers.IO) {
-                                    com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
-                                        .browseCategoryShelves(category.browseId, category.params).getOrThrow()
-                                }
-                                onOpenCategory?.invoke(category, playlists)
-                            } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                                throw cancelled
-                            } catch (_: Exception) {
-                                android.widget.Toast.makeText(context, "Couldn't load this category. Please try again.", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                        onCategoryClick?.invoke(category) ?: onOpenCategory?.invoke(category, emptyList())
                     },
                     modifier = Modifier.fillMaxSize().statusBarsPadding()
                 )
@@ -155,6 +145,9 @@ fun HomeScreen(
                 onOpenDeviceConnect = onOpenNodeConnect,
                 onSignInClick = onSignInClick,
                 onOpenPlaylistDetail = onOpenPlaylistDetail,
+                onOpenCategory = onOpenCategory,
+                onCategoryClick = onCategoryClick,
+                onNavigateToExplore = onNavigateToExplore,
                 modifier = Modifier.fillMaxSize().statusBarsPadding()
             )
         } else {

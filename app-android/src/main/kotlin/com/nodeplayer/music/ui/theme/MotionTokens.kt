@@ -1,19 +1,19 @@
 package com.nodeplayer.music.ui.theme
 
 import androidx.compose.animation.core.AnimationSpec
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
 import com.nodeplayer.model.GlassThemeConfig
+import kotlinx.coroutines.delay
 
 object MotionTokens {
 
@@ -63,7 +63,10 @@ object MotionTokens {
         return when (config.animationPreset) {
             "MINIMAL" -> spring(dampingRatio = 0.95f, stiffness = 700f * speedFactor)
             "BOUNCY" -> spring(dampingRatio = 0.65f, stiffness = 420f * speedFactor)
-            "CUSTOM" -> spring(dampingRatio = config.springBounciness.coerceIn(0.3f, 1.0f), stiffness = config.springStiffness.coerceIn(150f, 1000f) * speedFactor)
+            "CUSTOM" -> spring(
+                dampingRatio = config.springBounciness.coerceIn(0.3f, 1.0f),
+                stiffness = config.springStiffness.coerceIn(150f, 1000f) * speedFactor
+            )
             "SMOOTH" -> spring(dampingRatio = 0.82f, stiffness = 380f * speedFactor)
             else -> defaultSpec
         }
@@ -71,8 +74,8 @@ object MotionTokens {
 }
 
 /**
- * Modifier that scales a composable down when pressed and springs back when released.
- * Inspired by iOS fluid touch responsiveness. Respects user motion & reduce-motion preferences.
+ * Scroll-safe press-scale modifier using MutableInteractionSource so LazyColumn/LazyVerticalGrid
+ * scroll gestures are never intercepted or delayed.
  */
 fun Modifier.pressScale(
     targetScale: Float = 0.96f,
@@ -81,54 +84,70 @@ fun Modifier.pressScale(
 ): Modifier = composed {
     val themeConfig = LocalGlassThemeConfig.current
     val isEffectEnabled = enabled && themeConfig.pressScaleEnabled && !themeConfig.reduceMotion && !themeConfig.isPerformanceMode
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
 
-    var isPressed by remember { mutableStateOf(false) }
-    val effectiveTargetScale = if (isEffectEnabled) themeConfig.pressScaleStrength else 1.0f
+    val effectiveTargetScale = if (isEffectEnabled) {
+        if (targetScale != 0.96f) targetScale else themeConfig.pressScaleStrength
+    } else {
+        1.0f
+    }
+
     val scale by animateFloatAsState(
         targetValue = if (isPressed && isEffectEnabled) effectiveTargetScale else 1.0f,
         animationSpec = MotionTokens.resolveSpringSpec(themeConfig, MotionTokens.Snappy),
         label = "PressScale"
     )
 
+    val clickModifier = if (onClick != null) {
+        Modifier.clickable(
+            interactionSource = interactionSource,
+            indication = null,
+            enabled = enabled,
+            onClick = onClick
+        )
+    } else {
+        Modifier
+    }
+
     this
         .graphicsLayer {
             scaleX = scale
             scaleY = scale
         }
-        .pointerInput(enabled, onClick) {
-            detectTapGestures(
-                onPress = {
-                    isPressed = true
-                    val success = tryAwaitRelease()
-                    isPressed = false
-                    if (success && onClick != null) {
-                        onClick()
-                    }
-                }
-            )
-        }
+        .then(clickModifier)
 }
 
 /**
- * Modifier using interaction source for standard Compose clickable with press scale.
+ * Staggered entrance animation for initial list items, respecting user motion preferences.
  */
-fun Modifier.interactiveScale(
-    interactionSource: MutableInteractionSource,
-    targetScale: Float = 0.96f
+fun Modifier.staggeredEntrance(
+    index: Int,
+    maxAnimatedIndex: Int = 10
 ): Modifier = composed {
     val themeConfig = LocalGlassThemeConfig.current
-    val isEffectEnabled = themeConfig.pressScaleEnabled && !themeConfig.reduceMotion && !themeConfig.isPerformanceMode
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val effectiveTarget = if (isEffectEnabled) themeConfig.pressScaleStrength else 1.0f
+    val shouldAnimate = themeConfig.staggeredListAnimation &&
+        !themeConfig.reduceMotion &&
+        !themeConfig.isPerformanceMode &&
+        themeConfig.animationPreset != "OFF" &&
+        index in 0..maxAnimatedIndex
 
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed && isEffectEnabled) effectiveTarget else 1.0f,
-        animationSpec = MotionTokens.resolveSpringSpec(themeConfig, MotionTokens.Snappy),
-        label = "InteractiveScale"
-    )
+    if (!shouldAnimate) return@composed this
+
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        val delayMs = (index * 24L / themeConfig.motionSpeed.coerceIn(0.5f, 2.0f)).toLong()
+        if (delayMs > 0L) delay(delayMs)
+        progress.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                durationMillis = (240f / themeConfig.motionSpeed.coerceIn(0.5f, 2.0f)).toInt().coerceIn(120, 400)
+            )
+        )
+    }
 
     this.graphicsLayer {
-        scaleX = scale
-        scaleY = scale
+        alpha = progress.value
+        translationY = (1f - progress.value) * 18f
     }
 }

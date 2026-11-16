@@ -37,14 +37,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nodeplayer.model.AudioEffectConfig
 import com.nodeplayer.model.AudioOutputInfo
 import com.nodeplayer.model.CrossfadeConfig
 import com.nodeplayer.model.FadeCurve
 import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
+import com.nodeplayer.music.diagnostics.ShaderSelfTestResult
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.components.glassRefraction
+import com.nodeplayer.ui.components.LiquidButton
 import com.nodeplayer.ui.components.LiquidGlassSlider
 import com.nodeplayer.ui.components.LiquidGlassSwitch
 import com.nodeplayer.music.ui.theme.glassSurface
@@ -69,6 +72,7 @@ import java.util.Locale
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings as AndroidSettings
+import com.nodeplayer.model.video.VideoQuality
 import com.nodeplayer.ui.components.LiquidChip
 import com.nodeplayer.ui.components.LiquidSlider
 import com.nodeplayer.ui.components.LiquidToggle
@@ -105,6 +109,13 @@ fun SettingsScreen(
     onNavigateToOpticalDiagnostics: () -> Unit = {},
     onPairNewDevice: () -> Unit = {},
     onRescanLibrary: () -> Unit,
+    allTracks: List<Track> = emptyList(),
+    effectConfig: AudioEffectConfig = AudioEffectConfig(),
+    selfTestResult: ShaderSelfTestResult = ShaderSelfTestResult(passed = true, reason = "OK"),
+    selectedVideoQuality: VideoQuality = VideoQuality.P480,
+    onVideoQualityChange: (VideoQuality) -> Unit = {},
+    onOpenAudioConverter: () -> Unit = {},
+    onOpenStorageManager: () -> Unit = {},
     onBack: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -381,6 +392,8 @@ fun SettingsScreen(
                 SettingsHubItem("stats", "Stats & Audio Analysis", "Audio quality analysis, genuine Hi-Res, DR", Icons.Rounded.BarChart),
                 SettingsHubItem("updates", "Updates", "GitHub releases, auto-check, download manager", Icons.Rounded.SystemUpdate),
                 SettingsHubItem("backup", "Backup & Data", "Export settings, restore backup, reset data", Icons.Rounded.Save),
+                SettingsHubItem("storage", "Storage & Cache", "Partitions, offline downloads, cache sizes", Icons.Rounded.Storage),
+                SettingsHubItem("converter", "FLAC to Opus Converter", "Batch transcode FLAC to efficient Opus audio", Icons.Rounded.Transform),
                 SettingsHubItem("diagnostics", "Diagnostics & Graphics", "Frame metrics, hardware info, shader logs", Icons.Rounded.BugReport),
                 SettingsHubItem("about", "Support & About", "Node Player v${com.nodeplayer.music.BuildConfig.VERSION_NAME}, licenses, GitHub", Icons.Rounded.Info)
             )
@@ -399,6 +412,8 @@ fun SettingsScreen(
                     (section == "customize_ui" && (q.contains("ui") || q.contains("theme") || q.contains("glass") || q.contains("dock") || q.contains("font") || q.contains("color") || q.contains("round"))) ||
                     (section == "widgets" && (q.contains("widg") || q.contains("lock") || q.contains("overlay"))) ||
                     (section == "lyrics" && (q.contains("lyric") || q.contains("lrc") || q.contains("lrclib"))) ||
+                    (section == "storage" && (q.contains("storage") || q.contains("cache") || q.contains("download") || q.contains("disk") || q.contains("space"))) ||
+                    (section == "converter" && (q.contains("convert") || q.contains("flac") || q.contains("opus") || q.contains("transcode"))) ||
                     (section == "lastfm" && (q.contains("last") || q.contains("scrobbl") || q.contains("api"))) ||
                     (section == "stats" && (q.contains("stat") || q.contains("analys") || q.contains("hires") || q.contains("dr") || q.contains("loud"))) ||
                     (section == "updates" && (q.contains("updat") || q.contains("vers") || q.contains("git") || q.contains("check"))) ||
@@ -466,58 +481,143 @@ fun SettingsScreen(
         }
 
         if (isHubMode) {
-            // Quick Mode Toggles
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Quick Settings Card
+            Text(
+                text = "QUICK SETTINGS",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = accent
+                )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            var quickVideoQuality by remember {
+                mutableStateOf(sharedPrefs.getString("video_default_quality", "AUTO") ?: "AUTO")
+            }
+            var quickDiscordIncognito by remember {
+                mutableStateOf(sharedPrefs.getBoolean("discord_incognito", false))
+            }
+
+            GlassCard(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                LiquidChip(
-                    selected = themeConfig.isPerformanceMode,
-                    onClick = {
-                        onThemeConfigChange(themeConfig.copy(isPerformanceMode = !themeConfig.isPerformanceMode))
-                    },
-                    label = { Text("Performance: ${if (themeConfig.isPerformanceMode) "ON" else "OFF"}") },
-                    leadingIcon = {
-                        Icon(Icons.Rounded.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
-                    }
-                )
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // 5 Toggles in a smooth horizontal scroll row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // 1. Theme (OLED Black)
+                        val isOled = themeConfig.isOledBlack || themeConfig.themeMode == "OLED"
+                        LiquidChip(
+                            selected = isOled,
+                            onClick = {
+                                val nextTheme = if (isOled) "DARK" else "OLED"
+                                onThemeConfigChange(themeConfig.copy(themeMode = nextTheme, isOledBlack = nextTheme == "OLED"))
+                            },
+                            label = { Text("Theme: ${if (isOled) "OLED" else "Dark"}") },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.DarkMode, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        )
 
-                LiquidChip(
-                    selected = themeConfig.shaderMode != "OFF",
-                    onClick = {
-                        val nextMode = when (themeConfig.shaderMode) {
-                            "AUTO" -> "FULL"
-                            "FULL" -> "SIMPLE"
-                            "SIMPLE" -> "BLUR_ONLY"
-                            "BLUR_ONLY" -> "OFF"
-                            else -> "AUTO"
-                        }
-                        onThemeConfigChange(themeConfig.copy(shaderMode = nextMode))
-                    },
-                    label = { Text("Shader: ${themeConfig.shaderMode}") },
-                    leadingIcon = {
-                        Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
-                    }
-                )
+                        // 2. Glass Quality (Performance Mode)
+                        LiquidChip(
+                            selected = themeConfig.isPerformanceMode,
+                            onClick = {
+                                onThemeConfigChange(themeConfig.copy(isPerformanceMode = !themeConfig.isPerformanceMode))
+                            },
+                            label = { Text("Glass: ${if (themeConfig.isPerformanceMode) "Fast" else "Glass"}") },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.Bolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        )
 
-                LiquidChip(
-                    selected = true,
-                    onClick = {
-                        val nextTheme = when (themeConfig.themeMode) {
-                            "SYSTEM" -> "DARK"
-                            "DARK" -> "LIGHT"
-                            "LIGHT" -> "OLED"
-                            else -> "SYSTEM"
-                        }
-                        onThemeConfigChange(themeConfig.copy(themeMode = nextTheme, isOledBlack = nextTheme == "OLED"))
-                    },
-                    label = { Text("Theme: ${themeConfig.themeMode}") },
-                    leadingIcon = {
-                        Icon(Icons.Rounded.DarkMode, contentDescription = null, modifier = Modifier.size(16.dp))
+                        // 3. Animation Speed
+                        LiquidChip(
+                            selected = themeConfig.animationPreset != "OFF",
+                            onClick = {
+                                val presets = listOf("SMOOTH", "SNAPPY", "BOUNCY", "OFF")
+                                val idx = presets.indexOf(themeConfig.animationPreset).let { if (it == -1) 0 else it }
+                                val nextPreset = presets[(idx + 1) % presets.size]
+                                onThemeConfigChange(themeConfig.copy(animationPreset = nextPreset))
+                            },
+                            label = { Text("Motion: ${themeConfig.animationPreset.lowercase().replaceFirstChar { it.uppercase() }}") },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.Animation, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        )
+
+                        // 4. Default Video Quality
+                        LiquidChip(
+                            selected = true,
+                            onClick = {
+                                val qualities = listOf("AUTO", "1080p", "720p", "480p", "360p")
+                                val idx = qualities.indexOf(quickVideoQuality).let { if (it == -1) 0 else it }
+                                val nextQuality = qualities[(idx + 1) % qualities.size]
+                                quickVideoQuality = nextQuality
+                                sharedPrefs.edit().putString("video_default_quality", nextQuality).apply()
+                            },
+                            label = { Text("Video: $quickVideoQuality") },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.VideoLibrary, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        )
+
+                        // 5. Discord Incognito
+                        LiquidChip(
+                            selected = quickDiscordIncognito,
+                            onClick = {
+                                val next = !quickDiscordIncognito
+                                quickDiscordIncognito = next
+                                sharedPrefs.edit().putBoolean("discord_incognito", next).apply()
+                            },
+                            label = { Text("Discord: ${if (quickDiscordIncognito) "Incognito" else "Broadcasting"}") },
+                            leadingIcon = {
+                                Icon(if (quickDiscordIncognito) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                            }
+                        )
                     }
-                )
+
+                    // Quick Jump Actions Row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        LiquidButton(
+                            onClick = onOpenStorageManager,
+                            modifier = Modifier.weight(1f).height(38.dp)
+                        ) {
+                            Icon(Icons.Rounded.Storage, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Storage", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        LiquidButton(
+                            onClick = onOpenAudioConverter,
+                            modifier = Modifier.weight(1f).height(38.dp)
+                        ) {
+                            Icon(Icons.Rounded.Transform, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Converter", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        LiquidButton(
+                            onClick = onRescanLibrary,
+                            modifier = Modifier.weight(1f).height(38.dp)
+                        ) {
+                            Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Rescan", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -548,6 +648,7 @@ fun SettingsScreen(
                     SettingsHubCard("Customize UI", "Lens dock, themes, bundled fonts, spacing", Icons.Rounded.Palette) { activeSection = "customize_ui" }
                     SettingsHubCard("Widgets & Lock Screen", "4 static styles, shimmer, element toggles", Icons.Rounded.Widgets) { activeSection = "widgets" }
                     SettingsHubCard("Lyrics & Metadata", "Synced LRC, LRCLIB integration, karaoke", Icons.Rounded.Lyrics) { activeSection = "lyrics" }
+                    SettingsHubCard("Storage & Cache", "Partitions, offline downloads, cache sizes", Icons.Rounded.Storage) { onOpenStorageManager() }
                 }
 
                 Column(
@@ -561,6 +662,45 @@ fun SettingsScreen(
                     SettingsHubCard("Backup & Data", "Export settings, restore backup, reset data", Icons.Rounded.Save) { activeSection = "backup" }
                     SettingsHubCard("Diagnostics & Graphics", "Frame metrics, hardware info, shader logs", Icons.Rounded.BugReport) { activeSection = "diagnostics" }
                     SettingsHubCard("Support & About", "Node Player v${com.nodeplayer.music.BuildConfig.VERSION_NAME}, licenses, GitHub", Icons.Rounded.Info) { activeSection = "about" }
+                    SettingsHubCard("FLAC to Opus Converter", "Batch transcode FLAC to efficient Opus audio", Icons.Rounded.Transform) { onOpenAudioConverter() }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            GlassCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        showAdvancedSettings = !showAdvancedSettings
+                        sharedPrefs.edit().putBoolean("show_advanced_settings", showAdvancedSettings).apply()
+                    }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Advanced & Developer Settings",
+                            color = Color.White,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = if (showAdvancedSettings) "Showing expert audio & diagnostics knobs" else "Tap to show buffer, optical tests, and system flags",
+                            color = Color.White.copy(alpha = 0.65f),
+                            fontSize = 12.sp
+                        )
+                    }
+                    Icon(
+                        imageVector = if (showAdvancedSettings) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
+                        contentDescription = null,
+                        tint = accent
+                    )
                 }
             }
 
@@ -573,6 +713,8 @@ fun SettingsScreen(
                     "sound_eq" -> "Sound & EQ"
                     "playback" -> "Playback & Gestures"
                     "library" -> "Library & Folders"
+                    "storage" -> "Storage & Cache"
+                    "converter" -> "FLAC to Opus Converter"
                     "customize_ui" -> "Customize UI"
                     "widgets" -> "Widgets & Lock Screen"
                     "lyrics" -> "Lyrics & Metadata"
@@ -1273,6 +1415,34 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "FLAC to Opus Converter",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                        )
+                        Text(
+                            "Batch transcode lossless FLAC to efficient Opus audio",
+                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                        )
+                    }
+                    Button(
+                        onClick = onOpenAudioConverter,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = accent)
+                    ) {
+                        Icon(imageVector = Icons.Rounded.Transform, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Convert", fontSize = 12.sp)
+                    }
+                }
             }
         }
 
@@ -1380,13 +1550,28 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-                }
+        }
+
+        if (shouldShow("storage")) {
+            LaunchedEffect(Unit) {
+                onOpenStorageManager()
+                activeSection = null
+            }
+        }
+
+        if (shouldShow("converter")) {
+            LaunchedEffect(Unit) {
+                onOpenAudioConverter()
+                activeSection = null
+            }
+        }
 
         if (shouldShow("customize_ui")) {
             com.nodeplayer.ui.screens.CustomizeUiView(
                 themeConfig = themeConfig,
                 onThemeConfigChange = onThemeConfigChange,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                isEmbedded = true
             )
             Spacer(modifier = Modifier.height(20.dp))
         }
@@ -1947,6 +2132,89 @@ fun SettingsScreen(
                             }
                         }
                     }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
+                    // Video Playback Resolution Setting
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Video Stream Resolution",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                            )
+                            Text(
+                                text = "Default resolution for YouTube music video streams (480p default for smooth playback & low buffer latency)",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    var activeQuality by remember(selectedVideoQuality) {
+                        mutableStateOf(selectedVideoQuality)
+                    }
+
+                    val availableQualities = listOf(
+                        VideoQuality.P360,
+                        VideoQuality.P480,
+                        VideoQuality.P720,
+                        VideoQuality.P1080,
+                        VideoQuality.AUTO
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        availableQualities.forEach { quality ->
+                            val isSelected = activeQuality == quality
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) accent.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f))
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) accent.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.12f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable {
+                                        activeQuality = quality
+                                        sharedPrefs.edit().putString("youtube_video_quality", quality.key).apply()
+                                        coroutineScope.launch {
+                                            com.nodeplayer.music.data.AppSettingsRepository.updateSetting(
+                                                context,
+                                                com.nodeplayer.music.data.AppSettingsRepository.KEY_YOUTUBE_VIDEO_QUALITY,
+                                                quality.key
+                                            )
+                                        }
+                                        onVideoQualityChange(quality)
+                                    }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (quality == VideoQuality.P480) "480p*" else quality.label,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f)
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "*480p is set as the default standard resolution.",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.45f)
+                        )
+                    )
                 }
             }
 

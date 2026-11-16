@@ -36,6 +36,9 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.14.0")
     implementation("net.java.dev.jna:jna-platform:5.14.0")
 
+    // VLCJ Desktop Video Player
+    implementation("uk.co.caprica:vlcj:4.8.3")
+
     // SQLite JDBC for desktop library database
     implementation("org.xerial:sqlite-jdbc:3.45.1.0")
 

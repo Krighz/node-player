@@ -151,6 +151,62 @@ Added in Milestone v2.5 (Phase 3) to provide centralized physics tokens, interac
 | **`staggeredListAnimation`**| Boolean | `true`, `false` | `true` | Zero | Applies staggered entrance cascade to lazy list items, deferred strictly to `Modifier.graphicsLayer`. | • `MotionModifiers.kt`<br>• `OnlineHomeView.kt` |
 | **`screenTransitionStyle`** | String | `"FADE_THROUGH"`, `"SHARED_AXIS_X"`, `"SHARED_AXIS_Y"`, `"SLIDE"` | `"FADE_THROUGH"` | Zero | Transition style for top-level screen and destination changes in `SharedPlayerLayout`. | • `ScreenTransitions.kt`<br>• `SharedPlayerLayout.kt` |
 
+---
+
+## 7. Discord Rich Presence Settings (`SettingsRegistry`)
+
+Accessible via **Settings > Online, Connect & Network > Discord Rich Presence (Desktop Only)**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`discord_enabled`** | Boolean | `true`, `false` | `false` | Desktop | Master toggle for Discord IPC rich presence | `PresenceController.kt`, `DiscordRichPresenceCard.kt`, `Main.kt` |
+| **`discord_incognito`** | Boolean | `true`, `false` | `false` | Desktop | Incognito mode: immediately clears presence and suspends updates | `PresenceController.kt`, `HomeProfileSheet.kt`, `DiscordRichPresenceCard.kt` |
+| **`discord_show_cover`** | Boolean | `true`, `false` | `true` | Desktop | Displays track cover art image in profile presence card | `PresenceController.kt`, `DiscordActivityBuilder.kt` |
+| **`discord_show_album`** | Boolean | `true`, `false` | `true` | Desktop | Displays album name alongside artist name | `PresenceController.kt`, `DiscordActivityBuilder.kt` |
+| **`discord_show_while_paused`** | Boolean | `true`, `false` | `false` | Desktop | Retains presence card when playback is paused instead of clearing | `PresenceController.kt` |
+| **`discord_app_id`** | String | Valid Discord Client ID | `""` | Desktop | Custom Application Client ID created in Discord Developer Portal | `PresenceController.kt`, `DiscordIpcTransport.kt` |
+
+---
+
+## 8. Audio Converter Settings (`SettingsRegistry`)
+
+Accessible via **Settings > Library & Files > Audio Converter**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`convert_default_preset`** | Choice | `"192"`, `"128"`, `"96"`, `"CUSTOM"` | `"128"` | All | Default Opus bitrate preset | `AudioConverterView.kt`, `SettingsRegistry.kt` |
+| **`convert_custom_bitrate`** | IntRange | 32 .. 320 kbps | `160` | All | Custom target bitrate when Custom preset is selected | `AudioConverterView.kt`, `SettingsRegistry.kt` |
+| **`convert_vbr`** | Toggle | `true`, `false` | `true` | All | Dynamic bitrate allocation tailored to acoustic complexity | `AudioConverterView.kt`, `TranscodeJob.kt` |
+| **`convert_application`** | Choice | `"audio"`, `"voip"`, `"lowdelay"` | `"audio"` | All | Opus encoder application mode tuning | `AudioConverterView.kt`, `TranscodeJob.kt` |
+| **`convert_compression_level`** | IntRange | 0 .. 10 | `10` | All | Opus encoder computational complexity | `AudioConverterView.kt`, `TranscodeJob.kt` |
+| **`convert_keep_original`** | Toggle | `true`, `false` | `true` | All | Keep original source FLAC files after verified conversion | `AudioConverterView.kt`, `TranscodeQueueManager.kt` |
+| **`convert_output_mode`** | Choice | `"CUSTOM_FOLDER"`, `"NEXT_TO_ORIGINAL"` | `"CUSTOM_FOLDER"` | All | Output file destination location strategy | `AudioConverterView.kt`, `SettingsRegistry.kt` |
+| **`convert_output_folder`** | Text | Valid directory path | `""` | All | Target folder path where converted Opus files are saved | `AudioConverterView.kt`, `SettingsRegistry.kt` |
+| **`convert_name_template`** | Text | Template string | `"{title}"` | All | File naming pattern for transcoded outputs | `SettingsRegistry.kt` |
+| **`convert_workers`** | IntRange | 1 .. 4 | `2` | All | Number of parallel transcode worker threads | `AudioConverterView.kt`, `TranscodeQueueManager.kt` |
+| **`convert_write_r128`** | Toggle | `true`, `false` | `false` | All | Calculate and inject R128 loudness tags into output files | `AudioConverterView.kt`, `TranscodeJob.kt` |
+| **`convert_ffmpeg_path`** | Text | Executable path | `""` | Desktop | Custom manual override for FFmpeg executable on Desktop | `DesktopFFmpegTranscoder.kt`, `Main.kt` |
+| **`convert_rescan_after`** | Toggle | `true`, `false` | `true` | All | Automatically trigger local library scan when batch finishes | `TranscodeQueueManager.kt`, `SettingsRegistry.kt` |
+
+---
+
+## 11. Music Videos & Cinema Player Settings (`SettingsRegistry`)
+
+Accessible via **Settings > Online, Connect & Network > Music Videos**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`video_auto_play`** | Toggle | `true`, `false` | `false` | All | Automatically start video for music tracks that have a video stream | `PlayerViewModel.kt`, `NowPlayingView.kt` |
+| **`video_default_quality`** | Choice | `"auto"`, `"1080"`, `"720"`, `"480"`, `"360"` | `"auto"` | All | Preferred default resolution when playing music videos | `StreamResolver.kt`, `PlayerViewModel.kt` |
+| **`video_seek_step_s`** | IntRange | 5 .. 30 | `10` | All | Step duration in seconds for double-tap seeking | `FullscreenCinemaPlayer.kt`, `VideoMath.kt` |
+| **`video_gestures`** | Toggle | `true`, `false` | `true` | All | Enable swipe gestures (brightness on left, volume on right) | `FullscreenCinemaPlayer.kt` |
+| **`video_pip`** | Toggle | `true`, `false` | `true` | Android | Auto-enter Picture-in-Picture when leaving the app while video is active | `MainActivity.kt` |
+| **`video_background_audio_only`** | Toggle | `true`, `false` | `false` | Android | Data saver: switch video to audio-only background track when minimized | `MainActivity.kt` |
+| **`video_controls_autohide_s`** | IntRange | 2 .. 10 | `4` | All | Seconds of inactivity before fading cinema player controls | `FullscreenCinemaPlayer.kt` |
+| **`video_show_quality_pill`** | Toggle | `true`, `false` | `true` | All | Display interactive resolution badge pill in Now Playing hero card | `NowPlayingView.kt` |
+
+
+
 
 
 

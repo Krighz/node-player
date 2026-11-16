@@ -51,12 +51,12 @@ fun createThemedTypography(fontFamily: FontFamily): Typography {
     )
 }
 
-val DefaultAccent = Color(0xFF6366F1) // Indigo
+val DefaultAccent = Color(0xFFB50733) // Crimson Red
 
 private val DarkColorScheme = darkColorScheme(
     primary = DefaultAccent,
-    background = Color(0xFF0C0D14),
-    surface = Color(0xFF141622),
+    background = Color(0xFF262626),
+    surface = Color(0xFF303030),
     onPrimary = Color.White,
     onBackground = Color.White,
     onSurface = Color.White,
@@ -122,8 +122,8 @@ fun NodePlayerTheme(
 
     val colorScheme = baseScheme.copy(
         primary = animatedAccent,
-        background = if (isOled) Color.Black else if (isDark) Color(0xFF0C0D14) else Color(0xFFF4F5FB),
-        surface = if (isOled) Color(0xFF0A0A0A) else if (isDark) Color(0xFF141622) else Color(0xFFFFFFFF)
+        background = if (isOled) Color.Black else if (isDark) Color(0xFF262626) else Color(0xFFF4F5FB),
+        surface = if (isOled) Color(0xFF0A0A0A) else if (isDark) Color(0xFF303030) else Color(0xFFFFFFFF)
     )
 
     val densityPadding: Dp = when (themeConfig.spacingDensity) {

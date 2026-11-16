@@ -67,6 +67,22 @@ Node Player incorporates and depends upon open-source software libraries. We gra
 
 ---
 
+### FFmpeg (Audio Transcoder CLI)
+- **License**: GNU Lesser General Public License (LGPL) version 2.1 or later
+- **Copyright**: (c) 2000-2024 the FFmpeg developers
+- **URL**: https://ffmpeg.org/
+- **Note**: Used on Desktop as a bundled or external executable CLI via ProcessBuilder.
+
+---
+
+### FFmpegKit (ffmpeg-kit-audio)
+- **License**: GNU Lesser General Public License (LGPL) version 3.0
+- **Copyright**: (c) 2020-2023 Taner Sener / ffmpegkit-maintained
+- **URL**: https://github.com/arthenica/ffmpeg-kit
+- **Note**: Used on Android (`dev.ffmpegkit-maintained:ffmpeg-kit-audio:6.0.4`) for in-process audio transcoding.
+
+---
+
 ## Apache License 2.0 Full Text
 
 ```

@@ -67,6 +67,7 @@ class PlaybackService : MediaSessionService() {
         private set
     lateinit var nodeConnectHub: NodeConnectHub
         private set
+    val presenceTransport: com.nodeplayer.model.presence.PresenceTransport = com.nodeplayer.network.discord.NoPresenceTransport()
     private var incomingCastJob: Job? = null
     private var incomingAudioTrack: AudioTrack? = null
     private var multicastLock: WifiManager.MulticastLock? = null

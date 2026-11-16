@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased] (Post-v1.8.0)
+
+### Added
+- **Hardware-Synchronized System Volume Slider**: Real-time integration of the volume slider in `NowPlayingView` with Android's `AudioManager.STREAM_MUSIC`, complete with drag/tap seeking and a `BroadcastReceiver` listening to `"android.media.VOLUME_CHANGED_ACTION"` for hardware rocker synchronization.
+- **Widescreen 16:9 Music Video Player**: Automatic container aspect ratio transition to 16:9 for video streams, with stream quality badge (`480p`) and fullscreen expand controls conditionally visible only for video playback.
+- **Multi-Shelf YouTube Music Discovery**: Integrated 6 dynamic shelves on Home: Top Picks for You, Recents, Find Your Mood (with duotone category matrix filters), Albums & Singles, Music Videos, and Trending.
+- **Profile Avatar & Session Hydration**: Added authentic Google/YouTube avatar thumbnails, channel handle (`@username`), and account metadata in `HomeProfileSheet` backed by encrypted `SecureSessionStore`.
+- **TTML Syllable Lyrics & Karaoke**: Added syllable-level karaoke lyrics parsing from TTML formats, duet vocalist alignment, backing vocals, and instrumental break countdown dots.
+- **Bottom-Left Jump to Current**: Added a compact `36.dp` circular white button (`Icons.Rounded.ArrowDownward`, `Color.White.copy(alpha = 0.16f)`) anchored in the bottom-left corner of `FullScreenLyricsView`.
+
+### Changed
+- **Default Dark Mode Theme Color**: Set default dark mode background to charcoal `#262626` across `Theme.kt`, `LiquidGlassBackground.kt`, and `GlassTheme.kt` with `#303030` elevated card surfaces, while strictly maintaining pure `#000000` pitch black for OLED mode.
+- **FullScreenLyricsView Redesigned Top Bar**: Centered drag handle pill (`36.dp` × `4.dp`), `48.dp` × `42.dp` thumbnail, song title & artist typography, favorite star button, and dynamic context action button (More Options when controls are open, Share when controls are collapsed).
+- **Default Collapsed Lyrics Controls**: Full-screen lyrics playback dock now starts collapsed by default for an unobstructed, distraction-free reading experience, auto-collapsing after 3.5 seconds of inactivity when revealed.
+
+### Fixed
+- **Lyrics Scroll Auto-Popup Bug**: Decoupled manual list scrolling from control visibility so scrolling the lyrics list never unexpectedly brings up the bottom playback bar.
+- **Bottom Scrim Vignette Removal**: Removed the black gradient scrim overlay at the bottom of `FullScreenLyricsView`, enabling the dynamic album art palette to flow cleanly to the bottom edge.
+- **Root Screen Background De-Hardcoding**: Removed hardcoded `Color.Black` roots in `OnlineHomeView`, `PlaylistDetailView`, and `LibraryScreen`, enabling proper rendering of `#262626` in standard dark mode while preserving pure black in OLED mode.
+- **Windows Build File Locking**: Resolved file lock conflicts during multiplatform jar bundling (`bundleLibCompileToJarDebug`).
+
+---
+
 ## [1.6.0] - 2026-11-06
 
 ### Added

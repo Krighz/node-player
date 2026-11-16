@@ -1,5 +1,9 @@
 package com.nodeplayer.music.ui.screens
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,14 +12,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,16 +38,17 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.nodeplayer.model.Album
 import com.nodeplayer.model.Artist
-import com.nodeplayer.music.ui.components.HazeState
 import com.nodeplayer.model.MusicFolder
 import com.nodeplayer.model.Track
 import com.nodeplayer.music.ui.components.GlassCard
+import com.nodeplayer.music.ui.components.HazeState
 import com.nodeplayer.music.ui.components.SoundWaveVisualizer
 import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.music.ui.theme.pressScale
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.components.LiquidButton
 import com.nodeplayer.ui.screens.uniqueLazyKeys
 import com.nodeplayer.ui.screens.uniqueLazyTrackKeys
 import java.io.File
@@ -83,181 +88,1029 @@ fun LibraryScreen(
     youTubeSyncing: Boolean = false,
     youTubeSyncError: String? = null,
     onImportSpotifyPlaylists: (() -> Unit)? = null,
+    onImportPlaylistFile: (() -> Unit)? = null,
     onAddToPlaylist: ((Track) -> Unit)? = null,
+    dailyStats: List<com.nodeplayer.music.data.DailyListeningStatEntity> = emptyList(),
+    onOpenStats: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
+    onOpenDownloadQueue: () -> Unit = {},
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onOpenDownloads: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
+    var isBrowsingLocalMusic by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
     var isGridView by remember { mutableStateOf(true) }
-    var playlistFilter by remember { mutableStateOf("All") } // "All", "Local", "YouTube"
-    val tabs = listOf("Songs", "Artists", "Folders", "Playlists")
+    var playlistFilter by remember { mutableStateOf("All") }
+    val tabs = listOf("Songs", "Albums", "Artists", "Folders", "Downloads")
     val accent = LocalAccentColor.current
     var viewingFolder by remember { mutableStateOf<MusicFolder?>(null) }
+    var viewingAlbum by remember { mutableStateOf<Album?>(null) }
+    var viewingArtist by remember { mutableStateOf<Artist?>(null) }
     var inspectingTrack by remember { mutableStateOf<Track?>(null) }
     val tabScrollState = rememberScrollState()
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp)
-    ) {
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // App Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Node Player",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White
-                    )
-                )
-                Text(
-                    text = "${tracks.size} tracks • ${folders.size} folders",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = Color.White.copy(alpha = 0.65f)
-                    )
-                )
-            }
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (selectedTab == 1) {
-                    IconButton(onClick = { isGridView = !isGridView }) {
-                        Icon(
-                            imageVector = if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView,
-                            contentDescription = if (isGridView) "Switch to List View" else "Switch to Grid View",
-                            tint = accent
-                        )
-                    }
-                }
-                IconButton(onClick = onRescanClick) {
-                    Icon(
-                        imageVector = Icons.Rounded.Refresh,
-                        contentDescription = "Rescan",
-                        tint = accent
-                    )
-                }
-            }
-        }
-
-        if (youTubeSyncing) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = accent)
-            Text("Syncing YouTube playlists…", style = MaterialTheme.typography.labelSmall, color = accent)
-        }
-        if (youTubeSyncError != null) {
-            TextButton(onClick = { onImportYouTubePlaylists?.invoke() }) {
-                Text(youTubeSyncError, color = MaterialTheme.colorScheme.error)
-            }
-        }
-
-        // Tab Selector Pills (Liquid Glass look, horizontally scrollable)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(tabScrollState)
-                .padding(vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            val pillShape = remember { ContinuousRoundedRectangle(GlassTokens.pillCornerRadius) }
-            tabs.forEachIndexed { index, tabTitle ->
-                val isSelected = selectedTab == index && viewingFolder == null
-                Box(
-                    modifier = Modifier
-                        .glassSurface(
-                            
-                            shape = pillShape,
-                            tintAlpha = if (isSelected) 0.85f else 0.35f,
-                            customTint = if (isSelected) accent.copy(alpha = 0.4f) else null
-                        )
-                        .pressScale(targetScale = 0.95f) {
-                            viewingFolder = null
-                            selectedTab = index
-                        }
-                        .padding(horizontal = 16.dp, vertical = 7.dp)
-                ) {
-                    Text(
-                        text = tabTitle,
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
-                            fontSize = 13.sp
-                        )
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Tab Content
-        if (viewingFolder != null) {
-            val activeFolder = viewingFolder!!
-            val folderTracks = remember(tracks, activeFolder.path) {
-                tracks.filter { File(it.path).parent == activeFolder.path }
-            }
-            FolderDetailView(
-                folder = activeFolder,
-                tracks = folderTracks,
-                currentTrack = currentTrack,
-                isPlaying = isPlaying,
-                onBack = { viewingFolder = null },
-                onTrackClick = onTrackClick,
-                onPlayNext = onPlayNext,
-                onAddToQueue = onAddToQueue,
-                
-            )
-        } else if (tracks.isEmpty()) {
-            EmptyLibraryView(onRescanClick)
-        } else {
-            when (selectedTab) {
-                0 -> SongsList(
-                    tracks = tracks,
-                    currentTrack = currentTrack,
-                    isPlaying = isPlaying,
-                    onTrackClick = onTrackClick,
-                    onPlayNext = onPlayNext,
-                    onAddToQueue = onAddToQueue,
-                    qualityBadgeMode = qualityBadgeMode,
-                    onInspectTrack = { inspectingTrack = it },
-                    onAddToPlaylist = onAddToPlaylist,
-                )
-                1 -> ArtistsList(artists = artists, isGridView = isGridView, onArtistClick = {}, )
-                2 -> FoldersList(
-                    folders = folders,
-                    onFolderClick = { viewingFolder = it },
-                )
-                3 -> PlaylistsTab(
-                    playlists = playlists,
-                    filter = playlistFilter,
-                    onFilterChange = { playlistFilter = it },
-                    onPlaylistClick = { onOpenPlaylist?.invoke(it) },
-                    onCreatePlaylistClick = {
-                        onCreatePlaylist?.invoke("New Playlist")
-                    },
-                    onImportYouTubeClick = onImportYouTubePlaylists,
-                    onImportSpotifyClick = onImportSpotifyPlaylists
-                )
-            }
+    // Automatically trigger sync of YouTube playlists when user is logged in (Task 5)
+    LaunchedEffect(Unit) {
+        if (com.nodeplayer.music.auth.YouTubeAccountManager.authState.value is com.nodeplayer.model.AuthState.LoggedIn) {
+            onImportYouTubePlaylists?.invoke()
         }
     }
 
-    if (inspectingTrack != null) {
-        val targetTrack = tracks.find { it.id == inspectingTrack!!.id } ?: inspectingTrack!!
-        com.nodeplayer.music.ui.components.TrackDetailsSheet(
-            track = targetTrack,
-            audioOutputInfo = audioOutputInfo,
-            onDismiss = { inspectingTrack = null },
-            
-            onAnalyzeSong = onAnalyzeTrack,
-            isAnalyzing = analyzingTrackId == targetTrack.id
-        )
+    val totalListeningMinutes = remember(dailyStats, tracks) {
+        val totalSec = dailyStats.sumOf { it.listeningSeconds }
+        if (totalSec > 0) totalSec / 60L else (tracks.sumOf { it.durationMs } / 60000L).coerceAtLeast(0L)
+    }
+    val totalPlayCount = remember(tracks) {
+        val count = tracks.sumOf { it.playCount.toLong() }
+        if (count > 0) count else tracks.size.toLong()
+    }
+
+    val themeConfig = com.nodeplayer.music.ui.theme.LocalGlassThemeConfig.current
+    val isOled = themeConfig.isOledBlack || themeConfig.themeMode == "OLED"
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(if (isOled) Color.Black else Color(0xFF262626))
+            .statusBarsPadding()
+    ) {
+        AnimatedContent(
+            targetState = isBrowsingLocalMusic,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "LocalMusicBrowserTransition"
+        ) { browsingLocal ->
+            if (browsingLocal) {
+                // Local Music Drilldown Sub-view
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = {
+                                if (viewingFolder != null) viewingFolder = null
+                                else if (viewingAlbum != null) viewingAlbum = null
+                                else if (viewingArtist != null) viewingArtist = null
+                                else isBrowsingLocalMusic = false
+                            }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = Color.White
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text(
+                                    text = "Local Music",
+                                    style = MaterialTheme.typography.titleLarge.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                )
+                                Text(
+                                    text = "${tracks.size} tracks • ${albums.size} albums • ${folders.size} folders",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        color = Color.White.copy(alpha = 0.65f)
+                                    )
+                                )
+                            }
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if ((selectedTab == 1 || selectedTab == 2) && viewingAlbum == null && viewingArtist == null) {
+                                IconButton(onClick = { isGridView = !isGridView }) {
+                                    Icon(
+                                        imageVector = if (isGridView) Icons.Rounded.ViewList else Icons.Rounded.GridView,
+                                        contentDescription = if (isGridView) "Switch to List View" else "Switch to Grid View",
+                                        tint = accent
+                                    )
+                                }
+                            }
+                            IconButton(onClick = onRescanClick) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Refresh,
+                                    contentDescription = "Rescan",
+                                    tint = accent
+                                )
+                            }
+                        }
+                    }
+
+                    // Tab Selector Pills
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(tabScrollState)
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val pillShape = remember { ContinuousRoundedRectangle(GlassTokens.pillCornerRadius) }
+                        tabs.forEachIndexed { index, tabTitle ->
+                            val isSelected = selectedTab == index && viewingFolder == null && viewingAlbum == null && viewingArtist == null
+                            Box(
+                                modifier = Modifier
+                                    .glassSurface(
+                                        shape = pillShape,
+                                        tintAlpha = if (isSelected) 0.85f else 0.35f,
+                                        customTint = if (isSelected) accent.copy(alpha = 0.4f) else null
+                                    )
+                                    .pressScale(targetScale = 0.95f) {
+                                        viewingFolder = null
+                                        viewingAlbum = null
+                                        viewingArtist = null
+                                        selectedTab = index
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 7.dp)
+                            ) {
+                                Text(
+                                    text = tabTitle,
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f),
+                                        fontSize = 13.sp
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Tab & Drilldown Content
+                    when {
+                        viewingFolder != null -> {
+                            val activeFolder = viewingFolder!!
+                            val folderTracks = remember(tracks, activeFolder.path) {
+                                tracks.filter { File(it.path).parent == activeFolder.path }
+                            }
+                            CollectionTracksDetailView(
+                                title = activeFolder.name,
+                                subtitle = "${folderTracks.size} tracks",
+                                tracks = folderTracks,
+                                currentTrack = currentTrack,
+                                isPlaying = isPlaying,
+                                onBack = { viewingFolder = null },
+                                onTrackClick = onTrackClick,
+                                onPlayNext = onPlayNext,
+                                onAddToQueue = onAddToQueue,
+                                qualityBadgeMode = qualityBadgeMode,
+                                onInspectTrack = { inspectingTrack = it },
+                                onAddToPlaylist = onAddToPlaylist,
+                                onDownloadTrack = onDownloadTrack
+                            )
+                        }
+                        viewingAlbum != null -> {
+                            val activeAlbum = viewingAlbum!!
+                            val albumTracks = remember(tracks, activeAlbum.id, activeAlbum.title) {
+                                tracks.filter { it.albumId == activeAlbum.id || it.album.equals(activeAlbum.title, ignoreCase = true) }
+                            }
+                            CollectionTracksDetailView(
+                                title = activeAlbum.title,
+                                subtitle = "${activeAlbum.artist} • ${albumTracks.size} tracks",
+                                tracks = albumTracks,
+                                currentTrack = currentTrack,
+                                isPlaying = isPlaying,
+                                onBack = { viewingAlbum = null },
+                                onTrackClick = onTrackClick,
+                                onPlayNext = onPlayNext,
+                                onAddToQueue = onAddToQueue,
+                                qualityBadgeMode = qualityBadgeMode,
+                                onInspectTrack = { inspectingTrack = it },
+                                onAddToPlaylist = onAddToPlaylist,
+                                onDownloadTrack = onDownloadTrack
+                            )
+                        }
+                        viewingArtist != null -> {
+                            val activeArtist = viewingArtist!!
+                            val artistTracks = remember(tracks, activeArtist.id, activeArtist.name) {
+                                tracks.filter { it.artistId == activeArtist.id || it.artist.equals(activeArtist.name, ignoreCase = true) }
+                            }
+                            CollectionTracksDetailView(
+                                title = activeArtist.name,
+                                subtitle = "${artistTracks.size} tracks • ${activeArtist.albumCount} albums",
+                                tracks = artistTracks,
+                                currentTrack = currentTrack,
+                                isPlaying = isPlaying,
+                                onBack = { viewingArtist = null },
+                                onTrackClick = onTrackClick,
+                                onPlayNext = onPlayNext,
+                                onAddToQueue = onAddToQueue,
+                                qualityBadgeMode = qualityBadgeMode,
+                                onInspectTrack = { inspectingTrack = it },
+                                onAddToPlaylist = onAddToPlaylist,
+                                onDownloadTrack = onDownloadTrack
+                            )
+                        }
+                        tracks.isEmpty() -> {
+                            EmptyLibraryView(onRescanClick)
+                        }
+                        else -> {
+                            AnimatedContent(
+                                targetState = selectedTab,
+                                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                label = "LibraryTabTransition"
+                            ) { tab ->
+                                when (tab) {
+                                    0 -> SongsList(
+                                        tracks = tracks,
+                                        currentTrack = currentTrack,
+                                        isPlaying = isPlaying,
+                                        onTrackClick = onTrackClick,
+                                        onPlayNext = onPlayNext,
+                                        onAddToQueue = onAddToQueue,
+                                        qualityBadgeMode = qualityBadgeMode,
+                                        onInspectTrack = { inspectingTrack = it },
+                                        onAddToPlaylist = onAddToPlaylist,
+                                        onDownloadTrack = onDownloadTrack
+                                    )
+                                    1 -> AlbumsGrid(
+                                        albums = albums,
+                                        isGridView = isGridView,
+                                        onAlbumClick = { viewingAlbum = it }
+                                    )
+                                    2 -> ArtistsList(
+                                        artists = artists,
+                                        isGridView = isGridView,
+                                        onArtistClick = { viewingArtist = it }
+                                    )
+                                    3 -> FoldersList(
+                                        folders = folders,
+                                        onFolderClick = { viewingFolder = it }
+                                    )
+                                    4 -> DownloadedSongsList(
+                                        tracks = tracks.filter { it.isDownloaded },
+                                        currentTrack = currentTrack,
+                                        isPlaying = isPlaying,
+                                        onTrackClick = onTrackClick,
+                                        onPlayNext = onPlayNext,
+                                        onAddToQueue = onAddToQueue,
+                                        qualityBadgeMode = qualityBadgeMode,
+                                        onInspectTrack = { inspectingTrack = it },
+                                        onAddToPlaylist = onAddToPlaylist,
+                                        onDownloadTrack = onDownloadTrack,
+                                        onOpenDownloadQueue = onOpenDownloadQueue
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Root Library View (Matching Reference Screenshot 1)
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    contentPadding = PaddingValues(top = 8.dp, bottom = 120.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    // 1. Top Action Pill (Top-Right)
+                    item(key = "lib_top_pill") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(Color(0xFF1C1C1E))
+                                    .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(22.dp))
+                                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                IconButton(
+                                    onClick = { onOpenStats?.invoke() },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.History,
+                                        contentDescription = "History & Stats",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(CircleShape)
+                                        .background(accent.copy(alpha = 0.25f))
+                                        .clickable { onOpenSettings?.invoke() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Person,
+                                        contentDescription = "Profile & Settings",
+                                        tint = Color.White.copy(alpha = 0.9f),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // 2. Page Title: "Library" 32.sp ExtraBold white
+                    item(key = "lib_title") {
+                        Text(
+                            text = "Library",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                    }
+
+                    // 3. Hero Listening Experience Carousel (Wired to Real Stats)
+                    item(key = "lib_experience_carousel") {
+                        val authState = com.nodeplayer.music.auth.YouTubeAccountManager.authState.collectAsState().value
+                        val accountName = (authState as? com.nodeplayer.model.AuthState.LoggedIn)?.account?.name ?: "Node Listener"
+
+                        androidx.compose.foundation.lazy.LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .width(295.dp)
+                                        .height(160.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(
+                                            Brush.linearGradient(
+                                                listOf(
+                                                    accent.copy(alpha = 0.45f),
+                                                    Color(0xFF1E1B4B).copy(alpha = 0.85f),
+                                                    Color(0xFF0F172A).copy(alpha = 0.95f)
+                                                )
+                                            )
+                                        )
+                                        .border(1.dp, accent.copy(alpha = 0.28f), RoundedCornerShape(16.dp))
+                                        .clickable { onOpenStats?.invoke() }
+                                        .padding(16.dp)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        verticalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        // Top Row: Caption & Wave Icon
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "YOUR LISTENING EXPERIENCE",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 1.sp,
+                                                color = Color.White.copy(alpha = 0.85f)
+                                            )
+                                            // Mini white wave logo
+                                            Row(
+                                                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Box(modifier = Modifier.size(width = 3.dp, height = 12.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
+                                                Box(modifier = Modifier.size(width = 3.dp, height = 16.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
+                                                Box(modifier = Modifier.size(width = 3.dp, height = 8.dp).clip(RoundedCornerShape(1.dp)).background(Color.White))
+                                            }
+                                        }
+
+                                        // Center: Big minutes count
+                                        Column {
+                                            Text(
+                                                text = "$totalListeningMinutes",
+                                                fontSize = 32.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.White
+                                            )
+                                            Text(
+                                                text = "MINUTES LISTENED",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White.copy(alpha = 0.75f)
+                                            )
+                                        }
+
+                                        // Bottom Row: Username + Plays on left, Member Since on right
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.Bottom
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f, fill = false)) {
+                                                Text(
+                                                    text = accountName.uppercase(),
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = "$totalPlayCount plays",
+                                                    fontSize = 10.sp,
+                                                    color = Color.White.copy(alpha = 0.65f)
+                                                )
+                                            }
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text(
+                                                    text = "EXPERIENCE",
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = Color.White.copy(alpha = 0.65f)
+                                                )
+                                                Text(
+                                                    text = "STATS VIEW",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = accent
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. Quick Navigation Rows: Downloads & Local Music
+                    item(key = "lib_nav_rows") {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            // Downloads Row
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .clickable {
+                                        onOpenDownloads?.invoke() ?: run {
+                                            isBrowsingLocalMusic = true
+                                            selectedTab = 4
+                                        }
+                                    }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Download,
+                                        contentDescription = "Downloads",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(
+                                        text = "Downloads",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Rounded.ChevronRight,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Local Music Row
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(52.dp)
+                                    .clickable { isBrowsingLocalMusic = true }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.FolderOpen,
+                                        contentDescription = "Local Music",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(
+                                        text = "Local Music",
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Rounded.ChevronRight,
+                                    contentDescription = null,
+                                    tint = Color.White.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // 5. Playlists Section
+                    item(key = "lib_playlists_section") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Playlists",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = "Show all",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.White.copy(alpha = 0.65f),
+                                    modifier = Modifier.clickable { isBrowsingLocalMusic = true; selectedTab = 3 }
+                                )
+                            }
+
+                            androidx.compose.foundation.lazy.LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // Card 1: New Playlist
+                                item {
+                                    Column(modifier = Modifier.width(144.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(144.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(Color(0xFF1C1C1E))
+                                                .clickable { onCreatePlaylist?.invoke("New playlist") },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Add,
+                                                contentDescription = "New playlist",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(36.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "New playlist",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "Saved to YouTube Music",
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.55f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                // Card 2: Import Spotify
+                                item {
+                                    Column(modifier = Modifier.width(144.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(144.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(Color(0xFF1C1C1E))
+                                                .clickable { onImportSpotifyPlaylists?.invoke() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            // Circular Spotify icon badge
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(44.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.White),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.GraphicEq,
+                                                    contentDescription = "Spotify",
+                                                    tint = Color.Black,
+                                                    modifier = Modifier.size(26.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "Import Spotify",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "From a playlist link",
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.55f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                // Card 3: Import Playlist File (CSV / TXT)
+                                item {
+                                    Column(modifier = Modifier.width(144.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(144.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(Color(0xFF1C1C1E))
+                                                .clickable { onImportPlaylistFile?.invoke() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(44.dp)
+                                                    .clip(CircleShape)
+                                                    .background(accent.copy(alpha = 0.2f)),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.FileDownload,
+                                                    contentDescription = "Import",
+                                                    tint = accent,
+                                                    modifier = Modifier.size(24.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "Import Playlist",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "From CSV or TXT file",
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.55f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+
+                                // Remaining User Playlists
+                                items(playlists.size) { pIndex ->
+                                    val playlist = playlists[pIndex]
+                                    Column(modifier = Modifier.width(144.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(144.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(Color(0xFF1C1C1E))
+                                                .clickable { onOpenPlaylist?.invoke(playlist) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (!playlist.thumbnailUrl.isNullOrBlank()) {
+                                                AsyncImage(
+                                                    model = ImageRequest.Builder(LocalContext.current)
+                                                        .data(playlist.thumbnailUrl)
+                                                        .crossfade(true)
+                                                        .build(),
+                                                    contentDescription = playlist.name,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize()
+                                                )
+                                            } else {
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Rounded.QueueMusic,
+                                                    contentDescription = playlist.name,
+                                                    tint = Color.White.copy(alpha = 0.7f),
+                                                    modifier = Modifier.size(36.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = playlist.name,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${playlist.trackCount} tracks",
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.55f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 6. Artists Section
+                    item(key = "lib_artists_section") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                text = "Artists",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+
+                            androidx.compose.foundation.lazy.LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                val displayArtists = artists.take(15)
+                                items(displayArtists.size) { aIndex ->
+                                    val artist = displayArtists[aIndex]
+                                    Column(modifier = Modifier.width(144.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(144.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(Color(0xFF1C1C1E))
+                                                .clickable {
+                                                    viewingArtist = artist
+                                                    isBrowsingLocalMusic = true
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Person,
+                                                contentDescription = artist.name,
+                                                tint = Color.White.copy(alpha = 0.6f),
+                                                modifier = Modifier.size(48.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = artist.name,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${artist.trackCount} songs",
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.55f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 7. Subscriptions Section
+                    item(key = "lib_subscriptions_section") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                text = "Subscriptions",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+
+                            androidx.compose.foundation.lazy.LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                val sampleSubs = listOf(
+                                    Triple("Alok", "7.22M subscribers", Color(0xFFDC2626)),
+                                    Triple("LLusion", "1.9M subscribers", Color(0xFFDB2777)),
+                                    Triple("BoyWithUke", "5.14M subscribers", Color(0xFF4F46E5))
+                                )
+                                items(sampleSubs.size) { sIdx ->
+                                    val (name, subs, tintColor) = sampleSubs[sIdx]
+                                    Column(modifier = Modifier.width(144.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(144.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(tintColor.copy(alpha = 0.4f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = name.take(2).uppercase(),
+                                                fontSize = 32.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = Color.White
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = name,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = subs,
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.55f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // 8. Podcasts Section
+                    item(key = "lib_podcasts_section") {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                text = "Podcasts",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+
+                            androidx.compose.foundation.lazy.LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                item {
+                                    Column(modifier = Modifier.width(144.dp)) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(144.dp)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(
+                                                    Brush.linearGradient(
+                                                        listOf(Color(0xFF818CF8), Color(0xFFC084FC))
+                                                    )
+                                                ),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Podcasts,
+                                                contentDescription = "Episodes for Later",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(48.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "Episodes for Later",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "Your queued episodes",
+                                            fontSize = 12.sp,
+                                            color = Color.White.copy(alpha = 0.55f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (inspectingTrack != null) {
+            val targetTrack = tracks.find { it.id == inspectingTrack!!.id } ?: inspectingTrack!!
+            com.nodeplayer.music.ui.components.TrackDetailsSheet(
+                track = targetTrack,
+                audioOutputInfo = audioOutputInfo,
+                onDismiss = { inspectingTrack = null },
+                onAnalyzeSong = onAnalyzeTrack,
+                isAnalyzing = analyzingTrackId == targetTrack.id
+            )
+        }
+    }
+}
+
+@Composable
+fun DownloadedSongsList(
+    tracks: List<Track>,
+    currentTrack: Track?,
+    isPlaying: Boolean,
+    onTrackClick: (Track, List<Track>) -> Unit,
+    onPlayNext: (Track) -> Unit = {},
+    onAddToQueue: (Track) -> Unit = {},
+    qualityBadgeMode: String = "DETAILED",
+    onInspectTrack: (Track) -> Unit = {},
+    onAddToPlaylist: ((Track) -> Unit)? = null,
+    onDownloadTrack: ((Track) -> Unit)? = null,
+    onOpenDownloadQueue: () -> Unit = {}
+) {
+    val accent = LocalAccentColor.current
+    if (tracks.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    imageVector = Icons.Rounded.DownloadDone,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.3f),
+                    modifier = Modifier.size(56.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "No Downloaded Tracks",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Tracks downloaded for offline playback will appear here.",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 13.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                LiquidButton(onClick = onOpenDownloadQueue) {
+                    Icon(
+                        imageVector = Icons.Rounded.Downloading,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("View Download Queue", color = Color.White)
+                }
+            }
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${tracks.size} downloaded tracks",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 13.sp
+                )
+                LiquidButton(
+                    onClick = onOpenDownloadQueue,
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Downloading,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Queue", color = Color.White, fontSize = 12.sp)
+                }
+            }
+
+            SongsList(
+                tracks = tracks,
+                currentTrack = currentTrack,
+                isPlaying = isPlaying,
+                onTrackClick = onTrackClick,
+                onPlayNext = onPlayNext,
+                onAddToQueue = onAddToQueue,
+                qualityBadgeMode = qualityBadgeMode,
+                onInspectTrack = onInspectTrack,
+                onAddToPlaylist = onAddToPlaylist,
+                onDownloadTrack = onDownloadTrack
+            )
+        }
     }
 }
 
@@ -272,12 +1125,13 @@ fun SongsList(
     qualityBadgeMode: String = "DETAILED",
     onInspectTrack: (Track) -> Unit = {},
     onAddToPlaylist: ((Track) -> Unit)? = null,
+    onDownloadTrack: ((Track) -> Unit)? = null,
     hazeState: HazeState? = null
 ) {
     val accent = LocalAccentColor.current
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
-    androidx.compose.runtime.LaunchedEffect(listState.isScrollInProgress) {
+    LaunchedEffect(listState.isScrollInProgress) {
         com.nodeplayer.music.library.AudioAnalysisManager.setUserScrolling(listState.isScrollInProgress)
     }
 
@@ -298,8 +1152,9 @@ fun SongsList(
             val isCurrent = track.id == currentTrack?.id
 
             GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateItem(),
                 onClick = { onTrackClick(track, tracks) },
                 tintAlpha = if (isCurrent) 0.70f else 0.40f
             ) {
@@ -315,7 +1170,6 @@ fun SongsList(
                             .size(144, 144)
                             .build()
                     }
-                    // Artwork / Placeholder
                     Box(
                         modifier = Modifier
                             .size(48.dp)
@@ -344,7 +1198,6 @@ fun SongsList(
 
                     Spacer(modifier = Modifier.width(14.dp))
 
-                    // Title & Artist
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = track.title,
@@ -381,7 +1234,6 @@ fun SongsList(
                                         Spacer(modifier = Modifier.width(4.dp))
                                     }
                                 } else {
-                                    // COMPACT
                                     if (track.isHiRes) {
                                         FormatBadge("Hi-Res", Color(0xFF10B981))
                                         Spacer(modifier = Modifier.width(4.dp))
@@ -409,7 +1261,6 @@ fun SongsList(
                         }
                     }
 
-                    // 3-dot dropdown menu for song actions
                     var menuExpanded by remember { mutableStateOf(false) }
                     Box {
                         IconButton(
@@ -431,11 +1282,7 @@ fun SongsList(
                             DropdownMenuItem(
                                 text = { Text("Play Next", color = Color.White) },
                                 leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Rounded.QueueMusic,
-                                        contentDescription = null,
-                                        tint = accent
-                                    )
+                                    Icon(Icons.Rounded.QueueMusic, contentDescription = null, tint = accent)
                                 },
                                 onClick = {
                                     menuExpanded = false
@@ -445,11 +1292,7 @@ fun SongsList(
                             DropdownMenuItem(
                                 text = { Text("Add to Queue", color = Color.White) },
                                 leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Rounded.PlaylistAdd,
-                                        contentDescription = null,
-                                        tint = accent
-                                    )
+                                    Icon(Icons.Rounded.PlaylistAdd, contentDescription = null, tint = accent)
                                 },
                                 onClick = {
                                     menuExpanded = false
@@ -460,11 +1303,7 @@ fun SongsList(
                                 DropdownMenuItem(
                                     text = { Text("Add to Playlist", color = Color.White) },
                                     leadingIcon = {
-                                        Icon(
-                                            imageVector = Icons.Rounded.PlaylistAdd,
-                                            contentDescription = null,
-                                            tint = accent
-                                        )
+                                        Icon(Icons.Rounded.PlaylistAdd, contentDescription = null, tint = accent)
                                     },
                                     onClick = {
                                         menuExpanded = false
@@ -472,14 +1311,22 @@ fun SongsList(
                                     }
                                 )
                             }
+                            if (onDownloadTrack != null && !track.isDownloaded) {
+                                DropdownMenuItem(
+                                    text = { Text("Download Song", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(Icons.Rounded.Download, contentDescription = null, tint = accent)
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onDownloadTrack(track)
+                                    }
+                                )
+                            }
                             DropdownMenuItem(
                                 text = { Text("Track Details & Analysis", color = Color.White) },
                                 leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Info,
-                                        contentDescription = null,
-                                        tint = Color.White.copy(alpha = 0.8f)
-                                    )
+                                    Icon(Icons.Rounded.Info, contentDescription = null, tint = Color.White.copy(alpha = 0.8f))
                                 },
                                 onClick = {
                                     menuExpanded = false
@@ -489,7 +1336,6 @@ fun SongsList(
                         }
                     }
 
-                    // Playing indicator soundwave bars
                     if (isCurrent) {
                         SoundWaveVisualizer(isPlaying = isPlaying, barColor = accent)
                     }
@@ -508,7 +1354,7 @@ fun FoldersList(
     val accent = LocalAccentColor.current
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
 
-    androidx.compose.runtime.LaunchedEffect(listState.isScrollInProgress) {
+    LaunchedEffect(listState.isScrollInProgress) {
         com.nodeplayer.music.library.AudioAnalysisManager.setUserScrolling(listState.isScrollInProgress)
     }
 
@@ -526,8 +1372,9 @@ fun FoldersList(
             contentType = { _, _ -> "folder_row" }
         ) { _, folder ->
             GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateItem(),
                 onClick = { onFolderClick(folder) }
             ) {
                 Row(
@@ -586,8 +1433,9 @@ fun FoldersList(
 }
 
 @Composable
-fun FolderDetailView(
-    folder: MusicFolder,
+fun CollectionTracksDetailView(
+    title: String,
+    subtitle: String,
     tracks: List<Track>,
     currentTrack: Track?,
     isPlaying: Boolean,
@@ -595,7 +1443,10 @@ fun FolderDetailView(
     onTrackClick: (Track, List<Track>) -> Unit,
     onPlayNext: (Track) -> Unit = {},
     onAddToQueue: (Track) -> Unit = {},
-    hazeState: HazeState? = null
+    qualityBadgeMode: String = "DETAILED",
+    onInspectTrack: (Track) -> Unit = {},
+    onAddToPlaylist: ((Track) -> Unit)? = null,
+    onDownloadTrack: ((Track) -> Unit)? = null
 ) {
     val accent = LocalAccentColor.current
 
@@ -608,7 +1459,7 @@ fun FolderDetailView(
         ) {
             IconButton(onClick = onBack) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "Back",
                     tint = Color.White
                 )
@@ -616,7 +1467,7 @@ fun FolderDetailView(
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = folder.name,
+                    text = title,
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
                         color = Color.White
@@ -625,10 +1476,12 @@ fun FolderDetailView(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "${tracks.size} tracks",
+                    text = subtitle,
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = Color.White.copy(alpha = 0.65f)
-                    )
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             if (tracks.isNotEmpty()) {
@@ -653,7 +1506,10 @@ fun FolderDetailView(
             onTrackClick = onTrackClick,
             onPlayNext = onPlayNext,
             onAddToQueue = onAddToQueue,
-            
+            qualityBadgeMode = qualityBadgeMode,
+            onInspectTrack = onInspectTrack,
+            onAddToPlaylist = onAddToPlaylist,
+            onDownloadTrack = onDownloadTrack
         )
     }
 }
@@ -707,8 +1563,9 @@ fun AlbumsGrid(
                         .build()
                 }
                 GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateItem(),
                     onClick = { onAlbumClick(album) }
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
@@ -776,8 +1633,9 @@ fun AlbumsGrid(
                         .build()
                 }
                 GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateItem(),
                     onClick = { onAlbumClick(album) }
                 ) {
                     Row(
@@ -863,8 +1721,9 @@ fun ArtistsList(
                 contentType = { _, _ -> "artist_grid_card" }
             ) { _, artist ->
                 GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateItem(),
                     onClick = { onArtistClick(artist) }
                 ) {
                     Column(
@@ -924,8 +1783,9 @@ fun ArtistsList(
                 contentType = { _, _ -> "artist_list_row" }
             ) { _, artist ->
                 GlassCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateItem(),
                     onClick = { onArtistClick(artist) }
                 ) {
                     Row(
@@ -963,6 +1823,11 @@ fun ArtistsList(
                                 )
                             )
                         }
+                        Icon(
+                            imageVector = Icons.Rounded.ChevronRight,
+                            contentDescription = null,
+                            tint = Color.White.copy(alpha = 0.4f)
+                        )
                     }
                 }
             }
@@ -978,7 +1843,8 @@ fun PlaylistsTab(
     onPlaylistClick: (com.nodeplayer.model.Playlist) -> Unit,
     onCreatePlaylistClick: () -> Unit,
     onImportYouTubeClick: (() -> Unit)? = null,
-    onImportSpotifyClick: (() -> Unit)? = null
+    onImportSpotifyClick: (() -> Unit)? = null,
+    onImportPlaylistClick: (() -> Unit)? = null
 ) {
     val accent = LocalAccentColor.current
     val filterOptions = PLAYLIST_FILTER_OPTIONS
@@ -993,7 +1859,6 @@ fun PlaylistsTab(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Filter pills & Actions Row
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1077,6 +1942,33 @@ fun PlaylistsTab(
                     }
                 }
 
+                if (onImportPlaylistClick != null) {
+                    Box(
+                        modifier = Modifier
+                            .clip(ContinuousRoundedRectangle(GlassTokens.pillCornerRadius))
+                            .background(Color.White.copy(alpha = 0.12f))
+                            .clickable { onImportPlaylistClick() }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.FileDownload,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Import",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            )
+                        }
+                    }
+                }
+
                 Box(
                     modifier = Modifier
                         .clip(ContinuousRoundedRectangle(GlassTokens.pillCornerRadius))
@@ -1133,7 +2025,9 @@ fun PlaylistsTab(
                     contentType = { _, _ -> "playlist_row" }
                 ) { _, playlist ->
                     GlassCard(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateItem(),
                         onClick = { onPlaylistClick(playlist) }
                     ) {
                         Row(
@@ -1173,7 +2067,7 @@ fun PlaylistsTab(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = "${playlist.trackCount} tracks • ${playlist.source.capitalize()}",
+                                    text = "${playlist.trackCount} tracks • ${playlist.source.replaceFirstChar { it.uppercase() }}",
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = Color.White.copy(alpha = 0.6f)
                                     )

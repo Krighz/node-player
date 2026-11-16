@@ -1,6 +1,145 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Milestone v2.5 Phase 3 Motion System & Universal Animation Verified (2026-11-11)
+## Current Status: True Dual-Engine Decoupled Video Architecture & Audiophile Sync Verified (2026-11-16)
+
+### Audiophile Decoupled Video Architecture (2026-11-16)
+
+1. **True Dual-Engine Decoupling (Audio Master + Silent Secondary Video Player)**:
+   - Primary `activePlayer` in `PlaybackService` is the uninterrupted time master: never stopped, reset, or remuxed when toggling video on/off. USB bit-perfect DAC streams, EBU R128 loudness normalization, and gapless crossfade remain completely intact.
+   - Secondary `MusicVideoEngine` decodes video silently (`volume = 0f`, audio track disabled) on an isolated ExoPlayer instance on Android ART.
+   - Synchronous 250ms clock follower:
+     - Deadzone $\pm 25$ ms: 0 rate adjustment.
+     - Micro-drifts (25–450 ms): smoothly modulates `playbackParameters.speed` ($\pm 10\%$) using `VideoAspectMath.calculateRateNudge`.
+     - Macro-drifts (> 450 ms): issues direct seek jumps gated by a 1,500 ms cooldown to protect decoder keyframe acquisition.
+
+2. **Priority-Based Surface Claiming & Lifecycle**:
+   - `MusicVideoEngine.claimSurface(view, priority)` manages `FULLSCREEN_CINEMA` (priority 2), `NOW_PLAYING_CARD` (priority 1), and `MINI_PLAYER` (priority 0).
+   - Higher-priority surfaces preempt lower ones smoothly without leaking video buffers or creating orphaned player handles.
+   - 4-second unmount grace period before pausing video decoder when all surfaces unmount.
+
+3. **Zero-Allocation Aspect Math & Smooth Crossfade**:
+   - Direct Compose `TextureView` with `isOpaque = false` inside `VideoSurface.kt`.
+   - Custom `Modifier.layout` measuring container aspect vs video aspect (`VideoAspectMath.calculateDimensions`).
+   - Smooth 320ms alpha crossfade from still artwork to video once `onRenderedFirstFrame()` fires.
+
+4. **Multi-Tier Artwork & Fullscreen Landscape Cinema**:
+   - `FullscreenVideoPlayer` (`MusicVideoLayout.kt`): Edge-to-edge landscape UI with 3.5s auto-hiding controls, top header bar, resolution pill, large transport buttons, and bottom timeline scrubber.
+   - `VideoQualitySheet.kt`: Frosted glass drawer for Auto/1080p/720p/480p quality selection.
+   - `CanvasModels.kt` & `CanvasArtwork`: Models and UI hooks for Spotify/Apple Canvas video loops and multi-tier artwork fallback.
+
+5. **Strict Core Purity & Unit Verification**:
+   - `core-model/src/main/kotlin/com/nodeplayer/model/video/VideoModels.kt` and `CanvasModels.kt` are 100% pure Kotlin with zero Android/Media3 imports.
+   - Unit tests pass: `VideoMathTest` in `:core-model`, `VideoSyncEngineTest` and `AndroidVideoEngineTest` in `:app-android`.
+   - Full compilation and packaging green: `:app-android:assembleDebug` and `:app-desktop:compileKotlin`.
+
+---
+
+### Features v2 Phase F06: Music Video Playback & Cinema Player (2026-11-16)
+
+1. **Top 16:9 Embedded Player in Now Playing**:
+   - `NowPlayingView.kt`: Animated hero card aspect-ratio morphing between 1:1 (audio) and 16:9 (video) with `animateFloatAsState` spring physics.
+   - Interactive Quality badge pill (e.g. "480p") that taps to open a liquid-glass dropdown menu with available heights (1080p, 720p, 480p, 360p, Auto).
+   - Dedicated "Stop Video" button in Now Playing hero card to immediately revert to album art and audio-only mode.
+   - "Play Video" badge button on album art when an audio track has an associated music video available.
+   - Default is audio-only playback (`video_auto_play = false`), preserving data and battery unless explicitly toggled.
+   - Removed redundant Volume slider from `QuickSettingsSheet.kt` to avoid duplication with `NowPlayingView`.
+
+2. **Strict PTS Audio/Video Lip-Sync & Seamless Stream Handoff**:
+   - Android ExoPlayer master audio clock synchronization via hardware audio sink: attaching `VideoSurface` directly to `PlaybackService.instance.player` guarantees hardware PTS lip-sync.
+   - Position-preserving stream handoff: switching between video and audio preserves `currentPosition` down to the exact millisecond (`seekTo(currentPos)`), completely preventing restarts from 0:00 or drifting.
+   - Dual-surface architecture: `TextureView` (`view_video_texture.xml`) for squircle-clipped 16:9 hero card to prevent glass punch-through artifacts; `SurfaceView` (`view_video_surface.xml`) for full-screen `FullscreenCinemaPlayer`.
+
+3. **Fullscreen Cinema Player (`FullscreenCinemaPlayer.kt`)**:
+   - Immersive fullscreen liquid-glass overlay controls with single-tap toggle and configurable auto-hide timer.
+   - Dual-zone vertical drag gestures: left half for screen brightness, right half for system audio volume with real-time feedback badges.
+   - 10-second double-tap seek with directional animated ripple badges (`resolveDoubleTapSeekDeltaMs`).
+   - Resolution dropdown menu and interactive timeline scrubber.
+
+4. **Background Data Saver & Picture-in-Picture (PiP)**:
+   - Configured `android:supportsPictureInPicture="true"` and `configChanges` in `AndroidManifest.xml`.
+   - `MainActivity.kt`: Enters PiP on `onUserLeaveHint()` when video is playing and `video_pip` is enabled; restores UI on `onPictureInPictureModeChanged()`.
+   - Data saver: when app moves to background outside of PiP, dynamically disables video track via ExoPlayer `TrackSelectionParameters`, streaming audio-only.
+
+5. **Desktop Multiplatform Video Player (`DesktopVideoPlayer.kt`)**:
+   - Built on `uk.co.caprica:vlcj:4.8.3` via Compose `SwingPanel` embedding `EmbeddedMediaPlayerComponent`.
+   - Periodic drift correction keeping A/V sync within 150ms.
+   - Graceful fallback when VLC is not installed on the host machine.
+   - Wired into `SharedPlayerLayout.kt` and `Main.kt`.
+
+6. **Settings Registry & Verification**:
+   - Registered 8 settings under `SettingSubsection.MUSIC_VIDEOS` (`video_auto_play`, `video_default_quality`, `video_seek_step_s`, `video_gestures`, `video_pip`, `video_background_audio_only`, `video_controls_autohide_s`, `video_show_quality_pill`).
+   - All tests passing: `VideoQualityMathTest`, `SettingsRegistryTest`, `StreamResolverVideoTest`, `AndroidVideoEngineTest`, `DesktopVideoPlayerTest`.
+   - Multiplatform compilation 100% green: `:app-android`, `:app-desktop`, `:core-ui`, `:core-network`, `:core-model`.
+
+---
+
+## Historical Status: Verification Round 1 & Bug Fixes (F00–F05) Verified (2026-11-15)
+
+### Verification Round 1 & Post-F05 Bug Fixes (2026-11-15)
+
+1. **Bug B1: YouTube Playlist Creation on Import**:
+   - Implemented `InnerTubeClient.createPlaylist(title, description, privacyStatus, videoIds)` and `InnerTubeClient.addTracksToPlaylist(playlistId, videoIds)`.
+   - Wired remote YouTube playlist creation in `PlayerViewModel.createPlaylistWithTracks` when authenticated with InnerTube.
+   - Matched online tracks extract video IDs (`nodeplayer://youtube/...`, `watch?v=...`, `youtu.be/...`), skipping and logging local-only tracks.
+   - Verified via `YouTubePlaylistCreateTest` (3 tests passed).
+
+2. **Bug B2: File Picker & Resilient Decoding on Import**:
+   - Expanded file picker MIME filter in `MainActivity.kt` from `text/*` to `*/*`, eliminating Android file manager grey-out issues across download managers and cloud providers.
+   - Added `LaunchedEffect(initialText)` auto-synchronization in `PlaylistImportSheet.kt` to ensure file contents immediately populate the text area on selection.
+   - Implemented `UniversalPlaylistParser.decodeBytesWithFallback` supporting UTF-8 with BOM, UTF-16 LE/BE (Excel Unicode exports), and Windows-1252 fallbacks.
+   - Verified via `UniversalPlaylistParserTest` (5 new tests passed).
+
+3. **Bug B3: Storage Manager Audio Cache Directory Alignment**:
+   - Corrected audio cache directory registration in `NodePlayerApplication.kt` from `"media_cache"` to `AudioCache.CACHE_DIR_NAME` (`"audio_cache"`).
+   - Verified via `AudioCacheStorageCategoryTest` confirming correct byte accounting.
+
+4. **Multiplatform Verification**:
+   - All tests green across `:app-android:testDebugUnitTest`, `:core-network:test`, `:core-library:test`, `:core-model:test`, `:core-ui:desktopTest`, and `:app-desktop:compileKotlin`.
+
+---
+
+## Historical Status: Milestone Features v2 Phase F05 FLAC to Opus Converter Verified (2026-11-15)
+
+### Features v2 Phase F05: FLAC to Opus Batch Converter (2026-11-15)
+
+1. **Multiplatform Batch Transcoder Engine (`AudioTranscoder`)**:
+   - `ConverterModels.kt` in `:core-model` defining `TranscodePreset` (192, 128, 96, CUSTOM), `TranscodeJob`, `TranscodeBatchSummary`, and `AudioTranscoder` interface.
+   - `ConverterMath.kt` providing exact byte size projection, human-readable disk formatting, and ReplayGain to Opus R128 Q7.8 offset conversion.
+   - `DesktopFFmpegTranscoder` in `app-desktop` wrapping FFmpeg CLI via `ProcessBuilder` with `-progress pipe:1` live stream parsing, clean process cancellation, temporary file cleanup, and test-decode verification. Strictly zero runtime downloading: resolves custom configured path, adjacent bundled binary (`ffmpeg.exe`/`ffmpeg`), or system PATH.
+   - `AndroidFFmpegTranscoder` in `app-android` wrapping `dev.ffmpegkit-maintained:ffmpeg-kit-audio:6.0.4` (LGPL 3.0), providing in-process native Opus transcoding with thread-safe callbacks.
+   - `TranscodeQueueManager` in `:core-library` featuring Semaphore-controlled multi-worker concurrency, recursive directory scanning, skip-existing output check, and an **Atomic Replace-Original Safety Gate** (source FLAC is never deleted until `.tmp.opus` verifies and atomic rename succeeds).
+2. **Settings Registry & UI**:
+   - Registered 13 settings in `SettingsRegistry` under `SettingSection.LIBRARY_FILES`, `SettingSubsection.AUDIO_CONVERTER`.
+   - `AudioConverterView` in `:core-ui`: quality preset selector chips (`192`, `128`, `96`, `CUSTOM`), custom accordion with bitrate/VBR/application/compression controls, disk savings projection card, destination options, destructive replace-original confirmation dialog, multi-worker progress indicator, and batch summary dialog.
+   - Wired navigation from `SettingsView.kt` (`core-ui`), `SettingsScreen.kt` (`app-android`), and `SharedPlayerLayout.kt` under `Library & Files > FLAC to Opus Converter`.
+   - Documented FFmpeg and `ffmpeg-kit-audio` in `THIRD_PARTY_LICENSES.md`.
+3. **Verification**:
+   - All unit test suites passed: `ConverterMathTest`, `DesktopFFmpegTranscoderTest`, `TranscodeQueueManagerTest`, `SettingsRegistryTest`, `ThemeMatrixCharacterizationTest`.
+   - Multiplatform compilation succeeded with exit code 0 (`compileDebugKotlin`, `compileCommonMainKotlinMetadata`, `:app-desktop:compileKotlin`, `:core-ui:desktopTest`, `:app-desktop:test`, `:core-model:test`, `:core-library:test`).
+   - Wiring check passed with 9/9 symbols verified (`scripts/wiring-check.ps1`).
+
+---
+
+### Features v2 Phase F04: Discord Rich Presence (2026-11-15)
+
+1. **Windows Desktop Local Discord IPC Named Pipe (`PresenceTransport`)**:
+   - `DiscordIpcTransport` in `app-desktop` communicates over local named pipes `\\.\pipe\discord-ipc-0..9` via little-endian framing.
+   - Little-endian 8-byte framing encoder/decoder `DiscordFrameCodec` (`:core-network`) with safety cap (1MB).
+   - `DiscordActivityBuilder` formatting `SET_ACTIVITY` JSON with field clamping (2..128 chars), timestamp calculation, and artwork fallback.
+   - `PresenceController` in `:core-network` with 15-second debouncing rate-limiter, track seek detection, pause clearing, incognito mode, and exponential backoff reconnection.
+2. **Settings Registry & Privacy Protocol**:
+   - Registered 6 desktop-only settings in `SettingsRegistry` under `ONLINE_CONNECT_NETWORK > DISCORD_PRESENCE`.
+   - Desktop-only settings filtered out on Android `SettingsScreen.kt`.
+   - `DiscordRichPresenceCard` UI component rendered in `SettingsView.kt`.
+   - Quick Discord Incognito toggle added to `HomeProfileSheet.kt`.
+3. **Verification**:
+   - All unit test suites passed: `DiscordFrameCodecTest`, `DiscordActivityBuilderTest`, `PresenceControllerTest`, `SettingsRegistryTest`, `ThemeMatrixCharacterizationTest`.
+   - Multiplatform compilation succeeded with exit code 0 (`compileDebugKotlin`, `compileCommonMainKotlinMetadata`, `:app-desktop:compileKotlin`, `:core-ui:desktopTest`).
+   - Wiring check passed with 10/10 symbols verified (`scripts/wiring-check.ps1`).
+
+---
+
+## Historical Status: Milestone v2.5 Phase 3 Motion System & Universal Animation Verified (2026-11-11)
 
 ### Milestone v2.5 Phase 3: Motion System, Spring Physics & Container Transform (2026-11-11)
 

@@ -13,14 +13,13 @@ object FunctionNameExtractor {
     // The sig function is called as: FUNC(NUMBER, decodeURIComponent(encryptedSig))
     // within a logical expression: VAR && (VAR = FUNC(NUM, decodeURIComponent(VAR)), ...)
     private val SIG_FUNCTION_PATTERNS = listOf(
-        // Pattern 1 (2025+): &&(VAR=FUNC(NUM,decodeURIComponent(VAR))
-        Regex("""&&\s*\(\s*[a-zA-Z0-9$]+\s*=\s*([a-zA-Z0-9$]+)\s*\(\s*(\d+)\s*,\s*decodeURIComponent\s*\(\s*[a-zA-Z0-9$]+\s*\)"""),
-        // Classic patterns (pre-2025, kept as fallback)
+        // Modern 2025/2026 player JS variants:
         Regex("""\b[cs]\s*&&\s*[adf]\.set\([^,]+\s*,\s*encodeURIComponent\(([a-zA-Z0-9$]+)\("""),
-        Regex("""\b[a-zA-Z0-9]+\s*&&\s*[a-zA-Z0-9]+\.set\([^,]+\s*,\s*encodeURIComponent\(([a-zA-Z0-9$]+)\("""),
+        Regex("""\b([a-zA-Z0-9$]{2,})\s*=\s*function\(\s*a\s*\)\s*\{\s*a\s*=\s*a\.split\(\s*""\s*\)"""),
+        Regex("""&&\s*\(\s*[a-zA-Z0-9$]+\s*=\s*([a-zA-Z0-9$]+)\s*\(\s*(\d+)\s*,\s*decodeURIComponent\s*\(\s*[a-zA-Z0-9$]+\s*\)"""),
+        Regex("""(?:\b|[^a-zA-Z0-9$])([a-zA-Z0-9$]{2,})\s*=\s*function\(\s*a\s*,\s*b\s*\)\s*\{"""),
         Regex("""\bm=([a-zA-Z0-9${'$'}]{2,})\(decodeURIComponent\(h\.s\)\)"""),
-        Regex("""\bc\s*&&\s*d\.set\([^,]+\s*,\s*(?:encodeURIComponent\s*\()([a-zA-Z0-9$]+)\("""),
-        Regex("""\bc\s*&&\s*[a-z]\.set\([^,]+\s*,\s*encodeURIComponent\(([a-zA-Z0-9$]+)\("""),
+        Regex("""\bc\s*&&\s*[a-z]\.set\([^,]+\s*,\s*encodeURIComponent\(([a-zA-Z0-9$]+)\(""")
     )
 
     // N-parameter (throttle) transform function patterns
@@ -49,10 +48,23 @@ object FunctionNameExtractor {
 
     fun extractSigFunctionInfo(playerJs: String): SigFunctionInfo? {
         for ((index, pattern) in SIG_FUNCTION_PATTERNS.withIndex()) {
-            val match = pattern.find(playerJs)
-            if (match != null) {
+            val matches = pattern.findAll(playerJs)
+            for (match in matches) {
                 val name = match.groupValues[1]
                 val constArg = if (match.groupValues.size > 2) match.groupValues[2].toIntOrNull() else null
+
+                // For pattern 3 ((?:\\b|[^a-zA-Z0-9$])([a-zA-Z0-9$]{2,})\\s*=\\s*function\\(\\s*a\\s*,\\s*b\\s*\\)\\s*\\{),
+                // verify that the function body actually performs signature manipulation (split, slice, splice, reverse)
+                // to avoid matching generic 2-argument utility functions in Google Closure Library.
+                if (index == 3) {
+                    val fnStart = match.range.first
+                    val fnEnd = (fnStart + 400).coerceAtMost(playerJs.length)
+                    val snippet = playerJs.substring(fnStart, fnEnd)
+                    if (!snippet.contains("split") && !snippet.contains("slice") && !snippet.contains("splice") && !snippet.contains("reverse")) {
+                        continue
+                    }
+                }
+
                 NodeLog.d(TAG, "Sig function found with pattern $index: $name (constantArg=$constArg)")
                 return SigFunctionInfo(name, constArg)
             }

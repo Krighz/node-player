@@ -789,7 +789,7 @@ class CrossfadePlayerManager(
         }
         val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
         val artworkUri = if (track.path.startsWith("nodeplayer://youtube/")) {
-            Uri.parse("https://i.ytimg.com/vi/${track.path.removePrefix("nodeplayer://youtube/")}/hqdefault.jpg")
+            Uri.parse("https://i.ytimg.com/vi/${track.path.removePrefix("nodeplayer://youtube/")}/maxresdefault.jpg")
         } else ContentUris.withAppendedId(albumArtBaseUri, track.albumId)
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)
