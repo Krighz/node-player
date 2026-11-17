@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] (Post-v1.8.0)
 
 ### Added
+- **Carbon / Zinc Design System (`CarbonZincPalette.kt`)**: Added neutral dark palette (`#09090B` floor, `#121215` container, `#1C1C21` elevated surface, `#5EEAD4` AccentTeal) and unified typography scale.
+- **Fixed Slim Top Bar & Mode Switcher (`OnlineHomeView.kt`)**: Slim 38dp pinned header featuring a unified mode switcher `[ • YT Music | Device Files ]` with active teal indicator dot and instant toggle to offline files, accompanied by a circular profile avatar button.
+- **Scrollable Mood Filter Bar & Content Divider**: Horizontally scrollable mood chips (`Pop`, `Chill`, `Party`, `Commute`, `Romance`...) placed at the top of the Home feed, followed by a `1.dp` subtle divider that scrolls up cleanly under the fixed top bar.
+- **Modern "Your Mix" Cards & Squircle Art Covering (`YourMixShelf.kt`)**: Redesigned cards with 20.dp continuous rounded rectangle borders, 136×136dp inner album art with 14.dp squircle curvature, and an elevated capsule pill "Play" button.
 - **Hardware-Synchronized System Volume Slider**: Real-time integration of the volume slider in `NowPlayingView` with Android's `AudioManager.STREAM_MUSIC`, complete with drag/tap seeking and a `BroadcastReceiver` listening to `"android.media.VOLUME_CHANGED_ACTION"` for hardware rocker synchronization.
 - **Widescreen 16:9 Music Video Player**: Automatic container aspect ratio transition to 16:9 for video streams, with stream quality badge (`480p`) and fullscreen expand controls conditionally visible only for video playback.
 - **Multi-Shelf YouTube Music Discovery**: Integrated 6 dynamic shelves on Home: Top Picks for You, Recents, Find Your Mood (with duotone category matrix filters), Albums & Singles, Music Videos, and Trending.
@@ -17,11 +21,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bottom-Left Jump to Current**: Added a compact `36.dp` circular white button (`Icons.Rounded.ArrowDownward`, `Color.White.copy(alpha = 0.16f)`) anchored in the bottom-left corner of `FullScreenLyricsView`.
 
 ### Changed
+- **Online Stream & AAC Badge Accent**: Updated YouTube stream and AAC badges in `AudioFormatBadge.kt` to use `CarbonZincPalette.AccentTeal` (`#5EEAD4`) text, stroke, and translucent container tint.
+- **Home Feed Shelves Hierarchy**: Updated home screen sections, video cards, and squircle album cards to utilize the Carbon/Zinc surface hierarchy.
 - **Default Dark Mode Theme Color**: Set default dark mode background to charcoal `#262626` across `Theme.kt`, `LiquidGlassBackground.kt`, and `GlassTheme.kt` with `#303030` elevated card surfaces, while strictly maintaining pure `#000000` pitch black for OLED mode.
 - **FullScreenLyricsView Redesigned Top Bar**: Centered drag handle pill (`36.dp` × `4.dp`), `48.dp` × `42.dp` thumbnail, song title & artist typography, favorite star button, and dynamic context action button (More Options when controls are open, Share when controls are collapsed).
 - **Default Collapsed Lyrics Controls**: Full-screen lyrics playback dock now starts collapsed by default for an unobstructed, distraction-free reading experience, auto-collapsing after 3.5 seconds of inactivity when revealed.
 
 ### Fixed
+- **YouTube Playback 1m04s / 1 MiB CDN 403 Stall & 128 KB Chunking**:
+  - Implemented 128 KB bounded chunk range requests (`DEFAULT_CHUNK_SIZE = 128L * 1024`) in `RangedUpstreamDataSource.kt` to bypass Google Video CDN's 1 MiB cutoff on mobile unauthenticated streams.
+  - Rewrote upstream chunk read loop to prevent premature `RESULT_END_OF_INPUT` signals on chunk boundaries, enabling continuous audio buffering without stalls.
+  - Fixed `openChildWithRetry` to extract and pass the real 11-character `videoId` during stream refreshes instead of passing raw googlevideo URLs.
+  - Integrated `media3-datasource-okhttp` to maintain persistent HTTP/2 connection pooling across chunk boundaries.
+- **YouTube Stream Resolution & Client Rotation (`StreamResolver.kt`, `YouTubeModels.kt`)**:
+  - Upgraded Apple client models (`IOS`, `IPADOS`) with complete iOS 18.2 client metadata (`21.03.1`).
+  - Demoted broken `ANDROID_VR` and bot-blocked `TVHTML5` clients in stream rotation, requiring HTTP 200/206 validation before handing streams to ExoPlayer.
+- **MusicVideoEngine Video Playback Failure**:
+  - Configured `DefaultMediaSourceFactory` using `AudioCache.createDataSourceFactory()` for `MusicVideoEngine`'s secondary player to prevent naked unbounded video requests that triggered CDN 403 errors.
+  - Added playback error listener to `MusicVideoEngine` for immediate diagnosis.
 - **Lyrics Scroll Auto-Popup Bug**: Decoupled manual list scrolling from control visibility so scrolling the lyrics list never unexpectedly brings up the bottom playback bar.
 - **Bottom Scrim Vignette Removal**: Removed the black gradient scrim overlay at the bottom of `FullScreenLyricsView`, enabling the dynamic album art palette to flow cleanly to the bottom edge.
 - **Root Screen Background De-Hardcoding**: Removed hardcoded `Color.Black` roots in `OnlineHomeView`, `PlaylistDetailView`, and `LibraryScreen`, enabling proper rendering of `#262626` in standard dark mode while preserving pure black in OLED mode.
