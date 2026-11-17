@@ -5,7 +5,15 @@
 
 ---
 
-### [2026-11-17] - CPU, Network, Database & UI Performance Optimizations
+### [2026-11-17] - Instant Lyric Card Generator & High-Impact Lyrics Typography
+- **Instant Lyric Card Generator (`LyricCardView.kt`, `LyricCardRenderer.kt`)**:
+  - Added dedicated share button directly over the album art thumbnail in `FullScreenLyricsView` top bar to instantly trigger lyric selection mode.
+  - Interactive multi-line selection mode (up to 6 lines) in squircle card containers (`ContinuousRoundedRectangle(16.dp)`) with illuminated selection state and a floating glass pill dock `[ ✕ Cancel | Share ]`.
+  - 9:16 vertical Lyric Card generator previewing dynamic ambient gradients derived from `AlbumArtPalette`, "Node Player" brand watermark, bold typography, squircle album art, track title, and artist name.
+  - Android `LyricCardRenderer` generates 1080×1920 high-resolution PNG exports, automatically launches the native Android Share Sheet via `FileProvider`, and supports saving directly to device Pictures / MediaStore gallery.
+- **Thicker High-Impact Lyrics Typography (`WordByWordKaraokeText.kt`, `LyricLineItem.kt`, `FullScreenLyricsView.kt`)**:
+  - Increased font weight to `FontWeight.Black` (active) and `FontWeight.ExtraBold` (inactive) with `-0.45sp` letter spacing and `32.sp` default scale, ensuring punchy, highly legible typography against ambient backgrounds.
+  - Increased unsung text alpha from `0.35f` to `0.48f` for bolder character strokes.
 - **Unthrottled Stream Resolution Architecture (`AudioCache.kt`, `RangedUpstreamDataSource.kt`)**:
   - Primary YouTube audio stream resolution now delegates directly to `NewPipeFallback.resolveStream(videoId)` with Web JavaScript deciphering, matching the video engine's architecture.
   - Eliminates the 12–14s startup waterfall previously caused by rotating through dead clients (`VISIONOS`, `WEB_REMIX`), dropping stream start latency to ~1.1s.

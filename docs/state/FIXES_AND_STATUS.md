@@ -1,6 +1,19 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Unthrottled Stream Architecture & Timeline Ticker Fix Verified (2026-11-17)
+## Current Status: Instant Lyric Card Generator & High-Impact Typography Verified (2026-11-17)
+
+### Instant Lyric Card Generator & High-Impact Lyrics Typography (2026-11-17)
+
+1. **Instant Lyric Card Generator (`LyricCardView.kt`, `LyricCardRenderer.kt`)**:
+   - Added dedicated share button directly over the album art thumbnail in `FullScreenLyricsView` top bar to instantly trigger lyric selection mode.
+   - Interactive multi-line selection mode (up to 6 lines) in squircle card containers (`ContinuousRoundedRectangle(16.dp)`) with illuminated selection state and a floating glass pill dock `[ ✕ Cancel | Share ]`.
+   - 9:16 vertical Lyric Card generator previewing dynamic ambient gradients derived from `AlbumArtPalette`, "Node Player" brand watermark, bold typography, squircle album art, track title, and artist name.
+   - Android `LyricCardRenderer` generates 1080×1920 high-resolution PNG exports, automatically launches the native Android Share Sheet via `FileProvider`, and supports saving directly to device Pictures / MediaStore gallery.
+2. **Thicker High-Impact Lyrics Typography (`WordByWordKaraokeText.kt`, `LyricLineItem.kt`, `FullScreenLyricsView.kt`)**:
+   - Increased font weight to `FontWeight.Black` (active) and `FontWeight.ExtraBold` (inactive) with `-0.45sp` letter spacing and `32.sp` default scale, ensuring punchy, highly legible typography against ambient backgrounds.
+   - Increased unsung text alpha from `0.35f` to `0.48f` for bolder character strokes.
+
+---
 
 ### Unthrottled Stream Resolution & Now Playing Timeline Verification (2026-11-17)
 

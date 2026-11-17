@@ -87,6 +87,7 @@ import android.content.IntentFilter
 import kotlin.math.roundToInt
 import kotlinx.coroutines.withContext
 import com.nodeplayer.ui.components.NodeConnectPairingDialog
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -1261,7 +1262,33 @@ class MainActivity : ComponentActivity() {
                                                 startActivity(Intent.createChooser(shareIntent, "Share Track & Lyrics"))
                                             },
                                             onOpenNodeConnect = { showPairingDialog = true },
-                                            onOpenPlaybackOptions = { showAndroidPlaybackOptions = true }
+                                            onOpenPlaybackOptions = { showAndroidPlaybackOptions = true },
+                                            onShareCard = { lines, cardTrack, cardPalette ->
+                                                val t = cardTrack ?: track
+                                                lifecycleScope.launch {
+                                                    val art = t?.let { com.nodeplayer.ui.components.PlatformArtworkProvider.loadArtwork(it)?.asAndroidBitmap() }
+                                                    com.nodeplayer.music.lyrics.LyricCardRenderer.shareCard(
+                                                        context = this@MainActivity,
+                                                        track = t,
+                                                        lines = lines,
+                                                        palette = cardPalette,
+                                                        artwork = art
+                                                    )
+                                                }
+                                            },
+                                            onSaveCard = { lines, cardTrack, cardPalette ->
+                                                val t = cardTrack ?: track
+                                                lifecycleScope.launch {
+                                                    val art = t?.let { com.nodeplayer.ui.components.PlatformArtworkProvider.loadArtwork(it)?.asAndroidBitmap() }
+                                                    com.nodeplayer.music.lyrics.LyricCardRenderer.saveCardToGallery(
+                                                        context = this@MainActivity,
+                                                        track = t,
+                                                        lines = lines,
+                                                        palette = cardPalette,
+                                                        artwork = art
+                                                    )
+                                                }
+                                            }
                                         )
                                     }
                                 }

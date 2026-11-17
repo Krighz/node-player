@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -977,6 +978,32 @@ fun NowPlayingSheet(
                 onClose = { showLyrics = false },
                 onSearchAgain = { lyricsRefreshTrigger++ },
                 onOpenOffsetControls = { showLyricsOffsetDialog = true },
+                onShareCard = { lines, cardTrack, cardPalette ->
+                    val t = cardTrack ?: track
+                    coroutineScope.launch {
+                        val art = t?.let { com.nodeplayer.ui.components.PlatformArtworkProvider.loadArtwork(it)?.asAndroidBitmap() }
+                        com.nodeplayer.music.lyrics.LyricCardRenderer.shareCard(
+                            context = context,
+                            track = t,
+                            lines = lines,
+                            palette = cardPalette,
+                            artwork = art
+                        )
+                    }
+                },
+                onSaveCard = { lines, cardTrack, cardPalette ->
+                    val t = cardTrack ?: track
+                    coroutineScope.launch {
+                        val art = t?.let { com.nodeplayer.ui.components.PlatformArtworkProvider.loadArtwork(it)?.asAndroidBitmap() }
+                        com.nodeplayer.music.lyrics.LyricCardRenderer.saveCardToGallery(
+                            context = context,
+                            track = t,
+                            lines = lines,
+                            palette = cardPalette,
+                            artwork = art
+                        )
+                    }
+                },
                 onKeepScreenOn = { keep ->
                     (context as? android.app.Activity)?.let { act ->
                         if (keep) {

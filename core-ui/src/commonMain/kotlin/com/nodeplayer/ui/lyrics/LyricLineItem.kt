@@ -39,13 +39,14 @@ private val StartCenterOrigin = TransformOrigin(0f, 0.5f)
 
 private val BaseLyricTextStyle = TextStyle(
     fontSize = 28.sp,
-    fontWeight = FontWeight.SemiBold,
+    fontWeight = FontWeight.ExtraBold,
     lineHeight = 35.sp,
+    letterSpacing = (-0.45).sp,
     textAlign = TextAlign.Start
 )
 
 /** Opacity of the not-yet-sung part of the active line (the semi-translucent white of Apple Music). */
-private const val UNSUNG_ALPHA = 0.35f
+private const val UNSUNG_ALPHA = 0.48f
 
 /** Width of the soft edge that travels across the active line. */
 private val FeatherWidth = 22.dp

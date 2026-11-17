@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] (Post-v1.8.0)
 
 ### Added
+- **Instant Lyric Card Generator (`LyricCardView.kt`, `LyricCardRenderer.kt`)**: Added high-resolution (1080×1920) 9:16 vertical Lyric Card generator matching BitChord and Apple Music aesthetics:
+  - Album art thumbnail with dedicated share indicator in `FullScreenLyricsView` top bar opens interactive line-selection mode.
+  - Interactive multi-line selection (up to 6 lines) in squircle card containers (`ContinuousRoundedRectangle(16.dp)`) with illuminated selection state and a floating glass pill dock `[ ✕ Cancel | Share ]`.
+  - High-res card composition featuring dynamic vertical ambient gradients derived from `AlbumArtPalette`, "Node Player" brand watermark, bold typography, squircle album art, track title, and artist name.
+  - Android `LyricCardRenderer` generates crisp PNG exports, automatically launches the native Android Share Sheet via `FileProvider`, and supports saving directly to device Pictures / MediaStore gallery.
+- **Thicker High-Impact Lyrics Typography (`WordByWordKaraokeText.kt`, `LyricLineItem.kt`, `FullScreenLyricsView.kt`)**:
+  - Increased font weight to `FontWeight.Black` (active) and `FontWeight.ExtraBold` (inactive) with `-0.45sp` letter spacing and `32.sp` default scale, ensuring punchy, highly legible typography against ambient backgrounds.
+  - Increased unsung text alpha from `0.35f` to `0.48f` for bolder character strokes.
 - **Carbon / Zinc Design System (`CarbonZincPalette.kt`)**: Added neutral dark palette (`#09090B` floor, `#121215` container, `#1C1C21` elevated surface, `#5EEAD4` AccentTeal) and unified typography scale.
 - **Fixed Slim Top Bar & Mode Switcher (`OnlineHomeView.kt`)**: Slim 38dp pinned header featuring a unified mode switcher `[ • YT Music | Device Files ]` with active teal indicator dot and instant toggle to offline files, accompanied by a circular profile avatar button.
 - **Scrollable Mood Filter Bar & Content Divider**: Horizontally scrollable mood chips (`Pop`, `Chill`, `Party`, `Commute`, `Romance`...) placed at the top of the Home feed, followed by a `1.dp` subtle divider that scrolls up cleanly under the fixed top bar.

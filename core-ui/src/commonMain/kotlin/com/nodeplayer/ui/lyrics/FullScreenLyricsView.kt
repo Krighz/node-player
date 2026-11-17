@@ -11,6 +11,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.ChatBubble
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -86,6 +88,8 @@ import com.nodeplayer.model.AlbumArtPalette
 import com.nodeplayer.model.Lyrics
 import com.nodeplayer.model.LyricsLine
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.component.shapes.ContinuousCapsule
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.GlassControlSurface
 import com.nodeplayer.ui.components.LiquidButton
 import com.nodeplayer.ui.components.PlatformArtworkProvider
@@ -152,6 +156,8 @@ fun FullScreenLyricsView(
     onOpenPlaybackOptions: () -> Unit = {},
     onSearchAgain: () -> Unit = {},
     onOpenOffsetControls: () -> Unit = {},
+    onShareCard: ((lines: List<String>, track: Track?, palette: AlbumArtPalette) -> Unit)? = null,
+    onSaveCard: ((lines: List<String>, track: Track?, palette: AlbumArtPalette) -> Unit)? = null,
     lyricsConfig: com.nodeplayer.model.LyricsViewConfig = com.nodeplayer.model.LyricsViewConfig(),
     onKeepScreenOn: (Boolean) -> Unit = {},
     hoistedDominantColor: Color? = null,
@@ -213,6 +219,11 @@ fun FullScreenLyricsView(
     var interactionTick by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
     var isFavorite by remember(track?.id) { mutableStateOf(track?.isFavorite ?: false) }
 
+    // Lyric Card selection & generator states
+    var isSelectionMode by remember { mutableStateOf(false) }
+    var selectedLineIndices by remember { mutableStateOf(setOf<Int>()) }
+    var showCardDialog by remember { mutableStateOf(false) }
+
     fun registerInteraction() {
         if (controlsVisible) {
             interactionTick++
@@ -221,7 +232,7 @@ fun FullScreenLyricsView(
 
     // Auto-collapse playback controls after 3.5 seconds when playing
     LaunchedEffect(isPlaying, controlsVisible, interactionTick) {
-        if (isPlaying && controlsVisible) {
+        if (isPlaying && controlsVisible && !isSelectionMode) {
             delay(3500L)
             controlsVisible = false
         }
@@ -245,8 +256,8 @@ fun FullScreenLyricsView(
     }
 
     // Auto-scroll logic: spring smooth scroll only when !listState.isScrollInProgress so it never fights user touch
-    LaunchedEffect(activeIndex) {
-        if (!userScrolledManually && !listState.isScrollInProgress && activeIndex >= 0 && activeIndex < lines.size) {
+    LaunchedEffect(activeIndex, isSelectionMode) {
+        if (!isSelectionMode && !userScrolledManually && !listState.isScrollInProgress && activeIndex >= 0 && activeIndex < lines.size) {
             val targetScrollIndex = (activeIndex - 1).coerceAtLeast(0)
             listState.animateScrollToItem(targetScrollIndex)
         }
@@ -273,12 +284,14 @@ fun FullScreenLyricsView(
         modifier = modifier
             .fillMaxSize()
             .background(Color(effectivePalette.darkMuted).copy(alpha = 1f))
-            .pointerInput(Unit) {
-                detectTapGestures {
-                    // Tapping anywhere on the lyrics view toggles controls
-                    controlsVisible = !controlsVisible
-                    if (controlsVisible) {
-                        interactionTick++
+            .pointerInput(isSelectionMode) {
+                if (!isSelectionMode) {
+                    detectTapGestures {
+                        // Tapping anywhere on the lyrics view toggles controls
+                        controlsVisible = !controlsVisible
+                        if (controlsVisible) {
+                            interactionTick++
+                        }
                     }
                 }
             }
@@ -324,12 +337,23 @@ fun FullScreenLyricsView(
                             .padding(horizontal = 20.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Left: Rounded album/video thumbnail (48.dp x 42.dp, RoundedCornerShape(10.dp))
+                        // Left: Rounded album/video thumbnail with instant Share Card trigger
                         Box(
                             modifier = Modifier
                                 .size(width = 48.dp, height = 42.dp)
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color.White.copy(alpha = 0.12f)),
+                                .background(Color.White.copy(alpha = 0.12f))
+                                .clickable {
+                                    isSelectionMode = !isSelectionMode
+                                    if (isSelectionMode) {
+                                        controlsVisible = false
+                                        if (activeIndex in lines.indices) {
+                                            selectedLineIndices = setOf(activeIndex)
+                                        }
+                                    } else {
+                                        selectedLineIndices = emptySet()
+                                    }
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             val bmp = coverBitmap
@@ -346,6 +370,21 @@ fun FullScreenLyricsView(
                                     contentDescription = null,
                                     tint = Color.White.copy(alpha = 0.60f),
                                     modifier = Modifier.size(18.dp)
+                                )
+                            }
+
+                            // Share icon indicator on album art thumbnail
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = if (isSelectionMode) 0.50f else 0.20f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Share,
+                                    contentDescription = "Share Lyric Card",
+                                    tint = if (isSelectionMode) Color.White else Color.White.copy(alpha = 0.75f),
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
                         }
@@ -398,24 +437,39 @@ fun FullScreenLyricsView(
                                 )
                             }
 
-                            // More Options (controlsVisible == true) or Share (controlsVisible == false)
+                            // Action button: In selection mode -> Close ("X"); Otherwise -> Menu or Share
                             Box(
                                 modifier = Modifier
                                     .size(38.dp)
                                     .clip(CircleShape)
                                     .background(Color.White.copy(alpha = 0.12f))
                                     .clickable {
-                                        if (controlsVisible) {
+                                        if (isSelectionMode) {
+                                            isSelectionMode = false
+                                            selectedLineIndices = emptySet()
+                                        } else if (controlsVisible) {
                                             onOpenMenu()
                                         } else {
-                                            onShare()
+                                            isSelectionMode = true
+                                            controlsVisible = false
+                                            if (activeIndex in lines.indices) {
+                                                selectedLineIndices = setOf(activeIndex)
+                                            }
                                         }
                                     },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
-                                    imageVector = if (controlsVisible) Icons.Rounded.MoreHoriz else Icons.Rounded.Share,
-                                    contentDescription = if (controlsVisible) "More Options" else "Share",
+                                    imageVector = when {
+                                        isSelectionMode -> Icons.Rounded.Close
+                                        controlsVisible -> Icons.Rounded.MoreHoriz
+                                        else -> Icons.Rounded.Share
+                                    },
+                                    contentDescription = when {
+                                        isSelectionMode -> "Cancel Selection"
+                                        controlsVisible -> "More Options"
+                                        else -> "Share Lyrics"
+                                    },
                                     tint = Color.White,
                                     modifier = Modifier.size(19.dp)
                                 )
@@ -483,6 +537,135 @@ fun FullScreenLyricsView(
                                 )
                             }
                         }
+                    } else if (isSelectionMode) {
+                        // Selection Mode (matching Image 2)
+                        Box(
+                            modifier = Modifier
+                                .widthIn(max = columnWidth)
+                                .fillMaxHeight()
+                                .padding(horizontal = 20.dp)
+                        ) {
+                            val cardShape = remember { ContinuousRoundedRectangle(16.dp) }
+                            LazyColumn(
+                                contentPadding = PaddingValues(
+                                    top = 20.dp,
+                                    bottom = 120.dp
+                                ),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                itemsIndexed(
+                                    items = lines,
+                                    key = { index, line -> "sel_${line.timestampMs}_$index" }
+                                ) { index, line ->
+                                    val isSelected = selectedLineIndices.contains(index)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(cardShape)
+                                            .background(
+                                                if (isSelected) Color.White.copy(alpha = 0.22f)
+                                                else Color.White.copy(alpha = 0.08f)
+                                            )
+                                            .border(
+                                                width = if (isSelected) 1.5.dp else 1.dp,
+                                                color = if (isSelected) Color.White.copy(alpha = 0.50f) else Color.White.copy(alpha = 0.06f),
+                                                shape = cardShape
+                                            )
+                                            .clickable {
+                                                selectedLineIndices = if (isSelected) {
+                                                    selectedLineIndices - index
+                                                } else {
+                                                    if (selectedLineIndices.size < 6) {
+                                                        selectedLineIndices + index
+                                                    } else {
+                                                        selectedLineIndices
+                                                    }
+                                                }
+                                            }
+                                            .padding(horizontal = 20.dp, vertical = 18.dp)
+                                    ) {
+                                        Text(
+                                            text = line.text,
+                                            fontSize = 24.sp,
+                                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Bold,
+                                            letterSpacing = (-0.4).sp,
+                                            lineHeight = 32.sp,
+                                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.70f)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Bottom Floating Pill Bar: [ X Cancel | Share (capsule) ] (matching Image 2)
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 28.dp)
+                                    .clip(ContinuousCapsule)
+                                    .background(Color(0xFF141418).copy(alpha = 0.94f))
+                                    .border(1.dp, Color.White.copy(alpha = 0.16f), ContinuousCapsule)
+                                    .padding(horizontal = 8.dp, vertical = 6.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // 1. Cancel button
+                                    Row(
+                                        modifier = Modifier
+                                            .clip(ContinuousCapsule)
+                                            .clickable {
+                                                isSelectionMode = false
+                                                selectedLineIndices = emptySet()
+                                            }
+                                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = "Cancel",
+                                            tint = Color.White.copy(alpha = 0.85f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "Cancel",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color.White.copy(alpha = 0.85f)
+                                        )
+                                    }
+
+                                    // 2. Share button
+                                    val canShare = selectedLineIndices.isNotEmpty()
+                                    Row(
+                                        modifier = Modifier
+                                            .clip(ContinuousCapsule)
+                                            .background(if (canShare) Color.White else Color.White.copy(alpha = 0.22f))
+                                            .clickable(enabled = canShare) {
+                                                showCardDialog = true
+                                            }
+                                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Share,
+                                            contentDescription = "Share",
+                                            tint = if (canShare) Color.Black else Color.White.copy(alpha = 0.55f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Text(
+                                            text = "Share",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (canShare) Color.Black else Color.White.copy(alpha = 0.55f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     } else {
                         Box(
                             modifier = Modifier
@@ -514,8 +697,8 @@ fun FullScreenLyricsView(
                                             onSeekTo(ts)
                                         },
                                         activeColor = Color.White,
-                                        inactiveColor = Color.White.copy(alpha = 0.55f),
-                                        fontSize = 28.sp
+                                        inactiveColor = Color.White.copy(alpha = 0.70f),
+                                        fontSize = 32.sp
                                     )
 
                                     // Instrumental gap indicator check
@@ -744,6 +927,38 @@ fun FullScreenLyricsView(
                         )
                     }
                 }
+            }
+        }
+
+        // 3. High-Quality Lyric Card Generator Dialog (Image 3)
+        if (showCardDialog) {
+            val sortedLines = remember(selectedLineIndices, lines) {
+                selectedLineIndices.sorted().mapNotNull { lines.getOrNull(it)?.text }.filter { it.isNotBlank() }
+            }
+            if (sortedLines.isNotEmpty()) {
+                LyricCardGeneratorDialog(
+                    track = track,
+                    lines = sortedLines,
+                    palette = effectivePalette,
+                    coverBitmap = coverBitmap,
+                    onDismiss = { showCardDialog = false },
+                    onShareImage = {
+                        showCardDialog = false
+                        if (onShareCard != null) {
+                            onShareCard(sortedLines, track, effectivePalette)
+                        } else {
+                            onShare()
+                        }
+                    },
+                    onSaveImage = {
+                        if (onSaveCard != null) {
+                            onSaveCard(sortedLines, track, effectivePalette)
+                        }
+                    },
+                    onCopyText = {
+                        // Formatted text
+                    }
+                )
             }
         }
     }

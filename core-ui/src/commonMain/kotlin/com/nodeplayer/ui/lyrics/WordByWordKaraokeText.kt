@@ -536,14 +536,15 @@ fun WordByWordKaraokeText(
         TextStyle(
             fontFamily = lyricsFontFamily,
             fontSize = fontSize,
-            fontWeight = if (isActive) FontWeight.ExtraBold else FontWeight.Bold,
+            fontWeight = if (isActive) FontWeight.Black else FontWeight.ExtraBold,
             lineHeight = (fontSize.value * 1.25f).sp,
+            letterSpacing = (-0.45).sp,
             textAlign = textAlign
         )
     }
 
-    val activeBaseColor = remember(activeColor) { activeColor.copy(alpha = 0.35f) }
-    val dimmedInactiveColor = remember(inactiveColor) { inactiveColor.copy(alpha = 0.65f) }
+    val activeBaseColor = remember(activeColor) { activeColor.copy(alpha = 0.48f) }
+    val dimmedInactiveColor = remember(inactiveColor) { inactiveColor.copy(alpha = 0.85f) }
     val sweepResolvedColor = if (accentSweepColor != Color.Unspecified) accentSweepColor else activeColor
 
     Column(
