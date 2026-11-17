@@ -152,6 +152,16 @@ private fun ActiveSweepText(
     highlightColor: Color
 ) {
     var layout by remember(line.text) { mutableStateOf<TextLayoutResult?>(null) }
+    var framePlayPosMs by remember(line) { androidx.compose.runtime.mutableLongStateOf(positionProvider?.invoke() ?: currentPositionMs) }
+
+    if (positionProvider != null) {
+        LaunchedEffect(line, positionProvider) {
+            while (true) {
+                androidx.compose.runtime.withFrameNanos { it }
+                framePlayPosMs = positionProvider.invoke()
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         // Unsung layer: semi-translucent white.
@@ -172,7 +182,7 @@ private fun ActiveSweepText(
                 .drawWithContent {
                     drawContent()
                     val result = layout ?: return@drawWithContent
-                    val position = positionProvider?.invoke() ?: currentPositionMs
+                    val position = if (positionProvider != null) framePlayPosMs else currentPositionMs
                     val chars = sungCharPosition(line, position)
                     drawSweepMask(result, chars, line.text.length, FeatherWidth.toPx())
                 }

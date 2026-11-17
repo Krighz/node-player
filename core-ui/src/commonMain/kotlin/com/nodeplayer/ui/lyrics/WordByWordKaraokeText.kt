@@ -61,8 +61,6 @@ import androidx.compose.ui.text.font.FontFamily
 
 val LocalLyricsFontFamily = compositionLocalOf<FontFamily?> { null }
 
-private val WIPE_FEATHER = 18.dp
-
 private fun TextLayoutResult.xOn(offset: Int, visualLine: Int, inset: Float = 0f): Float {
     val lineStart = getLineStart(visualLine)
     val lineEndVisible = getLineEnd(visualLine, visibleEnd = true)
@@ -121,7 +119,6 @@ private fun ContentDrawScope.sweepText(
     layout: TextLayoutResult,
     revealedChars: Float,
     spans: List<IntRange>,
-    feather: Boolean = true,
 ) {
     if (revealedChars <= 0f) return
     val textLen = layout.layoutInput.text.length
@@ -151,24 +148,10 @@ private fun ContentDrawScope.sweepText(
         val lineRight = layout.getLineRight(visualLine)
         val safeCharPos = charPos.coerceIn(lineLeft, lineRight)
 
-        val featherPx = if (feather && cut) {
-            minOf(
-                WIPE_FEATHER.toPx(),
-                if (rtl) lineRight - safeCharPos else safeCharPos - lineLeft,
-            )
-        } else {
-            0f
-        }
-        val lead = if (rtl) {
-            (safeCharPos - featherPx).coerceAtLeast(lineLeft)
-        } else {
-            (safeCharPos + featherPx).coerceAtMost(lineRight)
-        }
-
         val (clipLeft, clipRight) = if (rtl) {
-            lead to lineRight
+            safeCharPos to lineRight
         } else {
-            lineLeft to lead
+            lineLeft to safeCharPos
         }
 
         if (clipLeft >= clipRight) continue
@@ -182,20 +165,6 @@ private fun ContentDrawScope.sweepText(
             bottom = bottom,
         ) {
             this@sweepText.drawContent()
-        }
-
-        if (featherPx >= 0.5f) {
-            clipRect(top = top, bottom = bottom) {
-                drawRect(
-                    brush = Brush.horizontalGradient(
-                        0f to Color.White,
-                        1f to Color.Transparent,
-                        startX = safeCharPos,
-                        endX = if (rtl) safeCharPos - featherPx else safeCharPos + featherPx,
-                    ),
-                    blendMode = BlendMode.DstIn,
-                )
-            }
         }
     }
 }
@@ -385,7 +354,6 @@ private class Spr(var pos: Float, private val freq: Float, private val damping: 
 
 private val BounceScale = Spline(floatArrayOf(0f, 0.7f, 1f), floatArrayOf(0.95f, 1.0505f, 1f))
 private val BounceLift = Spline(floatArrayOf(0f, 0.9f, 1f), floatArrayOf(0.01f, -1f / 60f, 0f))
-private val BounceGlow = Spline(floatArrayOf(0f, 0.15f, 0.6f, 1f), floatArrayOf(0f, 1f, 1f, 0f))
 
 private const val BOUNCE_SCALE_GAIN = 1.6f
 private const val BOUNCE_LIFT_GAIN = 6f
@@ -405,36 +373,32 @@ private fun ActiveKaraokeWord(
 ) {
     var bounceScale by remember(word) { mutableFloatStateOf(1f) }
     var bounceLiftPx by remember(word) { mutableFloatStateOf(0f) }
-    var glow by remember(word) { mutableFloatStateOf(0f) }
+    var framePlayPositionMs by remember(word) { androidx.compose.runtime.mutableLongStateOf(positionProvider()) }
     val provider by rememberUpdatedState(positionProvider)
 
     LaunchedEffect(word) {
         val sScale = Spr(1f, 0.88f, 0.64f)
         val sLift = Spr(0f, 1.45f, 0.4f)
-        val sGlow = Spr(0f, 1.18f, 0.56f)
         var last = withFrameNanos { it }
         while (true) {
             val now = withFrameNanos { it }
             val dt = ((now - last) / 1_000_000_000f).coerceIn(0.001f, 0.05f)
             last = now
             val pos = provider()
+            framePlayPositionMs = pos
             var goalScale = 1f
             var goalLift = 0f
-            var goalGlow = 0f
             if (pos >= word.startMs && pos < word.endMs) {
                 val dur = (word.endMs - word.startMs).coerceAtLeast(1L)
                 val p = (pos - word.startMs).toFloat() / dur
                 val strength = (dur / 900f).coerceIn(0.4f, 1f)
                 goalScale = 1f + (BounceScale.at(p) - 1f).coerceAtLeast(-0.02f) * BOUNCE_SCALE_GAIN * strength
                 goalLift = BounceLift.at(p) * BOUNCE_LIFT_GAIN * fontPx * strength
-                goalGlow = BounceGlow.at(p) * strength
             }
             sScale.step(goalScale, dt)
             sLift.step(goalLift, dt)
-            sGlow.step(goalGlow, dt)
             bounceScale = sScale.pos
             bounceLiftPx = sLift.pos
-            glow = sGlow.pos.coerceAtLeast(0f)
         }
     }
 
@@ -450,13 +414,7 @@ private fun ActiveKaraokeWord(
     ) {
         Text(
             text = word.text,
-            style = textStyle.copy(
-                shadow = if (glow > 0.01f) Shadow(
-                    color = Color.White.copy(alpha = (glow * 0.35f).coerceAtMost(0.9f)),
-                    offset = Offset.Zero,
-                    blurRadius = 8f + 10f * glow,
-                ) else null
-            ),
+            style = textStyle,
             color = baseColor,
             onTextLayout = { wordLayout = it },
         )
@@ -466,10 +424,10 @@ private fun ActiveKaraokeWord(
             style = textStyle,
             color = sweepColor,
             modifier = Modifier
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .drawWithContent {
                     val layout = wordLayout
-                    val revealed = word.revealedCharsInWord(provider())
+                    val pos = framePlayPositionMs
+                    val revealed = word.revealedCharsInWord(pos)
                     if (layout != null && revealed > 0f) {
                         sweepText(layout, revealed, emptyList())
                     } else if (revealed >= word.text.length) {
@@ -594,6 +552,15 @@ fun WordByWordKaraokeText(
                 }
             } else if (isActive) {
                 var textLayout by remember(line.text) { mutableStateOf<TextLayoutResult?>(null) }
+                var linePlayPosMs by remember(line) { androidx.compose.runtime.mutableLongStateOf(currentPositionProvider()) }
+
+                LaunchedEffect(line) {
+                    while (true) {
+                        withFrameNanos { it }
+                        linePlayPosMs = currentPositionProvider()
+                    }
+                }
+
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = boxAlignment
@@ -612,10 +579,9 @@ fun WordByWordKaraokeText(
                         color = sweepResolvedColor,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                             .drawWithContent {
                                 val layout = textLayout
-                                val pos = currentPositionProvider()
+                                val pos = linePlayPosMs
                                 val revealed = line.revealedChars(pos)
                                 if (layout != null && revealed > 0f) {
                                     sweepText(layout, revealed, line.sweepSpans)
@@ -694,16 +660,24 @@ fun WordByWordKaraokeText(
                             modifier = Modifier.fillMaxWidth()
                         )
 
+                        var bgPlayPosMs by remember(bgLine) { androidx.compose.runtime.mutableLongStateOf(currentPositionProvider()) }
+
+                        LaunchedEffect(bgLine) {
+                            while (true) {
+                                withFrameNanos { it }
+                                bgPlayPosMs = currentPositionProvider()
+                            }
+                        }
+
                         Text(
                             text = bgLine.text,
                             style = bgTextStyle,
                             color = sweepResolvedColor.copy(alpha = 0.85f),
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                                 .drawWithContent {
                                     val layout = bgTextLayout
-                                    val pos = currentPositionProvider()
+                                    val pos = bgPlayPosMs
                                     val revealed = bgLine.revealedChars(pos)
                                     if (layout != null && revealed > 0f) {
                                         sweepText(layout, revealed, bgLine.sweepSpans)

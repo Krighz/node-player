@@ -78,7 +78,7 @@ object LyricCardRenderer {
         val headerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(235, 255, 255, 255)
             textSize = 38f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             letterSpacing = -0.02f
         }
         val brandText = "Node Player"
@@ -115,7 +115,7 @@ object LyricCardRenderer {
         val lyricPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = lyricTextSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             letterSpacing = -0.03f
         }
 
@@ -179,13 +179,13 @@ object LyricCardRenderer {
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = 38f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
             letterSpacing = -0.01f
         }
         val artistPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(175, 255, 255, 255)
             textSize = 30f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
 
         val maxTextWidth = CARD_WIDTH - textLeft - contentPaddingX

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] (Post-v1.8.0)
 
+### Fixed
+- **Apple Music-Style Smooth Lyrics Sweep & Overlay Fix (`WordByWordKaraokeText.kt`, `FullScreenLyricsView.kt`)**:
+  - Eliminated the stuck white rectangular overlay and halo box artifact around active words by removing the erroneous `drawRect(BlendMode.DstIn)` feathering and word-level `Shadow` blur that previously rendered white gradient blocks over active lyrics.
+  - Implemented hardware-accelerated, frame-synchronized sub-pixel `clipRect` wiping driven by `withFrameNanos`, ensuring continuous 60/120 FPS sweep animation across syllables and lines without freezing or stuttering.
+  - Fixed compilation order in `FullScreenLyricsView.kt` where `enterSelectionMode()` referenced `activeIndex` before its declaration.
+  - Resolved Lyric Card text mismatch: card generator now pre-selects the playing on-screen lyrics (`activeIndex..activeIndex+3`), scrolls to the active position, and renders in crisp, bold sans-serif typography (`Typeface.SANS_SERIF, Typeface.BOLD`), completely preventing fallback to Android cursive system fonts.
+
 ### Added
 - **Instant Lyric Card Generator (`LyricCardView.kt`, `LyricCardRenderer.kt`)**: Added high-resolution (1080×1920) 9:16 vertical Lyric Card generator matching BitChord and Apple Music aesthetics:
   - Album art thumbnail with dedicated share indicator in `FullScreenLyricsView` top bar opens interactive line-selection mode.

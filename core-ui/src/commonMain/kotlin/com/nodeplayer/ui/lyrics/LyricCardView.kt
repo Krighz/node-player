@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -120,6 +121,7 @@ fun LyricCardView(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = appName,
+                    fontFamily = FontFamily.SansSerif,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = (-0.3).sp,
@@ -146,6 +148,7 @@ fun LyricCardView(
                 lines.forEach { lineText ->
                     Text(
                         text = lineText,
+                        fontFamily = FontFamily.SansSerif,
                         fontSize = fontSize,
                         fontWeight = FontWeight.ExtraBold,
                         lineHeight = lineHeight,
@@ -191,6 +194,7 @@ fun LyricCardView(
                 ) {
                     Text(
                         text = track?.title ?: "Unknown Track",
+                        fontFamily = FontFamily.SansSerif,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -200,6 +204,7 @@ fun LyricCardView(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = track?.artist ?: "Unknown Artist",
+                        fontFamily = FontFamily.SansSerif,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Normal,
                         color = Color.White.copy(alpha = 0.65f),

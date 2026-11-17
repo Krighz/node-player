@@ -224,6 +224,12 @@ fun FullScreenLyricsView(
     var selectedLineIndices by remember { mutableStateOf(setOf<Int>()) }
     var showCardDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(track?.id) {
+        selectedLineIndices = emptySet()
+        isSelectionMode = false
+        showCardDialog = false
+    }
+
     fun registerInteraction() {
         if (controlsVisible) {
             interactionTick++
@@ -253,6 +259,19 @@ fun FullScreenLyricsView(
     val activeIndex = remember(lines, livePositionMs) {
         if (lines.isEmpty()) -1
         else findActiveLyricIndex(lines, livePositionMs).coerceAtLeast(0)
+    }
+
+    fun enterSelectionMode() {
+        isSelectionMode = true
+        controlsVisible = false
+        val currentLines = lyrics?.lines ?: emptyList()
+        if (currentLines.isNotEmpty()) {
+            val start = activeIndex.coerceIn(currentLines.indices)
+            val end = (start + 3).coerceAtMost(currentLines.lastIndex)
+            selectedLineIndices = (start..end).toSet()
+        } else {
+            selectedLineIndices = emptySet()
+        }
     }
 
     // Auto-scroll logic: spring smooth scroll only when !listState.isScrollInProgress so it never fights user touch
@@ -344,14 +363,11 @@ fun FullScreenLyricsView(
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color.White.copy(alpha = 0.12f))
                                 .clickable {
-                                    isSelectionMode = !isSelectionMode
                                     if (isSelectionMode) {
-                                        controlsVisible = false
-                                        if (activeIndex in lines.indices) {
-                                            selectedLineIndices = setOf(activeIndex)
-                                        }
-                                    } else {
+                                        isSelectionMode = false
                                         selectedLineIndices = emptySet()
+                                    } else {
+                                        enterSelectionMode()
                                     }
                                 },
                             contentAlignment = Alignment.Center
@@ -450,11 +466,7 @@ fun FullScreenLyricsView(
                                         } else if (controlsVisible) {
                                             onOpenMenu()
                                         } else {
-                                            isSelectionMode = true
-                                            controlsVisible = false
-                                            if (activeIndex in lines.indices) {
-                                                selectedLineIndices = setOf(activeIndex)
-                                            }
+                                            enterSelectionMode()
                                         }
                                     },
                                 contentAlignment = Alignment.Center
@@ -546,7 +558,11 @@ fun FullScreenLyricsView(
                                 .padding(horizontal = 20.dp)
                         ) {
                             val cardShape = remember { ContinuousRoundedRectangle(16.dp) }
+                            val selectionListState = rememberLazyListState(
+                                initialFirstVisibleItemIndex = (activeIndex - 1).coerceAtLeast(0)
+                            )
                             LazyColumn(
+                                state = selectionListState,
                                 contentPadding = PaddingValues(
                                     top = 20.dp,
                                     bottom = 120.dp
