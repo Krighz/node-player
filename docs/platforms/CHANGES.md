@@ -5,7 +5,21 @@
 
 ---
 
-### [2026-11-16] - Features v2: Phase F06 - Decoupled Dual-Engine Video Architecture & Audiophile Sync
+### [2026-11-17] - Home Screen UI Revamp & Carbon / Zinc Theme Integration
+- **Slim Fixed Top Bar & Mode Switcher (`OnlineHomeView.kt`)**:
+  - Pinned a slim 38dp mode switcher header at the top of the Home tab displaying `[ • YT Music | Device Files ]` with an active teal indicator dot (`#5EEAD4`).
+  - Integrated fast switching to offline device files via `AppModeState.setOnlineMode(false)` and top-right profile avatar button.
+- **Scrollable Mood Categories & Content Divider**:
+  - Repositioned the horizontal mood categories chips (`Pop`, `Chill`, `Party`, `Commute`, `Romance`...) directly below the fixed header inside the scrollable content container.
+  - Added a `1.dp` horizontal divider (`BorderSubtle`) beneath the mood chips; mood chips and divider smoothly scroll up under the fixed header with the feed.
+- **Card Containers & Album Art Rounding (`YourMixShelf.kt`)**:
+  - Redesigned "Your Mix" card container to `CarbonZincPalette.SurfaceContainer` (`#121215`) with a 1.dp subtle border and `ContinuousRoundedRectangle(20.dp)` squircle curvature.
+  - Inner album art container upgraded to 136×136dp with `ContinuousRoundedRectangle(14.dp)` corner clipping.
+  - Replaced header text "Play" with a capsule pill button in `SurfaceElevated` (`#1C1C21`) with `BorderActive`.
+- **Teal Codec / Stream Badge Color (`AudioFormatBadge.kt`)**:
+  - Updated online YouTube stream / AAC badge styling to `CarbonZincPalette.AccentTeal` (`#5EEAD4`) for badge text, border stroke, and subtle translucent background tint.
+- **Carbon / Zinc Palette & Typography (`CarbonZincPalette.kt`)**:
+  - Created centralized palette constants (`Background`, `SurfaceContainer`, `SurfaceElevated`, `SurfaceGlass`, `BorderSubtle`, `BorderActive`, `TextPrimary`, `TextSecondary`, `AccentTeal`) and custom typography scale.
 - **True Dual-Engine Decoupling (Audio Master + Silent Secondary Video Player)**:
   - Audio playback on `PlaybackService.activePlayer` remains completely decoupled and acts strictly as the time master: never stopped, reset, or assigned a `MergingMediaSource` during video toggle.
   - Silent secondary `MusicVideoEngine` decodes video on an isolated ExoPlayer (`volume = 0f`, audio track disabled).
