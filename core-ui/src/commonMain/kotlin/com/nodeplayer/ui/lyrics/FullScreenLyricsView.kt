@@ -93,6 +93,7 @@ import com.nodeplayer.ui.player.NowPlayingTimeline
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.PaletteExtractor
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
@@ -226,13 +227,21 @@ fun FullScreenLyricsView(
         }
     }
 
-    // Active line detection — O(log N) binary search via derivedStateOf reading currentPositionProvider
-    val lines = lyrics?.lines ?: emptyList()
-    val activeIndex by remember(lines) {
-        derivedStateOf {
-            if (lines.isEmpty()) -1
-            else findActiveLyricIndex(lines, currentPositionProvider()).coerceAtLeast(0)
+    val livePositionMs by produceState(
+        initialValue = if (currentPositionMs > 0L) currentPositionMs else currentPositionProvider(),
+        positionProvider
+    ) {
+        while (isActive) {
+            value = currentPositionProvider()
+            delay(100L)
         }
+    }
+
+    // Active line detection — O(log N) binary search via remember reading livePositionMs
+    val lines = lyrics?.lines ?: emptyList()
+    val activeIndex = remember(lines, livePositionMs) {
+        if (lines.isEmpty()) -1
+        else findActiveLyricIndex(lines, livePositionMs).coerceAtLeast(0)
     }
 
     // Auto-scroll logic: spring smooth scroll only when !listState.isScrollInProgress so it never fights user touch
@@ -498,7 +507,7 @@ fun FullScreenLyricsView(
                                         line = line,
                                         index = index,
                                         activeIndex = activeIndex,
-                                        currentPositionMs = currentPositionMs,
+                                        currentPositionMs = livePositionMs,
                                         positionProvider = currentPositionProvider,
                                         onSeek = { ts ->
                                             registerInteraction()

@@ -109,7 +109,7 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             NodeDatabase::class.java,
             "node_player.db"
         )
-            .addMigrations(NodeDatabase.MIGRATION_6_7)
+            .addMigrations(NodeDatabase.MIGRATION_6_7, NodeDatabase.MIGRATION_7_8)
             .fallbackToDestructiveMigration()
             .build()
 

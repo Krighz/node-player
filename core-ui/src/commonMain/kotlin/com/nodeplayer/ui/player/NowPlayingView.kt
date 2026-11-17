@@ -7,6 +7,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -27,22 +29,31 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Cast
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.FormatListBulleted
 import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.MoreHoriz
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
@@ -87,8 +98,11 @@ import com.nodeplayer.ui.components.TrackArtwork
 import com.nodeplayer.library.LrcParser
 import com.nodeplayer.model.LyricWord
 import com.nodeplayer.model.Lyrics
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import com.nodeplayer.model.LyricsLine
 import com.nodeplayer.model.Track
+import com.nodeplayer.model.TrackExtendedInfo
 import com.nodeplayer.ui.lyrics.findActiveLyricIndex
 import com.nodeplayer.ui.theme.PaletteExtractor
 import com.nodeplayer.ui.theme.PaletteExtractor.toComposeColor
@@ -174,7 +188,13 @@ fun NowPlayingView(
     onSelectQuality: ((Int?) -> Unit)? = null,
     onOpenFullscreenCinema: (() -> Unit)? = null,
     artZoomScale: Float = 1.03f,
-    artVerticalOffsetDp: Int = 0
+    artVerticalOffsetDp: Int = 0,
+    extendedInfo: TrackExtendedInfo? = null,
+    onPlayTrack: ((Track) -> Unit)? = null,
+    onArtistClick: ((String, String?) -> Unit)? = null,
+    onTrackOptionsClick: ((Track) -> Unit)? = null,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null
 ) {
     if (currentTrack == null) return
 
@@ -257,7 +277,8 @@ fun NowPlayingView(
         label = "HeroAspectMorph"
     )
 
-    var isFavorite by remember(currentTrack.id) { mutableStateOf(currentTrack.isFavorite) }
+    var localFavorite by remember(currentTrack.id, isFavorite) { mutableStateOf(isFavorite || currentTrack.isFavorite) }
+    val effectiveFavorite = onToggleFavorite?.let { isFavorite } ?: localFavorite
     var internalVolume by remember { mutableFloatStateOf(volume) }
     val effectiveVolume = onVolumeChange?.let { volume } ?: internalVolume
 
@@ -301,34 +322,37 @@ fun NowPlayingView(
         )
     }
 
+    val lazyListState = rememberLazyListState()
+    val nestedScrollConnection = remember(onDragDelta, onDragEnd) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0 && available.y > 0) {
+                    if (onDragDelta != null) {
+                        onDragDelta.invoke(available.y)
+                        return available
+                    }
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                if (lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0 && available.y > 800f) {
+                    if (onDragEnd != null) {
+                        onDragEnd.invoke(available.y)
+                    } else {
+                        onClose()
+                    }
+                    return available
+                }
+                return super.onPreFling(available)
+            }
+        }
+    }
+
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(Color(0xFF000000))
-            .pointerInput(onDragDelta, onDragEnd) {
-                if (onDragDelta != null) {
-                    var accumulatedVelocity = 0f
-                    detectDragGestures(
-                        onDragEnd = {
-                            onDragEnd?.invoke(accumulatedVelocity)
-                        },
-                        onDrag = { change, dragAmount ->
-                            if (abs(dragAmount.y) > abs(dragAmount.x) * 1.2f) {
-                                change.consume()
-                                accumulatedVelocity = dragAmount.y
-                                onDragDelta(dragAmount.y)
-                            }
-                        }
-                    )
-                } else {
-                    detectDragGestures { change, dragAmount ->
-                        if (dragAmount.y > 35f && abs(dragAmount.y) > abs(dragAmount.x) * 1.5f) {
-                            change.consume()
-                            onClose()
-                        }
-                    }
-                }
-            }
     ) {
         val screenHeight = maxHeight
 
@@ -380,13 +404,25 @@ fun NowPlayingView(
         val availableHeroHeight = (screenHeight - bottomControlsReservedHeight).coerceAtLeast(260.dp)
         val effectiveHeroHeight = (availableHeroHeight + artVerticalOffsetDp.dp).coerceAtLeast(200.dp)
 
-        // Layer 3: Top Full-Bleed Artwork / Video
-        Box(
+        LazyColumn(
+            state = lazyListState,
             modifier = Modifier
-                .fillMaxWidth()
-                .height(effectiveHeroHeight)
-                .align(Alignment.TopCenter)
+                .fillMaxSize()
+                .nestedScroll(nestedScrollConnection)
         ) {
+            item(key = "np_hero_player", contentType = "hero_player") {
+                Box(
+                    modifier = Modifier
+                        .fillParentMaxHeight()
+                        .fillMaxWidth()
+                ) {
+                    // Layer 3: Top Full-Bleed Artwork / Video
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(effectiveHeroHeight)
+                            .align(Alignment.TopCenter)
+                    ) {
             if (!isVideoActive) {
                 // Still Artwork: 100% full-width, zero horizontal padding, zero corner clipping, starting at y = 0
                 TrackArtwork(
@@ -463,7 +499,30 @@ fun NowPlayingView(
                 .padding(top = 8.dp)
         ) {
             Column(
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .pointerInput(onDragDelta, onDragEnd) {
+                        if (onDragDelta != null) {
+                            var accumulatedVelocity = 0f
+                            detectDragGestures(
+                                onDragEnd = { onDragEnd?.invoke(accumulatedVelocity) },
+                                onDrag = { change, dragAmount ->
+                                    if (abs(dragAmount.y) > abs(dragAmount.x) * 1.2f) {
+                                        change.consume()
+                                        accumulatedVelocity = dragAmount.y
+                                        onDragDelta?.invoke(dragAmount.y)
+                                    }
+                                }
+                            )
+                        } else {
+                            detectDragGestures { change, dragAmount ->
+                                if (dragAmount.y > 35f && abs(dragAmount.y) > abs(dragAmount.x) * 1.5f) {
+                                    change.consume()
+                                    onClose()
+                                }
+                            }
+                        }
+                    },
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Box(
@@ -669,13 +728,19 @@ fun NowPlayingView(
                                 .size(42.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF2C2C2E).copy(alpha = 0.75f))
-                                .clickable { isFavorite = !isFavorite },
+                                .clickable {
+                                    if (onToggleFavorite != null) {
+                                        onToggleFavorite.invoke()
+                                    } else {
+                                        localFavorite = !localFavorite
+                                    }
+                                },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
+                                imageVector = if (effectiveFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                                 contentDescription = "Favorite",
-                                tint = if (isFavorite) Color(0xFFFBBF24) else Color.White,
+                                tint = if (effectiveFavorite) Color(0xFFFBBF24) else Color.White,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -905,6 +970,402 @@ fun NowPlayingView(
         }
     }
 
+            // Item 1: Credits Bar
+            if (extendedInfo != null && extendedInfo.credits.isNotEmpty()) {
+                item(key = "np_credits", contentType = "credits") {
+                    var showAllCredits by remember(currentTrack.id) { mutableStateOf(false) }
+                    val displayedCredits = if (showAllCredits) extendedInfo.credits else extendedInfo.credits.take(3)
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.Black.copy(alpha = 0.28f))
+                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+                            .padding(16.dp)
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Credits",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                if (extendedInfo.credits.size > 3) {
+                                    Text(
+                                        text = if (showAllCredits) "Show less" else "Show all",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White.copy(alpha = 0.85f),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .clickable { showAllCredits = !showAllCredits }
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                displayedCredits.forEach { entry ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .then(
+                                                if (onArtistClick != null) {
+                                                    Modifier.clickable { onArtistClick.invoke(entry.name, entry.browseId) }
+                                                } else Modifier
+                                            )
+                                            .padding(vertical = 4.dp, horizontal = 2.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = entry.name,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = entry.role,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Normal,
+                                                color = Color.White.copy(alpha = 0.65f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                        if (onArtistClick != null) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.ChevronRight,
+                                                contentDescription = null,
+                                                tint = Color.White.copy(alpha = 0.35f),
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Item 2: About the Artist
+            if (extendedInfo != null && (!extendedInfo.artistBio.isNullOrBlank() || !extendedInfo.artistBannerUrl.isNullOrBlank())) {
+                item(key = "np_about_artist", contentType = "about_artist") {
+                    var isBioExpanded by remember(currentTrack.id) { mutableStateOf(false) }
+                    val bannerUrl = extendedInfo.artistBannerUrl
+                    val bannerBitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
+                        initialValue = null,
+                        bannerUrl
+                    ) {
+                        if (!bannerUrl.isNullOrBlank()) {
+                            value = PlatformArtworkProvider.loadArtwork(bannerUrl, 800)
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.Black.copy(alpha = 0.28f))
+                            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+                            .clickable {
+                                onArtistClick?.invoke(extendedInfo.artistName, extendedInfo.artistBrowseId)
+                            }
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // Top banner / cover image
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp)
+                            ) {
+                                if (bannerBitmap != null) {
+                                    Image(
+                                        bitmap = bannerBitmap!!,
+                                        contentDescription = "Artist banner",
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                } else {
+                                    TrackArtwork(
+                                        track = currentTrack,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop,
+                                        cornerRadius = 0.dp
+                                    )
+                                }
+
+                                // Bottom dark scrim
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                0.0f to Color.Transparent,
+                                                0.50f to Color.Black.copy(alpha = 0.25f),
+                                                1.0f to Color.Black.copy(alpha = 0.85f)
+                                            )
+                                        )
+                                )
+
+                                // Pill badge in top-left
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .padding(14.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.Black.copy(alpha = 0.55f))
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Text(
+                                        text = "About the artist",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+
+                            // Below banner info
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            ) {
+                                Text(
+                                    text = extendedInfo.artistName.ifBlank { currentTrack.artist },
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                if (!extendedInfo.artistSubscribers.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = extendedInfo.artistSubscribers!!,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = Color.White.copy(alpha = 0.65f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                if (!extendedInfo.artistBio.isNullOrBlank()) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = extendedInfo.artistBio!!,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        lineHeight = 18.sp,
+                                        color = Color.White.copy(alpha = 0.85f),
+                                        maxLines = if (isBioExpanded) Int.MAX_VALUE else 3,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = if (isBioExpanded) "Show less" else "Read more",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White.copy(alpha = 0.95f),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(4.dp))
+                                            .clickable { isBioExpanded = !isBioExpanded }
+                                            .padding(vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Item 3: More by [Artist]
+            if (extendedInfo != null && extendedInfo.moreByArtist.isNotEmpty()) {
+                item(key = "np_more_by_artist", contentType = "more_by_artist") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "More by ${extendedInfo.artistName.ifBlank { currentTrack.artist }}",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(
+                                items = extendedInfo.moreByArtist,
+                                key = { "more_art_${it.id}_${it.title}" },
+                                contentType = { "artist_track" }
+                            ) { trackItem ->
+                                Column(
+                                    modifier = Modifier
+                                        .width(136.dp)
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .background(Color.Black.copy(alpha = 0.28f))
+                                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                                        .clickable { onPlayTrack?.invoke(trackItem) }
+                                        .padding(8.dp)
+                                ) {
+                                    TrackArtwork(
+                                        track = trackItem,
+                                        modifier = Modifier
+                                            .size(120.dp)
+                                            .clip(RoundedCornerShape(10.dp)),
+                                        contentScale = ContentScale.Crop,
+                                        cornerRadius = 10.dp,
+                                        targetSizePx = 256
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(
+                                        text = trackItem.title,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    Spacer(modifier = Modifier.height(2.dp))
+
+                                    Text(
+                                        text = if (trackItem.album.isNotBlank() && trackItem.album != "YouTube Music") trackItem.album else trackItem.artist,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Normal,
+                                        color = Color.White.copy(alpha = 0.65f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Item 4: More Like This Song
+            if (extendedInfo != null && extendedInfo.moreLikeThis.isNotEmpty()) {
+                item(key = "np_more_like_this", contentType = "more_like_this") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "More like this",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color.Black.copy(alpha = 0.28f))
+                                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+                                .padding(vertical = 6.dp)
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                extendedInfo.moreLikeThis.take(8).forEach { similarTrack ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { onPlayTrack?.invoke(similarTrack) }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        TrackArtwork(
+                                            track = similarTrack,
+                                            modifier = Modifier
+                                                .size(48.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop,
+                                            cornerRadius = 8.dp,
+                                            targetSizePx = 128
+                                        )
+
+                                        Spacer(modifier = Modifier.width(12.dp))
+
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = similarTrack.title,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color.White,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = similarTrack.artist,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Normal,
+                                                color = Color.White.copy(alpha = 0.65f),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+
+                                        IconButton(
+                                            onClick = { onTrackOptionsClick?.invoke(similarTrack) },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.MoreVert,
+                                                contentDescription = "Options",
+                                                tint = Color.White.copy(alpha = 0.70f),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bottom Spacer
+            item(key = "np_bottom_spacer", contentType = "spacer") {
+                Spacer(modifier = Modifier.navigationBarsPadding().height(48.dp))
+            }
+        }
+    }
+}
+
 @Composable
 fun NowPlayingLyricPreview(
     lyrics: Lyrics,
@@ -912,14 +1373,21 @@ fun NowPlayingLyricPreview(
     onOpenLyrics: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val currentPositionProvider = androidx.compose.runtime.rememberUpdatedState(positionProvider)
+    val currentPositionProvider by androidx.compose.runtime.rememberUpdatedState(positionProvider)
 
-    // Fast-path index lookup driven by positionProvider
-    val activeLine by remember(lyrics) {
-        derivedStateOf {
-            if (lyrics.lines.isEmpty()) null
-            else findActiveLyricLine(lyrics.lines, currentPositionProvider.value())
+    val currentPos by produceState(
+        initialValue = currentPositionProvider(),
+        positionProvider
+    ) {
+        while (isActive) {
+            value = currentPositionProvider()
+            delay(100L)
         }
+    }
+
+    val activeLine = remember(lyrics, currentPos) {
+        if (lyrics.lines.isEmpty()) null
+        else findActiveLyricLine(lyrics.lines, currentPos)
     }
 
     Box(
@@ -959,7 +1427,7 @@ fun NowPlayingLyricPreview(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.drawWithContent {
-                            val pos = currentPositionProvider.value()
+                            val pos = currentPos
                             val progress = calculateLyricLineCharsSungProgress(line, pos)
                             if (progress >= 1f) {
                                 drawContent()

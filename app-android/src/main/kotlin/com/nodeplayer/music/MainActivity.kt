@@ -183,6 +183,7 @@ class MainActivity : ComponentActivity() {
             val isOled = themeConfig.isOledBlack || themeConfig.themeMode == "OLED"
 
             val appSettings by viewModel.appSettings.collectAsState()
+            val trackExtendedInfo by viewModel.trackExtendedInfo.collectAsState()
             val effectiveThemeConfig = remember(themeConfig, appSettings.glassControlsConfig) {
                 themeConfig.copy(
                     glassTexture = 0.0f,
@@ -389,8 +390,6 @@ class MainActivity : ComponentActivity() {
 
                 val currentTrack by viewModel.currentTrack.collectAsState()
                 val isPlaying by viewModel.isPlaying.collectAsState()
-                val currentPositionState = viewModel.currentPositionMs.collectAsState()
-                val currentRmsState = viewModel.currentRms.collectAsState()
                 val audioOutputInfo by viewModel.audioOutputInfo.collectAsState()
                 val effectConfig by viewModel.effectConfig.collectAsState()
                 val systemEqEnabled by viewModel.systemEqEnabled.collectAsState()
@@ -462,6 +461,7 @@ class MainActivity : ComponentActivity() {
                 var pendingApkToInstall by remember { mutableStateOf<File?>(null) }
                 val downloadStatus by UpdateManager.downloadStatus.collectAsState()
                 var showSearchSheet by remember { mutableStateOf(false) }
+                var searchInitialQuery by remember { mutableStateOf("") }
                 var showYouTubeLoginSheet by remember { mutableStateOf(false) }
                 var showPairingDialog by remember { mutableStateOf(false) }
                 var pairingProgress by remember { mutableStateOf(false) }
@@ -814,7 +814,7 @@ class MainActivity : ComponentActivity() {
                                         onSaveAlbumPreset = { currentTrack?.let { viewModel.saveAsAlbumPreset(it) } },
                                         onClearPreset = { currentTrack?.let { viewModel.clearTrackOrAlbumPreset(it) } },
                                         onLoadConvolverPreset = { viewModel.setConvolverPreset(it) },
-                                        rmsProvider = { currentRmsState.value },
+                                        rmsProvider = { viewModel.currentRms.value },
                                         isPerformanceMode = effectiveThemeConfig.isPerformanceMode,
                                         onBack = { currentRoute = "home" }
                                     )
@@ -921,12 +921,48 @@ class MainActivity : ComponentActivity() {
                                         }
                                         var selectedAndroidFiles by remember { mutableStateOf<List<java.io.File>>(emptyList()) }
                                         var destinationAndroidFolder by remember { mutableStateOf<java.io.File?>(null) }
+                                        val flacs = remember(allTracks) {
+                                            allTracks.map { java.io.File(it.path) }.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
+                                        }
+
+                                        val pickMultipleDocumentsLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                                            contract = androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()
+                                        ) { uris ->
+                                            if (uris.isNotEmpty()) {
+                                                val resolved = uris.mapNotNull { uri ->
+                                                    try {
+                                                        if (uri.scheme == "file") {
+                                                            java.io.File(uri.path ?: "")
+                                                        } else {
+                                                            val name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                                                                if (cursor.moveToFirst()) cursor.getString(0) else null
+                                                            }
+                                                            if (name != null) {
+                                                                allTracks.find { java.io.File(it.path).name.equals(name, ignoreCase = true) }?.let { java.io.File(it.path) }
+                                                                    ?: run {
+                                                                        val tempFile = java.io.File(cacheDir, "converter_in_$name")
+                                                                        contentResolver.openInputStream(uri)?.use { input ->
+                                                                            tempFile.outputStream().use { output -> input.copyTo(output) }
+                                                                        }
+                                                                        tempFile
+                                                                    }
+                                                            } else null
+                                                        }
+                                                    } catch (_: Exception) { null }
+                                                }.filter { it.exists() }
+                                                selectedAndroidFiles = (selectedAndroidFiles + resolved).distinctBy { it.absolutePath }
+                                            }
+                                        }
 
                                         com.nodeplayer.ui.converter.AudioConverterView(
                                             queueManager = androidConverterManager,
                                             selectedFiles = selectedAndroidFiles,
+                                            candidateFiles = flacs,
+                                            onSelectedFilesChange = { selectedAndroidFiles = it },
+                                            onPickIndividualFiles = {
+                                                pickMultipleDocumentsLauncher.launch(arrayOf("audio/*", "application/octet-stream", "*/*"))
+                                            },
                                             onPickFiles = {
-                                                val flacs = allTracks.map { java.io.File(it.path) }.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
                                                 selectedAndroidFiles = flacs
                                             },
                                             destinationFolder = destinationAndroidFolder,
@@ -965,8 +1001,8 @@ class MainActivity : ComponentActivity() {
                             currentRoute = currentRoute,
                             accentColor = accentColor,
                             pageBackdrop = pageBackdrop,
-                            positionProvider = { currentPositionState.value },
-                            rmsProvider = { currentRmsState.value },
+                            positionProvider = { viewModel.currentPositionMs.value },
+                            rmsProvider = { viewModel.currentRms.value },
                             onRouteChange = { currentRoute = it },
                             onClearPlaylistDetail = { if (activePlaylistDetail != null) activePlaylistDetail = null else activeCategory = null },
                             onOpenSearch = { showSearchSheet = true },
@@ -1024,7 +1060,7 @@ class MainActivity : ComponentActivity() {
                                         currentTrack = track,
                                         isPlaying = isPlaying,
                                         positionMs = 0L,
-                                        positionProvider = { currentPositionState.value },
+                                        positionProvider = { viewModel.currentPositionMs.value },
                                         durationMs = track.durationMs,
                                         queue = queue,
                                         currentQueueIndex = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0),
@@ -1070,15 +1106,23 @@ class MainActivity : ComponentActivity() {
                                         onOpenThreeDotsMenu = { showAndroidQuickSettings = true },
                                         artZoomScale = effectiveThemeConfig.artZoomScale,
                                         artVerticalOffsetDp = effectiveThemeConfig.artVerticalOffsetDp,
+                                        extendedInfo = trackExtendedInfo,
+                                        onPlayTrack = { newTrack -> viewModel.playTrack(newTrack, listOf(newTrack)) },
+                                        onArtistClick = { artistName, _ ->
+                                            searchInitialQuery = artistName
+                                            showSearchSheet = true
+                                        },
+                                        onTrackOptionsClick = { trackForAddToPlaylist = it },
                                         onClose = { isNowPlayingExpanded = false }
                                     )
 
                                     if (videoPlayerState.isCinemaExpanded) {
                                         val livePlayer = com.nodeplayer.music.service.PlaybackService.instance?.player
+                                        val cinemaPos by viewModel.currentPositionMs.collectAsState()
                                         com.nodeplayer.ui.player.FullscreenCinemaPlayer(
                                             currentTrack = track,
                                             isPlaying = isPlaying,
-                                            positionMs = currentPositionState.value,
+                                            positionMs = cinemaPos,
                                             durationMs = track.durationMs,
                                             videoContent = { mod ->
                                                 val livePlayer = com.nodeplayer.music.service.PlaybackService.instance?.player
@@ -1189,7 +1233,7 @@ class MainActivity : ComponentActivity() {
                                             lyrics = trackLyrics,
                                             isPlaying = isPlaying,
                                             currentPositionMs = 0L,
-                                            positionProvider = { currentPositionState.value },
+                                            positionProvider = { viewModel.currentPositionMs.value },
                                             durationMs = track.durationMs,
                                             isLoading = isLyricsLoading,
                                             palette = activeNowPlayingPalette,
@@ -1494,7 +1538,11 @@ class MainActivity : ComponentActivity() {
 
                     if (showSearchSheet) {
                         com.nodeplayer.ui.screens.GlassSearchView(
-                            onDismiss = { showSearchSheet = false },
+                            initialQuery = searchInitialQuery,
+                            onDismiss = {
+                                showSearchSheet = false
+                                searchInitialQuery = ""
+                            },
                             onPlayTrack = { track, q ->
                                 if (track.path.startsWith("nodeconnect://")) {
                                     val conn = hub?.activeConnections?.firstOrNull()

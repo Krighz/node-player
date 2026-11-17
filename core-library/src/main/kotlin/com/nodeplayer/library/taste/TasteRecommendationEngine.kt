@@ -4,6 +4,9 @@ import com.nodeplayer.common.logging.NodeLog
 import com.nodeplayer.model.MoodBucket
 import com.nodeplayer.model.Track
 import com.nodeplayer.model.bucketFor
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.random.Random
@@ -256,14 +259,16 @@ class TasteRecommendationEngine(
 
         val takenVideoIds = (excludedVideoIds + dailyMixTracks.mapNotNull { it.extractVideoId() }).toMutableSet()
 
-        // Step 6: For each seed artist pick its most-played track as seed and fetch radio queues
+        // Step 6: For each seed artist pick its most-played track as seed and fetch radio queues in parallel
         val radioTracks = mutableListOf<Track>()
         if (seedArtists.isNotEmpty()) {
             val basePerSeed = config.seedRadioTrackCount / seedArtists.size
             val remainder = config.seedRadioTrackCount % seedArtists.size
             val seedQueues = mutableListOf<List<Track>>()
 
-            for ((idx, seedArtist) in seedArtists.withIndex()) {
+            data class SeedCandidate(val index: Int, val quota: Int, val seedTrack: HistoryEntry?)
+
+            val seedCandidates = seedArtists.mapIndexed { idx, seedArtist ->
                 val quota = basePerSeed + if (idx == 0) remainder else 0
                 val artistTracks = remainingEntries.filter { it.artistName.equals(seedArtist, ignoreCase = true) }
 
@@ -281,14 +286,31 @@ class TasteRecommendationEngine(
                     )
                     .firstOrNull()
 
-                if (seedTrack != null) {
-                    val queue = historySource.getRadioForTrack(seedTrack.videoId).getOrDefault(emptyList())
+                SeedCandidate(idx, quota, seedTrack)
+            }
+
+            val fetchedQueues = coroutineScope {
+                seedCandidates.map { candidate ->
+                    async {
+                        val track = candidate.seedTrack
+                        if (track != null) {
+                            historySource.getRadioForTrack(track.videoId).getOrDefault(emptyList())
+                        } else {
+                            emptyList()
+                        }
+                    }
+                }.awaitAll()
+            }
+
+            for ((idx, candidate) in seedCandidates.withIndex()) {
+                val queue = fetchedQueues[idx]
+                if (candidate.seedTrack != null) {
                     seedQueues.add(queue)
                     val eligible = queue.filter { track ->
                         val vid = track.extractVideoId()
                         vid != null && vid !in takenVideoIds
                     }
-                    val taken = eligible.take(quota)
+                    val taken = eligible.take(candidate.quota)
                     for (t in taken) {
                         t.extractVideoId()?.let { takenVideoIds.add(it) }
                         radioTracks.add(t)

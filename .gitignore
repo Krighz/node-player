@@ -36,6 +36,7 @@ dist/
 
 # GSD planning (local-only preference)
 .planning/
+.agents/
 convx-research/
 *.png
 *.lnk

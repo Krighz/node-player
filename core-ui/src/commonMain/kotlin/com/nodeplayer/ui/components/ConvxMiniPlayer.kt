@@ -27,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import com.nodeplayer.model.GlassComponentType
 import com.nodeplayer.model.Track
 import com.nodeplayer.ui.theme.LocalGlassControlsConfig
@@ -80,6 +82,17 @@ fun ConvxMiniPlayer(
 
     val currentProgressProvider by rememberUpdatedState(progressProvider)
     val currentRmsProvider by rememberUpdatedState(rmsProvider)
+
+    val currentProgress by produceState(
+        initialValue = if (progressFraction > 0f) progressFraction else currentProgressProvider(),
+        progressProvider,
+        isPlaying
+    ) {
+        while (isActive) {
+            value = currentProgressProvider()
+            delay(150L)
+        }
+    }
 
     val accent = LocalAccentColor.current
     val themeConfig = LocalGlassThemeConfig.current
@@ -193,7 +206,7 @@ fun ConvxMiniPlayer(
                 .fillMaxWidth()
                 .height(2.dp)
                 .drawBehind {
-                    val fraction = currentProgressProvider().coerceIn(0f, 1f)
+                    val fraction = currentProgress.coerceIn(0f, 1f)
                     if (fraction > 0f) {
                         drawRect(
                             color = accent.copy(alpha = 0.85f),

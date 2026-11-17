@@ -150,7 +150,18 @@ class CrossfadePlayerManager(
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
         }
 
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 30_000,
+                /* bufferForPlaybackMs = */ 800,
+                /* bufferForPlaybackAfterRebufferMs = */ 2_500
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         val player = ExoPlayer.Builder(context, renderersFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -601,9 +612,7 @@ class CrossfadePlayerManager(
             val pct = (progress * 100).toInt()
             if (pct % 25 == 0 && pct != lastLoggedPercent) {
                 lastLoggedPercent = pct
-                val outStr = "%.3f".format(outGain)
-                val inStr = "%.3f".format(inGain)
-                Log.d(TAG, "[Crossfade] Progress $pct% | OutVol: $outStr | InVol: $inStr | Elapsed: ${elapsed}ms / ${currentEffectiveFadeMs}ms")
+                Log.d(TAG, "[Crossfade] Progress $pct% | Elapsed: ${elapsed}ms / ${currentEffectiveFadeMs}ms")
             }
 
             if (progress >= 1.0f) {

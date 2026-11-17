@@ -818,6 +818,7 @@ data class SearchSuggestion(
 data class BrowseResponse(
     val contents: Contents? = null,
     val continuationContents: ContinuationContents? = null,
+    val header: BrowseHeader? = null,
     val responseContext: ResponseContext? = null,
     val background: ThumbnailRenderer? = null,
 ) {
@@ -846,6 +847,46 @@ data class BrowseResponse(
         )
     }
 }
+
+@Serializable
+data class BrowseHeader(
+    val musicImmersiveHeaderRenderer: MusicImmersiveHeaderRenderer? = null,
+    val musicVisualHeaderRenderer: MusicVisualHeaderRenderer? = null,
+    val musicHeaderRenderer: MusicHeaderRenderer? = null,
+)
+
+@Serializable
+data class MusicImmersiveHeaderRenderer(
+    val title: Runs? = null,
+    val description: Runs? = null,
+    val subscriptionButton: SubscriptionButton? = null,
+    val thumbnail: ThumbnailRenderer? = null,
+)
+
+@Serializable
+data class MusicVisualHeaderRenderer(
+    val title: Runs? = null,
+    val foregroundThumbnail: ThumbnailRenderer? = null,
+    val thumbnail: ThumbnailRenderer? = null,
+)
+
+@Serializable
+data class MusicHeaderRenderer(
+    val title: Runs? = null,
+    val subtitle: Runs? = null,
+    val thumbnail: ThumbnailRenderer? = null,
+)
+
+@Serializable
+data class SubscriptionButton(
+    val subscribeButtonRenderer: SubscribeButtonRenderer? = null,
+)
+
+@Serializable
+data class SubscribeButtonRenderer(
+    val subscriberCountText: Runs? = null,
+    val subscriberCountWithSubscribeText: Runs? = null,
+)
 
 /* ==========================================================================
    Next Response & Radio

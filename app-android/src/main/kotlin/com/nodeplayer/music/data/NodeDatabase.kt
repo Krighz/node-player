@@ -201,7 +201,7 @@ interface PlayerDao {
         ScrobbleQueueEntity::class,
         ScannedFolderEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class NodeDatabase : RoomDatabase() {
@@ -212,6 +212,13 @@ abstract class NodeDatabase : RoomDatabase() {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 // Clear stale format metadata so the updated parser re-reads accurate headers
                 db.execSQL("UPDATE tracks SET formatDescription = '', sampleRate = 0, bitDepth = 0, bitrateKbps = 0")
+            }
+        }
+
+        val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_isHidden_title ON tracks(isHidden, title)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_isFavorite ON tracks(isFavorite)")
             }
         }
     }

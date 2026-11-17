@@ -25,9 +25,13 @@ class DesktopTrackRepositoryAdapter(
 
     override suspend fun clearTracks() {}
 
-    override suspend fun incrementPlayCount(id: Long) {}
+    override suspend fun incrementPlayCount(id: Long) {
+        database.incrementPlayCount(id)
+    }
 
-    override suspend fun setFavorite(id: Long, isFav: Boolean) {}
+    override suspend fun setFavorite(id: Long, isFav: Boolean) {
+        database.setFavorite(id, isFav)
+    }
 
     override fun getFavoriteTracks(): Flow<List<Track>> {
         return flowOf(database.getAllTracks().filter { it.isFavorite })
@@ -43,21 +47,31 @@ class DesktopTrackRepositoryAdapter(
 
     override suspend fun setTracksHiddenForFolder(folderPrefix: String, isHidden: Boolean) {}
 
-    override fun getAllPlaylists(): Flow<List<Playlist>> = flowOf(emptyList())
+    override fun getAllPlaylists(): Flow<List<Playlist>> = flowOf(database.getAllPlaylists())
 
-    override suspend fun insertPlaylist(playlist: Playlist): Long = 1L
+    override suspend fun insertPlaylist(playlist: Playlist): Long = database.insertPlaylist(playlist)
 
-    override suspend fun renamePlaylist(playlistId: Long, newName: String) {}
+    override suspend fun renamePlaylist(playlistId: Long, newName: String) {
+        database.renamePlaylist(playlistId, newName)
+    }
 
-    override suspend fun deletePlaylist(playlistId: Long) {}
+    override suspend fun deletePlaylist(playlistId: Long) {
+        database.deletePlaylist(playlistId)
+    }
 
-    override fun getTracksForPlaylist(playlistId: Long): Flow<List<Track>> = flowOf(emptyList())
+    override fun getTracksForPlaylist(playlistId: Long): Flow<List<Track>> = flowOf(database.getTracksForPlaylist(playlistId))
 
-    override suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long) {}
+    override suspend fun addTrackToPlaylist(playlistId: Long, trackId: Long) {
+        database.addTrackToPlaylist(playlistId, trackId)
+    }
 
-    override suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {}
+    override suspend fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
+        database.removeTrackFromPlaylist(playlistId, trackId)
+    }
 
-    override suspend fun reorderPlaylistTracks(playlistId: Long, orderedTrackIds: List<Long>) {}
+    override suspend fun reorderPlaylistTracks(playlistId: Long, orderedTrackIds: List<Long>) {
+        database.reorderPlaylistTracks(playlistId, orderedTrackIds)
+    }
 
     override suspend fun updateTrackAudioAnalysis(
         id: Long,
@@ -67,7 +81,11 @@ class DesktopTrackRepositoryAdapter(
         lufs: Float,
         drScore: Int,
         drLabel: String
-    ) {}
+    ) {
+        database.updateTrackAudioAnalysis(id, status, confidence, cutoffHz, lufs, drScore, drLabel)
+    }
 
-    override suspend fun recordTrackPlayed(id: Long, timestamp: Long) {}
+    override suspend fun recordTrackPlayed(id: Long, timestamp: Long) {
+        database.recordTrackPlayed(id, timestamp)
+    }
 }

@@ -1,11 +1,18 @@
 package com.nodeplayer.music.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.nodeplayer.model.HiResStatus
 import com.nodeplayer.model.Track
 
-@Entity(tableName = "tracks")
+@Entity(
+    tableName = "tracks",
+    indices = [
+        Index(value = ["isHidden", "title"]),
+        Index(value = ["isFavorite"])
+    ]
+)
 data class TrackEntity(
     @PrimaryKey val id: Long,
     val title: String,

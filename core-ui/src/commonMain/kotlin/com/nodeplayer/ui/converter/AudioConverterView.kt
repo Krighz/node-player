@@ -52,6 +52,9 @@ fun AudioConverterView(
     destinationFolder: File?,
     onPickDestinationFolder: () -> Unit,
     onBack: () -> Unit,
+    candidateFiles: List<File> = emptyList(),
+    onSelectedFilesChange: ((List<File>) -> Unit)? = null,
+    onPickIndividualFiles: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -61,6 +64,7 @@ fun AudioConverterView(
 
     var selectedPreset by remember { mutableStateOf(TranscodePreset.PRESET_128) }
     var isCustomExpanded by remember { mutableStateOf(false) }
+    var showFileSelectionDialog by remember { mutableStateOf(false) }
 
     // Custom options
     var customBitrate by remember { mutableStateOf(160) }
@@ -203,13 +207,37 @@ fun AudioConverterView(
                         )
                     }
 
-                    LiquidButton(
-                        onClick = onPickFiles,
-                        enabled = batchState !is TranscodeBatchState.Running
-                    ) {
-                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(if (selectedFiles.isEmpty()) "Select Files / Folder" else "Change Source", fontSize = 12.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (candidateFiles.isNotEmpty()) {
+                            LiquidButton(
+                                onClick = { showFileSelectionDialog = true },
+                                enabled = batchState !is TranscodeBatchState.Running
+                            ) {
+                                Icon(Icons.Rounded.PlaylistAddCheck, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Choose Tracks", fontSize = 12.sp)
+                            }
+                        }
+
+                        if (onPickIndividualFiles != null) {
+                            LiquidButton(
+                                onClick = { onPickIndividualFiles.invoke() },
+                                enabled = batchState !is TranscodeBatchState.Running
+                            ) {
+                                Icon(Icons.Rounded.InsertDriveFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Browse Files", fontSize = 12.sp)
+                            }
+                        }
+
+                        LiquidButton(
+                            onClick = onPickFiles,
+                            enabled = batchState !is TranscodeBatchState.Running
+                        ) {
+                            Icon(Icons.Rounded.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(if (selectedFiles.isEmpty()) "Add All Library" else "Reset to All", fontSize = 12.sp)
+                        }
                     }
                 }
 
@@ -220,13 +248,236 @@ fun AudioConverterView(
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.75f)
                     )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Black.copy(alpha = 0.25f))
+                            .padding(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        selectedFiles.take(8).forEach { file ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = file.name,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = ConverterMath.formatDiskSize(file.length()),
+                                        fontSize = 11.sp,
+                                        color = Color.White.copy(alpha = 0.55f)
+                                    )
+                                }
+
+                                if (onSelectedFilesChange != null && batchState !is TranscodeBatchState.Running) {
+                                    IconButton(
+                                        onClick = { onSelectedFilesChange.invoke(selectedFiles.filter { it.absolutePath != file.absolutePath }) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Close,
+                                            contentDescription = "Remove file",
+                                            tint = Color.White.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        if (selectedFiles.size > 8) {
+                            Text(
+                                text = "+ ${selectedFiles.size - 8} more files selected",
+                                fontSize = 12.sp,
+                                color = accent,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 } else {
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "No FLAC source files selected. Pick a music folder or specific tracks to begin.",
+                        text = "No FLAC source files selected. Pick specific tracks from your library or browse storage to begin.",
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.45f)
                     )
+                }
+            }
+        }
+
+        // Individual File Selection Modal Dialog
+        if (showFileSelectionDialog && candidateFiles.isNotEmpty()) {
+            var searchQuery by remember { mutableStateOf("") }
+            var tempSelected by remember { mutableStateOf(selectedFiles.toSet()) }
+
+            val filteredCandidates = remember(candidateFiles, searchQuery) {
+                if (searchQuery.isBlank()) candidateFiles
+                else candidateFiles.filter { it.name.contains(searchQuery, ignoreCase = true) }
+            }
+
+            Dialog(onDismissRequest = { showFileSelectionDialog = false }) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(0.85f)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(Color(0xFF141724))
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(24.dp))
+                        .padding(20.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Select Individual FLACs",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            )
+                            IconButton(onClick = { showFileSelectionDialog = false }) {
+                                Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Search box
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            placeholder = { Text("Filter by filename...", color = Color.White.copy(alpha = 0.4f)) },
+                            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = Color.White.copy(alpha = 0.6f)) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White,
+                                focusedBorderColor = accent,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.2f)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Select All / Deselect All
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "${tempSelected.size} of ${candidateFiles.size} selected",
+                                fontSize = 12.sp,
+                                color = Color.White.copy(alpha = 0.7f)
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                TextButton(
+                                    onClick = { tempSelected = candidateFiles.toSet() }
+                                ) {
+                                    Text("Select All", fontSize = 12.sp, color = accent)
+                                }
+                                TextButton(
+                                    onClick = { tempSelected = emptySet() }
+                                ) {
+                                    Text("Clear", fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Candidate list
+                        androidx.compose.foundation.lazy.LazyColumn(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color.Black.copy(alpha = 0.2f)),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            items(filteredCandidates.size) { idx ->
+                                val file = filteredCandidates[idx]
+                                val isChecked = tempSelected.any { it.absolutePath == file.absolutePath }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            tempSelected = if (isChecked) {
+                                                tempSelected.filterNot { it.absolutePath == file.absolutePath }.toSet()
+                                            } else {
+                                                tempSelected + file
+                                            }
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = isChecked,
+                                        onCheckedChange = { checked ->
+                                            tempSelected = if (checked) {
+                                                tempSelected + file
+                                            } else {
+                                                tempSelected.filterNot { it.absolutePath == file.absolutePath }.toSet()
+                                            }
+                                        },
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = accent,
+                                            checkmarkColor = Color.Black
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = file.name,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color.White,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = "${ConverterMath.formatDiskSize(file.length())} • ${file.parentFile?.name ?: ""}",
+                                            fontSize = 11.sp,
+                                            color = Color.White.copy(alpha = 0.5f),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Confirm button
+                        LiquidButton(
+                            onClick = {
+                                onSelectedFilesChange?.invoke(tempSelected.toList())
+                                showFileSelectionDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Confirm (${tempSelected.size} Files Selected)", fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
         }

@@ -109,7 +109,7 @@ fun YourMixShelf(
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                items(5) {
+                items(5, key = { "your_mix_skel_$it" }) {
                     Box(
                         modifier = Modifier
                             .width(156.dp)
@@ -149,7 +149,11 @@ fun YourMixShelf(
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                itemsIndexed(tracks) { index, track ->
+                itemsIndexed(
+                    items = tracks,
+                    key = { index, track -> "${track.extractVideoId() ?: track.id}_$index" },
+                    contentType = { _, _ -> "your_mix_card" }
+                ) { index, track ->
                     Box(
                         modifier = Modifier
                             .width(156.dp)

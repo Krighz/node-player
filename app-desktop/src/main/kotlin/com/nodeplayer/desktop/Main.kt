@@ -96,6 +96,20 @@ fun main() = application {
     var themeConfig by remember { mutableStateOf(settingsStore.loadThemeConfig().copy(isOledBlack = false)) }
     var currentMusicFolder by remember { mutableStateOf(settingsStore.getLastMusicFolder()) }
 
+    var crossfadeSeconds by remember { mutableFloatStateOf(settingsStore.getFloat("crossfade_seconds", 0.0f)) }
+    var gaplessEnabled by remember { mutableStateOf(settingsStore.getBoolean("gapless_enabled", true)) }
+    var replayGainMode by remember {
+        mutableStateOf(
+            try {
+                ReplayGainMode.valueOf(settingsStore.getString("replay_gain_mode", ReplayGainMode.OFF.name))
+            } catch (_: Exception) {
+                ReplayGainMode.OFF
+            }
+        )
+    }
+    var lastFmEnabled by remember { mutableStateOf(settingsStore.getBoolean("lastfm_enabled", false)) }
+    var trackExtendedInfo by remember { mutableStateOf<TrackExtendedInfo?>(null) }
+
     val ncSettingsStore = remember { com.nodeplayer.network.service.NodeConnectSettingsStore(settingsStore) }
     var ncConfig by remember { mutableStateOf(ncSettingsStore.config.value) }
     var remoteTracks by remember { mutableStateOf<List<Track>>(emptyList()) }
@@ -320,11 +334,49 @@ fun main() = application {
     // Apply saved audio DSP config, load library, and start Node Connect on startup
     LaunchedEffect(Unit) {
         engine.applyEffectConfig(audioEffectConfig)
+        val savedVol = settingsStore.getFloat("playback_volume", 1.0f)
+        engine.setVolume(savedVol)
+        val savedShuffle = settingsStore.getBoolean("playback_shuffle", false)
+        engine.setShuffle(savedShuffle)
+        val savedRepeat = settingsStore.getInt("playback_repeat", 0)
+        engine.setRepeatMode(savedRepeat)
+        engine.onTrackCompletedCallback = { tr ->
+            coroutineScope.launch(Dispatchers.IO) {
+                database.recordTrackPlayed(tr.id, System.currentTimeMillis())
+            }
+        }
         refreshLibrary()
         hub.start(
             deviceName = "Node Player PC (${System.getProperty("user.name", "Windows")})",
             platform = "Windows"
         )
+    }
+
+    LaunchedEffect(currentTrack?.id) {
+        val tr = currentTrack
+        if (tr == null) {
+            trackExtendedInfo = null
+        } else {
+            val client = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+            val videoId = tr.extractVideoId()
+            val cacheKey = videoId ?: tr.id.toString()
+            val cached = client.getCachedExtendedInfo(cacheKey)
+            if (cached != null) {
+                trackExtendedInfo = cached
+            } else {
+                trackExtendedInfo = TrackExtendedInfo(
+                    credits = client.parseLocalCredits(tr),
+                    artistName = tr.artist
+                )
+                withContext(Dispatchers.IO) {
+                    client.fetchTrackExtendedInfo(tr).onSuccess { info ->
+                        withContext(Dispatchers.Main) {
+                            trackExtendedInfo = info
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Broadcast playback state to connected controllers
@@ -437,6 +489,42 @@ fun main() = application {
                 volume = volume,
                 isShuffle = isShuffle,
                 repeatMode = repeatMode,
+                isFavorite = currentTrack?.isFavorite == true,
+                onToggleFavorite = {
+                    val tr = currentTrack
+                    if (tr != null) {
+                        val newFav = !tr.isFavorite
+                        coroutineScope.launch(Dispatchers.IO) {
+                            database.setFavorite(tr.id, newFav)
+                            val updated = tr.copy(isFavorite = newFav)
+                            withContext(Dispatchers.Main) {
+                                engine.updateCurrentTrack(updated)
+                                trackList = trackList.map { if (it.id == tr.id) updated else it }
+                            }
+                        }
+                    }
+                },
+                crossfadeSeconds = crossfadeSeconds,
+                onCrossfadeChange = {
+                    crossfadeSeconds = it
+                    settingsStore.putFloat("crossfade_seconds", it)
+                },
+                gaplessEnabled = gaplessEnabled,
+                onGaplessToggle = {
+                    gaplessEnabled = it
+                    settingsStore.putBoolean("gapless_enabled", it)
+                },
+                replayGainMode = replayGainMode,
+                onReplayGainModeChange = {
+                    replayGainMode = it
+                    settingsStore.putString("replay_gain_mode", it.name)
+                },
+                lastFmEnabled = lastFmEnabled,
+                onLastFmToggle = {
+                    lastFmEnabled = it
+                    settingsStore.putBoolean("lastfm_enabled", it)
+                },
+                trackExtendedInfo = trackExtendedInfo,
                 queue = queue,
                 currentQueueIndex = currentQueueIndex,
                 lrcContent = currentLrc,
@@ -523,7 +611,12 @@ fun main() = application {
                             }
                         }
                     } else {
-                        engine.setQueue(list, list.indexOf(track))
+                        val idx = list.indexOf(track)
+                        if (idx >= 0) {
+                            engine.setQueue(list, idx)
+                        } else {
+                            engine.setQueue(listOf(track) + list, 0)
+                        }
                     }
                 },
                 onPlayPause = { engine.playPause() },
@@ -532,9 +625,18 @@ fun main() = application {
                 onNext = { engine.next() },
                 onPrevious = { engine.previous() },
                 onSeek = { engine.seekTo(it) },
-                onVolumeChange = { engine.setVolume(it) },
-                onToggleShuffle = { engine.toggleShuffle() },
-                onCycleRepeat = { engine.cycleRepeatMode() },
+                onVolumeChange = {
+                    engine.setVolume(it)
+                    settingsStore.putFloat("playback_volume", it)
+                },
+                onToggleShuffle = {
+                    engine.toggleShuffle()
+                    settingsStore.putBoolean("playback_shuffle", engine.isShuffle.value)
+                },
+                onCycleRepeat = {
+                    engine.cycleRepeatMode()
+                    settingsStore.putInt("playback_repeat", engine.repeatMode.value)
+                },
                 onSelectQueueItem = { engine.playIndex(it) },
                 onAudioEffectConfigChange = { cfg ->
                     audioEffectConfig = cfg

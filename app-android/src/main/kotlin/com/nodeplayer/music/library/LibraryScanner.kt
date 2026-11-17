@@ -28,12 +28,14 @@ class LibraryScanner(private val context: Context) {
         minDurationMs: Long = 10_000L,
         includedFolders: Set<String> = emptySet(),
         excludedFolders: Set<String> = emptySet(),
-        whitelistedTrackIds: Set<Long> = emptySet()
+        whitelistedTrackIds: Set<Long> = emptySet(),
+        cachedTracksById: Map<Long, com.nodeplayer.music.data.TrackEntity> = emptyMap()
     ): List<Track> = withContext(Dispatchers.IO) {
         scanAllTracks(
             minDurationMs = minDurationMs,
             includedFolders = includedFolders,
-            whitelistedTrackIds = whitelistedTrackIds
+            whitelistedTrackIds = whitelistedTrackIds,
+            cachedTracksById = cachedTracksById
         ).map { track ->
             val isExcluded = excludedFolders.any { track.path.startsWith(it, ignoreCase = true) }
             track.copy(isHidden = isExcluded)
@@ -43,7 +45,8 @@ class LibraryScanner(private val context: Context) {
     suspend fun scanAllTracks(
         minDurationMs: Long = 10_000L,
         includedFolders: Set<String> = emptySet(),
-        whitelistedTrackIds: Set<Long> = emptySet()
+        whitelistedTrackIds: Set<Long> = emptySet(),
+        cachedTracksById: Map<Long, com.nodeplayer.music.data.TrackEntity> = emptyMap()
     ): List<Track> = withContext(Dispatchers.IO) {
         val tracks = mutableListOf<Track>()
         val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -147,8 +150,17 @@ class LibraryScanner(private val context: Context) {
                             path.endsWith(".wav", ignoreCase = true) ||
                             path.endsWith(".alac", ignoreCase = true)
 
-                    val formatInfo = resolveAudioFormat(path, mime, size, duration, isLossless)
-                    val isHiRes = formatInfo.sampleRate > 48000 || formatInfo.bitDepth > 16
+                    val cached = cachedTracksById[id]
+                    val isCachedValid = cached != null && cached.sampleRate > 0 && cached.dateAdded == dateAdded
+                    val formatInfo = if (!isCachedValid) resolveAudioFormat(path, mime, size, duration, isLossless) else null
+
+                    val sampleRate = cached?.sampleRate ?: formatInfo?.sampleRate ?: 0
+                    val bitDepth = cached?.bitDepth ?: formatInfo?.bitDepth ?: 0
+                    val channels = cached?.channels ?: formatInfo?.channels ?: 2
+                    val bitrateKbps = cached?.bitrateKbps ?: formatInfo?.bitrateKbps ?: 0
+                    val formatDesc = cached?.formatDescription ?: formatInfo?.formatDescription ?: ""
+                    val lossless = cached?.isLossless ?: formatInfo?.isLossless ?: isLossless
+                    val isHiRes = sampleRate > 48000 || bitDepth > 16
 
                     tracks.add(
                         Track(
@@ -162,16 +174,16 @@ class LibraryScanner(private val context: Context) {
                             path = path,
                             size = size,
                             mimeType = mime,
-                            sampleRate = formatInfo.sampleRate,
-                            bitDepth = formatInfo.bitDepth,
-                            channels = formatInfo.channels,
-                            bitrateKbps = formatInfo.bitrateKbps,
-                            formatDescription = formatInfo.formatDescription,
+                            sampleRate = sampleRate,
+                            bitDepth = bitDepth,
+                            channels = channels,
+                            bitrateKbps = bitrateKbps,
+                            formatDescription = formatDesc,
                             trackNumber = trackNo,
                             discNumber = discNo,
                             year = year,
                             dateAdded = dateAdded,
-                            isLossless = formatInfo.isLossless,
+                            isLossless = lossless,
                             isHiRes = isHiRes
                         )
                     )

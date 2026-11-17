@@ -1,10 +1,12 @@
 package com.nodeplayer.network.innertube
 
 import com.nodeplayer.common.logging.NodeLog
+import com.nodeplayer.model.CreditEntry
 import com.nodeplayer.model.MoodGenre
 import com.nodeplayer.model.MoodGenreSection
 import com.nodeplayer.model.Playlist
 import com.nodeplayer.model.Track
+import com.nodeplayer.model.TrackExtendedInfo
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.HttpClientEngine
@@ -77,7 +79,17 @@ class InnerTubeClient(
     private val httpClient: HttpClient = if (engine != null) {
         HttpClient(engine) { configureClient() }
     } else {
-        HttpClient(CIO) { configureClient() }
+        HttpClient(CIO) {
+            engine {
+                maxConnectionsCount = 1000
+                endpoint.maxConnectionsPerRoute = 20
+                endpoint.pipelineMaxSize = 1
+                endpoint.keepAliveTime = 30_000
+                endpoint.connectTimeout = 15_000
+                endpoint.connectAttempts = 3
+            }
+            configureClient()
+        }
     }
 
     private fun io.ktor.client.HttpClientConfig<*>.configureClient() {
@@ -798,6 +810,237 @@ class InnerTubeClient(
         tracks
     }.onFailure { e ->
         NodeLog.e(TAG, "Failed to fetch next radio queue for videoId=$videoId", e)
+    }
+
+    private val extendedInfoCache = java.util.Collections.synchronizedMap(
+        object : java.util.LinkedHashMap<String, TrackExtendedInfo>(32, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TrackExtendedInfo>?): Boolean {
+                return size > 50
+            }
+        }
+    )
+
+    fun getCachedExtendedInfo(key: String): TrackExtendedInfo? = extendedInfoCache[key]
+
+    fun putCachedExtendedInfo(key: String, info: TrackExtendedInfo) {
+        extendedInfoCache[key] = info
+    }
+
+    /**
+     * Parses local tag credits from track artist, title features, etc.
+     */
+    fun parseLocalCredits(track: Track): List<CreditEntry> {
+        val credits = mutableListOf<CreditEntry>()
+        val mainArtist = track.artist.trim()
+
+        val featRegex = Regex("""(?i)\((?:feat\.|ft\.|featuring)\s+([^)]+)\)""")
+        val featMatch = featRegex.find(track.title)
+        val featuredFromTitle = featMatch?.groupValues?.getOrNull(1)
+            ?.split(Regex("""[,&/]|\band\b""", RegexOption.IGNORE_CASE))
+            ?.map { it.trim() }
+            ?.filter { it.isNotBlank() }
+            .orEmpty()
+
+        val artistParts = mainArtist.split(Regex("""[,&/]|\band\b""", RegexOption.IGNORE_CASE))
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        if (artistParts.isNotEmpty()) {
+            credits.add(CreditEntry(name = artistParts[0], role = "Main Artist"))
+            for (i in 1 until artistParts.size) {
+                if (credits.none { it.name.equals(artistParts[i], ignoreCase = true) }) {
+                    credits.add(CreditEntry(name = artistParts[i], role = "Featured Artist"))
+                }
+            }
+        } else if (mainArtist.isNotBlank()) {
+            credits.add(CreditEntry(name = mainArtist, role = "Main Artist"))
+        }
+
+        for (feat in featuredFromTitle) {
+            if (credits.none { it.name.equals(feat, ignoreCase = true) }) {
+                credits.add(CreditEntry(name = feat, role = "Featured Artist"))
+            }
+        }
+
+        return credits
+    }
+
+    /**
+     * Resolves the artist browse ID from InnerTube search.
+     */
+    suspend fun searchArtistBrowseId(artistName: String): String? = runCatching {
+        val client = YouTubeClient.WEB_REMIX
+        val response = withRetry {
+            httpClient.post("search") {
+                header("User-Agent", client.userAgent)
+                header("X-YouTube-Client-Name", client.clientId)
+                header("X-YouTube-Client-Version", client.clientVersion)
+                setBody(
+                    SearchBody(
+                        context = client.toContext(locale),
+                        query = artistName,
+                        params = SearchFilter.ARTISTS.paramValue
+                    )
+                )
+            }.body<SearchResponse>()
+        }
+
+        val contents = response.contents?.tabbedSearchResultsRenderer?.tabs?.firstOrNull()
+            ?.tabRenderer?.content?.sectionListRenderer?.contents.orEmpty()
+
+        for (content in contents) {
+            val shelf = content.musicShelfRenderer ?: continue
+            for (item in shelf.contents.orEmpty()) {
+                val renderer = item.musicResponsiveListItemRenderer ?: continue
+                val browseId = renderer.navigationEndpoint?.browseEndpoint?.browseId
+                if (!browseId.isNullOrBlank()) {
+                    return@runCatching browseId
+                }
+            }
+        }
+        null
+    }.getOrNull()
+
+    /**
+     * Fetches rich extended information for [track], caching results in memory.
+     */
+    suspend fun fetchTrackExtendedInfo(track: Track): Result<TrackExtendedInfo> = runCatching {
+        var videoId = track.extractVideoId()
+        val cacheKey = videoId ?: track.id.toString()
+        extendedInfoCache[cacheKey]?.let { return@runCatching it }
+
+        val localCredits = parseLocalCredits(track)
+        val primaryArtistName = localCredits.firstOrNull()?.name ?: track.artist
+
+        // If no videoId, search online if online mode is enabled
+        if (videoId == null && track.title.isNotBlank() && track.artist.isNotBlank()) {
+            val searchRes = search("${track.artist} ${track.title}", SearchFilter.SONGS).getOrNull()
+            val matchedTrack = searchRes?.songs?.firstOrNull()
+            videoId = matchedTrack?.extractVideoId()
+        }
+
+        var artistBrowseId: String? = null
+        val credits = localCredits.toMutableList()
+        var moreLikeThis = emptyList<Track>()
+
+        // 1. If we have a videoId, fetch next & next radio
+        if (videoId != null) {
+            val nextResult = runCatching {
+                httpClient.post("next") {
+                    setBody(
+                        NextBody(
+                            context = clientContext.toContext(locale),
+                            videoId = videoId
+                        )
+                    )
+                }.body<NextResponse>()
+            }
+            val nextResponse = nextResult.getOrNull()
+
+            val continuationContents = nextResponse?.continuationContents?.playlistPanelContinuation
+            val firstPanelItem = continuationContents?.contents?.firstOrNull()?.playlistPanelVideoRenderer
+            val bylineRuns = firstPanelItem?.shortBylineText?.runs
+
+            bylineRuns?.forEach { run ->
+                val bId = run.navigationEndpoint?.browseEndpoint?.browseId
+                if (bId != null && (bId.startsWith("UC") || bId.startsWith("FEmusic_library_privately_owned_artist"))) {
+                    if (artistBrowseId == null) {
+                        artistBrowseId = bId
+                    }
+                    if (run.text.isNotBlank() && credits.none { it.name.equals(run.text, ignoreCase = true) }) {
+                        credits.add(CreditEntry(name = run.text.trim(), role = "Artist", browseId = bId))
+                    }
+                }
+            }
+
+            // Fetch "More like this" from radio
+            val radioResult = getNextRadio(videoId, "RDAMVM$videoId")
+            val radioTracks = radioResult.getOrDefault(emptyList())
+            moreLikeThis = radioTracks
+                .filter { candidate ->
+                    val candVideoId = candidate.extractVideoId()
+                    val isSameTrack = (candVideoId != null && candVideoId == videoId) ||
+                        candidate.id == track.id ||
+                        candidate.title.equals(track.title, ignoreCase = true)
+                    val isSameArtist = candidate.artist.equals(primaryArtistName, ignoreCase = true) ||
+                        candidate.artist.equals(track.artist, ignoreCase = true)
+                    !isSameTrack && !isSameArtist
+                }
+                .distinctBy { it.title.lowercase() }
+                .take(12)
+        }
+
+        // 2. If artistBrowseId not found yet, search for artist browseId
+        if (artistBrowseId == null && primaryArtistName.isNotBlank() && primaryArtistName != "YouTube Music") {
+            artistBrowseId = searchArtistBrowseId(primaryArtistName)
+        }
+
+        var artistBannerUrl: String? = null
+        var artistSubscribers: String? = null
+        var artistBio: String? = null
+        var moreByArtist = emptyList<Track>()
+
+        // 3. Browse artist page if artistBrowseId is available
+        if (artistBrowseId != null) {
+            val browseResult = browse(browseId = artistBrowseId).getOrNull()
+            if (browseResult != null) {
+                val header = browseResult.header
+                val immersive = header?.musicImmersiveHeaderRenderer
+                val visual = header?.musicVisualHeaderRenderer
+                val generic = header?.musicHeaderRenderer
+
+                artistBannerUrl = immersive?.thumbnail?.getThumbnailUrl()
+                    ?: visual?.thumbnail?.getThumbnailUrl()
+                    ?: visual?.foregroundThumbnail?.getThumbnailUrl()
+                    ?: generic?.thumbnail?.getThumbnailUrl()
+                    ?: browseResult.background?.getThumbnailUrl()
+
+                artistSubscribers = immersive?.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText?.text()
+                    ?: immersive?.subscriptionButton?.subscribeButtonRenderer?.subscriberCountWithSubscribeText?.text()
+
+                artistBio = immersive?.description?.text()?.ifBlank { null }
+
+                val sections = parseBrowseSections(browseResult)
+                val songsSection = sections.firstOrNull { it.title.contains("Song", ignoreCase = true) }
+                    ?: sections.firstOrNull { it.title.contains("Top", ignoreCase = true) }
+                    ?: sections.firstOrNull { it.items.isNotEmpty() }
+
+                val artistTracks = (songsSection?.items ?: sections.flatMap { it.items })
+                    .filter { cand ->
+                        val candVid = cand.extractVideoId()
+                        val isSameTrack = (candVid != null && candVid == videoId) ||
+                            cand.id == track.id ||
+                            cand.title.equals(track.title, ignoreCase = true)
+                        !isSameTrack
+                    }
+                    .distinctBy { it.title.lowercase() }
+                    .take(15)
+
+                moreByArtist = artistTracks
+            }
+        }
+
+        val finalCredits = credits.map { credit ->
+            if (credit.role == "Main Artist" && credit.browseId == null && artistBrowseId != null) {
+                credit.copy(browseId = artistBrowseId)
+            } else {
+                credit
+            }
+        }
+
+        val extendedInfo = TrackExtendedInfo(
+            credits = finalCredits,
+            artistName = primaryArtistName,
+            artistBrowseId = artistBrowseId,
+            artistBannerUrl = artistBannerUrl,
+            artistSubscribers = artistSubscribers,
+            artistBio = artistBio,
+            moreByArtist = moreByArtist,
+            moreLikeThis = moreLikeThis
+        )
+
+        extendedInfoCache[cacheKey] = extendedInfo
+        extendedInfo
     }
 
     override fun close() {

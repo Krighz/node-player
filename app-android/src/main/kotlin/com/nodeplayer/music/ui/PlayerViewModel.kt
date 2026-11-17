@@ -215,6 +215,40 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _videoPlayerState = MutableStateFlow(VideoPlayerState())
     val videoPlayerState: StateFlow<VideoPlayerState> = _videoPlayerState.asStateFlow()
 
+    private val _trackExtendedInfo = MutableStateFlow<TrackExtendedInfo?>(null)
+    val trackExtendedInfo: StateFlow<TrackExtendedInfo?> = _trackExtendedInfo.asStateFlow()
+    private var trackExtendedInfoJob: Job? = null
+
+    private fun updateTrackExtendedInfo(track: Track?) {
+        trackExtendedInfoJob?.cancel()
+        if (track == null) {
+            _trackExtendedInfo.value = null
+            return
+        }
+
+        val client = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+        val videoId = track.extractVideoId()
+        val cacheKey = videoId ?: track.id.toString()
+        val cached = client.getCachedExtendedInfo(cacheKey)
+        if (cached != null) {
+            _trackExtendedInfo.value = cached
+            return
+        }
+
+        val baselineCredits = client.parseLocalCredits(track)
+        _trackExtendedInfo.value = TrackExtendedInfo(
+            credits = baselineCredits,
+            artistName = track.artist
+        )
+
+        trackExtendedInfoJob = viewModelScope.launch(Dispatchers.IO) {
+            val result = client.fetchTrackExtendedInfo(track)
+            result.onSuccess { info ->
+                _trackExtendedInfo.value = info
+            }
+        }
+    }
+
     fun setCinemaExpanded(expanded: Boolean) {
         _videoPlayerState.update { it.copy(isCinemaExpanded = expanded) }
     }
@@ -465,6 +499,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         initMediaController()
         registerAudioDeviceCallback()
         restoreLastPlaybackSession()
+
+        viewModelScope.launch {
+            _currentTrack.collect { track ->
+                updateTrackExtendedInfo(track)
+            }
+        }
 
         viewModelScope.launch {
             appSettings.collect { settings ->
@@ -790,10 +830,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         libraryRefreshJob?.cancel()
         libraryRefreshJob = viewModelScope.launch(Dispatchers.IO) {
             val minMs = minDurationSec * 1000L
+            val existingTracks = dao.getAllRawTracksList().associateBy { it.id }
             val scannedTracks = scanner.scanAllTracks(
                 minDurationMs = minMs,
                 includedFolders = includedFolders,
-                whitelistedTrackIds = whitelistedIds
+                whitelistedTrackIds = whitelistedIds,
+                cachedTracksById = existingTracks
             )
 
             val detectedFolders = scanner.extractFolders(scannedTracks)
@@ -807,7 +849,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             dao.insertScannedFolders(folderEntities)
 
-            val existingTracks = dao.getAllRawTracksList().associateBy { it.id }
             val entities = scannedTracks.map { track ->
                 val isHidden = excludedFolders.any { excludedPath ->
                     track.path.startsWith(excludedPath, ignoreCase = true)

@@ -60,6 +60,7 @@ import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.LiquidColors
 import com.nodeplayer.library.taste.TasteRecommendationEngine
+import com.nodeplayer.library.taste.TasteStation
 import com.nodeplayer.model.MoodBucket
 import com.nodeplayer.model.bucketFor
 import com.nodeplayer.network.innertube.InnerTubeTasteHistoryAdapter
@@ -78,6 +79,7 @@ private val HOME_CAPSULE_SHAPE = ContinuousCapsule()
 private val HOME_BANNER_SHAPE_16 = ContinuousRoundedRectangle(16.dp)
 private val HOME_BANNER_ICON_SHAPE_10 = ContinuousRoundedRectangle(10.dp)
 private val HOME_BTN_SHAPE_12 = ContinuousRoundedRectangle(12.dp)
+private var sessionCachedTasteStation: TasteStation? = null
 
 fun <T> uniqueLazyKeys(items: List<T>, baseKeySelector: (T) -> String): List<String> {
     if (items.isEmpty()) return emptyList()
@@ -163,31 +165,39 @@ fun OnlineHomeView(
     var categorySections by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<List<YouTubeSection>?>(null) }
     var actionJob by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<Job?>(null) }
 
-    var yourMixTracks by remember(isLoggedIn, accountId) { mutableStateOf<List<Track>>(emptyList()) }
-    var isYourMixLoading by remember(isLoggedIn, accountId) { mutableStateOf(true) }
-    var isYourMixFallback by remember(isLoggedIn, accountId) { mutableStateOf(false) }
+    var yourMixTracks by remember(isLoggedIn, accountId) { mutableStateOf<List<Track>>(sessionCachedTasteStation?.tracks ?: emptyList()) }
+    var isYourMixLoading by remember(isLoggedIn, accountId) { mutableStateOf(sessionCachedTasteStation == null) }
+    var isYourMixFallback by remember(isLoggedIn, accountId) { mutableStateOf(sessionCachedTasteStation?.isFallback ?: false) }
+    var yourMixJob by remember(isLoggedIn, accountId) { mutableStateOf<Job?>(null) }
 
     val tasteEngine = remember(isLoggedIn, accountId) {
         val adapter = InnerTubeTasteHistoryAdapter(SharedInnerTubeProvider.get())
         TasteRecommendationEngine(adapter)
     }
 
-    suspend fun loadYourMix() {
-        isYourMixLoading = true
-        try {
-            val stationRes = withContext(Dispatchers.IO) {
-                tasteEngine.generateTasteStationDetailed()
-            }
-            stationRes.onSuccess { station ->
-                yourMixTracks = station.tracks
-                isYourMixFallback = station.isFallback
-            }.onFailure {
+    suspend fun loadYourMix(force: Boolean = false) {
+        if (!force && yourMixJob?.isActive == true) return
+        yourMixJob?.cancel()
+        if (sessionCachedTasteStation == null) {
+            isYourMixLoading = true
+        }
+        yourMixJob = scope.launch {
+            try {
+                val stationRes = withContext(Dispatchers.IO) {
+                    tasteEngine.generateTasteStationDetailed()
+                }
+                stationRes.onSuccess { station ->
+                    sessionCachedTasteStation = station
+                    yourMixTracks = station.tracks
+                    isYourMixFallback = station.isFallback
+                }.onFailure {
+                    isYourMixFallback = true
+                }
+            } catch (_: Throwable) {
                 isYourMixFallback = true
+            } finally {
+                isYourMixLoading = false
             }
-        } catch (_: Throwable) {
-            isYourMixFallback = true
-        } finally {
-            isYourMixLoading = false
         }
     }
 
@@ -199,7 +209,7 @@ fun OnlineHomeView(
         isRefreshing = true
         errorMessage = null
         try {
-            scope.launch { loadYourMix() }
+            scope.launch { loadYourMix(force = true) }
             val result = withContext(Dispatchers.IO) {
                 val innerClient = SharedInnerTubeProvider.get()
                 if (currentRoute == "new" || currentRoute == "explore") {

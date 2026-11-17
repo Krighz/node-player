@@ -228,31 +228,20 @@ class StreamResolver(
 
     /**
      * Active HTTP Range Probe:
-     * For audio: Probes starting at 1 MiB (AUTH_BOUNDARY_BYTES) if the file is longer than 1 MiB,
-     * ensuring streams that get 403 cut off at 1:04 on unauthenticated clients are caught and rejected.
-     * For video: Probes offset 0-1024 to verify immediate URL liveness.
+     * Sends GET request with Range: bytes=0-1024 and 3-second timeout.
+     * Accepts HTTP 206 (Partial Content) or 200 (OK).
      */
     internal suspend fun verifyStreamUrl(url: String, userAgent: String, isVideo: Boolean = false): Boolean {
-        val length = url.substringAfter("clen=", "").substringBefore("&").toLongOrNull()
-        val start = if (!isVideo && length != null && length > AUTH_BOUNDARY_BYTES + PROBE_READ_BYTES) {
-            AUTH_BOUNDARY_BYTES
-        } else {
-            0L
-        }
-        val window = if (!isVideo && start > 0L) 128L * 1024 else 1024L
-        val end = if (length != null) minOf(start + window, length) - 1 else start + window - 1
-        val probeRange = "bytes=$start-$end"
-
         return try {
             probeClient.prepareGet(url) {
-                header("Range", probeRange)
+                header("Range", "bytes=0-1024")
                 header("User-Agent", userAgent)
             }.execute { response ->
                 response.status == HttpStatusCode.PartialContent || response.status == HttpStatusCode.OK
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            NodeLog.w(TAG, "Stream probe error for $url at $probeRange: ${e.message}")
+            NodeLog.w(TAG, "Stream probe error for $url: ${e.message}")
             false
         }
     }
@@ -302,9 +291,7 @@ class StreamResolver(
 
     companion object {
         private const val TAG = "stream-resolver"
-        private const val PROBE_TIMEOUT_MS = 3_000L
-        private const val AUTH_BOUNDARY_BYTES = 1024L * 1024 // 1 MiB boundary
-        private const val PROBE_READ_BYTES = 16L * 1024
+        private const val PROBE_TIMEOUT_MS = 1_500L
 
         val CLIENT_ROTATION = listOf(
             YouTubeClient.IOS,

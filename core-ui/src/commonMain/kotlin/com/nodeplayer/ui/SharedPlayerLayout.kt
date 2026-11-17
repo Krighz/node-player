@@ -151,6 +151,9 @@ fun SharedPlayerLayout(
     onToggleVideo: ((Boolean) -> Unit)? = null,
     onSelectQuality: ((Int?) -> Unit)? = null,
     onOpenFullscreenCinema: (() -> Unit)? = null,
+    trackExtendedInfo: com.nodeplayer.model.TrackExtendedInfo? = null,
+    onArtistClick: ((String, String?) -> Unit)? = null,
+    onTrackOptionsClick: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var currentNav by remember { mutableStateOf(PlayerNavDestination.HOME) }
@@ -603,23 +606,52 @@ fun SharedPlayerLayout(
                                     onBack = { currentNav = PlayerNavDestination.SETTINGS },
                                     themeConfig = themeConfig
                                 )
-                                PlayerNavDestination.AUDIO_CONVERTER -> com.nodeplayer.ui.converter.AudioConverterView(
-                                    queueManager = effectiveConverterManager,
-                                    selectedFiles = selectedConverterFiles,
-                                    onPickFiles = {
-                                        val flacFiles = tracks.map { java.io.File(it.path) }.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
-                                        selectedConverterFiles = flacFiles
-                                    },
-                                    destinationFolder = converterDestinationFolder,
-                                    onPickDestinationFolder = {
-                                        if (currentMusicFolder.isNotBlank()) {
-                                            val dest = java.io.File(currentMusicFolder, "Converted")
-                                            dest.mkdirs()
-                                            converterDestinationFolder = dest
-                                        }
-                                    },
-                                    onBack = { currentNav = PlayerNavDestination.SETTINGS }
-                                )
+                                PlayerNavDestination.AUDIO_CONVERTER -> {
+                                    val candidateFlacs = remember(tracks) {
+                                        tracks.map { java.io.File(it.path) }.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
+                                    }
+                                    com.nodeplayer.ui.converter.AudioConverterView(
+                                        queueManager = effectiveConverterManager,
+                                        selectedFiles = selectedConverterFiles,
+                                        candidateFiles = candidateFlacs,
+                                        onSelectedFilesChange = { selectedConverterFiles = it },
+                                        onPickIndividualFiles = {
+                                            try {
+                                                javax.swing.SwingUtilities.invokeLater {
+                                                    try {
+                                                        javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager.getSystemLookAndFeelClassName())
+                                                    } catch (_: Exception) {}
+                                                    val chooser = javax.swing.JFileChooser()
+                                                    chooser.dialogTitle = "Select Individual FLAC Files"
+                                                    chooser.fileSelectionMode = javax.swing.JFileChooser.FILES_ONLY
+                                                    chooser.isMultiSelectionEnabled = true
+                                                    chooser.fileFilter = javax.swing.filechooser.FileNameExtensionFilter("FLAC Audio Files (*.flac)", "flac")
+                                                    if (currentMusicFolder.isNotBlank()) {
+                                                        val f = java.io.File(currentMusicFolder)
+                                                        if (f.exists()) chooser.currentDirectory = f
+                                                    }
+                                                    val res = chooser.showOpenDialog(null)
+                                                    if (res == javax.swing.JFileChooser.APPROVE_OPTION) {
+                                                        val picked = chooser.selectedFiles.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
+                                                        selectedConverterFiles = (selectedConverterFiles + picked).distinctBy { it.absolutePath }
+                                                    }
+                                                }
+                                            } catch (_: Exception) {}
+                                        },
+                                        onPickFiles = {
+                                            selectedConverterFiles = candidateFlacs
+                                        },
+                                        destinationFolder = converterDestinationFolder,
+                                        onPickDestinationFolder = {
+                                            if (currentMusicFolder.isNotBlank()) {
+                                                val dest = java.io.File(currentMusicFolder, "Converted")
+                                                dest.mkdirs()
+                                                converterDestinationFolder = dest
+                                            }
+                                        },
+                                        onBack = { currentNav = PlayerNavDestination.SETTINGS }
+                                    )
+                                }
                             }
                         }
                     }
@@ -647,7 +679,7 @@ fun SharedPlayerLayout(
                         onToggleFavorite = onToggleFavorite,
                         onOpenSignalPath = { currentNav = PlayerNavDestination.EQUALIZER },
                         onOpenOutputDevicePicker = { currentNav = PlayerNavDestination.SETTINGS },
-                        onCastClick = { /* open cast sheet */ },
+                        onCastClick = { onPairNewDevice() },
                         onExpandNowPlaying = { playerPresentationState = com.nodeplayer.model.PlayerPresentationState.NowPlaying },
                         sleepTimerRemainingSec = sleepTimerRemainingSec,
                         onSetSleepTimer = onSetSleepTimer,
@@ -875,23 +907,52 @@ fun SharedPlayerLayout(
                                 onBack = { currentNav = PlayerNavDestination.SETTINGS },
                                 themeConfig = themeConfig
                             )
-                            PlayerNavDestination.AUDIO_CONVERTER -> com.nodeplayer.ui.converter.AudioConverterView(
-                                queueManager = effectiveConverterManager,
-                                selectedFiles = selectedConverterFiles,
-                                onPickFiles = {
-                                    val flacFiles = tracks.map { java.io.File(it.path) }.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
-                                    selectedConverterFiles = flacFiles
-                                },
-                                destinationFolder = converterDestinationFolder,
-                                onPickDestinationFolder = {
-                                    if (currentMusicFolder.isNotBlank()) {
-                                        val dest = java.io.File(currentMusicFolder, "Converted")
-                                        dest.mkdirs()
-                                        converterDestinationFolder = dest
-                                    }
-                                },
-                                onBack = { currentNav = PlayerNavDestination.SETTINGS }
-                            )
+                            PlayerNavDestination.AUDIO_CONVERTER -> {
+                                val candidateFlacs = remember(tracks) {
+                                    tracks.map { java.io.File(it.path) }.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
+                                }
+                                com.nodeplayer.ui.converter.AudioConverterView(
+                                    queueManager = effectiveConverterManager,
+                                    selectedFiles = selectedConverterFiles,
+                                    candidateFiles = candidateFlacs,
+                                    onSelectedFilesChange = { selectedConverterFiles = it },
+                                    onPickIndividualFiles = {
+                                        try {
+                                            javax.swing.SwingUtilities.invokeLater {
+                                                try {
+                                                    javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager.getSystemLookAndFeelClassName())
+                                                } catch (_: Exception) {}
+                                                val chooser = javax.swing.JFileChooser()
+                                                chooser.dialogTitle = "Select Individual FLAC Files"
+                                                chooser.fileSelectionMode = javax.swing.JFileChooser.FILES_ONLY
+                                                chooser.isMultiSelectionEnabled = true
+                                                chooser.fileFilter = javax.swing.filechooser.FileNameExtensionFilter("FLAC Audio Files (*.flac)", "flac")
+                                                if (currentMusicFolder.isNotBlank()) {
+                                                    val f = java.io.File(currentMusicFolder)
+                                                    if (f.exists()) chooser.currentDirectory = f
+                                                }
+                                                val res = chooser.showOpenDialog(null)
+                                                if (res == javax.swing.JFileChooser.APPROVE_OPTION) {
+                                                    val picked = chooser.selectedFiles.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
+                                                    selectedConverterFiles = (selectedConverterFiles + picked).distinctBy { it.absolutePath }
+                                                }
+                                            }
+                                        } catch (_: Exception) {}
+                                    },
+                                    onPickFiles = {
+                                        selectedConverterFiles = candidateFlacs
+                                    },
+                                    destinationFolder = converterDestinationFolder,
+                                    onPickDestinationFolder = {
+                                        if (currentMusicFolder.isNotBlank()) {
+                                            val dest = java.io.File(currentMusicFolder, "Converted")
+                                            dest.mkdirs()
+                                            converterDestinationFolder = dest
+                                        }
+                                    },
+                                    onBack = { currentNav = PlayerNavDestination.SETTINGS }
+                                )
+                            }
                         }
                         }
                     }
@@ -1152,10 +1213,15 @@ fun SharedPlayerLayout(
                                 positionMs = positionMs,
                                 positionProvider = { positionMs },
                                 durationMs = durationMs,
+                                volume = volume,
+                                onVolumeChange = onVolumeChange,
+                                isFavorite = isFavorite,
+                                onToggleFavorite = onToggleFavorite,
+                                extendedInfo = trackExtendedInfo,
                                 queue = queue,
                                 currentQueueIndex = currentQueueIndex,
                                 lrcContent = lrcContent,
-                                audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                                audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { if (isExpanded) "This PC" else "This phone" },
                                 videoContent = videoContent,
                                 isVideoActive = isVideoActive,
                                 isVideoAvailable = isVideoAvailable,
@@ -1174,6 +1240,15 @@ fun SharedPlayerLayout(
                                 onOpenNodeConnect = { onPairNewDevice() },
                                 onOpenPlaybackOptions = { showPlaybackOptions = true },
                                 onOpenThreeDotsMenu = { showQuickSettings = true },
+                                onPlayTrack = { tr -> onPlayTrack(tr, listOf(tr)) },
+                                onArtistClick = onArtistClick ?: { artistName, _ ->
+                                    searchQuery = artistName
+                                    onSearchQueryChanged?.invoke(artistName)
+                                    currentNav = PlayerNavDestination.LIBRARY
+                                },
+                                onTrackOptionsClick = onTrackOptionsClick ?: { tr ->
+                                    activeContextMenuTrack = tr
+                                },
                                 onClose = {
                                     coroutineScope.launch {
                                         if (themeConfig.reduceMotion || themeConfig.motionLevel == com.nodeplayer.model.MotionLevel.OFF || themeConfig.isPerformanceMode) {
@@ -1328,6 +1403,8 @@ fun SharedPlayerLayout(
                                 onPlayTrack(tr, listOf(tr) + queue.shuffled().take(15))
                             }
                             com.nodeplayer.model.TrackActionId.GO_TO_ARTIST -> {
+                                searchQuery = tr.artist
+                                onSearchQueryChanged?.invoke(tr.artist)
                                 currentNav = PlayerNavDestination.LIBRARY
                             }
                             com.nodeplayer.model.TrackActionId.GO_TO_ALBUM -> {
