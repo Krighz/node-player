@@ -47,6 +47,7 @@ import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.music.ui.theme.pressScale
+import com.nodeplayer.ui.component.OfflineMixtapeHomeCard
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.LiquidButton
 import com.nodeplayer.ui.screens.uniqueLazyKeys
@@ -109,6 +110,9 @@ fun LibraryScreen(
     var viewingArtist by remember { mutableStateOf<Artist?>(null) }
     var inspectingTrack by remember { mutableStateOf<Track?>(null) }
     val tabScrollState = rememberScrollState()
+    val context = LocalContext.current
+    val mixtapeManager = remember { (context.applicationContext as? com.nodeplayer.music.NodePlayerApplication)?.smartMixtapeManager }
+    val cachedMixtapeMap by (mixtapeManager?.cachedKeyMap ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())).collectAsState()
 
     // Automatically trigger sync of YouTube playlists when user is logged in (Task 5)
     LaunchedEffect(Unit) {
@@ -618,6 +622,20 @@ fun LibraryScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
+                        }
+                    }
+
+                    if (cachedMixtapeMap.isNotEmpty()) {
+                        item(key = "lib_offline_mixtape_card") {
+                            OfflineMixtapeHomeCard(
+                                cachedSongCount = cachedMixtapeMap.size,
+                                onPlayMixtape = {
+                                    val mixtapeTracks = mixtapeManager?.getCachedTracks() ?: emptyList()
+                                    if (mixtapeTracks.isNotEmpty()) {
+                                        onTrackClick(mixtapeTracks.first(), mixtapeTracks)
+                                    }
+                                }
+                            )
                         }
                     }
 

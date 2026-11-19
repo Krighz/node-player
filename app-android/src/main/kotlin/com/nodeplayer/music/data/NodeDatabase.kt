@@ -188,6 +188,22 @@ interface PlayerDao {
 
     @Query("SELECT COUNT(*) FROM scrobble_queue")
     fun getScrobbleQueueCount(): Flow<Int>
+
+    // --- Followed Artists ---
+    @Query("SELECT * FROM followed_artists ORDER BY followedAt DESC")
+    fun getAllFollowedArtists(): Flow<List<FollowedArtistEntity>>
+
+    @Query("SELECT * FROM followed_artists ORDER BY followedAt DESC")
+    suspend fun getAllFollowedArtistsList(): List<FollowedArtistEntity>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM followed_artists WHERE artistBrowseId = :browseId)")
+    fun isArtistFollowed(browseId: String): Flow<Boolean>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun followArtist(artist: FollowedArtistEntity)
+
+    @Query("DELETE FROM followed_artists WHERE artistBrowseId = :browseId")
+    suspend fun unfollowArtist(browseId: String)
 }
 
 @Database(
@@ -199,9 +215,10 @@ interface PlayerDao {
         SmartPlaylistEntity::class,
         DailyListeningStatEntity::class,
         ScrobbleQueueEntity::class,
-        ScannedFolderEntity::class
+        ScannedFolderEntity::class,
+        FollowedArtistEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class NodeDatabase : RoomDatabase() {
@@ -219,6 +236,19 @@ abstract class NodeDatabase : RoomDatabase() {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_isHidden_title ON tracks(isHidden, title)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_isFavorite ON tracks(isFavorite)")
+            }
+        }
+
+        val MIGRATION_8_9 = object : androidx.room.migration.Migration(8, 9) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `followed_artists` (
+                        `artistBrowseId` TEXT NOT NULL PRIMARY KEY,
+                        `artistName` TEXT NOT NULL,
+                        `avatarUrl` TEXT,
+                        `followedAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
             }
         }
     }

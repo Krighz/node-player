@@ -3,6 +3,7 @@ package com.nodeplayer.library
 import com.nodeplayer.model.LyricWord
 import com.nodeplayer.model.Lyrics
 import com.nodeplayer.model.LyricsLine
+import com.nodeplayer.model.SongSectionMarker
 import java.util.regex.Pattern
 
 object LrcParser {
@@ -12,16 +13,29 @@ object LrcParser {
     private val WORD_TIME_TAG_REGEX = Pattern.compile("<(\\d{2}):(\\d{2})(?:[.:](\\d{2,3}))?>")
     // ID tags: [ar:...], [ti:...], [al:...], [offset:...], etc.
     private val ID_TAG_REGEX = Pattern.compile("\\[([a-zA-Z]+):([^\\]]*)]")
+    // Standalone or inline section tags: [intro], [verse 1], [chorus], [drop], etc.
+    private val SECTION_TAG_REGEX = Pattern.compile("^\\[(intro|verse(?:\\s*\\d+)?|chorus|drop|bridge|solo|instrumental|outro)\\]$", Pattern.CASE_INSENSITIVE)
+    private val INLINE_SECTION_REGEX = Pattern.compile("^\\[(intro|verse(?:\\s*\\d+)?|chorus|drop|bridge|solo|instrumental|outro)\\]\\s*", Pattern.CASE_INSENSITIVE)
 
     fun parse(lrcContent: String, trackId: Long = 0, source: String = "lrc"): Lyrics {
         val parsedLines = mutableListOf<ParsedLineEntry>()
         val plainTextBuilder = StringBuilder()
+        val sectionMarkers = mutableListOf<SongSectionMarker>()
+        var pendingSectionTitle: String? = null
         var hasWordTimingsGlobal = false
         var lrcOffsetMs = 0L
 
         for (rawLine in lrcContent.lineSequence()) {
             val trimmed = rawLine.trim()
             if (trimmed.isEmpty()) continue
+
+            // Check for standalone section tag [intro], [verse 1], [chorus], etc.
+            val sectionMatcher = SECTION_TAG_REGEX.matcher(trimmed)
+            if (sectionMatcher.matches()) {
+                val rawTitle = sectionMatcher.group(1).lowercase().replaceFirstChar { it.uppercase() }
+                pendingSectionTitle = rawTitle
+                continue
+            }
 
             // Check for metadata tag [offset:+/-ms]
             val idMatcher = ID_TAG_REGEX.matcher(trimmed)
@@ -65,9 +79,30 @@ object LrcParser {
 
             // Now parse enhanced LRC per-word tags inside lineContent if present:
             // e.g. "<00:10.00>Hello <00:10.50>world <00:11.20>"
-            val (words, cleanText) = parseWordTimings(lineContent, timestamps.first())
+            val (words, rawCleanText) = parseWordTimings(lineContent, timestamps.first())
             if (words.isNotEmpty()) {
                 hasWordTimingsGlobal = true
+            }
+
+            // Check if cleanText starts with an inline section tag, e.g. "[Chorus] Some lyric text"
+            val inlineMatcher = INLINE_SECTION_REGEX.matcher(rawCleanText)
+            val cleanText: String
+            val effectiveSectionTitle: String?
+            if (inlineMatcher.find()) {
+                effectiveSectionTitle = inlineMatcher.group(1).lowercase().replaceFirstChar { it.uppercase() }
+                cleanText = rawCleanText.substring(inlineMatcher.end()).trim()
+            } else if (pendingSectionTitle != null) {
+                effectiveSectionTitle = pendingSectionTitle
+                pendingSectionTitle = null
+                cleanText = rawCleanText
+            } else {
+                effectiveSectionTitle = null
+                cleanText = rawCleanText
+            }
+
+            if (effectiveSectionTitle != null && timestamps.isNotEmpty()) {
+                val secTs = maxOf(0L, timestamps.first() + lrcOffsetMs)
+                sectionMarkers.add(SongSectionMarker(title = effectiveSectionTitle, startMs = secTs))
             }
 
             if (cleanText.isNotEmpty()) {
@@ -117,6 +152,11 @@ object LrcParser {
             )
         }
 
+        val finalSections = sectionMarkers.distinctBy { it.startMs }.mapIndexed { idx, marker ->
+            val nextStart = if (idx + 1 < sectionMarkers.size) sectionMarkers[idx + 1].startMs else null
+            marker.copy(endMs = nextStart)
+        }
+
         return Lyrics(
             trackId = trackId,
             lines = finalLines,
@@ -124,7 +164,8 @@ object LrcParser {
             isSynced = finalLines.isNotEmpty(),
             plainText = plainTextBuilder.toString().trim(),
             hasWordTimings = hasWordTimingsGlobal,
-            offsetMs = lrcOffsetMs
+            offsetMs = lrcOffsetMs,
+            sections = finalSections
         )
     }
 

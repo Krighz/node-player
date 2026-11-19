@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] (Post-v1.8.0)
 
+### Added
+- **BitChord-Inspired 2-Tier Music Video Resolution & Smart Alignment (`VideoTrackMatcher.kt`, `InnerTubeClient.kt`, `PlayerViewModel.kt`)**:
+  - **Tier 1 (Official InnerTube Counterparts)**: Added `fetchOfficialVersionPair` parsing `playlistPanelVideoWrapperRenderer` and `counterparts` from YouTube Music `/next`. Extracts exact official paired music videos and parses `segmentMap` (`primaryVideoStartTimeMilliseconds`, `counterpartVideoStartTimeMilliseconds`) for intro/outro time-offset alignment.
+  - **Tier 2 (Intelligent Video Matcher)**: Added `VideoTrackMatcher` decomposing track titles into core recording identity versus listing packaging (e.g. "(Official Video)", "[4K]", "Lyrics"), validating artist overlap, enforcing version fidelity (Remix, Acoustic, Live), and validating duration tolerance (±120s) to discard 1-hour loops or reaction videos.
+  - **Background Pre-Resolution & UI Lighting**: Automatically resolves video availability asynchronously on track change in `PlayerViewModel`, setting `isAvailable = true` to light up the existing "Video" button in `NowPlayingView` without modifying UI layout or video engines.
+
+### Fixed
+- **Release Crash & Concurrent Drag Gesture Contention (MainActivity.kt, NowPlayingView.kt)**:
+  - Replaced unmanaged coroutine dispatches with a dedicated composeScope and sequential job cancellation (dragAnimJob?.cancel()), preventing concurrent nimateTo interruptions and CancellationException crashes upon touch release.
+  - Added safe 	ry / catch boundary around drag release spring animations and an isDismissingSheet lock to prevent redundant dismiss triggers.
+- **Centered Floating Video Window & Status Bar Inset (NowPlayingView.kt)**:
+  - Enforced contentAlignment = Alignment.Center and Modifier.fillMaxSize() on AnimatedContent hero container, eliminating top clipping behind the status bar and header.
+  - Added statusBarsPadding().padding(top = 48.dp, bottom = 12.dp) positioning the 16:9 video window symmetrically centered in the hero viewport, completely clear of the top header and camera notch.
+
+### Added
+- **Smooth Quadratic Backdrop Blur & Dynamic Dissolve Curve (MainActivity.kt)**:
+  - Added an interactive background glass blur (36.dp) that is rich and blurry when Now Playing is fully expanded on top, and smoothly dissolves along an exponential quadratic curve ((1f - progress)^2) to complete transparency as dragged down, revealing the underlying screen seamlessly.
+
 ### Fixed
 - **Apple Music-Style Smooth Lyrics Sweep & Overlay Fix (`WordByWordKaraokeText.kt`, `FullScreenLyricsView.kt`)**:
   - Eliminated the stuck white rectangular overlay and halo box artifact around active words by removing the erroneous `drawRect(BlendMode.DstIn)` feathering and word-level `Shadow` blur that previously rendered white gradient blocks over active lyrics.

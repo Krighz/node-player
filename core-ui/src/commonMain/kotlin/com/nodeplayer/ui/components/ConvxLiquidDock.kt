@@ -145,6 +145,15 @@ fun ConvxLiquidDock(
     val puckShape = CircleShape
     val searchShape = CircleShape
 
+    val specularRimBrush = remember {
+        Brush.verticalGradient(
+            colors = listOf(
+                Color.White.copy(alpha = 0.28f),
+                Color.White.copy(alpha = 0.05f)
+            )
+        )
+    }
+
     val animatedPuckCenterXPx by animateFloatAsState(
         targetValue = if (pillWidthPx > 0) targetCenterXPx else 0f,
         animationSpec = if (isDragging) {
@@ -227,12 +236,7 @@ fun ConvxLiquidDock(
                             .background(fallbackColor.copy(alpha = fallbackAlpha))
                             .border(
                                 width = 1.dp,
-                                brush = Brush.verticalGradient(
-                                    listOf(
-                                        Color.White.copy(alpha = if (rimActive) 0.35f else 0.12f),
-                                        Color.White.copy(alpha = 0.08f)
-                                    )
-                                ),
+                                brush = specularRimBrush,
                                 shape = dockShape
                             )
                     }

@@ -152,32 +152,33 @@ object AudioCache {
                     resolved.streamUrl
                 } else null
             } else {
-                // Resolve unthrottled stream via NewPipeFallback FIRST to avoid 1 MiB 403 cutoff
                 try {
                     NewPipeFallback.init(sharedOkHttpClient)
                     val (npUrl, npHeaders) = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
                         NewPipeFallback.resolveStream(videoId)
                     }
                     cacheResolvedUrl(videoId, npUrl, npHeaders["User-Agent"], npHeaders)
-                    NodeLog.i(TAG, "Successfully refreshed unthrottled stream for videoId=$videoId via NewPipe")
-                    return npUrl
+                    NodeLog.i(TAG, "Successfully refreshed stream for videoId=$videoId via NewPipe (bypassing 1 MiB cap)")
+                    npUrl
                 } catch (e: Exception) {
                     NodeLog.w(TAG, "NewPipe refresh failed for videoId=$videoId: ${e.message}, falling back to StreamResolver")
+                    val resolver = getStreamResolver()
+                    val result = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                        resolver.resolveStream(videoId)
+                    }
+                    if (result.isSuccess) {
+                        val resolved = result.getOrThrow()
+                        val clientUa = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
+                            .firstOrNull { it.clientName.equals(resolved.clientName, ignoreCase = true) }?.userAgent
+                            ?: com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
+                        cacheResolvedUrl(videoId, resolved.streamUrl, clientUa)
+                        NodeLog.i(TAG, "Successfully refreshed stream URL for videoId=$videoId via ${resolved.clientName}")
+                        resolved.streamUrl
+                    } else {
+                        NodeLog.w(TAG, "Both NewPipe and StreamResolver refresh failed for videoId=$videoId: ${result.exceptionOrNull()?.message}")
+                        null
+                    }
                 }
-
-                val resolver = getStreamResolver()
-                val result = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                    resolver.resolveStream(videoId)
-                }
-                if (result.isSuccess) {
-                    val resolved = result.getOrThrow()
-                    val clientUa = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
-                        .firstOrNull { it.clientName.equals(resolved.clientName, ignoreCase = true) }?.userAgent
-                        ?: com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
-                    cacheResolvedUrl(videoId, resolved.streamUrl, clientUa)
-                    NodeLog.i(TAG, "Successfully refreshed stream URL for videoId=$videoId via ${resolved.clientName}")
-                    resolved.streamUrl
-                } else null
             }
         } catch (e: Exception) {
             NodeLog.w(TAG, "Error refreshing stream URL for $videoIdOrUrl: ${e.message}")
@@ -426,8 +427,7 @@ object AudioCache {
                     }
                 }
 
-                NodeLog.i(TAG, "Resolving stream synchronously on loader thread for videoId=$videoId")
-                // Resolve via NewPipe first for continuous unthrottled playback without 1 MiB 403 limits
+                NodeLog.i(TAG, "Resolving stream synchronously on loader thread for videoId=$videoId (NewPipe primary)")
                 try {
                     NewPipeFallback.init(sharedOkHttpClient)
                     val (npUrl, npHeaders) = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
@@ -435,9 +435,9 @@ object AudioCache {
                     }
                     liveUrl = npUrl
                     cacheResolvedUrl(videoId, liveUrl, npHeaders["User-Agent"], npHeaders)
-                    NodeLog.i(TAG, "Resolved stream via NewPipe successfully for videoId=$videoId")
-                } catch (e: Exception) {
-                    NodeLog.w(TAG, "NewPipe primary resolution failed for videoId=$videoId: ${e.message}, falling back to StreamResolver...")
+                    NodeLog.i(TAG, "Resolved stream via NewPipe primary for videoId=$videoId (unthrottled, no 1 MiB cap)")
+                } catch (npError: Exception) {
+                    NodeLog.w(TAG, "NewPipe primary resolution failed for videoId=$videoId (${npError.message}), falling back to StreamResolver...")
                     val resolvedResult = kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
                         streamResolver.resolveStream(videoId)
                     }
@@ -451,8 +451,8 @@ object AudioCache {
                         NodeLog.i(TAG, "Resolved stream via StreamResolver fallback for videoId=$videoId (client=${resolved.clientName})")
                     } else {
                         val err = resolvedResult.exceptionOrNull()
-                        NodeLog.e(TAG, "Both NewPipe and StreamResolver failed for videoId=$videoId: ${e.message}", e)
-                        throw java.io.IOException("Stream resolution failed for videoId: $videoId", err ?: e)
+                        NodeLog.e(TAG, "Both NewPipe and StreamResolver failed for videoId=$videoId: ${npError.message} / ${err?.message}", err ?: npError)
+                        throw java.io.IOException("Stream resolution failed for videoId: $videoId", err ?: npError)
                     }
                 }
             }

@@ -465,7 +465,7 @@ fun main() = application {
         },
         state = windowState,
         title = "Node Player",
-        icon = painterResource("icon.png")
+        icon = painterResource("brand/nodeplayer_256.png")
     ) {
         window.minimumSize = Dimension(960, 600)
 

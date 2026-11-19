@@ -46,6 +46,7 @@ import com.nodeplayer.network.innertube.YouTubeSection
 import com.nodeplayer.network.innertube.YouTubePlaylistSummary
 import com.nodeplayer.network.recommender.HomeFeedRecommender
 import com.nodeplayer.ui.LocalBottomBarPadding
+import com.nodeplayer.ui.component.OfflineMixtapeHomeCard
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.DockScrollController
@@ -131,10 +132,12 @@ fun OnlineHomeView(
     onOpenDeviceConnect: () -> Unit = {},
     onSignInClick: () -> Unit = {},
     onRescanClick: () -> Unit = {},
-    onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
+    onOpenPlaylistDetail: ((id: String, title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
     onOpenCategory: ((com.nodeplayer.model.MoodGenre, List<com.nodeplayer.model.Playlist>) -> Unit)? = null,
     onCategoryClick: ((com.nodeplayer.model.MoodGenre) -> Unit)? = null,
     onNavigateToExplore: (() -> Unit)? = null,
+    offlineMixtapeSongCount: Int = 0,
+    onPlayOfflineMixtape: (() -> Unit)? = null,
     listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier
 ) {
@@ -502,6 +505,15 @@ fun OnlineHomeView(
                     )
                 }
 
+                if (offlineMixtapeSongCount > 0 && onPlayOfflineMixtape != null) {
+                    item(key = "home_offline_mixtape_card", contentType = "mixtape_card") {
+                        OfflineMixtapeHomeCard(
+                            cachedSongCount = offlineMixtapeSongCount,
+                            onPlayMixtape = onPlayOfflineMixtape
+                        )
+                    }
+                }
+
                 if (categorySections != null) {
                     item(key = "category_back") {
                         Text("‹  All recommendations", color = CarbonZincPalette.AccentTeal, modifier = Modifier.clickable { categorySections = null })
@@ -667,10 +679,13 @@ fun OnlineHomeView(
                             onPlayTrack(clickedTrack, shelf.items)
                         },
                         onShelfClick = { clickedShelf ->
+                            val firstTrack = clickedShelf.items.firstOrNull()
+                            val firstTrackThumb = firstTrack?.extractVideoId()?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
                             onOpenPlaylistDetail?.invoke(
                                 clickedShelf.title,
+                                clickedShelf.title,
                                 "YouTube Music",
-                                clickedShelf.items.firstOrNull()?.path,
+                                firstTrackThumb,
                                 clickedShelf.items
                             )
                         },
@@ -684,7 +699,7 @@ fun OnlineHomeView(
                                 coroutineContext.ensureActive()
                                 result.onSuccess { tracks ->
                                     if (tracks.isNotEmpty()) {
-                                        onOpenPlaylistDetail?.invoke(playlist.title, playlist.author ?: "YouTube Music", playlist.thumbnailUrl, tracks)
+                                        onOpenPlaylistDetail?.invoke(playlist.id, playlist.title, playlist.author ?: "YouTube Music", playlist.thumbnailUrl, tracks)
                                     } else {
                                         errorMessage = "No tracks available in ${playlist.title}"
                                     }
@@ -824,25 +839,52 @@ fun OnlineHomeView(
 fun organizeShelves(sections: List<YouTubeSection>): List<YouTubeSection> {
     val consumed = HashSet<YouTubeSection>()
 
-    val quickPicks = sections.find { "quick" in it.title.lowercase() || "pick" in it.title.lowercase() }
-        ?.also { consumed.add(it) }
-    val newVideos = sections.find { it !in consumed && ("video" in it.title.lowercase() || "new" in it.title.lowercase() || "release" in it.title.lowercase()) }
-        ?.also { consumed.add(it) }
-    val trending = sections.find { it !in consumed && ("trending" in it.title.lowercase() || "chart" in it.title.lowercase()) }
-        ?.also { consumed.add(it) }
-    val playlists = sections.find { it !in consumed && ("playlist" in it.title.lowercase() || "mix" in it.title.lowercase() || "mood" in it.title.lowercase()) }
-        ?.also { consumed.add(it) }
-    val artists = sections.find { it !in consumed && ("artist" in it.title.lowercase() || "follow" in it.title.lowercase()) }
-        ?.also { consumed.add(it) }
+    // 1. Quick Picks
+    val quickPicks = sections.find { 
+        val t = it.title.lowercase()
+        "quick" in t || "pick" in t || "start radio" in t
+    }?.also { consumed.add(it) }
 
-    val result = ArrayList<YouTubeSection>(5)
+    // 2. Trending / Charts (Prioritized before newVideos so "Video charts" isn't stolen!)
+    val trending = sections.find { 
+        it !in consumed && run {
+            val t = it.title.lowercase()
+            "trending" in t || "chart" in t || "top 50" in t || "top 100" in t
+        }
+    }?.also { consumed.add(it) }
+
+    // 3. New Music Videos (strictly videos, excluding charts & albums)
+    val newVideos = sections.find { 
+        it !in consumed && run {
+            val t = it.title.lowercase()
+            ("video" in t && "chart" !in t) || ("new" in t && "album" !in t && "single" !in t)
+        }
+    }?.also { consumed.add(it) }
+
+    // 4. Playlists & Mixes
+    val playlists = sections.find { 
+        it !in consumed && run {
+            val t = it.title.lowercase()
+            "playlist" in t || "mix" in t || "mood" in t
+        }
+    }?.also { consumed.add(it) }
+
+    // 5. From Artists You Follow
+    val artists = sections.find { 
+        it !in consumed && run {
+            val t = it.title.lowercase()
+            "artist" in t || "follow" in t || "subscriber" in t
+        }
+    }?.also { consumed.add(it) }
+
+    val result = ArrayList<YouTubeSection>()
     if (quickPicks != null) result.add(quickPicks.copy(title = "Quick Picks"))
     if (newVideos != null) result.add(newVideos.copy(title = "New Music Videos"))
     if (trending != null) result.add(trending.copy(title = "Trending in Region"))
     if (playlists != null) result.add(playlists.copy(title = "Playlists & Mixes"))
     if (artists != null) result.add(artists.copy(title = "From Artists You Follow"))
 
-    // Append any remaining sections that weren't categorized
+    // Append any remaining sections that weren't categorized (e.g. "New albums & singles", "Song mixes")
     for (sec in sections) {
         if (sec !in consumed) {
             result.add(sec)

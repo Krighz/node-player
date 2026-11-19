@@ -200,14 +200,10 @@ internal fun Uri.isGoogleVideoUrl(): Boolean =
     scheme == "https" && (host == "googlevideo.com" || host.orEmpty().endsWith(".googlevideo.com"))
 
 /**
- * Google Video streams originating from the iOS client (c=IOS) enforce subsegment bounded range slicing.
- * Non-iOS streams (like ANDROID_VR or WEB) can stream continuously without forced 512 KB slicing.
+ * All Google Video CDN streams must enforce bounded range slicing (128 KB chunks)
+ * to bypass YouTube CDN's continuous-stream bandwidth throttling after the initial 1 MB burst.
  */
-internal fun Uri.requiresChunkedRanging(): Boolean {
-    if (!isGoogleVideoUrl()) return false
-    val clientParam = getQueryParameter("c")
-    return clientParam.isNullOrBlank() || clientParam.equals("IOS", ignoreCase = true) || clientParam.equals("IPADOS", ignoreCase = true)
-}
+internal fun Uri.requiresChunkedRanging(): Boolean = isGoogleVideoUrl()
 
 @UnstableApi
 internal fun DataSource.contentRangeLength(): Long? = responseHeaders.entries

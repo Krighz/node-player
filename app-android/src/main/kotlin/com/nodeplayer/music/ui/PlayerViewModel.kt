@@ -32,6 +32,9 @@ import com.nodeplayer.model.video.VideoQuality
 import com.nodeplayer.model.video.VideoMath
 import com.nodeplayer.music.NodePlayerApplication
 import com.nodeplayer.music.data.TrackEntity
+import com.nodeplayer.music.data.FollowedArtistEntity
+import com.nodeplayer.model.ArtistPageData
+import kotlinx.coroutines.flow.first
 import com.nodeplayer.music.diagnostics.GlassShaderSelfTest
 import com.nodeplayer.music.diagnostics.GraphicsEventTracker
 import com.nodeplayer.music.diagnostics.ShaderSelfTestResult
@@ -215,9 +218,66 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _videoPlayerState = MutableStateFlow(VideoPlayerState())
     val videoPlayerState: StateFlow<VideoPlayerState> = _videoPlayerState.asStateFlow()
 
+    data class ResolvedVideoEntry(
+        val videoId: String,
+        val timeOffsetMs: Long = 0L,
+        val isOfficial: Boolean = false
+    )
+    private val resolvedVideoMap = java.util.concurrent.ConcurrentHashMap<String, ResolvedVideoEntry>()
+
+    fun checkVideoAvailabilityForTrack(track: Track) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val vid = resolveVideoIdForTrack(track)
+            if (vid != null) {
+                _videoPlayerState.update { it.copy(isAvailable = true) }
+            }
+        }
+    }
+
     private val _trackExtendedInfo = MutableStateFlow<TrackExtendedInfo?>(null)
     val trackExtendedInfo: StateFlow<TrackExtendedInfo?> = _trackExtendedInfo.asStateFlow()
     private var trackExtendedInfoJob: Job? = null
+
+    private val _artistPageData = MutableStateFlow<ArtistPageData?>(null)
+    val artistPageData: StateFlow<ArtistPageData?> = _artistPageData.asStateFlow()
+
+    private val _isArtistPageLoading = MutableStateFlow(false)
+    val isArtistPageLoading: StateFlow<Boolean> = _isArtistPageLoading.asStateFlow()
+
+    private var artistPageJob: Job? = null
+
+    fun loadArtistPage(browseId: String) {
+        artistPageJob?.cancel()
+        _isArtistPageLoading.value = true
+        artistPageJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val client = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+                val isFollowed = dao.isArtistFollowed(browseId).first()
+                val result = client.getArtistPage(browseId).getOrNull()
+                _artistPageData.value = result?.copy(isFollowed = isFollowed)
+            } catch (e: Exception) {
+                com.nodeplayer.common.logging.NodeLog.e("PlayerViewModel", "Error loading artist page for $browseId", e)
+            } finally {
+                _isArtistPageLoading.value = false
+            }
+        }
+    }
+
+    fun toggleFollowArtist(browseId: String, name: String, avatarUrl: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val isFollowed = dao.isArtistFollowed(browseId).first()
+            if (isFollowed) {
+                dao.unfollowArtist(browseId)
+            } else {
+                dao.followArtist(FollowedArtistEntity(browseId, name, avatarUrl))
+            }
+            _artistPageData.value?.let { current ->
+                if (current.browseId == browseId) {
+                    _artistPageData.value = current.copy(isFollowed = !isFollowed)
+                }
+            }
+        }
+    }
 
     private fun updateTrackExtendedInfo(track: Track?) {
         trackExtendedInfoJob?.cancel()
@@ -370,8 +430,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 if (livePlayer != null) {
                     com.nodeplayer.music.ui.video.MusicVideoEngine.attachAudioController(livePlayer)
                 }
-                val pos = livePlayer?.currentPosition ?: 0L
-                com.nodeplayer.music.ui.video.MusicVideoEngine.loadVideoStream(finalUrl, pos, finalUa, videoId)
+                val cacheKey = extractYouTubeVideoId(track.path) ?: "${track.title}_${track.artist}".trim().lowercase()
+                val offsetMs = resolvedVideoMap[cacheKey]?.timeOffsetMs ?: 0L
+                val pos = (livePlayer?.currentPosition ?: 0L) + offsetMs
+                com.nodeplayer.music.ui.video.MusicVideoEngine.loadVideoStream(finalUrl, pos.coerceAtLeast(0L), finalUa, videoId)
 
                 _videoPlayerState.update {
                     it.copy(
@@ -431,8 +493,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 com.nodeplayer.music.playback.AudioCache.cacheResolvedUrl("video_$videoId", stream.streamUrl, clientUa)
 
                 withContext(Dispatchers.Main) {
-                    val pos = activePlayer?.currentPosition ?: 0L
-                    com.nodeplayer.music.ui.video.MusicVideoEngine.loadVideoStream(stream.streamUrl, pos, clientUa, videoId)
+                    val cacheKey = extractYouTubeVideoId(track.path) ?: "${track.title}_${track.artist}".trim().lowercase()
+                    val offsetMs = resolvedVideoMap[cacheKey]?.timeOffsetMs ?: 0L
+                    val pos = (activePlayer?.currentPosition ?: 0L) + offsetMs
+                    com.nodeplayer.music.ui.video.MusicVideoEngine.loadVideoStream(stream.streamUrl, pos.coerceAtLeast(0L), clientUa, videoId)
                     _videoPlayerState.update {
                         it.copy(
                             currentHeight = stream.height,
@@ -778,6 +842,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     updateSignalPath(track)
                     dao.incrementPlayCount(track.id)
                     checkAndApplyTrackOrAlbumPreset(track)
+                    checkVideoAvailabilityForTrack(track)
                 }
             }
             service.crossfadeManager.crossfadeConfig = _crossfadeConfig.value
@@ -812,8 +877,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         updateSignalPath(track)
                         dao.incrementPlayCount(track.id)
                         checkAndApplyTrackOrAlbumPreset(track)
+                        checkVideoAvailabilityForTrack(track)
                     } else if (_currentTrack.value == null && currentInService != null) {
                         _currentTrack.value = currentInService
+                        checkVideoAvailabilityForTrack(currentInService)
                     }
                 }
             }
@@ -943,22 +1010,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _isPlaying.value = true
         updatePaletteAccent(track)
         updateSignalPath(track)
-        val hasVideo = extractYouTubeVideoId(track.path) != null
+        val direct = extractYouTubeVideoId(track.path)
+        val isExplicitVideo = track.mimeType.contains("video", ignoreCase = true) ||
+            track.formatDescription.contains("video", ignoreCase = true) ||
+            track.genre?.contains("video", ignoreCase = true) == true ||
+            track.path.contains("video", ignoreCase = true)
+        val cacheKey = direct ?: "${track.title}_${track.artist}".trim().lowercase()
+        val hasCachedVideo = isExplicitVideo || resolvedVideoMap.containsKey(cacheKey)
+
         com.nodeplayer.music.ui.video.MusicVideoEngine.stop()
         _videoPlayerState.update {
             it.copy(
-                isAvailable = hasVideo,
+                isAvailable = hasCachedVideo,
                 isVideoActive = false,
                 isBuffering = false,
                 hasRenderedFirstFrame = false
             )
         }
-        viewModelScope.launch(Dispatchers.IO) {
-            val vid = resolveVideoIdForTrack(track)
-            if (vid != null) {
-                _videoPlayerState.update { it.copy(isAvailable = true) }
-            }
-        }
+        checkVideoAvailabilityForTrack(track)
 
         val targetIndex = effectiveQueue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
         val service = PlaybackService.instance
@@ -1828,21 +1897,58 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun resolveVideoIdForTrack(track: Track): String? {
         val direct = extractYouTubeVideoId(track.path)
-        if (direct != null) return direct
+
+        // If local video or already an explicit music video track from video shelves
+        val isExplicitVideoTrack = track.mimeType.contains("video", ignoreCase = true) ||
+            track.formatDescription.contains("video", ignoreCase = true) ||
+            track.genre?.contains("video", ignoreCase = true) == true ||
+            track.path.contains("video", ignoreCase = true)
+
+        if (isExplicitVideoTrack && direct != null) {
+            return direct
+        }
+
+        val cacheKey = direct ?: "${track.title}_${track.artist}".trim().lowercase()
+        resolvedVideoMap[cacheKey]?.let { return it.videoId }
+
         return withContext(Dispatchers.IO) {
             try {
-                val query = "${track.title} ${track.artist}".trim()
                 val client = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
-                // Search videos first for official music video
-                val videoRes = client.search("$query official video", com.nodeplayer.network.innertube.SearchFilter.VIDEOS).getOrNull()
-                val matchedVideo = videoRes?.songs?.firstOrNull()
-                if (matchedVideo != null) {
-                    val vid = extractYouTubeVideoId(matchedVideo.path)
-                    if (vid != null) return@withContext vid
+
+                // Tier 1: Query InnerTube /next for official paired counterpart (BitChord algorithm)
+                if (direct != null) {
+                    val pair = client.fetchOfficialVersionPair(direct, wantAudio = false)
+                    if (pair != null) {
+                        val offsetMs = pair.timeMap?.segments?.firstOrNull()?.let {
+                            it.toStartMs - it.fromStartMs
+                        } ?: 0L
+                        com.nodeplayer.common.logging.NodeLog.i(
+                            "PlayerViewModel",
+                            "Resolved official paired music video for '${track.title}': ${pair.videoId} (offset=${offsetMs}ms)"
+                        )
+                        resolvedVideoMap[cacheKey] = ResolvedVideoEntry(pair.videoId, offsetMs, isOfficial = true)
+                        return@withContext pair.videoId
+                    }
                 }
-                val searchRes = client.search(query, com.nodeplayer.network.innertube.SearchFilter.SONGS).getOrNull()?.songs?.firstOrNull()
-                searchRes?.let { extractYouTubeVideoId(it.path) }
+
+                // Tier 2: Search YouTube Music with VideoTrackMatcher verification (BitChord algorithm)
+                val matchedVideo = client.searchMusicVideo(track.title, track.artist, track.durationMs)
+                if (matchedVideo != null) {
+                    val matchedVid = extractYouTubeVideoId(matchedVideo.path)
+                    if (matchedVid != null) {
+                        com.nodeplayer.common.logging.NodeLog.i(
+                            "PlayerViewModel",
+                            "Resolved matched music video via VideoTrackMatcher for '${track.title}': $matchedVid"
+                        )
+                        resolvedVideoMap[cacheKey] = ResolvedVideoEntry(matchedVid, 0L, isOfficial = false)
+                        return@withContext matchedVid
+                    }
+                }
+
+                // If online track but no music video exists in YouTube Music, return null
+                null
             } catch (e: Exception) {
+                com.nodeplayer.common.logging.NodeLog.w("PlayerViewModel", "Video resolution failed for '${track.title}': ${e.message}")
                 null
             }
         }

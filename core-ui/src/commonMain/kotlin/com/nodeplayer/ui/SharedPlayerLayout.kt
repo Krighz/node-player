@@ -363,8 +363,22 @@ fun SharedPlayerLayout(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Empty placeholder on left to balance spacing with the optical dock
-                        Box(modifier = Modifier.width(96.dp))
+                        // Brand Logo on left
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            com.nodeplayer.ui.components.NodePlayerLogoMark(
+                                size = 32.dp,
+                                showSquircleBackground = true
+                            )
+                            Text(
+                                text = "Node Player",
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                color = androidx.compose.ui.graphics.Color.White,
+                                fontSize = 16.sp
+                            )
+                        }
 
                         // Center: Search Capsule
                         SearchCapsule(
@@ -453,9 +467,9 @@ fun SharedPlayerLayout(
                                     onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
                                     onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
                                     youTubeAccount = youTubeAccount,
-                                    onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
+                                    onOpenPlaylistDetail = { id, title, subtitle, artworkUrl, items ->
                                         activeDetailHeader = DetailMediaHeader(
-                                            id = "home_pl_${title.hashCode()}",
+                                            id = id,
                                             title = title,
                                             subtitle = subtitle,
                                             artworkUrl = artworkUrl,
@@ -755,9 +769,9 @@ fun SharedPlayerLayout(
                                 onCastToPeer = onCastToPeer,
                                 onToggleNodeConnect = onToggleNodeConnect,
                                 youTubeAccount = youTubeAccount,
-                                onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
+                                onOpenPlaylistDetail = { id, title, subtitle, artworkUrl, items ->
                                     activeDetailHeader = DetailMediaHeader(
-                                        id = "home_pl_${title.hashCode()}",
+                                        id = id,
                                         title = title,
                                         subtitle = subtitle,
                                         artworkUrl = artworkUrl,

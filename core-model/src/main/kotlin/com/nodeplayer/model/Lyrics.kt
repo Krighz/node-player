@@ -58,5 +58,6 @@ data class Lyrics(
     val isSynced: Boolean = false,
     val plainText: String = "",
     val hasWordTimings: Boolean = false,
-    val offsetMs: Long = 0L
+    val offsetMs: Long = 0L,
+    val sections: List<SongSectionMarker> = emptyList()
 )

@@ -1,15 +1,25 @@
 package com.nodeplayer.ui.player
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import com.nodeplayer.ui.theme.MotionTokens
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,6 +53,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import com.nodeplayer.ui.components.SongSectionMarkersBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Cast
@@ -237,23 +248,23 @@ fun NowPlayingView(
 
     val animatedVibrant by animateColorAsState(
         targetValue = rawVibrant,
-        animationSpec = tween(450),
-        label = "NPVibrant"
+        animationSpec = spring(stiffness = 180f, dampingRatio = 0.92f),
+        label = "VibrantColor"
     )
     val animatedDominant by animateColorAsState(
         targetValue = rawDominant,
-        animationSpec = tween(450),
-        label = "NPDominant"
+        animationSpec = spring(stiffness = 180f, dampingRatio = 0.92f),
+        label = "DominantColor"
     )
     val animatedDarkMuted by animateColorAsState(
         targetValue = rawDarkMuted,
-        animationSpec = tween(450),
-        label = "NPDarkMuted"
+        animationSpec = spring(stiffness = 180f, dampingRatio = 0.92f),
+        label = "DarkMutedColor"
     )
     val animatedAccent by animateColorAsState(
         targetValue = rawAccent,
-        animationSpec = tween(450),
-        label = "NPAccent"
+        animationSpec = spring(stiffness = 180f, dampingRatio = 0.92f),
+        label = "AccentColor"
     )
 
     val accentTint = PaletteExtractor.ensureContrastAgainstDark(animatedVibrant, animatedDarkMuted)
@@ -308,9 +319,14 @@ fun NowPlayingView(
 
     val topArtworkFadeBrush = remember {
         Brush.verticalGradient(
-            0.0f to Color.Transparent,
-            0.60f to Color.Transparent,
-            1.0f to Color.Black.copy(alpha = 0.88f)
+            colorStops = arrayOf(
+                0.00f to Color.Transparent,
+                0.40f to Color.Transparent,
+                0.65f to Color(0xFF000000).copy(alpha = 0.40f),
+                0.82f to Color(0xFF000000).copy(alpha = 0.82f),
+                0.94f to Color(0xFF000000).copy(alpha = 0.96f),
+                1.00f to Color(0xFF000000)
+            )
         )
     }
 
@@ -400,7 +416,8 @@ fun NowPlayingView(
         )
 
         // Calculate available hero height: spans from y=0 down to the top of the title row
-        val bottomControlsReservedHeight = 340.dp
+        // Adjusted to 385.dp (-45dp / ~120px) so the bottom of the artwork dissolves flush with the vignette
+        val bottomControlsReservedHeight = 385.dp
         val availableHeroHeight = (screenHeight - bottomControlsReservedHeight).coerceAtLeast(260.dp)
         val effectiveHeroHeight = (availableHeroHeight + artVerticalOffsetDp.dp).coerceAtLeast(200.dp)
 
@@ -416,70 +433,188 @@ fun NowPlayingView(
                         .fillParentMaxHeight()
                         .fillMaxWidth()
                 ) {
-                    // Layer 3: Top Full-Bleed Artwork / Video
+                    // Layer 3: Top Full-Bleed Artwork / Video with Gesture Support
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(effectiveHeroHeight)
                             .align(Alignment.TopCenter)
+                            .pointerInput(onDragDelta, onDragEnd) {
+                                if (onDragDelta != null) {
+                                    var accumulatedVelocity = 0f
+                                    detectVerticalDragGestures(
+                                        onDragEnd = { onDragEnd?.invoke(accumulatedVelocity) },
+                                        onVerticalDrag = { change, dragAmount ->
+                                            if (dragAmount > 0f || accumulatedVelocity > 0f) {
+                                                change.consume()
+                                                accumulatedVelocity = dragAmount
+                                                onDragDelta.invoke(dragAmount)
+                                            }
+                                        }
+                                    )
+                                }
+                            }
                     ) {
-            if (!isVideoActive) {
-                // Still Artwork: 100% full-width, zero horizontal padding, zero corner clipping, starting at y = 0
-                TrackArtwork(
-                    track = currentTrack,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            translationY = artVerticalOffsetDp.dp.toPx()
-                        },
-                    contentScale = ContentScale.Crop,
-                    cornerRadius = 0.dp,
-                    targetSizePx = ArtworkCache.HERO_TARGET_SIZE_PX,
-                    scale = artZoomScale
-                )
-
-                // Smooth gradient dissolve at the bottom edge of the artwork: blends into blurred glow
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(90.dp)
-                        .align(Alignment.BottomCenter)
-                        .background(topArtworkFadeBrush)
-                )
-            } else {
-                // Video Mode: 16:9 Video centered in hero area cleanly above track title
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(videoAspect)
-                        .align(Alignment.Center)
-                        .graphicsLayer {
-                            scaleX = 1.02f
-                            scaleY = 1.02f
-                        }
-                ) {
-                    Box(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        videoContent?.invoke(Modifier.fillMaxSize())
-                    }
-
-                    // Dissolve gradient at the bottom edge of video
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(36.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(
-                                Brush.verticalGradient(
-                                    0.0f to Color.Transparent,
-                                    1.0f to Color.Black.copy(alpha = 0.60f)
+                        AnimatedContent(
+                            targetState = isVideoActive,
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                            transitionSpec = {
+                                (fadeIn(spring(stiffness = 380f, dampingRatio = 0.85f)) + scaleIn(
+                                    initialScale = 0.94f,
+                                    animationSpec = spring(stiffness = 380f, dampingRatio = 0.85f)
+                                )).togetherWith(
+                                    fadeOut(spring(stiffness = 380f, dampingRatio = 0.85f)) + scaleOut(
+                                        targetScale = 0.94f,
+                                        animationSpec = spring(stiffness = 380f, dampingRatio = 0.85f)
+                                    )
                                 )
-                            )
-                    )
-                }
-            }
-        }
+                            },
+                            label = "HeroArtworkVideoTransition"
+                        ) { activeVideo ->
+                            if (!activeVideo) {
+                                // Directional Cover Art Glide in NowPlayingView
+                                AnimatedContent(
+                                    targetState = currentTrack,
+                                    transitionSpec = {
+                                        val direction = 1
+                                        (slideInHorizontally(
+                                            initialOffsetX = { (it * 0.20f * direction).toInt() },
+                                            animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f)
+                                        ) + fadeIn(tween(220)) + scaleIn(
+                                            initialScale = 0.92f,
+                                            animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f)
+                                        )).togetherWith(
+                                            slideOutHorizontally(
+                                                targetOffsetX = { (-it * 0.20f * direction).toInt() },
+                                                animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f)
+                                            ) + fadeOut(tween(180)) + scaleOut(
+                                                targetScale = 0.92f,
+                                                animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f)
+                                            )
+                                        )
+                                    },
+                                    label = "HeroArtworkMorph"
+                                ) { targetTrack ->
+                                    Box(modifier = Modifier.fillMaxSize()) {
+                                        TrackArtwork(
+                                            track = targetTrack,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .graphicsLayer {
+                                                    translationY = artVerticalOffsetDp.dp.toPx()
+                                                },
+                                            contentScale = ContentScale.Crop,
+                                            cornerRadius = 0.dp,
+                                            targetSizePx = ArtworkCache.HERO_TARGET_SIZE_PX,
+                                            scale = artZoomScale
+                                        )
+
+                                        // Multi-stop seamless fade to dark background (no hard seam)
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(topArtworkFadeBrush)
+                                        )
+                                    }
+                                }
+                            } else {
+                                // Video Mode: 16:9 Video window floating cleanly centered (Reference image layout)
+                                var showQualityMenu by remember { mutableStateOf(false) }
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp)
+                                        .statusBarsPadding()
+                                        .padding(top = 48.dp, bottom = 12.dp)
+                                        .aspectRatio(videoAspect)
+                                        .clip(RoundedCornerShape(16.dp))
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        videoContent?.invoke(Modifier.fillMaxSize())
+                                    }
+
+                                    // Top-right window overlay badges: 4K quality pill + Fullscreen icon
+                                    Row(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(top = 10.dp, end = 10.dp),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val badgeText = when {
+                                            currentHeight != null && currentHeight >= 2160 -> "4K"
+                                            currentHeight != null -> "${currentHeight}p"
+                                            else -> "4K"
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color.Black.copy(alpha = 0.55f))
+                                                .clickable { showQualityMenu = !showQualityMenu }
+                                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = badgeText,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        }
+
+                                        Box(
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color.Black.copy(alpha = 0.55f))
+                                                .clickable { onOpenFullscreenCinema?.invoke() },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Fullscreen,
+                                                contentDescription = "Fullscreen",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (showQualityMenu && availableHeights.isNotEmpty()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(top = 44.dp, end = 10.dp)
+                                                .clip(RoundedCornerShape(10.dp))
+                                                .background(Color.Black.copy(alpha = 0.88f))
+                                                .padding(vertical = 4.dp)
+                                        ) {
+                                            Column {
+                                                availableHeights.forEach { h ->
+                                                    val isSelected = currentHeight == h
+                                                    Text(
+                                                        text = "${h}p",
+                                                        fontSize = 12.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                        color = if (isSelected) Color(0xFFFF4D6D) else Color.White,
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .clickable {
+                                                                onSelectQuality?.invoke(h)
+                                                                showQualityMenu = false
+                                                            }
+                                                            .padding(horizontal = 14.dp, vertical = 6.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
         // Layer 4: Top Status Bar & Header Scrim
         Box(
@@ -573,109 +708,24 @@ fun NowPlayingView(
                         )
                     }
                 }
-            } else if (isVideoActive) {
-                var showQualityMenu by remember { mutableStateOf(false) }
-
-                Row(
+            } else if (isVideoActive && onToggleVideo != null) {
+                // Return to Audio / Album Art button
+                Box(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(end = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(end = 14.dp)
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .clickable { onToggleVideo.invoke(false) },
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Quality badge pill ("480p" etc.)
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.Black.copy(alpha = 0.55f))
-                            .clickable { showQualityMenu = !showQualityMenu }
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (currentHeight != null) "${currentHeight}p" else "Auto",
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                    }
-
-                    // Fullscreen expand pill
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.Black.copy(alpha = 0.55f))
-                            .clickable { onOpenFullscreenCinema?.invoke() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Fullscreen,
-                            contentDescription = "Fullscreen",
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    // Dedicated Stop Video button
-                    Box(
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color.Black.copy(alpha = 0.55f))
-                            .clickable { onToggleVideo?.invoke(false) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Close,
-                            contentDescription = "Stop Video",
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-
-                if (showQualityMenu) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 40.dp, end = 12.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color.Black.copy(alpha = 0.90f))
-                            .padding(6.dp)
-                    ) {
-                        Column {
-                            Text(
-                                text = "Auto",
-                                fontSize = 12.sp,
-                                color = if (currentHeight == null) Color.Cyan else Color.White,
-                                fontWeight = if (currentHeight == null) FontWeight.Bold else FontWeight.Normal,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        onSelectQuality?.invoke(null)
-                                        showQualityMenu = false
-                                    }
-                                    .padding(vertical = 4.dp, horizontal = 6.dp)
-                            )
-                            val heights = if (availableHeights.isNotEmpty()) availableHeights else listOf(1080, 720, 480, 360)
-                            heights.forEach { h ->
-                                Text(
-                                    text = "${h}p",
-                                    fontSize = 12.sp,
-                                    color = if (currentHeight == h) Color.Cyan else Color.White,
-                                    fontWeight = if (currentHeight == h) FontWeight.Bold else FontWeight.Normal,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            onSelectQuality?.invoke(h)
-                                            showQualityMenu = false
-                                        }
-                                        .padding(vertical = 4.dp, horizontal = 6.dp)
-                                )
-                            }
-                        }
-                    }
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Return to Album Art",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
         }
@@ -772,6 +822,16 @@ fun NowPlayingView(
                     positionProvider = positionProvider,
                     onOpenLyrics = onOpenLyrics
                 )
+
+                if (lyrics.sections.isNotEmpty()) {
+                    SongSectionMarkersBar(
+                        sections = lyrics.sections,
+                        positionProvider = positionProvider,
+                        accentColor = accentTint,
+                        onSeek = onSeek,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
 
                 // Scrubber with elapsed (0:40) and negative remaining (-3:02) timestamps
                 NowPlayingTimeline(

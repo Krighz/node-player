@@ -32,6 +32,11 @@ object AppSettingsRepository {
     val KEY_GLOBAL_LYRICS_OFFSET_MS = longPreferencesKey("global_lyrics_offset_ms")
     val KEY_AUTO_FETCH_LYRICS = booleanPreferencesKey("auto_fetch_lyrics")
     val KEY_YOUTUBE_VIDEO_QUALITY = stringPreferencesKey("youtube_video_quality")
+    val KEY_SMART_MIXTAPE_ENABLED = booleanPreferencesKey("smart_mixtape_enabled")
+    val KEY_SMART_MIXTAPE_SONG_COUNT = intPreferencesKey("smart_mixtape_song_count")
+    val KEY_SMART_MIXTAPE_STORAGE_CAP_MB = intPreferencesKey("smart_mixtape_storage_cap_mb")
+    val KEY_SMART_MIXTAPE_WIFI_ONLY = booleanPreferencesKey("smart_mixtape_wifi_only")
+    val KEY_SMART_MIXTAPE_QUALITY = stringPreferencesKey("smart_mixtape_quality")
 
     // Settings
     val KEY_GLASS_CONTROLS_CONFIG = stringPreferencesKey("glass_controls_config_json")
@@ -74,7 +79,12 @@ object AppSettingsRepository {
         val isOnlineMode: Boolean = true,
         val globalLyricsOffsetMs: Long = 0L,
         val autoFetchLyrics: Boolean = true,
-        val youtubeVideoQuality: String = "480"
+        val youtubeVideoQuality: String = "480",
+        val smartMixtapeEnabled: Boolean = true,
+        val smartMixtapeSongCount: Int = 30,
+        val smartMixtapeStorageCapMb: Int = 1024,
+        val smartMixtapeWifiOnly: Boolean = true,
+        val smartMixtapeQuality: String = "BALANCED"
     )
 
     fun getSettingsFlow(context: Context): Flow<AppSettings> {
@@ -111,7 +121,12 @@ object AppSettingsRepository {
                 isOnlineMode = prefs[KEY_IS_ONLINE_MODE] ?: true,
                 globalLyricsOffsetMs = prefs[KEY_GLOBAL_LYRICS_OFFSET_MS] ?: 0L,
                 autoFetchLyrics = prefs[KEY_AUTO_FETCH_LYRICS] ?: true,
-                youtubeVideoQuality = prefs[KEY_YOUTUBE_VIDEO_QUALITY] ?: "480"
+                youtubeVideoQuality = prefs[KEY_YOUTUBE_VIDEO_QUALITY] ?: "480",
+                smartMixtapeEnabled = prefs[KEY_SMART_MIXTAPE_ENABLED] ?: true,
+                smartMixtapeSongCount = prefs[KEY_SMART_MIXTAPE_SONG_COUNT] ?: 30,
+                smartMixtapeStorageCapMb = prefs[KEY_SMART_MIXTAPE_STORAGE_CAP_MB] ?: 1024,
+                smartMixtapeWifiOnly = prefs[KEY_SMART_MIXTAPE_WIFI_ONLY] ?: true,
+                smartMixtapeQuality = prefs[KEY_SMART_MIXTAPE_QUALITY] ?: "BALANCED"
             )
         }
     }

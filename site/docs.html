@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Technical Documentation — Node Player</title>
+  <meta name="description" content="Comprehensive engineering guides for Node Player: 32-bit audio signal path, WASAPI exclusive mode, AutoEQ integration, Node Connect mTLS protocol, and AGSL shaders." />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="assets/css/theme.css" />
+  <style>
+    .docs-layout {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 3.5rem 1.5rem;
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 3.5rem;
+      align-items: flex-start;
+    }
+    .docs-toc {
+      position: sticky;
+      top: 5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem;
+    }
+    .docs-toc h4 {
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent-teal);
+      margin-bottom: 1rem;
+    }
+    .docs-toc ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .docs-toc a {
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      transition: color 0.2s ease;
+      display: block;
+    }
+    .docs-toc a:hover {
+      color: var(--text-primary);
+    }
+    .docs-body {
+      display: flex;
+      flex-direction: column;
+      gap: 3.5rem;
+    }
+    .doc-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      padding: 2.25rem;
+    }
+    .doc-section h2 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+    }
+    .doc-section h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin: 1.5rem 0 0.75rem;
+      color: var(--text-primary);
+    }
+    .doc-section p {
+      color: var(--text-secondary);
+      line-height: 1.7;
+      margin-bottom: 1rem;
+    }
+    .code-block {
+      background: #09090B;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      color: #E2E8F0;
+      overflow-x: auto;
+      margin: 1rem 0;
+      line-height: 1.5;
+    }
+    .callout-box {
+      border-left: 3px solid var(--accent-teal);
+      background: rgba(94, 234, 212, 0.05);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      padding: 1rem 1.25rem;
+      margin: 1.25rem 0;
+    }
+    .callout-box p {
+      margin-bottom: 0;
+      color: #E2E8F0;
+      font-size: 0.92rem;
+    }
+    @media (max-width: 900px) {
+      .docs-layout {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+      }
+      .docs-toc {
+        position: static;
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Sticky Glass Navbar -->
+  <header class="site-nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand">
+        <img src="favicon.svg" alt="Node Player Logo" width="28" height="28" />
+        <span>Node Player</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">Showcase</a></li>
+        <li><a href="features.html">Features</a></li>
+        <li><a href="docs.html" class="active">Technical Docs</a></li>
+        <li><a href="changelog.html">Changelog</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a href="index.html#download" class="btn-pill btn-accent">Download Latest</a>
+        <a href="https://github.com/Krighz/node-player" target="_blank" rel="noopener noreferrer" class="btn-pill btn-ghost">GitHub</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Docs Layout -->
+  <div class="docs-layout">
+    
+    <!-- Left Sticky TOC -->
+    <aside class="docs-toc">
+      <h4>Documentation</h4>
+      <ul>
+        <li><a href="#signal-path">1. 32-Bit Signal Path &amp; Sinks</a></li>
+        <li><a href="#autoeq">2. AutoEQ Headphone Profiles</a></li>
+        <li><a href="#node-connect">3. Node Connect P2P Mesh</a></li>
+        <li><a href="#agsl-shaders">4. AGSL Shaders &amp; Diagnostics</a></li>
+        <li><a href="#backup-portability">5. .nodebackup Data Portability</a></li>
+        <li><a href="#battery-optimization">6. Battery &amp; Background Playback</a></li>
+      </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="docs-body">
+
+      <!-- Section 1 -->
+      <section id="signal-path" class="doc-section">
+        <div class="section-badge">DSP Core</div>
+        <h2>32-Bit Signal Path &amp; Direct Sinks</h2>
+        <p>
+          Node Player operates on an end-to-end 32-bit floating-point audio pipeline. Unlike standard audio players that convert decoded audio frames into 16-bit integers before applying digital signal processing, Node Player keeps samples in IEEE 754 float32 format from initial decoding through all biquad filter nodes, volume scaling, and limiter stages.
+        </p>
+
+        <div class="callout-box">
+          <p><strong>Audiophile Principle:</strong> Processing at 32-bit float provides over 1500 dB of internal dynamic range, eliminating intermediate truncation artifacts and cumulative rounding noise.</p>
+        </div>
+
+        <h3>Platform Output Architectures</h3>
+        <p><strong>Windows Desktop (WASAPI Exclusive):</strong> Communicates with native WASAPI endpoints via JNA bindings. When exclusive mode is engaged, Windows audio session mixer is bypassed, locking the hardware sample rate directly to the source media rate (44.1 kHz, 48 kHz, 96 kHz, or 192 kHz).</p>
+        <p><strong>Android ART (Direct AudioTrack Sinks):</strong> Leverages AndroidX Media3 ExoPlayer with customized audio attribute flags (<code>USAGE_MEDIA</code>, <code>CONTENT_TYPE_MUSIC</code>). On supported Android HAL implementations, the stream routes through offloaded direct sink paths.</p>
+      </section>
+
+      <!-- Section 2 -->
+      <section id="autoeq" class="doc-section">
+        <div class="section-badge">Headphone Correction</div>
+        <h2>AutoEQ Headphone &amp; IEM Profiles</h2>
+        <p>
+          Node Player includes a high-speed parametric AutoEQ engine featuring verified compensation curves for prominent audiophile IEMs and consumer headphones (Sony WH-1000XM4/XM5, Sennheiser HD 600/650, Moondrop Aria/Chu, Tangzu Wan'er, 7Hz Zero, AirPods Pro 2).
+        </p>
+        <div class="code-block">
+// Sample 10-Band Biquad Filter Coefficients Calculation
+val q = 1.414f // Standard 1-octave bandwidth
+val alpha = sin(w0) / (2.0f * q)
+val a0 = 1.0f + alpha / A
+val a1 = -2.0f * cos(w0)
+val a2 = 1.0f - alpha / A
+        </div>
+        <p>
+          Each preset automatically configures center frequencies, Q-factors, and gains across 10 parametric peaking biquads, aligning headphone acoustic output to the standardized Harman target.
+        </p>
+      </section>
+
+      <!-- Section 3 -->
+      <section id="node-connect" class="doc-section">
+        <div class="section-badge">Cross-Device Mesh</div>
+        <h2>Node Connect P2P Setup &amp; QR Pairing</h2>
+        <p>
+          Node Connect enables cross-device control, mutual library access, and lossless Wi-Fi PCM audio casting between Windows PC and Android devices over your local area network without requiring third-party cloud servers or router port forwarding.
+        </p>
+        <h3>Pairing Sequence</h3>
+        <p>1. Open Node Connect on both devices (or tap the Device Connect pill in the top header).</p>
+        <p>2. On Desktop, display the pairing QR code. On mobile, scan the QR code using the integrated zero-dependency barcode reader.</p>
+        <p>3. The devices perform a mutual TLS (mTLS) handshake with ephemeral 2048-bit RSA keys, establishing a TLS encrypted framing stream on port <code>54820</code>.</p>
+      </section>
+
+      <!-- Section 4 -->
+      <section id="agsl-shaders" class="doc-section">
+        <div class="section-badge">Visual Shaders</div>
+        <h2>AGSL Liquid Glass Shaders &amp; Diagnostics</h2>
+        <p>
+          The liquid glass UI utilizes custom Android Graphics Shading Language (AGSL) shaders running on the GPU (Android 13+ / API 33+). On older Android releases (API 26–32) or desktop platforms with software OpenGL, Node Player gracefully engages its Safe Graphics diagnostic fallback.
+        </p>
+        <div class="callout-box">
+          <p><strong>Safe Graphics Guard:</strong> If a GPU crash or shader link error occurs during initialization, the engine flags the failure and safely falls back to standard Material 3 elevated glass surfaces without interrupting audio playback.</p>
+        </div>
+      </section>
+
+      <!-- Section 5 -->
+      <section id="backup-portability" class="doc-section">
+        <div class="section-badge">Data Freedom</div>
+        <h2>.nodebackup Data Portability</h2>
+        <p>
+          Node Player stores zero user data on remote clouds. All playlists, favorites, equalizer configurations, custom folder rules, and playback histories can be exported as an encrypted or plain <code>.nodebackup</code> archive via <em>Settings &rarr; Storage &amp; Backup</em>.
+        </p>
+        <div class="code-block">
+// Archive Manifest Schema
+{
+  "version": 4,
+  "exportedAt": 1732000000000,
+  "playlists": [ ... ],
+  "favorites": [ ... ],
+  "eqPresets": [ ... ],
+  "appSettings": { ... }
+}
+        </div>
+        <p>
+          The <code>.nodebackup</code> archive is fully cross-platform and can be imported into Node Player on Windows or Android interchangeably.
+        </p>
+      </section>
+
+      <!-- Section 6 -->
+      <section id="battery-optimization" class="doc-section">
+        <div class="section-badge">Background Service</div>
+        <h2>Battery Optimization &amp; ColorOS / Realme UI</h2>
+        <p>
+          Modern Android operating systems (including OxygenOS, ColorOS, Realme UI, MIUI, and One UI) enforce aggressive background task management that can terminate long-running media foreground services if battery restrictions are applied.
+        </p>
+        <p><strong>Recommended Configuration:</strong></p>
+        <p>1. Long-press the <strong>Node Player</strong> app icon &rarr; <em>App Info</em> &rarr; <em>Battery usage</em>.</p>
+        <p>2. Select <strong>"Unrestricted"</strong> (or enable <em>"Allow background activity"</em> and <em>"Allow auto-launch"</em>).</p>
+        <p>3. Under <em>Settings &rarr; Battery &rarr; More settings &rarr; Optimize battery use</em>, mark Node Player as <strong>"Don't optimize"</strong>.</p>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Sticky Glass Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <div class="nav-brand">
+          <img src="favicon.svg" alt="Node Player Logo" width="28" height="28" />
+          <span>Node Player</span>
+        </div>
+        <p>Bit-perfect 32-bit audiophile music reproduction meets fluid liquid glass design.</p>
+      </div>
+      <div class="footer-col">
+        <h5>Navigation</h5>
+        <ul>
+          <li><a href="index.html">Showcase</a></li>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="docs.html">Technical Docs</a></li>
+          <li><a href="changelog.html">Changelog</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Community</h5>
+        <ul>
+          <li><a href="https://github.com/Krighz/node-player" target="_blank" rel="noopener noreferrer">GitHub Repo</a></li>
+          <li><a href="https://github.com/Krighz/node-player/releases" target="_blank" rel="noopener noreferrer">Releases</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Support</h5>
+        <div class="upi-card">
+          <p style="font-size: 0.82rem; color: var(--text-secondary);">UPI Direct Support:</p>
+          <div class="upi-id-row">
+            <span>7063061981@fam</span>
+            <button class="copy-btn" data-copy="7063061981@fam" type="button">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Node Player Team. Released under Apache 2.0.</span>
+    </div>
+  </footer>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

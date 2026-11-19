@@ -92,7 +92,7 @@ fun HomeScreen(
     onOpenCategory: ((com.nodeplayer.model.MoodGenre, List<com.nodeplayer.model.Playlist>) -> Unit)? = null,
     onCategoryClick: ((com.nodeplayer.model.MoodGenre) -> Unit)? = null,
     onNavigateToExplore: (() -> Unit)? = null,
-    onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
+    onOpenPlaylistDetail: ((id: String, title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
     hazeState: HazeState? = null,
     modifier: Modifier = Modifier
 ) {
@@ -100,6 +100,8 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val ytAuthState by com.nodeplayer.music.auth.YouTubeAccountManager.authState.collectAsState()
+    val mixtapeManager = remember { (context.applicationContext as? com.nodeplayer.music.NodePlayerApplication)?.smartMixtapeManager }
+    val cachedMixtapeMap by (mixtapeManager?.cachedKeyMap ?: kotlinx.coroutines.flow.MutableStateFlow(emptyMap())).collectAsState()
 
     AnimatedContent(
         targetState = isOnline,
@@ -148,6 +150,13 @@ fun HomeScreen(
                 onOpenCategory = onOpenCategory,
                 onCategoryClick = onCategoryClick,
                 onNavigateToExplore = onNavigateToExplore,
+                offlineMixtapeSongCount = cachedMixtapeMap.size,
+                onPlayOfflineMixtape = {
+                    val mixtapeTracks = mixtapeManager?.getCachedTracks() ?: emptyList()
+                    if (mixtapeTracks.isNotEmpty()) {
+                        onTrackClick(mixtapeTracks.first(), mixtapeTracks)
+                    }
+                },
                 modifier = Modifier.fillMaxSize().statusBarsPadding()
             )
         } else {

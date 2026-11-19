@@ -48,6 +48,7 @@ import com.nodeplayer.music.diagnostics.ShaderSelfTestResult
 import com.nodeplayer.music.ui.components.GlassCard
 import com.nodeplayer.music.ui.components.glassRefraction
 import com.nodeplayer.ui.components.LiquidButton
+import com.nodeplayer.ui.components.NodePlayerLogoMark
 import com.nodeplayer.ui.components.LiquidGlassSlider
 import com.nodeplayer.ui.components.LiquidGlassSwitch
 import com.nodeplayer.music.ui.theme.glassSurface
@@ -992,6 +993,7 @@ fun SettingsScreen(
                             FadeCurve.EQUAL_POWER -> "Equal Power (Constant acoustic power, cos/sin curve)"
                             FadeCurve.LINEAR -> "Linear (Direct linear amplitude ramp)"
                             FadeCurve.LOGARITHMIC -> "Logarithmic (Hermite S-curve, smooth endpoints)"
+                            FadeCurve.DJ_BLEND -> "DJ Blend (Prolonged overlap with energy-normalized bass preservation)"
                         },
                         style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
                     )
@@ -3896,19 +3898,26 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = Modifier.pointerInput(Unit) {
-                            detectTapGestures(onLongPress = { onReportProblem() })
-                        }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .pointerInput(Unit) {
+                                detectTapGestures(onLongPress = { onReportProblem() })
+                            }
                     ) {
-                        Text(
-                            text = "Node Player",
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
-                        )
-                        Text(
-                            text = "Version ${com.nodeplayer.music.BuildConfig.VERSION_NAME} (Hold for diagnostics)",
-                            style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
-                        )
+                        NodePlayerLogoMark(size = 44.dp, showSquircleBackground = true)
+                        Column {
+                            Text(
+                                text = "Node Player",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                            )
+                            Text(
+                                text = "Version ${com.nodeplayer.music.BuildConfig.VERSION_NAME} (Hold for diagnostics)",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                            )
+                        }
                     }
                     Surface(
                         color = accent.copy(alpha = 0.2f),

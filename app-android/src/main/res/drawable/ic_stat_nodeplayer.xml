@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Node Player — Playback Notification Status Bar Icon ('N' Musical Note) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M 194 188 L 280 354 C 292 374 308 384 326 384 C 352 384 370 364 370 332 L 370 178 C 374 183 382 186 391 186 C 405 186 415 175 415 161 C 415 141 397 126 370 126 C 343 126 322 145 322 178 L 322 332 L 232 154 C 220 135 206 126 188 126 C 162 126 146 146 146 178 L 146 316 C 146 322 138 323 128 327 C 113 333 106 346 106 360 C 106 376 120 384 138 384 C 166 384 194 364 194 334 L 194 188 Z" />
+</vector>

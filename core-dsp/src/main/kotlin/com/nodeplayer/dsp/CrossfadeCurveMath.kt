@@ -36,6 +36,14 @@ object CrossfadeCurveMath {
                 val inside = s
                 Pair(out, inside)
             }
+            FadeCurve.DJ_BLEND -> {
+                // Extended shoulder DJ transition: prolonged outgoing energy + fast incoming blend, safely normalized
+                val rawOut = cos(((t.coerceAtLeast(0.35f) - 0.35f) / 0.65f * (Math.PI / 2.0)).toFloat())
+                val rawIn = sin((t.coerceAtMost(0.65f) / 0.65f * (Math.PI / 2.0)).toFloat())
+                val sum = rawOut + rawIn
+                val scale = if (sum > 1.22f) 1.22f / sum else 1.0f
+                Pair((rawOut * scale).coerceIn(0f, 1f), (rawIn * scale).coerceIn(0f, 1f))
+            }
         }
     }
 }

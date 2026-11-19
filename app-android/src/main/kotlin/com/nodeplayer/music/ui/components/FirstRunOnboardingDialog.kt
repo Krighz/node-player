@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.components.NodePlayerLogoMark
 
 @Composable
 fun FirstRunOnboardingDialog(
@@ -86,6 +87,9 @@ fun FirstRunOnboardingDialog(
                             onAction = {
                                 onRequestPermissions()
                                 currentStep = 2
+                            },
+                            customIcon = {
+                                NodePlayerLogoMark(size = 56.dp, showSquircleBackground = true)
                             }
                         )
                         2 -> OnboardingStepCard(
@@ -131,25 +135,30 @@ private fun OnboardingStepCard(
     title: String,
     description: String,
     actionLabel: String,
-    onAction: () -> Unit
+    onAction: () -> Unit,
+    customIcon: (@Composable () -> Unit)? = null
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(CircleShape)
-                .background(accentColor.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(36.dp)
-            )
+        if (customIcon != null) {
+            customIcon()
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(CircleShape)
+                    .background(accentColor.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accentColor,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
         }
 
         Text(

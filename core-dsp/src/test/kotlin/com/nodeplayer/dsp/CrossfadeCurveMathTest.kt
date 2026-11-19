@@ -61,4 +61,25 @@ class CrossfadeCurveMathTest {
             lastOut = out
         }
     }
+
+    @Test
+    fun testDjBlendCurveBoundariesAndPowerPreservation() {
+        val (outStart, inStart) = CrossfadeCurveMath.calculateGains(0.0f, FadeCurve.DJ_BLEND)
+        assertEquals(1.0f, outStart, 1e-4f)
+        assertEquals(0.0f, inStart, 1e-4f)
+
+        val (outEnd, inEnd) = CrossfadeCurveMath.calculateGains(1.0f, FadeCurve.DJ_BLEND)
+        assertEquals(0.0f, outEnd, 1e-4f)
+        assertEquals(1.0f, inEnd, 1e-4f)
+
+        // Across all steps, sum of gains should never exceed safe limit 1.25f (preventing digital clipping)
+        val steps = 100
+        for (i in 0..steps) {
+            val t = i.toFloat() / steps
+            val (out, ins) = CrossfadeCurveMath.calculateGains(t, FadeCurve.DJ_BLEND)
+            assertTrue("Gain out must be in [0, 1]", out in 0.0f..1.0f)
+            assertTrue("Gain in must be in [0, 1]", ins in 0.0f..1.0f)
+            assertTrue("Combined gain ($out + $ins) at t=$t must not exceed 1.25", (out + ins) <= 1.25f)
+        }
+    }
 }

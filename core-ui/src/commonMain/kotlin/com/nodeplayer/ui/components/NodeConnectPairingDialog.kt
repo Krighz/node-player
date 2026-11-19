@@ -115,20 +115,7 @@ fun NodeConnectPairingDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(accent.copy(alpha = 0.15f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Rounded.CastConnected,
-                                contentDescription = null,
-                                tint = accent,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        NodePlayerLogoMark(size = 36.dp, showSquircleBackground = true)
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(

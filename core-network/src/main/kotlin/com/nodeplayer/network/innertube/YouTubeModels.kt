@@ -955,6 +955,53 @@ data class PlaylistPanelVideoRenderer(
     val navigationEndpoint: NavigationEndpoint? = null,
 )
 
+/**
+ * Representation of an official counterpart version (e.g. Song <-> Official Music Video)
+ * paired by YouTube Music via playlistPanelVideoWrapperRenderer.
+ */
+@Serializable
+data class VersionPair(
+    val videoId: String,
+    val title: String,
+    val artist: String,
+    val thumbnailUrl: String? = null,
+    val isVideo: Boolean = true,
+    val timeMap: VersionTimeMap? = null
+)
+
+/**
+ * Millisecond timestamp alignment segments between audio and official video (for narrative intro/outro compensation).
+ */
+@Serializable
+data class VersionTimeMap(
+    val segments: List<Segment> = emptyList()
+) {
+    @Serializable
+    data class Segment(
+        val fromStartMs: Long,
+        val toStartMs: Long,
+        val durationMs: Long
+    )
+
+    fun mapPosition(positionMs: Long): Long {
+        val segment = segments.firstOrNull {
+            positionMs >= it.fromStartMs && positionMs < (it.fromStartMs + it.durationMs)
+        } ?: return positionMs
+        val offset = positionMs - segment.fromStartMs
+        return segment.toStartMs + offset
+    }
+
+    fun inverted(): VersionTimeMap = VersionTimeMap(
+        segments = segments.map {
+            Segment(
+                fromStartMs = it.toStartMs,
+                toStartMs = it.fromStartMs,
+                durationMs = it.durationMs
+            )
+        }
+    )
+}
+
 /* ==========================================================================
    Player Response & Streaming Data
    ========================================================================== */

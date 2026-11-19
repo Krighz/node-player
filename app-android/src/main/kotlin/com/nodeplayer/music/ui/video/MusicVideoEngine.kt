@@ -55,8 +55,19 @@ object MusicVideoEngine {
             val rangedFactory = com.nodeplayer.music.playback.RangedUpstreamDataSource.Factory(httpFactory)
             val mediaSourceFactory = DefaultMediaSourceFactory(rangedFactory)
 
+            val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+                .setBufferDurationsMs(
+                    /* minBufferMs = */ 4000,
+                    /* maxBufferMs = */ 25000,
+                    /* bufferForPlaybackMs = */ 2000,
+                    /* bufferForPlaybackAfterRebufferMs = */ 3500
+                )
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
+
             videoPlayer = ExoPlayer.Builder(appContext)
                 .setMediaSourceFactory(mediaSourceFactory)
+                .setLoadControl(loadControl)
                 .build().apply {
                     volume = 0f
                     trackSelectionParameters = trackSelectionParameters.buildUpon()

@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontSynthesis
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.text.style.TextAlign
@@ -118,7 +119,7 @@ private fun horizontalAt(
 private fun ContentDrawScope.sweepText(
     layout: TextLayoutResult,
     revealedChars: Float,
-    spans: List<IntRange>,
+    spans: List<IntRange>
 ) {
     if (revealedChars <= 0f) return
     val textLen = layout.layoutInput.text.length
@@ -127,8 +128,7 @@ private fun ContentDrawScope.sweepText(
         return
     }
 
-    val offset = layout.getLineStart(0).coerceIn(0, (layout.layoutInput.text.length - 1).coerceAtLeast(0))
-    val rtl = layout.getParagraphDirection(offset) == ResolvedTextDirection.Rtl
+    val rtl = layout.getParagraphDirection(0) == ResolvedTextDirection.Rtl
 
     for (visualLine in 0 until layout.lineCount) {
         val lineStart = layout.getLineStart(visualLine)
@@ -137,34 +137,27 @@ private fun ContentDrawScope.sweepText(
 
         if (revealedChars <= lineStart) return
 
-        val cut = revealedChars < lineEndAll
-        val charPos = if (cut) {
-            horizontalAt(layout, revealedChars, visualLine, spans)
-        } else {
-            if (rtl) layout.getLineLeft(visualLine) else layout.getLineRight(visualLine)
-        }
-
-        val lineLeft = layout.getLineLeft(visualLine)
-        val lineRight = layout.getLineRight(visualLine)
-        val safeCharPos = charPos.coerceIn(lineLeft, lineRight)
-
-        val (clipLeft, clipRight) = if (rtl) {
-            safeCharPos to lineRight
-        } else {
-            lineLeft to safeCharPos
-        }
-
-        if (clipLeft >= clipRight) continue
-
         val top = layout.getLineTop(visualLine)
         val bottom = layout.getLineBottom(visualLine)
-        clipRect(
-            left = clipLeft,
-            top = top,
-            right = clipRight,
-            bottom = bottom,
-        ) {
-            this@sweepText.drawContent()
+        val lineLeft = layout.getLineLeft(visualLine)
+        val lineRight = layout.getLineRight(visualLine)
+
+        if (revealedChars >= lineEndAll) {
+            // Entire visual line is sung: draw full line
+            clipRect(left = lineLeft, top = top, right = lineRight, bottom = bottom) {
+                this@sweepText.drawContent()
+            }
+        } else {
+            // Fractional syllable cut on this line
+            val charPos = horizontalAt(layout, revealedChars, visualLine, spans)
+            val safeCut = charPos.coerceIn(lineLeft, lineRight)
+            val (clipLeft, clipRight) = if (rtl) safeCut to lineRight else lineLeft to safeCut
+
+            if (clipLeft < clipRight) {
+                clipRect(left = clipLeft, top = top, right = clipRight, bottom = bottom) {
+                    this@sweepText.drawContent()
+                }
+            }
         }
     }
 }
@@ -366,6 +359,7 @@ private val WordCenterOrigin = TransformOrigin(0.5f, 0.5f)
 private fun ActiveKaraokeWord(
     word: LyricWord,
     textStyle: TextStyle,
+    glowTextStyle: TextStyle = textStyle,
     baseColor: Color,
     sweepColor: Color,
     fontPx: Float,
@@ -421,7 +415,7 @@ private fun ActiveKaraokeWord(
 
         Text(
             text = word.text,
-            style = textStyle,
+            style = glowTextStyle,
             color = sweepColor,
             modifier = Modifier
                 .drawWithContent {
@@ -435,6 +429,35 @@ private fun ActiveKaraokeWord(
                     }
                 }
         )
+    }
+}
+
+class LyricVsyncClock {
+    private var anchorMs: Long = 0L
+    private var anchorNanos: Long = 0L
+    private var speed: Float = 1.0f
+    private var isPlaying: Boolean = false
+
+    fun sync(positionMs: Long, playbackSpeed: Float, playing: Boolean) {
+        val now = System.nanoTime()
+        // If out of sync by more than 350ms (e.g. seek), snap immediately
+        val expected = if (isPlaying && anchorNanos != 0L) {
+            anchorMs + ((now - anchorNanos) / 1_000_000.0 * speed).toLong()
+        } else {
+            anchorMs
+        }
+        if (kotlin.math.abs(positionMs - expected) > 350L || !playing) {
+            anchorMs = positionMs
+            anchorNanos = now
+        }
+        speed = playbackSpeed
+        isPlaying = playing
+    }
+
+    fun currentSmoothMs(): Long {
+        if (!isPlaying || anchorNanos == 0L) return anchorMs
+        val elapsed = ((System.nanoTime() - anchorNanos) / 1_000_000.0 * speed).toLong()
+        return anchorMs + elapsed.coerceAtLeast(0L)
     }
 }
 
@@ -490,19 +513,36 @@ fun WordByWordKaraokeText(
 
     val lyricsFontFamily = LocalLyricsFontFamily.current ?: FontFamily.SansSerif
 
+    val subtleGlowShadow = remember {
+        Shadow(
+            color = Color.White.copy(alpha = 0.52f),
+            offset = Offset.Zero,
+            blurRadius = 18f
+        )
+    }
+
     val textStyle = remember(fontSize, isActive, textAlign, lyricsFontFamily) {
         TextStyle(
             fontFamily = lyricsFontFamily,
-            fontSize = fontSize,
+            fontSize = 36.sp,
             fontWeight = if (isActive) FontWeight.Black else FontWeight.ExtraBold,
-            lineHeight = (fontSize.value * 1.25f).sp,
-            letterSpacing = (-0.45).sp,
+            fontSynthesis = FontSynthesis.All,
+            lineHeight = 43.sp,
+            letterSpacing = (-0.85).sp,
             textAlign = textAlign
         )
     }
 
-    val activeBaseColor = remember(activeColor) { activeColor.copy(alpha = 0.48f) }
-    val dimmedInactiveColor = remember(inactiveColor) { inactiveColor.copy(alpha = 0.85f) }
+    val activeGlowTextStyle = remember(textStyle) {
+        textStyle.copy(
+            fontWeight = FontWeight.Black,
+            fontSynthesis = FontSynthesis.All,
+            shadow = subtleGlowShadow
+        )
+    }
+
+    val activeBaseColor = remember(activeColor) { activeColor.copy(alpha = 0.50f) }
+    val dimmedInactiveColor = remember(inactiveColor) { inactiveColor.copy(alpha = 0.95f) }
     val sweepResolvedColor = if (accentSweepColor != Color.Unspecified) accentSweepColor else activeColor
 
     Column(
@@ -542,6 +582,7 @@ fun WordByWordKaraokeText(
                             ActiveKaraokeWord(
                                 word = word,
                                 textStyle = textStyle,
+                                glowTextStyle = activeGlowTextStyle,
                                 baseColor = activeBaseColor,
                                 sweepColor = sweepResolvedColor,
                                 fontPx = fontPx,
@@ -575,7 +616,7 @@ fun WordByWordKaraokeText(
 
                     Text(
                         text = line.text,
-                        style = textStyle,
+                        style = activeGlowTextStyle,
                         color = sweepResolvedColor,
                         modifier = Modifier
                             .fillMaxWidth()

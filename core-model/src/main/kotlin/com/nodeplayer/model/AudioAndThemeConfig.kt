@@ -174,7 +174,8 @@ data class AudioEffectConfig(
 enum class FadeCurve(val displayName: String) {
     LINEAR("Linear"),
     EQUAL_POWER("Equal Power"),
-    LOGARITHMIC("Logarithmic")
+    LOGARITHMIC("Logarithmic"),
+    DJ_BLEND("DJ Blend (Constant Bass)")
 }
 
 data class CrossfadeConfig(

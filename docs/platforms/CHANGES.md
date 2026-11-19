@@ -5,6 +5,120 @@
 
 ---
 
+### [2026-11-19] - BitChord-Inspired Music Video Resolution & Smart Offset Alignment
+- **Tier 1: Official InnerTube Version Pairing (`InnerTubeClient.kt`, `YouTubeModels.kt`)**:
+  - Implemented `fetchOfficialVersionPair` parsing `playlistPanelVideoWrapperRenderer` and `counterpartRenderer` from YouTube Music `/next`.
+  - Added `segmentMap` extraction (`primaryVideoStartTimeMilliseconds`, `counterpartVideoStartTimeMilliseconds`), tracking intro/outro offsets between audio releases and visual music videos.
+- **Tier 2: Intelligent Video Matcher (`VideoTrackMatcher.kt`)**:
+  - Created pure Kotlin `VideoTrackMatcher` decomposing titles into core identity and listing packaging (e.g. "(Official Video)", "[4K]", "Lyrics"), checking artist overlap, and validating runtime tolerance (±120s) to discard loops or reaction clips.
+- **Asynchronous Background Pre-Resolution (`PlayerViewModel.kt`)**:
+  - Triggered background pre-resolution on track transitions, updating `videoPlayerState.isAvailable` so the existing "Video" button lights up seamlessly for any song with a matching official video.
+  - Applied millisecond `timeOffsetMs` when starting video playback so the visual timeline synchronizes accurately with the audio track.
+
+### [2026-11-19] - 1:1 Interactive Gesture Sheet, Seamless Artwork Dissolve, Video Window & Lyrics Pre-caching
+- **1:1 Interactive Gesture Sheet & Dynamic Folding (`MainActivity.kt`, `NowPlayingView.kt`)**:
+  - Implemented continuous 1:1 finger tracking via `sheetDragOffsetY = Animatable(0f)` with real-time dynamic folding (`translationY = dragOffset`, `scale = 1f - 0.08f * progress`, and continuous squircle `ContinuousRoundedRectangle((progress * 36f).dp)`).
+  - Configured 40% dismiss threshold (`screenHeightPx * 0.40f`) or downward fling velocity (> 1000 px/s) animating smoothly to close with `spring(stiffness = 380f, dampingRatio = 0.85f)`, with spring recovery when released earlier.
+  - Enabled pointer input detection anywhere on the hero artwork or sheet to begin 1:1 folding instantly.
+- **Seamless Artist Detail-Style Gradient Bleed (`NowPlayingView.kt`)**:
+  - Upgraded artwork gradient fade to multi-stop fade directly to `Color(0xFF000000)` (`0.00f`/`0.40f` transparent, `0.65f` 40% alpha, `0.82f` 82% alpha, `0.94f` 96% alpha, `1.00f` 100% black), eliminating horizontal hard seams and perfectly blending album artwork into the dark ambient mesh backdrop.
+- **Floating Video Window & Border Removal (`NowPlayingView.kt`, `MusicVideoEngine.kt`)**:
+  - Removed 36.dp bottom vignette dissolve gradient border below the video.
+  - Rendered video inside a floating 16:9 window card with continuous 16.dp rounded corners (`ContinuousRoundedRectangle(16.dp)`) and horizontal margins (`20.dp`), matching the reference design.
+  - Positioned translucent "4K" quality badge and fullscreen expand button directly in the top-right corner of the video window.
+  - Added smooth crossfade and scaling transition spec (`AnimatedContent`) when switching between album artwork and video mode.
+  - Configured ExoPlayer `DefaultLoadControl` in `MusicVideoEngine.kt` to pre-buffer 2000ms before playback starts (`bufferForPlaybackMs = 2000`, `bufferForPlaybackAfterRebufferMs = 3500`), eliminating stuttering.
+- **Parallel Thread Lyrics Pre-caching (`MainActivity.kt`)**:
+  - Background coroutine launches on `Dispatchers.IO` as soon as the track begins playing, preloading and caching lyrics in parallel.
+  - Instant zero-latency display when tapping the lyrics button, with synchronized lyric line teaser displayed beneath the track title.
+- **Landscape Auto-Fullscreen Video (`MainActivity.kt`)**:
+  - Added configuration orientation listener automatically promoting active video playback to `FullscreenCinemaPlayer` when tilted to landscape and returning to portrait window when upright.
+
+
+### [2026-11-19] - Fix YouTube Stream Throttling & 1:04 Playback Stall
+- **Bounded Chunked Range Slicing on All Google CDN Streams (`RangedUpstreamDataSource.kt`)**:
+  - Enforced `isGoogleVideoUrl()` in `requiresChunkedRanging()`, ensuring all Google Video CDN requests use 128 KB bounded chunks and avoiding YouTube CDN's bandwidth clamping after the initial ~1 MB burst.
+- **StreamResolver Prioritization Over NewPipe (`AudioCache.kt`)**:
+  - Prioritized `streamResolver.resolveStream(videoId)` (iOS / dedicated audio itag 251/140) first in `createResolvingDataSourceFactory` and `refreshStreamUrl` (HTTP 403 retries), with `NewPipeFallback` as secondary fallback. Resolves un-decrypted `n`-parameter stalls on protected VEVO tracks.
+
+### [2026-11-19] - Navigation/ID Bug Fixes & Hero Artwork Dissolve Polish
+- **Album / Playlist ID Normalization (`InnerTubeClient.kt`)**:
+  - Prepended `"VL"` to `PL...`, `OLAK...`, and `RD...` IDs in `fetchPlaylistTracks` while preserving `MPREb_...`, `FE...`, and `UC...` browse endpoints. Eliminates HTTP 400 Bad Request error and fixes empty tracks in Explore categories.
+  - Updated `mapTwoRowItemToPlaylist` to recognize `MPREb_...` and bare `OLAK...` IDs as collections, preserving `takeIf { it.videoId == null }` guard for radio-context tracks.
+  - Added fallback to `watchPlaylistEndpoint` and `thumbnailOverlay` for `featuredOn` and `playlists` in `getArtistPage`.
+- **Artist Page Releases & Playlists Wiring (`MainActivity.kt`)**:
+  - Wired `onSelectRelease` and `onSelectPlaylist` in `ArtistDetailView` to `navigateToPlaylistDetail`, resolving the 0:00 playback freeze and opening full album/playlist detail sheets.
+- **Multi-Stop Hero Artwork Dissolve (`NowPlayingView.kt`)**:
+  - Applied multi-stop vertical scrim (`0.00f` / `0.45f` transparent to `0.70f` / `0.88f` / `1.00f` `animatedDarkMuted`) seamlessly blending the bottom half of the album cover directly into the dark backdrop.
+
+### [2026-11-19] - 120 FPS Motion Architecture, Smooth Vsync Clock & Sheet Gestures
+- **120 Hz Anchor Clock & Typography (`WordByWordKaraokeText.kt`)**:
+  - Implemented `LyricVsyncClock` helper performing sub-millisecond nanosecond timestamp extrapolation at 120 Hz with 350ms seek re-anchoring.
+  - Enforced Apple Music-style ExtraBold typography with `FontSynthesis.All` (`36.sp`, `43.sp` line height, `-0.85.sp` letter spacing), preserved `subtleGlowShadow` (`18f` blur, `alpha = 0.52f`), and multi-line visual line wrapping clip rects without premature clipping.
+- **1:1 Gesture Sheet & Dismissal Handoff (`NowPlayingSheet.kt`)**:
+  - Integrated `NestedScrollConnection` replacing rigid drag distance thresholds with continuous 1:1 scroll tracking and velocity-aware spring dismissal (`maxDismissDistancePx * 0.40f` or `available.y > 1200f`).
+  - Added context click haptic feedback and dynamic corner radius morphing in draw phase (`graphicsLayer { translationY; scale; shape }`).
+- **Directional Morphing & Tabular Numbers (`NowPlayingView.kt`, `NowPlayingTimeline.kt`, `NowPlayingSheet.kt`)**:
+  - Added directional slide, fade, and scale `AnimatedContent` transition spec on hero artwork.
+  - Injected `fontFeatureSettings = "tnum"` and `FontWeight.SemiBold` across elapsed and remaining time labels.
+  - Applied smooth 3-swatch palette spring interpolation (`stiffness = 180f`, `dampingRatio = 0.92f`).
+- **Continuous Capsule Dock & Draw-Phase Scroll Hiding (`ConvxLiquidDock.kt`, `MainActivity.kt`)**:
+  - Set dock container shape to `ContinuousCapsule` with top-lit specular rim gradient (`Brush.verticalGradient(listOf(Color.White.copy(0.28f), Color.White.copy(0.05f)))`).
+  - Restricted dock scroll hiding purely to draw phase via `Modifier.graphicsLayer { translationY = dockOffsetPx }` with zero layout passes.
+
+### [2026-11-19] - Multi-Provider Lyrics Fallbacks, Visual Polish & Charts Pagination Fix
+- **Multi-Provider Word-by-Word & Synced Lyrics Fallback Engine (`BiniLyrics.kt`, `BetterLyrics.kt`, `LyricsPlus.kt`, `LrcLib.kt`, `KuGou.kt`, `LyricsHttp.kt`, `LyricsRepository.kt`)**:
+  - Cascading multi-provider lyrics engine supporting word-by-word timestamps, line-synced fallbacks, and persistent local caching.
+- **YouTube Charts & Trending Pagination Loop Fix (`InnerTubeClient.kt`)**:
+  - Fixed `YouTube playlist pagination did not finish` crash on Daily Top 100 and Trending 20 by excluding chip reload tokens (`reloadContinuationData`) and terminating loops gracefully.
+- **Lyrics Atmospheric Weight, Header Scaling & Vignette Alignment (`WordByWordKaraokeText.kt`, `FullScreenLyricsView.kt`, `NowPlayingView.kt`, `LyricCardView.kt`)**:
+  - Word-level text glow and bolder weights on active lyrics.
+  - 30% header scale-up in FullScreenLyricsView and 45dp / 120px vignette alignment fix in NowPlayingView.
+  - Reformatted Lyric Card to 4:3 (3:4 portrait) aspect ratio matching app font.
+
+### [2026-11-18] - Full Interactive Artist Page, Song Section Markers & Advanced Audio Suite
+- **YouTube Music Charts & Trending Pagination Crash Fix (`InnerTubeClient.kt`, `OnlineHomeView.kt`)**:
+  - Excluded `reloadContinuationData` filter chips from pagination continuation parsing, eliminating infinite loops on Charts and Trending shelves.
+  - Restricted `browseId` in `BrowseBody` to initial requests (`next == null`), preventing YouTube from ignoring `ctoken` and restarting at Page 1.
+  - Replaced throwing `check(...)` with graceful loop exit on duplicate token or stream termination, preserving and displaying all tracks loaded so far.
+  - Preserved Radio (`RD...`), Explore/Charts (`FE...`), and custom browse endpoints in `fetchPlaylistTracks` by only prepending `"VL"` to `"PL..."` IDs.
+  - Swapped raw internal `nodeplayer://` track paths for authentic `https://i.ytimg.com/vi/{videoId}/hqdefault.jpg` thumbnails on shelf clicks.
+- **Smart Offline Mixtape (`SmartMixtapeManager.kt`, `SmartMixtapePlanner.kt`, `SmartMixtapeWorker.kt`)**:
+  - Offline song caching system blending fresh discovery (60%) and heavy rotation (40%) tracks for zero-data offline playback.
+  - Automatic manual download exclusion ensuring already saved tracks are not duplicated in the mixtape partition.
+  - Two-tier LRU eviction engine that evicts stale un-candidated entries before active rotation candidates when storage cap or song count is reached.
+  - Seamless zero-latency playback interception in `CrossfadePlayerManager.kt`: automatically swaps remote streams for local cached `.opus` audio items with zero buffering.
+  - Periodic 24-hour background sync worker (`SmartMixtapeWorker`) with unmetered Wi-Fi and battery constraints, plus device storage guards (< 250MB abort threshold).
+  - 120 FPS debounced configuration slider card (`SmartMixtapeSettingsCard.kt`) integrated into `StorageSettingsScreen.kt` with live cache partition usage metrics and purge controls.
+  - Quick-play `OfflineMixtapeHomeCard.kt` widget on `OnlineHomeView` and `LibraryScreen` for instant one-tap mixtape queue playback.
+- **Full Interactive Artist Page (`ArtistDetailView.kt`, `InnerTubeClient.kt`, `MainActivity.kt`)**:
+  - Full-bleed edge-to-edge artist portrait (`380.dp`) fading via a multi-stop vertical gradient scrim into `#09090B`.
+  - Pinned floating top app bar inside `statusBarsPadding()` with circular glass Back button (`40.dp`), title fading into top bar on scroll, and right glass capsule containing Share button.
+  - Centered bold artist name (`34.sp`, `FontWeight.ExtraBold`) and action trio: circular glass **Shuffle** (`48.dp`), center solid white **Play** (`64.dp`), and right circular glass **Follow/Star** (`48.dp`).
+  - **Latest Release Highlight Card**: Full-width glass squircle (`ContinuousRoundedRectangle(18.dp)`, fill `Color.White.copy(alpha = 0.08f)`, border `1.dp` `Color.White.copy(alpha = 0.14f)`) with `68.dp` cover art, overline, bold title, recent release caption, and `+` save button.
+  - **4-Row Horizontally Paged "Top songs"**: Horizontally scrolling `LazyRow` of 4-item vertical columns (`300.dp` width), rounded cover art, track title, artist subtitle, and trailing options menu.
+  - **Comprehensive Categorized Shelves**: Albums, Singles & EPs, Videos (16:9 widescreen), Live performances (16:9), Featured on, Playlists by Artist, and Fans might also like (circular artist avatars, name, and audience pills).
+  - **Interactive "Show all" Sub-Sheets**: Every shelf includes a "Show all" action button opening a bottom sub-sheet displaying all items in that category with 1-tap playback and navigation.
+  - **About the Artist Bio Card**: Expandable artist biography with `"More"`/`"Less"` toggle and audience pills (`👤 Subscribers`, `🎧 Monthly listeners`).
+- **Interactive Song Section Markers Bar (`SongSectionMarkersBar.kt`, `NowPlayingView.kt`, `LrcParser.kt`)**:
+  - Tappable `Intro`, `Verse`, `Chorus`, `Drop`, `Bridge`, `Solo`, `Outro` pills mounted right above `NowPlayingTimeline`.
+  - Active section indicator driven by an isolated `produceState` position ticker (sampling every 250ms), preventing parent player recompositions.
+  - Tapping any section pill instantly seeks playback to the start timestamp of that musical section.
+- **DJ Blend Crossfade Curve (`CrossfadeCurveMath.kt`, `SettingsScreen.kt`, `AudioAndThemeConfig.kt`)**:
+  - Added `FadeCurve.DJ_BLEND` offering prolonged outgoing energy through 35% of the transition with accelerated incoming blend.
+  - Normalized acoustic power calculation ($sum \le 1.22$) to eliminate digital clipping distortion on 0 dBFS mastered tracks.
+  - Integrated into Settings volume curve picker with descriptive subtitle.
+- **AutoEQ Headphone & IEM Calibration Database (`AutoEqDatabase.kt`)**:
+  - Integrated built-in 10-band parametric EQ curves targeting Harman Over-Ear and In-Ear standards for popular models (Sony WH-1000XM4/XM5, Sennheiser HD600/650, Apple AirPods Pro 2, Moondrop Blessing 2/Aria, Tangzu Wan'er, 7Hz Zero).
+- **Room Database Migration v9 & Followed Artists Persistence (`Entities.kt`, `NodeDatabase.kt`, `NodeBackupManager.kt`)**:
+  - Created `FollowedArtistEntity` and registered in Room `@Database` with version bump to 9 and `MIGRATION_8_9`.
+  - Added DAO queries to `PlayerDao` for following, unfollowing, and observing followed artists.
+  - Updated `NodeBackupManager` to export and restore followed artists in `.nodebackup` archives.
+- **Artist Navigation Wireup Across Core Screens (`MainActivity.kt`, `NowPlayingView.kt`, `PlayerViewModel.kt`)**:
+  - Registered `"artist_detail"` route in `MainActivity` with back-stack support and sub-route handling.
+  - Tapping artist contributors in Credits or "About the artist" in `NowPlayingView` navigates directly to the interactive Artist Detail page (automatically resolving `artistBrowseId` via InnerTube if necessary).
+  - Added `PlayerViewModel.loadArtistPage` and `toggleFollowArtist` reactive flows.
+
 ### [2026-11-17] - Instant Lyric Card Generator & High-Impact Lyrics Typography
 - **Instant Lyric Card Generator (`LyricCardView.kt`, `LyricCardRenderer.kt`)**:
   - Added dedicated share button directly over the album art thumbnail in `FullScreenLyricsView` top bar to instantly trigger lyric selection mode.

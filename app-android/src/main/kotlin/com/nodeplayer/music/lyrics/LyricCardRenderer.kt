@@ -27,19 +27,19 @@ import java.io.File
 import java.io.FileOutputStream
 
 /**
- * High-resolution 9:16 vertical Lyric Card renderer for sharing to Instagram Stories, WhatsApp, and social media.
+ * High-resolution 4:3 portrait (3:4) Lyric Card renderer for sharing and exporting.
  *
- * Renders album art palette gradient background, Node Player branding, bold lyric typography,
- * and squircle-rounded album art with track title and artist.
+ * Renders album art palette gradient background, Node Player branding, bold lyric typography
+ * matching the app lyrics font and size, and squircle-rounded album art with track title and artist.
  */
 object LyricCardRenderer {
 
     private const val TAG = "LyricCardRenderer"
     private const val CARD_WIDTH = 1080
-    private const val CARD_HEIGHT = 1920
+    private const val CARD_HEIGHT = 1440
 
     /**
-     * Renders a high-resolution 1080x1920 Bitmap from the selected lyrics and track info.
+     * Renders a high-resolution 1080x1440 Bitmap from the selected lyrics and track info.
      */
     fun renderCardBitmap(
         context: Context,
@@ -77,64 +77,69 @@ object LyricCardRenderer {
         // 3. Header: Node Player branding (Top Right)
         val headerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(235, 255, 255, 255)
-            textSize = 38f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textSize = 34f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             letterSpacing = -0.02f
         }
         val brandText = "Node Player"
         val brandTextWidth = headerPaint.measureText(brandText)
-        val headerRightMargin = 88f
-        val headerTop = 135f
+        val headerRightMargin = 72f
+        val headerTop = 95f
 
         // Draw 3 mini soundwave bars next to brand text
         val barPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(240, 255, 255, 255)
             style = Paint.Style.FILL
         }
-        val barStartX = CARD_WIDTH - headerRightMargin - brandTextWidth - 42f
-        val barWidth = 6f
-        val barSpacing = 6f
-        val heights = floatArrayOf(20f, 32f, 16f)
+        val barStartX = CARD_WIDTH - headerRightMargin - brandTextWidth - 36f
+        val barWidth = 5f
+        val barSpacing = 5f
+        val heights = floatArrayOf(18f, 28f, 14f)
         for (i in heights.indices) {
             val bx = barStartX + i * (barWidth + barSpacing)
             val h = heights[i]
-            val by = headerTop - (h / 2f) - 12f
-            canvas.drawRoundRect(bx, by, bx + barWidth, by + h, 3f, 3f, barPaint)
+            val by = headerTop - (h / 2f) - 10f
+            canvas.drawRoundRect(bx, by, bx + barWidth, by + h, 2.5f, 2.5f, barPaint)
         }
         canvas.drawText(brandText, CARD_WIDTH - headerRightMargin - brandTextWidth, headerTop, headerPaint)
 
-        // 4. Middle Content: Selected Lyrics Lines
-        val contentPaddingX = 96f
+        // 4. Middle Content: Selected Lyrics Lines (matching in-app lyrics font & size)
+        val contentPaddingX = 84f
         val availableContentWidth = CARD_WIDTH - (contentPaddingX * 2)
 
         val lyricTextSize = when {
-            lines.size <= 2 -> 68f
-            lines.size <= 4 -> 56f
-            else -> 46f
+            lines.size <= 3 -> 74f
+            lines.size <= 5 -> 64f
+            else -> 52f
         }
         val lyricPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = lyricTextSize
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-            letterSpacing = -0.03f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            letterSpacing = -0.02f
         }
 
         val layouts = lines.map { text ->
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 StaticLayout.Builder.obtain(text, 0, text.length, lyricPaint, availableContentWidth.toInt())
                     .setAlignment(Layout.Alignment.ALIGN_NORMAL)
-                    .setLineSpacing(16f, 1.15f)
+                    .setLineSpacing(14f, 1.22f)
                     .build()
             } else {
                 @Suppress("DEPRECATION")
-                StaticLayout(text, lyricPaint, availableContentWidth.toInt(), Layout.Alignment.ALIGN_NORMAL, 1.15f, 16f, false)
+                StaticLayout(text, lyricPaint, availableContentWidth.toInt(), Layout.Alignment.ALIGN_NORMAL, 1.22f, 14f, false)
             }
         }
 
-        val spacingBetweenLines = if (lines.size <= 3) 54f else 36f
+        // 5. Footer: Squircle Artwork, Song Title, and Artist
+        val footerY = CARD_HEIGHT - 170f
+        val thumbSize = 110f
+        val thumbLeft = contentPaddingX
+
+        val spacingBetweenLines = if (lines.size <= 3) 42f else 28f
         val totalLyricsHeight = layouts.sumOf { it.height } + (layouts.size - 1) * spacingBetweenLines
         val targetCenterY = CARD_HEIGHT * 0.48f
-        var currentY = (targetCenterY - (totalLyricsHeight / 2f)).coerceAtLeast(240f)
+        var currentY = (targetCenterY - (totalLyricsHeight / 2f)).coerceIn(140f, footerY - totalLyricsHeight - 30f)
 
         for (layout in layouts) {
             canvas.save()
@@ -143,11 +148,6 @@ object LyricCardRenderer {
             canvas.restore()
             currentY += layout.height + spacingBetweenLines
         }
-
-        // 5. Footer: Squircle Artwork, Song Title, and Artist
-        val footerY = CARD_HEIGHT - 210f
-        val thumbSize = 120f
-        val thumbLeft = contentPaddingX
 
         if (artwork != null && !artwork.isRecycled) {
             val thumbPath = Path().apply {
@@ -179,13 +179,13 @@ object LyricCardRenderer {
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.WHITE
             textSize = 38f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             letterSpacing = -0.01f
         }
         val artistPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = Color.argb(175, 255, 255, 255)
             textSize = 30f
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
         }
 
         val maxTextWidth = CARD_WIDTH - textLeft - contentPaddingX

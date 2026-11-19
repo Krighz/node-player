@@ -62,10 +62,10 @@ private val CARD_CONTAINER_SHAPE = ContinuousRoundedRectangle(24.dp)
 private val CARD_THUMBNAIL_SHAPE = ContinuousRoundedRectangle(10.dp)
 
 /**
- * High-quality vertical Lyric Card (9:16 ratio) matching BitChord and Apple Music aesthetics.
+ * High-quality vertical Lyric Card (4:3 ratio) matching BitChord and Apple Music aesthetics.
  *
  * - Top-right: Node Player brand logo and title.
- * - Center: Selected lyric lines in bold, high-contrast typography.
+ * - Center: Selected lyric lines in bold, high-contrast typography matching the app's lyrics font and size.
  * - Bottom: Rounded squircle album artwork, track title, and artist name.
  * - Background: Dynamic vertical ambient gradient extracted from the album artwork palette.
  */
@@ -78,6 +78,8 @@ fun LyricCardView(
     modifier: Modifier = Modifier,
     appName: String = "Node Player"
 ) {
+    val lyricsFontFamily = LocalLyricsFontFamily.current ?: FontFamily.Default
+
     val topGradientColor = remember(palette.darkMuted) {
         Color(palette.darkMuted).copy(alpha = 1f)
     }
@@ -112,11 +114,9 @@ fun LyricCardView(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.GraphicEq,
-                    contentDescription = null,
-                    tint = Color.White.copy(alpha = 0.90f),
-                    modifier = Modifier.size(18.dp)
+                com.nodeplayer.ui.components.NodePlayerLogoMark(
+                    size = 20.dp,
+                    showSquircleBackground = true
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
@@ -129,28 +129,28 @@ fun LyricCardView(
                 )
             }
 
-            // 2. Middle Body: Selected Lyric Lines
+            // 2. Middle Body: Selected Lyric Lines (matching app lyrics font & size)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
+                    .padding(vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(
-                    if (lines.size <= 3) 16.dp else 10.dp
+                    if (lines.size <= 3) 14.dp else 8.dp
                 )
             ) {
                 val fontSize = when {
-                    lines.size <= 2 -> 28.sp
-                    lines.size <= 4 -> 24.sp
-                    else -> 20.sp
+                    lines.size <= 3 -> 34.sp
+                    lines.size <= 5 -> 28.sp
+                    else -> 22.sp
                 }
-                val lineHeight = (fontSize.value * 1.30f).sp
+                val lineHeight = (fontSize.value * 1.25f).sp
 
                 lines.forEach { lineText ->
                     Text(
                         text = lineText,
-                        fontFamily = FontFamily.SansSerif,
+                        fontFamily = lyricsFontFamily,
                         fontSize = fontSize,
-                        fontWeight = FontWeight.ExtraBold,
+                        fontWeight = FontWeight.Black,
                         lineHeight = lineHeight,
                         letterSpacing = (-0.45).sp,
                         color = Color.White
@@ -291,7 +291,7 @@ fun LyricCardGeneratorDialog(
                     }
                 }
 
-                // Lyric Card in 9:16 story aspect ratio
+                // Lyric Card in 4:3 (3:4 portrait) aspect ratio
                 LyricCardView(
                     track = track,
                     lines = lines,
@@ -299,7 +299,7 @@ fun LyricCardGeneratorDialog(
                     coverBitmap = coverBitmap,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(9f / 16f)
+                        .aspectRatio(3f / 4f)
                         .heightIn(max = 520.dp)
                 )
 

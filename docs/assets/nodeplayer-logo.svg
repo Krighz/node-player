@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Primary Diagonal White-to-Sky-Blue Gradient -->
+    <linearGradient id="nBodyGrad" gradientUnits="userSpaceOnUse" x1="175" y1="185" x2="342" y2="368">
+      <stop offset="0%" stop-color="#FFFFFF" />
+      <stop offset="36%" stop-color="#FFFFFF" />
+      <stop offset="62%" stop-color="#E2E8F0" />
+      <stop offset="100%" stop-color="#94A3B8" />
+    </linearGradient>
+    <!-- Subtle Radial Throat Tint on Bottom-Left Notehead Join -->
+    <radialGradient id="noteThroatGrad" gradientUnits="userSpaceOnUse" cx="176" cy="364" r="46">
+      <stop offset="0%" stop-color="#CBD5E1" stop-opacity="0.95" />
+      <stop offset="55%" stop-color="#F1F5F9" stop-opacity="0.55" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0" />
+    </radialGradient>
+    <!-- Clip Region for Bottom-Left Notehead Throat Tint (x < 200, y > 310) -->
+    <clipPath id="noteThroatClip">
+      <rect x="96" y="310" width="104" height="84" />
+    </clipPath>
+  </defs>
+  <!-- Matte #131316 Squircle Container (rx=124, 1px #222227 border) -->
+  <rect x="4" y="4" width="504" height="504" rx="124" fill="#131316" stroke="#222227" stroke-width="1" />
+  <!-- Seamless 48px-Stroke Musical 'N' Glyph -->
+  <g>
+    <!-- Single Continuous Closed Path for Fixed First Bend Musical-'N' (48px Uniform Stem) -->
+    <path d="M 194 188 L 280 354 C 292 374 308 384 326 384 C 352 384 370 364 370 332 L 370 178 C 374 183 382 186 391 186 C 405 186 415 175 415 161 C 415 141 397 126 370 126 C 343 126 322 145 322 178 L 322 332 L 232 154 C 220 135 206 126 188 126 C 162 126 146 146 146 178 L 146 316 C 146 322 138 323 128 327 C 113 333 106 346 106 360 C 106 376 120 384 138 384 C 166 384 194 364 194 334 L 194 188 Z" fill="url(#nBodyGrad)" />
+    <!-- Clipped Bottom-Left Notehead Throat Tint Overlay (x < 200, y > 310) -->
+    <path
+      d="M 194 188 L 280 354 C 292 374 308 384 326 384 C 352 384 370 364 370 332 L 370 178 C 374 183 382 186 391 186 C 405 186 415 175 415 161 C 415 141 397 126 370 126 C 343 126 322 145 322 178 L 322 332 L 232 154 C 220 135 206 126 188 126 C 162 126 146 146 146 178 L 146 316 C 146 322 138 323 128 327 C 113 333 106 346 106 360 C 106 376 120 384 138 384 C 166 384 194 364 194 334 L 194 188 Z"
+      fill="url(#noteThroatGrad)"
+      clip-path="url(#noteThroatClip)"
+    />
+  </g>
+</svg>

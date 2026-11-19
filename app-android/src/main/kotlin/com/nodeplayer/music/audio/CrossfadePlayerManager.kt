@@ -24,6 +24,8 @@ import com.nodeplayer.model.AudioEffectConfig
 import com.nodeplayer.model.CrossfadeConfig
 import com.nodeplayer.model.FadeCurve
 import com.nodeplayer.model.Track
+import com.nodeplayer.common.logging.NodeLog
+import com.nodeplayer.music.NodePlayerApplication
 import kotlin.math.min
 
 /**
@@ -764,6 +766,19 @@ class CrossfadePlayerManager(
 
     private fun setPlayerMediaSource(player: ExoPlayer, track: Track) {
         retriedStreams.remove(player)
+
+        // --- SMART MIXTAPE INTERCEPTION HOOK ---
+        val mixtapeFile = (context.applicationContext as? NodePlayerApplication)
+            ?.smartMixtapeManager
+            ?.interceptPlayback(track.path)
+
+        if (mixtapeFile != null && mixtapeFile.exists()) {
+            NodeLog.d(TAG, "Playback Intercepted: Playing cached mixtape file for ${track.title}")
+            val localMediaItem = MediaItem.fromUri(Uri.fromFile(mixtapeFile))
+            player.setMediaItem(localMediaItem)
+            return
+        }
+
         val mediaItem = createMediaItem(track)
         val uri = mediaItem.localConfiguration?.uri
         val isSyntheticYouTube = track.path.startsWith("nodeplayer://youtube/") ||

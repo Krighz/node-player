@@ -56,6 +56,10 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
     lateinit var downloadQueueManager: com.nodeplayer.library.downloader.DownloadQueueManager
         private set
 
+    val smartMixtapeManager by lazy {
+        com.nodeplayer.music.mixtape.SmartMixtapeManager(this)
+    }
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Volatile
@@ -109,7 +113,7 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             NodeDatabase::class.java,
             "node_player.db"
         )
-            .addMigrations(NodeDatabase.MIGRATION_6_7, NodeDatabase.MIGRATION_7_8)
+            .addMigrations(NodeDatabase.MIGRATION_6_7, NodeDatabase.MIGRATION_7_8, NodeDatabase.MIGRATION_8_9)
             .fallbackToDestructiveMigration()
             .build()
 

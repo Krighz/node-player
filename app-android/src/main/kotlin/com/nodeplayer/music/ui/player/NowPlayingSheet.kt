@@ -31,10 +31,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -44,6 +48,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -142,17 +147,64 @@ fun NowPlayingSheet(
 
     val activeThemeConfig = themeConfig ?: LocalGlassThemeConfig.current
 
+    val sheetOffsetY = remember { androidx.compose.animation.core.Animatable(0f) }
+    val density = LocalDensity.current
+    val maxDismissDistancePx = with(density) { 380.dp.toPx() }
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // Dragging down while sheet is already pulled
+                if (available.y > 0f && sheetOffsetY.value > 0f) {
+                    coroutineScope.launch {
+                        sheetOffsetY.snapTo((sheetOffsetY.value + available.y).coerceAtLeast(0f))
+                    }
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (available.y > 0f) {
+                    coroutineScope.launch {
+                        sheetOffsetY.snapTo((sheetOffsetY.value + available.y).coerceAtLeast(0f))
+                    }
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (sheetOffsetY.value > maxDismissDistancePx * 0.40f || available.y > 1200f) {
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                    sheetOffsetY.animateTo(maxDismissDistancePx * 1.5f, MotionTokens.Smooth)
+                    onDismiss()
+                    return available
+                } else if (sheetOffsetY.value > 0f) {
+                    sheetOffsetY.animateTo(0f, MotionTokens.Smooth)
+                    return available
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                detectDragGestures { change, dragAmount ->
-                    if (dragAmount.y > 35f && abs(dragAmount.y) > abs(dragAmount.x) * 1.5f) {
-                        change.consume()
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        onDismiss()
-                    }
-                }
+            .nestedScroll(nestedScrollConnection)
+            .graphicsLayer {
+                val progress = (sheetOffsetY.value / maxDismissDistancePx).coerceIn(0f, 1f)
+                translationY = sheetOffsetY.value
+                scaleX = 1f - (progress * 0.08f)
+                scaleY = 1f - (progress * 0.08f)
+                val cornerRadius = (progress * 32f).dp
+                clip = cornerRadius > 0.dp
+                shape = ContinuousRoundedRectangle(cornerRadius)
             }
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -1319,11 +1371,21 @@ private fun PlayerSeekBar(
         ) {
             Text(
                 text = formatTime(currentMs),
-                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.70f), fontSize = 12.sp)
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = Color.White.copy(alpha = 0.70f),
+                    fontSize = 12.sp,
+                    fontFeatureSettings = "tnum",
+                    fontWeight = FontWeight.SemiBold
+                )
             )
             Text(
                 text = formatTime(totalMs),
-                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.70f), fontSize = 12.sp)
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = Color.White.copy(alpha = 0.70f),
+                    fontSize = 12.sp,
+                    fontFeatureSettings = "tnum",
+                    fontWeight = FontWeight.SemiBold
+                )
             )
         }
     }

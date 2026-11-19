@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -169,15 +170,21 @@ private fun TimelineTimeLabels(
     ) {
         Text(
             text = formatDuration(displayPositionMs),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color.White.copy(alpha = 0.65f)
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontFeatureSettings = "tnum",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.65f)
+            )
         )
         Text(
             text = "-${formatDuration(remainingMs)}",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color.White.copy(alpha = 0.65f)
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontFeatureSettings = "tnum",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.65f)
+            )
         )
     }
 }

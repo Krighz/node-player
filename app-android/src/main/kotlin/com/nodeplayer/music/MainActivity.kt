@@ -27,6 +27,13 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.shape.RoundedCornerShape
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
@@ -41,6 +48,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -51,6 +59,8 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.nodeplayer.music.service.PlaybackService
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
@@ -365,7 +375,7 @@ class MainActivity : ComponentActivity() {
                 val isSubRoute = currentRoute in listOf(
                     "stats", "recap", "smart_playlists", "duplicate_finder", "widgets", "widget_settings",
                     "playlist_detail", "settings", "equalizer", "optical_diagnostics", "storage", "storage_settings",
-                    "audio_converter", "downloads"
+                    "audio_converter", "downloads", "artist_detail"
                 )
                 BackHandler(enabled = isLyricsExpanded || isNowPlayingExpanded || isSubRoute || selectedPlaylistForDetail != null || activePlaylistDetail != null || activeCategory != null) {
                     if (isLyricsExpanded) {
@@ -681,8 +691,8 @@ class MainActivity : ComponentActivity() {
                                         onOpenCategory = { category, playlists -> navigateToCategory(category, playlists) },
                                         onCategoryClick = { category -> navigateToCategory(category) },
                                         onNavigateToExplore = { currentRoute = "explore" },
-                                        onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
-                                            navigateToPlaylistDetail(title, title, subtitle, artworkUrl, items)
+                                        onOpenPlaylistDetail = { id, title, subtitle, artworkUrl, items ->
+                                            navigateToPlaylistDetail(id, title, subtitle, artworkUrl, items)
                                         },
                                         nodeConnectStatus = if (connectedPeers.isNotEmpty()) com.nodeplayer.ui.components.DeviceConnectStatus.CONNECTED
                                             else if (discoveredPeers.isNotEmpty() || activeSession != null) com.nodeplayer.ui.components.DeviceConnectStatus.DISCOVERING
@@ -863,6 +873,61 @@ class MainActivity : ComponentActivity() {
                                         onBack = { currentRoute = "more" },
                                         onTrackDeleted = { viewModel.refreshLibrary() }
                                     )
+                                    "artist_detail" -> {
+                                        val artistData by viewModel.artistPageData.collectAsState()
+                                        val isArtistLoading by viewModel.isArtistPageLoading.collectAsState()
+                                        com.nodeplayer.ui.screens.ArtistDetailView(
+                                            artistData = artistData,
+                                            isLoading = isArtistLoading,
+                                            onBack = { currentRoute = "home" },
+                                            onPlayTrack = { trk -> viewModel.playTrack(trk) },
+                                            onShuffleArtist = {
+                                                artistData?.topSongs?.let { songs ->
+                                                    if (songs.isNotEmpty()) viewModel.playTrack(songs.shuffled().first(), songs.shuffled())
+                                                }
+                                            },
+                                            onToggleFollow = {
+                                                artistData?.let { art ->
+                                                    viewModel.toggleFollowArtist(art.browseId, art.artistName, art.heroImageUrl)
+                                                }
+                                            },
+                                            onSelectRelease = { rel ->
+                                                navigateToPlaylistDetail(
+                                                    id = rel.id,
+                                                    title = rel.title,
+                                                    subtitle = "${artistData?.artistName ?: "Artist"} • ${rel.type} ${rel.year}".trim(),
+                                                    artworkUrl = rel.artworkUrl
+                                                )
+                                            },
+                                            onSelectPlaylist = { pl ->
+                                                navigateToPlaylistDetail(
+                                                    id = pl.playlistId,
+                                                    title = pl.title,
+                                                    subtitle = pl.author ?: (artistData?.artistName ?: "YouTube Music"),
+                                                    artworkUrl = pl.thumbnailUrl
+                                                )
+                                            },
+                                            onSelectVideo = { vid ->
+                                                viewModel.playTrack(
+                                                    com.nodeplayer.model.Track(
+                                                        id = kotlin.math.abs(vid.videoId.hashCode().toLong()),
+                                                        title = vid.title,
+                                                        artist = artistData?.artistName ?: "YouTube Music",
+                                                        album = "Music Video",
+                                                        durationMs = 0L,
+                                                        path = "nodeplayer://youtube/${vid.videoId}",
+                                                        formatDescription = "YouTube Audio"
+                                                    )
+                                                )
+                                            },
+                                            onSelectSimilarArtist = { sim ->
+                                                viewModel.loadArtistPage(sim.browseId)
+                                            },
+                                            onOptionsClick = { trk ->
+                                                trackForAddToPlaylist = trk
+                                            }
+                                        )
+                                    }
                                     "settings" -> SettingsScreen(
                                         outputInfo = audioOutputInfo,
                                         themeConfig = effectiveThemeConfig,
@@ -1016,6 +1081,50 @@ class MainActivity : ComponentActivity() {
 
                     val activeNowPlayingTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
                     val playerMotionEnabled = effectiveThemeConfig.motionLevel != com.nodeplayer.model.MotionLevel.OFF && effectiveThemeConfig.animationPreset != "OFF"
+
+                    val sheetDragOffsetY = remember { Animatable(0f) }
+                    val screenHeightPx = with(LocalDensity.current) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() }
+                    val composeScope = rememberCoroutineScope()
+                    var dragAnimJob by remember { mutableStateOf<Job?>(null) }
+                    var isDismissingSheet by remember { mutableStateOf(false) }
+
+                    // Background parallel thread lyrics pre-caching
+                    val activityContext = androidx.compose.ui.platform.LocalContext.current
+                    var cachedLyrics by remember(activeNowPlayingTrack?.id) { mutableStateOf<com.nodeplayer.model.Lyrics?>(null) }
+                    var isLyricsPreloaded by remember(activeNowPlayingTrack?.id) { mutableStateOf(false) }
+
+                    LaunchedEffect(activeNowPlayingTrack?.id) {
+                        val trk = activeNowPlayingTrack ?: return@LaunchedEffect
+                        isLyricsPreloaded = false
+                        withContext(Dispatchers.IO) {
+                            val result = com.nodeplayer.music.lyrics.LyricsManager.getLyrics(
+                                context = activityContext,
+                                track = trk,
+                                forceRefresh = false
+                            )
+                            withContext(Dispatchers.Main) {
+                                cachedLyrics = result
+                                isLyricsPreloaded = true
+                            }
+                        }
+                    }
+
+                    // Auto-fullscreen when rotating to landscape in video mode
+                    val currentOrientation = androidx.compose.ui.platform.LocalConfiguration.current.orientation
+                    val isLandscape = currentOrientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+                    LaunchedEffect(isLandscape, videoPlayerState.isVideoActive) {
+                        if (videoPlayerState.isVideoActive) {
+                            viewModel.setCinemaExpanded(isLandscape)
+                        }
+                    }
+
+                    LaunchedEffect(isNowPlayingExpanded) {
+                        if (isNowPlayingExpanded) {
+                            sheetDragOffsetY.snapTo(0f)
+                        }
+                    }
+
                     AnimatedVisibility(
                         visible = isNowPlayingExpanded && activeNowPlayingTrack != null,
                         enter = slideInVertically(tween(if (playerMotionEnabled) 320 else 0, easing = FastOutSlowInEasing), initialOffsetY = { it }) + fadeIn(tween(if (playerMotionEnabled) 180 else 0)),
@@ -1053,10 +1162,41 @@ class MainActivity : ComponentActivity() {
                                 track.path.startsWith("http") ||
                                 videoPlayerState.isAvailable
 
+                            val dragOffset = sheetDragOffsetY.value
+                            val dragProgress = (dragOffset / screenHeightPx.coerceAtLeast(1f)).coerceIn(0f, 1f)
+                            val smoothCurve = ((1f - dragProgress) * (1f - dragProgress)).coerceIn(0f, 1f)
+                            val backdropBlurRadius = (36f * smoothCurve).dp
+                            val backdropScrimAlpha = 0.75f * smoothCurve
+                            val sheetScale = 1f - (dragProgress * 0.08f)
+                            val sheetCornerRadius = (dragProgress * 32f).dp
+
                             CompositionLocalProvider(
                                 com.nodeplayer.ui.lyrics.LocalLyricsFontFamily provides interFontFamily
                             ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
+                                    // Deep glass blur that dissolves smoothly along a curve as dragged down
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .graphicsLayer {
+                                                alpha = smoothCurve
+                                            }
+                                            .background(Color.Black.copy(alpha = backdropScrimAlpha))
+                                            .blur(backdropBlurRadius)
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .graphicsLayer {
+                                                translationY = dragOffset
+                                                scaleX = sheetScale
+                                                scaleY = sheetScale
+                                                alpha = if (isDismissingSheet) smoothCurve else 1f
+                                                clip = dragProgress > 0.005f
+                                                shape = RoundedCornerShape(sheetCornerRadius)
+                                            }
+                                    ) {
                                     com.nodeplayer.ui.player.NowPlayingView(
                                         currentTrack = track,
                                         isPlaying = isPlaying,
@@ -1065,7 +1205,7 @@ class MainActivity : ComponentActivity() {
                                         durationMs = track.durationMs,
                                         queue = queue,
                                         currentQueueIndex = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0),
-                                        lrcContent = null,
+                                        lrcContent = cachedLyrics?.plainText,
                                         audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
                                         sourceLabel = if (currentRoute == "search") "Search" else "Library",
                                         palette = activeNowPlayingPalette,
@@ -1109,13 +1249,87 @@ class MainActivity : ComponentActivity() {
                                         artVerticalOffsetDp = effectiveThemeConfig.artVerticalOffsetDp,
                                         extendedInfo = trackExtendedInfo,
                                         onPlayTrack = { newTrack -> viewModel.playTrack(newTrack, listOf(newTrack)) },
-                                        onArtistClick = { artistName, _ ->
-                                            searchInitialQuery = artistName
-                                            showSearchSheet = true
+                                        onArtistClick = { artistName, browseId ->
+                                            isNowPlayingExpanded = false
+                                            if (!browseId.isNullOrBlank()) {
+                                                viewModel.loadArtistPage(browseId)
+                                                currentRoute = "artist_detail"
+                                            } else {
+                                                lifecycleScope.launch(Dispatchers.IO) {
+                                                    val client = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+                                                    val resolvedId = client.searchArtistBrowseId(artistName)
+                                                    withContext(Dispatchers.Main) {
+                                                        if (resolvedId != null) {
+                                                            viewModel.loadArtistPage(resolvedId)
+                                                            currentRoute = "artist_detail"
+                                                        } else {
+                                                            searchInitialQuery = artistName
+                                                            showSearchSheet = true
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         },
                                         onTrackOptionsClick = { trackForAddToPlaylist = it },
-                                        onClose = { isNowPlayingExpanded = false }
+                                        onDragDelta = { delta ->
+                                            if (!isDismissingSheet) {
+                                                dragAnimJob?.cancel()
+                                                dragAnimJob = composeScope.launch {
+                                                    try {
+                                                        val next = (sheetDragOffsetY.value + delta).coerceAtLeast(0f)
+                                                        sheetDragOffsetY.snapTo(next)
+                                                    } catch (_: CancellationException) {}
+                                                }
+                                            }
+                                        },
+                                        onDragEnd = { velocityY ->
+                                            if (!isDismissingSheet) {
+                                                dragAnimJob?.cancel()
+                                                dragAnimJob = composeScope.launch {
+                                                    try {
+                                                        val currentOffset = sheetDragOffsetY.value
+                                                        val dismissThreshold = screenHeightPx * 0.40f
+                                                        if (currentOffset > dismissThreshold || velocityY > 1000f) {
+                                                            isDismissingSheet = true
+                                                            sheetDragOffsetY.animateTo(
+                                                                targetValue = screenHeightPx,
+                                                                animationSpec = spring(stiffness = 320f, dampingRatio = 0.85f)
+                                                            )
+                                                            isNowPlayingExpanded = false
+                                                            sheetDragOffsetY.snapTo(0f)
+                                                            isDismissingSheet = false
+                                                        } else {
+                                                            sheetDragOffsetY.animateTo(
+                                                                targetValue = 0f,
+                                                                animationSpec = spring(stiffness = 350f, dampingRatio = 0.82f)
+                                                            )
+                                                        }
+                                                    } catch (_: CancellationException) {
+                                                    } catch (e: Exception) {
+                                                        com.nodeplayer.common.logging.NodeLog.e("NowPlaying", "Error during drag release", e)
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        onClose = {
+                                            if (!isDismissingSheet) {
+                                                dragAnimJob?.cancel()
+                                                dragAnimJob = composeScope.launch {
+                                                    try {
+                                                        isDismissingSheet = true
+                                                        sheetDragOffsetY.animateTo(
+                                                            targetValue = screenHeightPx,
+                                                            animationSpec = spring(stiffness = 320f, dampingRatio = 0.85f)
+                                                        )
+                                                        isNowPlayingExpanded = false
+                                                        sheetDragOffsetY.snapTo(0f)
+                                                        isDismissingSheet = false
+                                                    } catch (_: CancellationException) {}
+                                                }
+                                            }
+                                        }
                                     )
+                                }
 
                                     if (videoPlayerState.isCinemaExpanded) {
                                         val livePlayer = com.nodeplayer.music.service.PlaybackService.instance?.player
@@ -1215,28 +1429,17 @@ class MainActivity : ComponentActivity() {
                                         enter = fadeIn(spring(stiffness = 380f)),
                                         exit = fadeOut(spring(stiffness = 380f))
                                     ) {
-                                        val context = androidx.compose.ui.platform.LocalContext.current
-                                        var trackLyrics by remember(track.id) { mutableStateOf<com.nodeplayer.model.Lyrics?>(null) }
-                                        var isLyricsLoading by remember(track.id) { mutableStateOf(false) }
-
-                                        LaunchedEffect(track.id) {
-                                            isLyricsLoading = true
-                                            trackLyrics = com.nodeplayer.music.lyrics.LyricsManager.getLyrics(
-                                                context = context,
-                                                track = track,
-                                                forceRefresh = false
-                                            )
-                                            isLyricsLoading = false
-                                        }
+                                        val effectiveLyrics = cachedLyrics
+                                        val effectiveLyricsLoading = !isLyricsPreloaded && effectiveLyrics == null
 
                                         com.nodeplayer.ui.lyrics.FullScreenLyricsView(
                                             track = track,
-                                            lyrics = trackLyrics,
+                                            lyrics = effectiveLyrics,
                                             isPlaying = isPlaying,
                                             currentPositionMs = 0L,
                                             positionProvider = { viewModel.currentPositionMs.value },
                                             durationMs = track.durationMs,
-                                            isLoading = isLyricsLoading,
+                                            isLoading = effectiveLyricsLoading,
                                             palette = activeNowPlayingPalette,
                                             audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
                                             onPlayPause = { viewModel.togglePlayPause() },
@@ -1251,7 +1454,7 @@ class MainActivity : ComponentActivity() {
                                                     putExtra(Intent.EXTRA_SUBJECT, "Now Playing: ${track.title}")
                                                     val shareText = buildString {
                                                         append("Listening to \"${track.title}\" by ${track.artist}")
-                                                        val plain = trackLyrics?.plainText
+                                                        val plain = effectiveLyrics?.plainText
                                                         if (!plain.isNullOrBlank()) {
                                                             append("\n\n")
                                                             append(plain.take(500))
@@ -2209,6 +2412,9 @@ private fun BoxScope.MainBottomDockOverlay(
                 )
             }
 
+            val dockOffsetPx = with(LocalDensity.current) {
+                if (themeConfig.dockAutoHideEnabled) (80.dp.toPx() * dockScrollFractionState.value) else 0f
+            }
             ConvxLiquidDock(
                 selectedRoute = currentRoute,
                 onRouteChange = onRouteChange,
@@ -2219,7 +2425,10 @@ private fun BoxScope.MainBottomDockOverlay(
                 searchButtonVisible = themeConfig.showDockSearchButton,
                 lensStrength = themeConfig.lensRefractionStrength,
                 rimSpecular = themeConfig.lensRimSpecular,
-                backdrop = pageBackdrop
+                backdrop = pageBackdrop,
+                modifier = Modifier.graphicsLayer {
+                    translationY = dockOffsetPx
+                }
             )
         }
     }

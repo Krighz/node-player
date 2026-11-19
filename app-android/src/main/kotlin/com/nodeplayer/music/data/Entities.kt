@@ -200,3 +200,11 @@ data class AudioPresetEntity(
     val presetName: String,
     val configJson: String
 )
+
+@Entity(tableName = "followed_artists")
+data class FollowedArtistEntity(
+    @PrimaryKey val artistBrowseId: String,
+    val artistName: String,
+    val avatarUrl: String? = null,
+    val followedAt: Long = System.currentTimeMillis()
+)

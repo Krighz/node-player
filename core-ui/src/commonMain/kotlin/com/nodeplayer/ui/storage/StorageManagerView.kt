@@ -48,7 +48,8 @@ fun StorageManagerView(
     preferredFormat: String,
     onPreferredFormatChanged: (String) -> Unit,
     onOpenDownloadQueue: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    headerContent: (@Composable () -> Unit)? = null
 ) {
     val accent = LocalAccentColor.current
     var categoryToClear by remember { mutableStateOf<StorageUsageStats?>(null) }
@@ -116,6 +117,12 @@ fun StorageManagerView(
             modifier = Modifier.fillMaxWidth().weight(1f),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            if (headerContent != null) {
+                item(key = "mixtape_header") {
+                    headerContent()
+                }
+            }
+
             // Storage Summary Card
             item {
                 StorageBreakdownCard(

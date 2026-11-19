@@ -353,14 +353,14 @@ fun FullScreenLyricsView(
                         modifier = Modifier
                             .widthIn(max = columnWidth)
                             .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 10.dp),
+                            .padding(horizontal = 20.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Left: Rounded album/video thumbnail with instant Share Card trigger
+                        // Left: Rounded album/video thumbnail with instant Share Card trigger (~30% bigger: 62x55dp)
                         Box(
                             modifier = Modifier
-                                .size(width = 48.dp, height = 42.dp)
-                                .clip(RoundedCornerShape(10.dp))
+                                .size(width = 62.dp, height = 55.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(Color.White.copy(alpha = 0.12f))
                                 .clickable {
                                     if (isSelectionMode) {
@@ -385,7 +385,7 @@ fun FullScreenLyricsView(
                                     imageVector = Icons.Rounded.MusicNote,
                                     contentDescription = null,
                                     tint = Color.White.copy(alpha = 0.60f),
-                                    modifier = Modifier.size(18.dp)
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
 
@@ -400,36 +400,37 @@ fun FullScreenLyricsView(
                                     imageVector = Icons.Rounded.Share,
                                     contentDescription = "Share Lyric Card",
                                     tint = if (isSelectionMode) Color.White else Color.White.copy(alpha = 0.75f),
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
 
-                        // Center: Song title above artist name
+                        // Center: Song title above artist name (~30% bigger with bold weight)
                         Column(
                             modifier = Modifier
                                 .weight(1f)
-                                .padding(horizontal = 12.dp)
+                                .padding(horizontal = 14.dp)
                         ) {
                             Text(
                                 text = track?.title ?: "No track playing",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.ExtraBold,
                                 color = Color.White,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            Spacer(modifier = Modifier.height(3.dp))
                             Text(
                                 text = track?.artist ?: "",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = Color.White.copy(alpha = 0.65f),
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White.copy(alpha = 0.75f),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
 
-                        // Right: Two circular translucent icon buttons (38.dp, CircleShape, Color.White.copy(alpha = 0.12f))
+                        // Right: Two circular translucent icon buttons (~30% bigger: 48.dp, CircleShape)
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -437,7 +438,7 @@ fun FullScreenLyricsView(
                             // Favorite Star button
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .background(Color.White.copy(alpha = 0.12f))
                                     .clickable {
@@ -449,14 +450,14 @@ fun FullScreenLyricsView(
                                     imageVector = if (isFavorite) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                                     contentDescription = "Favorite",
                                     tint = if (isFavorite) Color(0xFFFBBF24) else Color.White,
-                                    modifier = Modifier.size(19.dp)
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
 
                             // Action button: In selection mode -> Close ("X"); Otherwise -> Menu or Share
                             Box(
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(48.dp)
                                     .clip(CircleShape)
                                     .background(Color.White.copy(alpha = 0.12f))
                                     .clickable {
@@ -483,7 +484,7 @@ fun FullScreenLyricsView(
                                         else -> "Share Lyrics"
                                     },
                                     tint = Color.White,
-                                    modifier = Modifier.size(19.dp)
+                                    modifier = Modifier.size(24.dp)
                                 )
                             }
                         }
@@ -714,7 +715,7 @@ fun FullScreenLyricsView(
                                         },
                                         activeColor = Color.White,
                                         inactiveColor = Color.White.copy(alpha = 0.70f),
-                                        fontSize = 32.sp
+                                        fontSize = 34.sp
                                     )
 
                                     // Instrumental gap indicator check
