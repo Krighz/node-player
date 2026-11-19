@@ -239,7 +239,7 @@ object LrcRed {
                     connectTimeout = 6000
                     readTimeout = 8000
                     requestMethod = "GET"
-                    setRequestProperty("User-Agent", "NodePlayer/1.8.0 (Audiophile Music Player)")
+                    setRequestProperty("User-Agent", "NodePlayer/2.0.0 (Audiophile Music Player)")
                 }
                 val code = connection.responseCode
                 if (code in 200..299) {

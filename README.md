@@ -6,28 +6,28 @@ Node Player is a local-first, bit-perfect 32-bit floating-point audio player and
   <img src="docs/assets/nodeplayer-logo.svg" alt="Node Player Logo" width="64" height="64" />
 </p>
 
-[Live Website & Docs](https://krighz.github.io/node-player/) • [Features](https://krighz.github.io/node-player/features.html) • [Technical Docs](https://krighz.github.io/node-player/docs.html) • [Changelog](https://krighz.github.io/node-player/changelog.html) • [Releases](https://github.com/Krighz/node-player/releases) • [Discussions](https://github.com/Krighz/node-player/discussions)
+[Website & Docs](https://krighz.github.io/node-player/) • [Download v2.0.0](https://github.com/Krighz/node-player/releases/tag/v2.0.0) • [Features](https://krighz.github.io/node-player/features.html) • [Docs](https://krighz.github.io/node-player/docs.html) • [Changelog](CHANGELOG.md) • [Discussions](https://github.com/Krighz/node-player/discussions)
 
 ---
 
-### ✨ Highlights
+### ✨ What's New in v2.0.0
 
-* **Hybrid YouTube Music + 32-Bit Local Audio:** Seamlessly stream online with ~1.1s startup and 128 KB chunked caching, or decode bit-perfect local FLAC, ALAC, WAV, and MP3 via a pure 32-bit float audio engine (WASAPI Exclusive on Windows, direct audio sinks on Android).
-* **5-Provider Word-by-Word Karaoke & Lyric Cards:** Sub-pixel 120 FPS syllable sweep powered by BiniLyrics, BetterLyrics, LyricsPlus, LrcLib, and KuGou; create and export shareable 4:3 & 1080×1920 Lyric Cards in one tap.
+* **Universal Curved 'N' Brand Identity:** Finalized squircle brand mark and monochrome adaptive icons across Android, Windows Desktop, Compose vectors, and web.
+* **5-Provider Word-by-Word Karaoke & Lyric Cards:** Sub-pixel 120 FPS syllable sweep (BiniLyrics, BetterLyrics, LyricsPlus, LrcLib, KuGou) + instant 1080×1920 & 4:3 ambient Lyric Card exports.
 * **Smart Offline Mixtape:** Autonomous background Wi-Fi caching (60% discovery + 40% heavy rotation) with intelligent two-tier LRU eviction and zero-latency offline playback interception.
 * **Full Interactive Artist Pages:** Immersive 380dp hero portraits, Shuffle/Play/Follow controls, Latest Release spotlight, 4-row Top Songs, and categorized discography shelves with "Show all" sub-sheets.
-* **10-Band EQ + AutoEQ + DJ Blend Crossfade:** Studio-grade biquad equalizer with built-in Harman IEM/headphone target profiles and normalized acoustic-power DJ Blend gapless transitions.
+* **32-Bit Float DSP, AutoEQ & DJ Blend:** 10-band parametric EQ, built-in Harman IEM/headphone target profiles, and normalized acoustic-power DJ Blend gapless transitions.
 * **Node Connect P2P Mesh (Windows ↔ Android):** Zero-config local Wi-Fi 16-bit 48kHz PCM casting, stateful playback handoff, and encrypted mTLS QR pairing between PC and phone.
 
 ---
 
 ### 📱 Live Interface
 
-| Home & Discovery | Word-by-Word Karaoke | Full Artist Page |
+| Home & Discovery | Now Playing & Karaoke | Full Artist Page |
 | :---: | :---: | :---: |
-| <img src="docs/screenshots/01_home_ytmusic.webp" alt="Node Player Home" width="260" /> | <img src="docs/screenshots/03_karaoke_lyrics.webp" alt="Word-by-Word Karaoke Lyrics" width="260" /> | <img src="docs/screenshots/05_artist_page.webp" alt="Interactive Artist Page" width="260" /> |
+| <img src="docs/screenshots/01_home_ytmusic.webp" alt="Node Player Home" width="260" /> | <img src="docs/screenshots/02_now_playing.webp" alt="Now Playing & Karaoke" width="260" /> | <img src="docs/screenshots/05_artist_page.webp" alt="Interactive Artist Page" width="260" /> |
 
-*Additional captures:* [Now Playing](docs/screenshots/02_now_playing.webp) • [Shareable Lyric Card](docs/screenshots/04_lyric_card.webp) • [10-Band Parametric EQ & DSP](docs/screenshots/06_mixtape_and_dsp.webp)
+*Additional captures:* [Word-by-Word Karaoke](docs/screenshots/03_karaoke_lyrics.webp) • [Shareable Lyric Card](docs/screenshots/04_lyric_card.webp) • [10-Band Parametric EQ & DSP](docs/screenshots/06_mixtape_and_dsp.webp)
 
 ---
 

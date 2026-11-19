@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased] (Post-v1.8.0)
+## [2.0.0] - 2026-11-19
 
 ### Added
 - **BitChord-Inspired 2-Tier Music Video Resolution & Smart Alignment (`VideoTrackMatcher.kt`, `InnerTubeClient.kt`, `PlayerViewModel.kt`)**:

@@ -841,7 +841,7 @@ private fun AboutAndScrobblerCard(
             ) {
                 com.nodeplayer.ui.components.NodePlayerLogoMark(size = 32.dp, showSquircleBackground = true)
                 Column {
-                    Text("Node Player v1.8.0+", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
+                    Text("Node Player v2.0.0", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = accent)
                     Text("No network use unless you opt in. Local peer-to-peer audio streaming & sync.", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
                 }
             }

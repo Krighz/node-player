@@ -25,7 +25,7 @@ import kotlin.math.abs
  */
 class LrclibLyricsProvider(
     engine: HttpClientEngine? = null,
-    private val userAgent: String = "NodePlayer/1.8.0 (https://github.com/satyanarayan1999/node-player)"
+    private val userAgent: String = "NodePlayer/2.0.0 (https://github.com/satyanarayan1999/node-player)"
 ) : LyricsProvider {
 
     override val name: String = "lrclib"

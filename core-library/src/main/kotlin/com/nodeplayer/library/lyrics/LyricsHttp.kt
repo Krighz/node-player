@@ -13,7 +13,7 @@ import java.net.URL
  */
 object LyricsHttp {
 
-    private const val DEFAULT_USER_AGENT = "NodePlayer/1.8.0 (Audiophile Music Player; +https://github.com/nodeplayer)"
+    private const val DEFAULT_USER_AGENT = "NodePlayer/2.0.0 (Audiophile Music Player; +https://github.com/nodeplayer)"
 
     suspend fun get(
         urlStr: String,
