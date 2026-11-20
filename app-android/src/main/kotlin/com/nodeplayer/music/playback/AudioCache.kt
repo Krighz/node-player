@@ -158,6 +158,7 @@ object AudioCache {
                         NewPipeFallback.resolveStream(videoId)
                     }
                     cacheResolvedUrl(videoId, npUrl, npHeaders["User-Agent"], npHeaders)
+                    updateCacheRedirectedUri("nodeplayer_yt_$videoId", npUrl)
                     NodeLog.i(TAG, "Successfully refreshed stream for videoId=$videoId via NewPipe (bypassing 1 MiB cap)")
                     npUrl
                 } catch (e: Exception) {
@@ -172,6 +173,7 @@ object AudioCache {
                             .firstOrNull { it.clientName.equals(resolved.clientName, ignoreCase = true) }?.userAgent
                             ?: com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
                         cacheResolvedUrl(videoId, resolved.streamUrl, clientUa)
+                        updateCacheRedirectedUri("nodeplayer_yt_$videoId", resolved.streamUrl)
                         NodeLog.i(TAG, "Successfully refreshed stream URL for videoId=$videoId via ${resolved.clientName}")
                         resolved.streamUrl
                     } else {
@@ -304,6 +306,34 @@ object AudioCache {
     }
 
     /**
+     * Checks if a track given by its cache key or URI is 100% fully cached on disk.
+     */
+    fun isFullyCached(cacheKey: String): Boolean {
+        val cache = simpleCacheInstance ?: return false
+        val metadata = cache.getContentMetadata(cacheKey)
+        val contentLength = androidx.media3.datasource.cache.ContentMetadata.getContentLength(metadata)
+        return contentLength > 0L && cache.isCached(cacheKey, 0L, contentLength)
+    }
+
+    fun isFullyCached(uri: Uri): Boolean = isFullyCached(getEffectiveCacheKey(uri))
+
+    /**
+     * Overwrites or updates the on-disk redirected URI in SimpleCache metadata.
+     * Prevents Media3 CacheDataSource from falling back to stale/expired HTTPS URLs across app restarts.
+     */
+    fun updateCacheRedirectedUri(cacheKey: String, url: String) {
+        val cache = simpleCacheInstance ?: return
+        try {
+            val mutations = androidx.media3.datasource.cache.ContentMetadataMutations()
+            androidx.media3.datasource.cache.ContentMetadataMutations.setRedirectedUri(mutations, Uri.parse(url))
+            cache.applyContentMetadataMutations(cacheKey, mutations)
+            NodeLog.d(TAG, "Updated on-disk redirected URI in cache metadata for $cacheKey")
+        } catch (e: Exception) {
+            NodeLog.w(TAG, "Could not update cache metadata for $cacheKey: ${e.message}")
+        }
+    }
+
+    /**
      * Builds a DataSource.Factory wrapping dynamic DefaultHttpDataSource with CacheDataSource.
      */
     fun createDataSourceFactory(context: Context): DataSource.Factory {
@@ -412,14 +442,20 @@ object AudioCache {
 
             val cacheKey = "nodeplayer_yt_$videoId"
 
-            // 1. Check if we already have a live resolved HTTPS URL in memory
+            // 1. If 100% fully cached on disk, bypass network resolution completely
+            if (isFullyCached(cacheKey)) {
+                NodeLog.i(TAG, "Track is 100% cached on disk ($cacheKey): bypassing network resolution")
+                return@Factory dataSpec.buildUpon().setKey(cacheKey).build()
+            }
+
+            // 2. Check if we already have a live resolved HTTPS URL in memory
             var liveUrl = getCachedResolvedUrl(videoId)
 
-            // 2. If no valid HTTPS URL is known yet, resolve it synchronously (works for both cache misses and cached tracks needing upstream)
+            // 3. If no valid HTTPS URL is known yet, resolve it synchronously (works for both cache misses and cached tracks needing upstream)
             if (liveUrl.isNullOrBlank()) {
                 if (!com.nodeplayer.common.AppModeState.isOnlineMode.value) {
                     if (isVideoIdCached(videoId)) {
-                        NodeLog.d(TAG, "Offline mode: Playing cached track for videoId=$videoId (no refresh)")
+                        NodeLog.d(TAG, "Offline mode: Playing partially cached track for videoId=$videoId (no refresh)")
                         return@Factory dataSpec.buildUpon().setKey(cacheKey).build()
                     } else {
                         NodeLog.w(TAG, "Offline mode active: Cannot resolve online YouTube track for videoId=$videoId")
@@ -456,6 +492,11 @@ object AudioCache {
                     }
                 }
             }
+
+            // 4. Overwrite any stale on-disk redirected URI in SimpleCache
+            // This guarantees that if the track is partially cached (e.g. first minute cached on disk),
+            // CacheDataSource seamlessly transitions to upstream for the remainder with the fresh valid URL
+            updateCacheRedirectedUri(cacheKey, liveUrl)
 
             // Always provide the real HTTPS URL and the stable cacheKey to CacheDataSource
             val resolvedUri = Uri.parse(liveUrl)

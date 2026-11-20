@@ -143,6 +143,8 @@ class RangedUpstreamDataSource(
                         if (!freshUrl.isNullOrBlank()) {
                             NodeLog.i(TAG, "Stream URL refreshed successfully for videoId=$videoId after 403, retrying connection")
                             val newUri = Uri.parse(freshUrl)
+                            val cacheKey = currentSpec.key ?: "nodeplayer_yt_$videoId"
+                            AudioCache.updateCacheRedirectedUri(cacheKey, freshUrl)
                             spec = currentSpec.buildUpon().setUri(newUri).build()
                             return openChild(length)
                         }

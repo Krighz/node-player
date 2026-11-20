@@ -45,13 +45,13 @@ object NewPipeFallback {
     }
 
     suspend fun resolveStream(videoId: String): Pair<String, Map<String, String>> = withContext(Dispatchers.IO) {
-        NodeLog.i(TAG, "Resolving progressive stream via NewPipe for videoId=$videoId")
+        NodeLog.i(TAG, "Resolving stream via NewPipe for videoId=$videoId")
         val extractor = ServiceList.YouTube.getStreamExtractor("https://www.youtube.com/watch?v=$videoId")
         extractor.fetchPage()
         val audioStream = extractor.audioStreams
-            .filter { !it.content.isNullOrBlank() && it.deliveryMethod == DeliveryMethod.PROGRESSIVE_HTTP }
+            .filter { !it.content.isNullOrBlank() }
             .maxByOrNull { it.averageBitrate }
-            ?: error("No progressive audio stream found for $videoId")
+            ?: error("No audio stream found for $videoId")
 
         val headers = mapOf(
             "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",

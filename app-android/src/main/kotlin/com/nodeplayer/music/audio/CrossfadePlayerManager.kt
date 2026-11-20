@@ -137,8 +137,10 @@ class CrossfadePlayerManager(
     }
 
     private fun createPlayer(processor: DspAudioProcessor): ExoPlayer {
+        val supportsFloat = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
         val customAudioSink = DefaultAudioSink.Builder(context)
             .setAudioProcessors(arrayOf(processor))
+            .setEnableFloatOutput(supportsFloat)
             .build()
 
         val renderersFactory = object : DefaultRenderersFactory(context) {
@@ -148,7 +150,7 @@ class CrossfadePlayerManager(
                 enableAudioTrackPlaybackParams: Boolean
             ): AudioSink = customAudioSink
         }.apply {
-            setEnableAudioFloatOutput(true)
+            setEnableAudioFloatOutput(supportsFloat)
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
         }
 
