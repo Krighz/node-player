@@ -376,8 +376,13 @@ fun GlobalSearchSheet(
                                             )
                                         }
                                     }
+                                    val subtitleText = when {
+                                        track.album.isNotBlank() && track.album != "YouTube Music" && track.album != track.artist -> "${track.artist} • ${track.album}"
+                                        track.artist.isNotBlank() -> track.artist
+                                        else -> track.album.ifBlank { "YouTube Music" }
+                                    }
                                     Text(
-                                        text = "${track.artist} • ${track.album}",
+                                        text = subtitleText,
                                         style = MaterialTheme.typography.bodySmall.copy(
                                             color = Color.White.copy(alpha = 0.6f),
                                             fontSize = 12.sp

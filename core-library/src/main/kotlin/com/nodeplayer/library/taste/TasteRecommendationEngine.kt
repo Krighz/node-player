@@ -1,7 +1,13 @@
 package com.nodeplayer.library.taste
 
 import com.nodeplayer.common.logging.NodeLog
+import com.nodeplayer.model.MoodBucket
 import com.nodeplayer.model.Track
+import com.nodeplayer.model.bucketFor
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import java.time.LocalDate
 import java.time.LocalTime
 import kotlin.random.Random
 
@@ -31,16 +37,72 @@ sealed class ContextualMood(val label: String, val subtitle: String) {
 }
 
 /**
+ * Result bundle for a generated taste station indicating whether fallback mode was triggered.
+ */
+data class TasteStation(
+    val tracks: List<Track>,
+    val isFallback: Boolean
+)
+
+/**
+ * Configuration parameters for [TasteRecommendationEngine] per F01.
+ */
+data class TasteConfig(
+    val useHistory: Boolean = true,
+    val historyLimit: Int = 200,
+    val recentExcludeCount: Int = 15,
+    val topArtistCount: Int = 10,
+    val seedArtistCount: Int = 3,
+    val dailyMixTrackCount: Int = 12,
+    val seedRadioTrackCount: Int = 13,
+    val notInterestedVideoIds: Set<String> = emptySet(),
+    val daySeed: Long = 0L
+)
+
+/**
+ * Weighted sampling without replacement per F01.
+ */
+fun <T> weightedSampleWithoutReplacement(
+    items: List<T>,
+    weights: List<Double>,
+    k: Int,
+    random: Random = Random.Default
+): List<T> {
+    require(items.size == weights.size) { "items and weights must have identical sizes" }
+    val pool = items.indices.toMutableList()
+    val picked = ArrayList<T>(minOf(k, items.size))
+    repeat(minOf(k, items.size)) {
+        val total = pool.sumOf { weights[it] }
+        var chosenPos = pool.lastIndex
+        if (total > 0.0) {
+            var r = random.nextDouble() * total
+            for ((pos, i) in pool.withIndex()) {
+                r -= weights[i]
+                if (r <= 0.0) {
+                    chosenPos = pos
+                    break
+                }
+            }
+        }
+        picked += items[pool.removeAt(chosenPos)]
+    }
+    return picked
+}
+
+/**
  * Pure YouTube listening history taste recommendation engine.
  *
  * Implements:
  * - History ingestion exclusively from authentic YouTube history (zero synthetic mock data) per TASTE-01.
- * - History exclusion: excludes the last 15 played tracks (`history.take(15)`) per D-09.
- * - Top 10 artists ranked by play count with weighted probability sampling (rank 1 weight = 10 ... rank 10 = 1).
- * - 3-artist seed selection drawing ~13 tracks from `RDAMVM<videoId>` radio queues.
- * - Dynamic 25-track station blend combining ~12 daily mix tracks + ~13 seed radio tracks per D-12.
- * - Contextual time-of-day moods per D-11.
- * - Graceful fallback to top charts when history is empty or paused per D-10, T-01-08.
+ * - History exclusion: excludes the last 15 played tracks (`entries.take(recentExcludeCount)`) per D-09 / F01.
+ * - Top 10 artists ranked by play count with recency tie-breaking; 3 seed artists selected via weighted sampling.
+ * - Seed radio queues drawn from `RDAMVM<videoId>`.
+ * - Daily mix (~12 tracks) derived from user's history with stable intra-day seed.
+ * - Dynamic 25-track session blend combining ~12 daily mix + ~13 seed radio tracks per D-12 / F01.
+ * - Shuffled on app launch with injected random.
+ * - Contextual time-of-day mood buckets per D-11 / F01.
+ * - Graceful fallback to regional charts when history is empty, paused, or unavailable.
+ * - Strict privacy: zero track titles or video IDs in logs.
  * - Pure Kotlin with zero `android.*` imports.
  */
 class TasteRecommendationEngine(
@@ -51,11 +113,6 @@ class TasteRecommendationEngine(
     /**
      * Resolves the contextual time-of-day mood for the given [hour] (0-23).
      * If [hour] is null, uses the current system time hour.
-     *
-     * - 05:00 - 11:59 -> Morning Energy
-     * - 12:00 - 16:59 -> Deep Focus
-     * - 17:00 - 21:59 -> Evening Chill
-     * - 22:00 - 04:59 -> Late Night Ambient
      */
     fun resolveContextualMood(hour: Int? = null): ContextualMood {
         val currentHour = hour ?: LocalTime.now().hour
@@ -68,205 +125,242 @@ class TasteRecommendationEngine(
     }
 
     /**
-     * Generates a 25-track dynamic station blend derived from authentic YouTube history.
+     * Resolves the active [MoodBucket] for the given [hour] against [buckets].
      */
-    suspend fun generateTasteStation(): Result<List<Track>> = runCatching {
-        val historyResult = historySource.getListeningHistory()
-        val rawHistory = historyResult.getOrNull().orEmpty()
+    fun resolveContextualMoodBucket(
+        hour: Int? = null,
+        buckets: List<MoodBucket> = MoodBucket.DEFAULT_BUCKETS
+    ): MoodBucket? {
+        val currentHour = hour ?: LocalTime.now().hour
+        return bucketFor(currentHour, buckets)
+    }
 
-        // Fallback per D-10 & T-01-08: If history is empty or fails, fallback to top charts
-        if (rawHistory.isEmpty()) {
-            NodeLog.i(TAG, "Listening history is empty or paused; falling back to top charts per D-10")
-            return historySource.getFallbackTopCharts().map { charts ->
-                charts.distinctBy { it.id }.take(STATION_SIZE)
-            }
-        }
+    /**
+     * Generates a 25-track dynamic station blend derived from authentic YouTube history per F01.
+     */
+    suspend fun generateTasteStation(
+        config: TasteConfig = TasteConfig(),
+        daySeed: Long = LocalDate.now().toEpochDay()
+    ): Result<List<Track>> = generateTasteStationDetailed(config, daySeed).map { it.tracks }
 
-        // Exclusion filter per D-09: Exclude the last 15 played tracks
-        val excludedRecent = rawHistory.take(EXCLUSION_LIMIT)
-        val excludedVideoIds = excludedRecent.mapNotNull { it.extractVideoId() }.toSet()
-        val excludedTrackIds = excludedRecent.map { it.id }.toSet()
-
-        val remainingHistory = rawHistory.drop(EXCLUSION_LIMIT)
-        if (remainingHistory.isEmpty()) {
-            NodeLog.i(TAG, "Remaining history after exclusion is empty; falling back to daily mix / charts")
-            val fallbackTracks = historySource.getDailyMixTracks()
-                .recoverCatching { historySource.getFallbackTopCharts().getOrThrow() }
-                .getOrDefault(emptyList())
-
-            return Result.success(
-                fallbackTracks.filterNot { it.id in excludedTrackIds || it.extractVideoId() in excludedVideoIds }
-                    .distinctBy { it.id }
-                    .take(STATION_SIZE)
+    /**
+     * Generates a 25-track dynamic station blend with fallback state details per F01.
+     */
+    suspend fun generateTasteStationDetailed(
+        config: TasteConfig = TasteConfig(),
+        daySeed: Long = LocalDate.now().toEpochDay()
+    ): Result<TasteStation> = runCatching {
+        if (!config.useHistory) {
+            NodeLog.i(TAG, "History recommendation disabled via config; falling back to top charts")
+            val charts = historySource.getFallbackTopCharts().getOrDefault(emptyList())
+            return@runCatching TasteStation(
+                tracks = charts.distinctBy { it.id }.take(STATION_SIZE),
+                isFallback = true
             )
         }
 
-        // Top artist ranking by play count from remaining history
-        val artistFrequencies = mutableMapOf<String, Int>()
-        for (track in remainingHistory) {
-            val artist = track.artist.trim()
-            if (artist.isNotEmpty() && !artist.equals("Unknown Artist", ignoreCase = true) && !artist.equals("YouTube Music", ignoreCase = true)) {
-                artistFrequencies[artist] = (artistFrequencies[artist] ?: 0) + 1
+        val historyResult = historySource.recentHistory(config.historyLimit)
+        val entries: List<HistoryEntry> = when (historyResult) {
+            is HistoryResult.Success -> historyResult.entries
+            is HistoryResult.Paused, is HistoryResult.Empty, is HistoryResult.NotSignedIn -> {
+                NodeLog.i(TAG, "History query status indicates fallback: ${historyResult::class.simpleName}")
+                emptyList()
+            }
+            is HistoryResult.Failure -> {
+                // Fallback check: try legacy getListeningHistory in case source implements it
+                val legacy = historySource.getListeningHistory().getOrNull().orEmpty()
+                legacy.mapNotNull { track ->
+                    val vid = track.extractVideoId() ?: return@mapNotNull null
+                    HistoryEntry(
+                        videoId = vid,
+                        title = track.title,
+                        artistName = track.artist,
+                        durationMs = track.durationMs
+                    )
+                }
             }
         }
 
-        val topArtists = artistFrequencies.entries
-            .sortedByDescending { it.value }
-            .take(TOP_ARTISTS_LIMIT)
-            .map { it.key }
-
-        // Weighted 3-artist random draw
-        val selectedArtists = drawWeightedArtists(topArtists, SEED_ARTISTS_COUNT)
-
-        // Find a seed track for each selected artist from remaining history
-        val seedTracks = selectedArtists.mapNotNull { artist ->
-            remainingHistory.firstOrNull { it.artist.equals(artist, ignoreCase = true) && it.extractVideoId() != null }
-        }
-
-        // Fetch seed radio queues
-        val radioTracks = mutableListOf<Track>()
-        for (seed in seedTracks) {
-            val videoId = seed.extractVideoId() ?: continue
-            val radioResult = historySource.getRadioForTrack(videoId)
-            val queue = radioResult.getOrDefault(emptyList())
-            radioTracks.addAll(queue)
-        }
-
-        // Fetch daily mix tracks
-        val dailyMixResult = historySource.getDailyMixTracks()
-        val dailyMix = dailyMixResult.getOrDefault(emptyList())
-
-        // Blend station queue per D-12: ~12 daily mix + ~13 seed radio tracks, total 25
-        val station = blendStationTracks(
-            dailyMix = dailyMix,
-            radioTracks = radioTracks,
-            excludedTrackIds = excludedTrackIds,
-            excludedVideoIds = excludedVideoIds,
-            targetSize = STATION_SIZE,
-            dailyMixTarget = DAILY_MIX_TARGET
-        )
-
-        // If station has fewer than 25 tracks due to heavy exclusions, top up from fallback charts
-        if (station.size < STATION_SIZE) {
-            val needed = STATION_SIZE - station.size
-            val existingIds = station.map { it.id }.toSet()
-            val existingVideoIds = station.mapNotNull { it.extractVideoId() }.toSet()
+        if (entries.isEmpty()) {
+            NodeLog.i(TAG, "History entries empty; falling back to top charts")
             val charts = historySource.getFallbackTopCharts().getOrDefault(emptyList())
-            val topUps = charts.filterNot {
-                it.id in excludedTrackIds ||
-                    it.extractVideoId() in excludedVideoIds ||
-                    it.id in existingIds ||
-                    it.extractVideoId() in existingVideoIds
-            }.take(needed)
+            return@runCatching TasteStation(
+                tracks = charts.distinctBy { it.id }.take(STATION_SIZE),
+                isFallback = true
+            )
+        }
 
-            (station + topUps).take(STATION_SIZE)
+        // Step 2: Exclude the recent tracks and "Not Interested" tracks
+        val recentExcluded = entries.take(config.recentExcludeCount)
+        val excludedVideoIds = (recentExcluded.map { it.videoId } + config.notInterestedVideoIds).toSet()
+
+        val remainingEntries = entries.drop(config.recentExcludeCount)
+            .filterNot { it.videoId in excludedVideoIds }
+
+        if (remainingEntries.isEmpty()) {
+            NodeLog.i(TAG, "Remaining history after exclusion is empty; falling back to top charts")
+            val charts = historySource.getFallbackTopCharts().getOrDefault(emptyList())
+            return@runCatching TasteStation(
+                tracks = charts.filterNot { it.extractVideoId() in excludedVideoIds }
+                    .distinctBy { it.id }
+                    .take(STATION_SIZE),
+                isFallback = true
+            )
+        }
+
+        // Step 3: Top artists ranked by play count in remaining history (tie-break: most recent play)
+        val artistPlayCounts = mutableMapOf<String, Int>()
+        val artistFirstSeenIndex = mutableMapOf<String, Int>()
+        remainingEntries.forEachIndexed { index, entry ->
+            val artist = entry.artistName.trim()
+            if (artist.isNotEmpty() && !artist.equals("Unknown Artist", ignoreCase = true) && !artist.equals("YouTube Music", ignoreCase = true)) {
+                artistPlayCounts[artist] = (artistPlayCounts[artist] ?: 0) + 1
+                if (artist !in artistFirstSeenIndex) {
+                    artistFirstSeenIndex[artist] = index
+                }
+            }
+        }
+
+        val topArtists = artistPlayCounts.keys
+            .sortedWith(
+                compareByDescending<String> { artistPlayCounts[it] ?: 0 }
+                    .thenBy { artistFirstSeenIndex[it] ?: Int.MAX_VALUE }
+            )
+            .take(config.topArtistCount)
+
+        // Step 4: Sample seed artists with probability proportional to play count
+        val artistWeights = topArtists.map { (artistPlayCounts[it] ?: 1).toDouble() }
+        val seedArtists = weightedSampleWithoutReplacement(topArtists, artistWeights, config.seedArtistCount, random)
+
+        // Step 5: Daily mix tracks from remaining history ranked by play count, picked with per-day seed
+        val effectiveDaySeed = if (config.daySeed != 0L) config.daySeed else daySeed
+        val dayRandom = Random(effectiveDaySeed)
+
+        val remainingTrackCounts = mutableMapOf<String, Int>()
+        val remainingTrackFirstSeen = mutableMapOf<String, Int>()
+        remainingEntries.forEachIndexed { i, t ->
+            remainingTrackCounts[t.videoId] = (remainingTrackCounts[t.videoId] ?: 0) + 1
+            if (t.videoId !in remainingTrackFirstSeen) remainingTrackFirstSeen[t.videoId] = i
+        }
+
+        val rankedUniqueTracks = remainingEntries.distinctBy { it.videoId }
+            .sortedWith(
+                compareByDescending<HistoryEntry> { remainingTrackCounts[it.videoId] ?: 0 }
+                    .thenBy { remainingTrackFirstSeen[it.videoId] ?: Int.MAX_VALUE }
+            )
+
+        val dailyMixPool = rankedUniqueTracks.map { it.toTrack() }
+        val dailyMixTracks = if (dailyMixPool.size <= config.dailyMixTrackCount) {
+            dailyMixPool
         } else {
-            station
+            val weights = rankedUniqueTracks.map { (remainingTrackCounts[it.videoId] ?: 1).toDouble() }
+            weightedSampleWithoutReplacement(dailyMixPool, weights, config.dailyMixTrackCount, dayRandom)
+        }
+
+        val takenVideoIds = (excludedVideoIds + dailyMixTracks.mapNotNull { it.extractVideoId() }).toMutableSet()
+
+        // Step 6: For each seed artist pick its most-played track as seed and fetch radio queues in parallel
+        val radioTracks = mutableListOf<Track>()
+        if (seedArtists.isNotEmpty()) {
+            val basePerSeed = config.seedRadioTrackCount / seedArtists.size
+            val remainder = config.seedRadioTrackCount % seedArtists.size
+            val seedQueues = mutableListOf<List<Track>>()
+
+            data class SeedCandidate(val index: Int, val quota: Int, val seedTrack: HistoryEntry?)
+
+            val seedCandidates = seedArtists.mapIndexed { idx, seedArtist ->
+                val quota = basePerSeed + if (idx == 0) remainder else 0
+                val artistTracks = remainingEntries.filter { it.artistName.equals(seedArtist, ignoreCase = true) }
+
+                val trackPlayCounts = mutableMapOf<String, Int>()
+                val trackFirstSeen = mutableMapOf<String, Int>()
+                artistTracks.forEachIndexed { i, t ->
+                    trackPlayCounts[t.videoId] = (trackPlayCounts[t.videoId] ?: 0) + 1
+                    if (t.videoId !in trackFirstSeen) trackFirstSeen[t.videoId] = i
+                }
+
+                val seedTrack = artistTracks.distinctBy { it.videoId }
+                    .sortedWith(
+                        compareByDescending<HistoryEntry> { trackPlayCounts[it.videoId] ?: 0 }
+                            .thenBy { trackFirstSeen[it.videoId] ?: Int.MAX_VALUE }
+                    )
+                    .firstOrNull()
+
+                SeedCandidate(idx, quota, seedTrack)
+            }
+
+            val fetchedQueues = coroutineScope {
+                seedCandidates.map { candidate ->
+                    async {
+                        val track = candidate.seedTrack
+                        if (track != null) {
+                            historySource.getRadioForTrack(track.videoId).getOrDefault(emptyList())
+                        } else {
+                            emptyList()
+                        }
+                    }
+                }.awaitAll()
+            }
+
+            for ((idx, candidate) in seedCandidates.withIndex()) {
+                val queue = fetchedQueues[idx]
+                if (candidate.seedTrack != null) {
+                    seedQueues.add(queue)
+                    val eligible = queue.filter { track ->
+                        val vid = track.extractVideoId()
+                        vid != null && vid !in takenVideoIds
+                    }
+                    val taken = eligible.take(candidate.quota)
+                    for (t in taken) {
+                        t.extractVideoId()?.let { takenVideoIds.add(it) }
+                        radioTracks.add(t)
+                    }
+                }
+            }
+
+            // Top-up if some seeds had fewer tracks than their quota
+            if (radioTracks.size < config.seedRadioTrackCount) {
+                for (queue in seedQueues) {
+                    val eligible = queue.filter { track ->
+                        val vid = track.extractVideoId()
+                        vid != null && vid !in takenVideoIds
+                    }
+                    for (t in eligible) {
+                        if (radioTracks.size >= config.seedRadioTrackCount) break
+                        t.extractVideoId()?.let { takenVideoIds.add(it) }
+                        radioTracks.add(t)
+                    }
+                }
+            }
+        }
+
+        // Step 7: Blend to 25-track session mix (12 daily mix + 13 radio tracks)
+        val blended = (dailyMixTracks + radioTracks).distinctBy { it.extractVideoId() ?: it.id.toString() }
+
+        // Shuffle on app launch / generation using injected random
+        val sessionMix = blended.shuffled(random).take(STATION_SIZE)
+
+        // Step 8: If blend has tracks, return what exists (never pad with fake data); if zero, use fallback
+        if (sessionMix.isEmpty()) {
+            NodeLog.i(TAG, "Session mix is empty; falling back to top charts")
+            val fallbackTracks = historySource.getFallbackTopCharts().map { charts ->
+                charts.filterNot { it.extractVideoId() in excludedVideoIds }
+                    .distinctBy { it.id }
+                    .take(STATION_SIZE)
+            }.getOrDefault(emptyList())
+            TasteStation(tracks = fallbackTracks, isFallback = true)
+        } else {
+            TasteStation(tracks = sessionMix, isFallback = false)
         }
     }
 
     /**
      * Samples [count] distinct artists using weighted rank probability.
-     * Rank 1 weight = 10, Rank 2 = 9, ..., Rank 10 = 1.
      */
     internal fun drawWeightedArtists(rankedArtists: List<String>, count: Int): List<String> {
         if (rankedArtists.isEmpty()) return emptyList()
-        if (rankedArtists.size <= count) return rankedArtists
-
-        val available = rankedArtists.toMutableList()
-        val chosen = mutableListOf<String>()
-
-        while (chosen.size < count && available.isNotEmpty()) {
-            val weights = available.map { artist ->
-                val originalRankIndex = rankedArtists.indexOf(artist).coerceIn(0, TOP_ARTISTS_LIMIT - 1)
-                (TOP_ARTISTS_LIMIT - originalRankIndex).coerceAtLeast(1)
-            }
-            val totalWeight = weights.sum()
-            var roll = random.nextInt(totalWeight)
-
-            var selectedIndex = 0
-            for (i in weights.indices) {
-                roll -= weights[i]
-                if (roll < 0) {
-                    selectedIndex = i
-                    break
-                }
-            }
-            chosen.add(available.removeAt(selectedIndex))
-        }
-
-        return chosen
-    }
-
-    /**
-     * Blends tracks from daily mix and artist radio queues, filtering out recent exclusions and duplicates.
-     */
-    private fun blendStationTracks(
-        dailyMix: List<Track>,
-        radioTracks: List<Track>,
-        excludedTrackIds: Set<Long>,
-        excludedVideoIds: Set<String>,
-        targetSize: Int,
-        dailyMixTarget: Int
-    ): List<Track> {
-        val seenTrackIds = mutableSetOf<Long>()
-        val seenVideoIds = mutableSetOf<String>()
-
-        fun isEligible(track: Track): Boolean {
-            val videoId = track.extractVideoId()
-            if (track.id in excludedTrackIds || track.id in seenTrackIds) return false
-            if (videoId != null && (videoId in excludedVideoIds || videoId in seenVideoIds)) return false
-            return true
-        }
-
-        fun accept(track: Track) {
-            seenTrackIds.add(track.id)
-            track.extractVideoId()?.let { seenVideoIds.add(it) }
-        }
-
-        val eligibleDailyMix = dailyMix.filter { isEligible(it) }
-        val dailyChosen = mutableListOf<Track>()
-        for (track in eligibleDailyMix) {
-            if (dailyChosen.size >= dailyMixTarget) break
-            if (isEligible(track)) {
-                accept(track)
-                dailyChosen.add(track)
-            }
-        }
-
-        val radioTarget = targetSize - dailyChosen.size
-        val eligibleRadio = radioTracks.filter { isEligible(it) }
-        val radioChosen = mutableListOf<Track>()
-        for (track in eligibleRadio) {
-            if (radioChosen.size >= radioTarget) break
-            if (isEligible(track)) {
-                accept(track)
-                radioChosen.add(track)
-            }
-        }
-
-        // Interleave daily mix and radio tracks for a balanced listening experience
-        val result = mutableListOf<Track>()
-        var dIndex = 0
-        var rIndex = 0
-
-        while (result.size < targetSize && (dIndex < dailyChosen.size || rIndex < radioChosen.size)) {
-            if (dIndex < dailyChosen.size) {
-                result.add(dailyChosen[dIndex++])
-            }
-            if (rIndex < radioChosen.size && result.size < targetSize) {
-                result.add(radioChosen[rIndex++])
-            }
-        }
-
-        return result
-    }
-
-    private fun Track.extractVideoId(): String? {
-        if (path.startsWith("nodeplayer://youtube/")) {
-            return path.removePrefix("nodeplayer://youtube/").takeIf { it.isNotBlank() }
-        }
-        return null
+        val weights = rankedArtists.indices.map { (rankedArtists.size - it).toDouble().coerceAtLeast(1.0) }
+        return weightedSampleWithoutReplacement(rankedArtists, weights, count, random)
     }
 
     companion object {
@@ -277,4 +371,20 @@ class TasteRecommendationEngine(
         const val STATION_SIZE = 25
         const val DAILY_MIX_TARGET = 12
     }
+}
+
+/**
+ * Converts a [HistoryEntry] to a playable [Track].
+ */
+fun HistoryEntry.toTrack(): Track {
+    val numericId = videoId.hashCode().toLong().let { if (it == Long.MIN_VALUE) 0L else kotlin.math.abs(it) }
+    return Track(
+        id = numericId,
+        title = title,
+        artist = artistName,
+        album = "YouTube Music",
+        durationMs = durationMs ?: 180_000L,
+        path = "nodeplayer://youtube/$videoId",
+        formatDescription = "YouTube Audio"
+    )
 }

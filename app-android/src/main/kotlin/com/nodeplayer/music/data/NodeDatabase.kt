@@ -41,6 +41,9 @@ interface PlayerDao {
     @Query("DELETE FROM tracks")
     suspend fun clearTracks()
 
+    @Query("DELETE FROM tracks WHERE id = :id")
+    suspend fun deleteTrackById(id: Long)
+
     @Query("UPDATE tracks SET playCount = playCount + 1 WHERE id = :id")
     suspend fun incrementPlayCount(id: Long)
 
@@ -185,6 +188,56 @@ interface PlayerDao {
 
     @Query("SELECT COUNT(*) FROM scrobble_queue")
     fun getScrobbleQueueCount(): Flow<Int>
+
+    // --- Followed Artists ---
+    @Query("SELECT * FROM followed_artists ORDER BY followedAt DESC")
+    fun getAllFollowedArtists(): Flow<List<FollowedArtistEntity>>
+
+    @Query("SELECT * FROM followed_artists ORDER BY followedAt DESC")
+    suspend fun getAllFollowedArtistsList(): List<FollowedArtistEntity>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM followed_artists WHERE artistBrowseId = :browseId)")
+    fun isArtistFollowed(browseId: String): Flow<Boolean>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun followArtist(artist: FollowedArtistEntity)
+
+    @Query("DELETE FROM followed_artists WHERE artistBrowseId = :browseId")
+    suspend fun unfollowArtist(browseId: String)
+
+    // --- Playback History & Song Stats for Cloud Sync ---
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlaybackHistory(entry: PlaybackHistoryEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPlaybackHistoryList(entries: List<PlaybackHistoryEntity>)
+
+    @Query("SELECT * FROM playback_history ORDER BY playedAt DESC LIMIT :limit")
+    suspend fun getPlaybackHistory(limit: Int = 200): List<PlaybackHistoryEntity>
+
+    @Query("SELECT * FROM playback_history ORDER BY playedAt DESC")
+    fun getAllPlaybackHistory(): Flow<List<PlaybackHistoryEntity>>
+
+    @Query("DELETE FROM playback_history WHERE id NOT IN (SELECT id FROM playback_history ORDER BY playedAt DESC LIMIT :keepCount)")
+    suspend fun trimPlaybackHistory(keepCount: Int = 200)
+
+    @Query("DELETE FROM playback_history")
+    suspend fun clearPlaybackHistory()
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSongStats(stats: SongStatsEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSongStatsList(stats: List<SongStatsEntity>)
+
+    @Query("SELECT * FROM song_stats WHERE songId = :songId")
+    suspend fun getSongStats(songId: String): SongStatsEntity?
+
+    @Query("SELECT * FROM song_stats")
+    suspend fun getAllSongStats(): List<SongStatsEntity>
+
+    @Query("SELECT * FROM song_stats")
+    fun getAllSongStatsFlow(): Flow<List<SongStatsEntity>>
 }
 
 @Database(
@@ -196,9 +249,12 @@ interface PlayerDao {
         SmartPlaylistEntity::class,
         DailyListeningStatEntity::class,
         ScrobbleQueueEntity::class,
-        ScannedFolderEntity::class
+        ScannedFolderEntity::class,
+        FollowedArtistEntity::class,
+        PlaybackHistoryEntity::class,
+        SongStatsEntity::class
     ],
-    version = 7,
+    version = 10,
     exportSchema = false
 )
 abstract class NodeDatabase : RoomDatabase() {
@@ -209,6 +265,52 @@ abstract class NodeDatabase : RoomDatabase() {
             override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                 // Clear stale format metadata so the updated parser re-reads accurate headers
                 db.execSQL("UPDATE tracks SET formatDescription = '', sampleRate = 0, bitDepth = 0, bitrateKbps = 0")
+            }
+        }
+
+        val MIGRATION_7_8 = object : androidx.room.migration.Migration(7, 8) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_isHidden_title ON tracks(isHidden, title)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_tracks_isFavorite ON tracks(isFavorite)")
+            }
+        }
+
+        val MIGRATION_8_9 = object : androidx.room.migration.Migration(8, 9) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `followed_artists` (
+                        `artistBrowseId` TEXT NOT NULL PRIMARY KEY,
+                        `artistName` TEXT NOT NULL,
+                        `avatarUrl` TEXT,
+                        `followedAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+            }
+        }
+
+        val MIGRATION_9_10 = object : androidx.room.migration.Migration(9, 10) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `playback_history` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `songId` TEXT NOT NULL,
+                        `playedAt` INTEGER NOT NULL,
+                        `durationPlayedSeconds` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_playback_history_songId_playedAt` ON `playback_history`(`songId`, `playedAt`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_playback_history_playedAt` ON `playback_history`(`playedAt`)")
+
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `song_stats` (
+                        `songId` TEXT PRIMARY KEY NOT NULL,
+                        `title` TEXT NOT NULL,
+                        `artist` TEXT NOT NULL,
+                        `totalPlayTimeSeconds` INTEGER NOT NULL,
+                        `playCount` INTEGER NOT NULL,
+                        `lastPlayedAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
             }
         }
     }

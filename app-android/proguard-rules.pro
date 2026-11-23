@@ -55,3 +55,12 @@
 -keepclassmembers class * {
     @android.webkit.JavascriptInterface <methods>;
 }
+
+# Mozilla Rhino / NewPipeExtractor JavaScript Engine
+-dontwarn java.beans.**
+-dontwarn javax.lang.model.**
+-dontwarn javax.script.**
+-dontwarn org.mozilla.javascript.**
+-keep class org.mozilla.javascript.** { *; }
+-keep class org.schabi.newpipe.extractor.** { *; }
+

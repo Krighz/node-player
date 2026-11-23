@@ -9,12 +9,13 @@ class LibraryViewTest {
     @Test
     fun testLibrarySubDestinationValues() {
         val destinations = LibrarySubDestination.values()
-        assertEquals(5, destinations.size)
+        assertEquals(6, destinations.size)
         assertTrue(destinations.contains(LibrarySubDestination.NONE))
         assertTrue(destinations.contains(LibrarySubDestination.PLAYLISTS))
         assertTrue(destinations.contains(LibrarySubDestination.ARTISTS))
         assertTrue(destinations.contains(LibrarySubDestination.ALBUMS))
         assertTrue(destinations.contains(LibrarySubDestination.SONGS))
+        assertTrue(destinations.contains(LibrarySubDestination.DOWNLOADS))
     }
 
     @Test

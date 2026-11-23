@@ -2,8 +2,15 @@ package com.nodeplayer.music.ui.player
 
 import android.content.res.Configuration
 import android.view.HapticFeedbackConstants
-import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,44 +31,46 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import kotlinx.coroutines.launch
-import com.nodeplayer.library.LrcParser
-import com.nodeplayer.model.AudioOutputInfo
-import com.nodeplayer.model.Lyrics
-import com.nodeplayer.model.Track
-import com.nodeplayer.model.GlassThemeConfig
-import com.nodeplayer.music.lyrics.LyricsManager
-import com.nodeplayer.music.ui.components.LiquidGlassBackground
-import com.nodeplayer.music.ui.components.glassLensBubble
-import com.nodeplayer.ui.components.LiquidGlassIconButton
-import com.nodeplayer.ui.components.LiquidGlassSlider
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.highlight.Highlight
 import com.kyant.backdrop.shadow.Shadow
+import com.nodeplayer.model.AudioOutputInfo
+import com.nodeplayer.model.GlassThemeConfig
+import com.nodeplayer.model.Lyrics
+import com.nodeplayer.model.Track
+import com.nodeplayer.music.lyrics.LyricsManager
+import com.nodeplayer.music.ui.components.LiquidGlassBackground
 import com.nodeplayer.music.ui.components.SoundWaveVisualizer
-import com.nodeplayer.music.ui.theme.GlassTokens
 import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.LocalGlassThemeConfig
-import com.nodeplayer.music.ui.theme.glassSurface
+import com.nodeplayer.music.ui.theme.MotionTokens
 import com.nodeplayer.music.ui.theme.pressScale
-import java.io.File
+import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
+import com.nodeplayer.ui.components.LiquidGlassSlider
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,6 +99,7 @@ fun NowPlayingSheet(
     onOpenSignalPath: () -> Unit = {},
     themeConfig: GlassThemeConfig? = null,
     onAddToPlaylistClick: ((Track) -> Unit)? = null,
+    onDownloadTrack: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val accent = LocalAccentColor.current
@@ -110,16 +120,7 @@ fun NowPlayingSheet(
     var showTopMenu by remember { mutableStateOf(false) }
     var isRepeatOne by remember { mutableStateOf(false) }
 
-    val liveDuration = remember(track.id, track.durationMs) {
-        val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
-        if (srvDur > 1000L) srvDur else if (track.durationMs > 1000L) track.durationMs else 0L
-    }
-    val effectiveDuration = if (liveDuration > 1000L) {
-        liveDuration
-    } else {
-        val srvDur = com.nodeplayer.music.service.PlaybackService.instance?.player?.duration ?: 0L
-        if (srvDur > 1000L) srvDur else if (track.durationMs > 1000L) track.durationMs else 1L
-    }
+    val effectiveDuration = if (track.durationMs > 1000L) track.durationMs else 1L
     val currentMs = if (isSeeking) sliderPosition.toLong() else currentPositionMs
     val totalMs = effectiveDuration.coerceAtLeast(1L)
     val progress = if (totalMs > 1000L) {
@@ -128,44 +129,89 @@ fun NowPlayingSheet(
         0f
     }
 
-    // Load lyrics via LyricsManager (local-first, disk cache, LRCLIB fallback)
+    val lyricsSettings by com.nodeplayer.music.data.LyricsSettingsRepository.getSettingsFlow(context)
+        .collectAsState(initial = com.nodeplayer.model.LyricsSettings())
+
     var lyrics by remember(track.id) { mutableStateOf<Lyrics?>(null) }
     var isLyricsLoading by remember(track.id) { mutableStateOf(false) }
-    var lyricsRefreshTrigger by remember { mutableStateOf(0) }
+    var lyricsRefreshTrigger by remember { mutableIntStateOf(0) }
 
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(track.id, lyricsRefreshTrigger) {
+    LaunchedEffect(track.id, lyricsRefreshTrigger, lyricsSettings.preferredProvider) {
         isLyricsLoading = true
         lyrics = LyricsManager.getLyrics(
             context = context,
             track = track,
-            forceRefresh = lyricsRefreshTrigger > 0
+            forceRefresh = lyricsRefreshTrigger > 0,
+            provider = lyricsSettings.preferredProvider
         )
         isLyricsLoading = false
     }
 
     val activeThemeConfig = themeConfig ?: LocalGlassThemeConfig.current
 
+    val sheetOffsetY = remember { androidx.compose.animation.core.Animatable(0f) }
+    val density = LocalDensity.current
+    val maxDismissDistancePx = with(density) { 380.dp.toPx() }
+
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                // Dragging down while sheet is already pulled
+                if (available.y > 0f && sheetOffsetY.value > 0f) {
+                    coroutineScope.launch {
+                        sheetOffsetY.snapTo((sheetOffsetY.value + available.y).coerceAtLeast(0f))
+                    }
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (available.y > 0f) {
+                    coroutineScope.launch {
+                        sheetOffsetY.snapTo((sheetOffsetY.value + available.y).coerceAtLeast(0f))
+                    }
+                    return Offset(0f, available.y)
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (sheetOffsetY.value > maxDismissDistancePx * 0.40f || available.y > 1200f) {
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+                    sheetOffsetY.animateTo(maxDismissDistancePx * 1.5f, MotionTokens.Smooth)
+                    onDismiss()
+                    return available
+                } else if (sheetOffsetY.value > 0f) {
+                    sheetOffsetY.animateTo(0f, MotionTokens.Smooth)
+                    return available
+                }
+                return Velocity.Zero
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(Unit) {
-                // Vertical drag down to close gesture
-                detectDragGestures { change, dragAmount ->
-                    if (dragAmount.y > 35f && abs(dragAmount.y) > abs(dragAmount.x) * 1.5f) {
-                        change.consume()
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        onDismiss()
-                    }
-                }
+            .nestedScroll(nestedScrollConnection)
+            .graphicsLayer {
+                val progress = (sheetOffsetY.value / maxDismissDistancePx).coerceIn(0f, 1f)
+                translationY = sheetOffsetY.value
+                scaleX = 1f - (progress * 0.08f)
+                scaleY = 1f - (progress * 0.08f)
+                val cornerRadius = (progress * 32f).dp
+                clip = cornerRadius > 0.dp
+                shape = ContinuousRoundedRectangle(cornerRadius)
             }
     ) {
-        // 1. Fluid Background (samples into sheetHazeState for crystal lens glass refraction)
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-        ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             LiquidGlassBackground(
                 accentColor = accent,
                 isPlaying = isPlaying,
@@ -176,7 +222,6 @@ fun NowPlayingSheet(
             )
         }
 
-        // 2. Translucent Ambient Scrim (lets fluid caustics breathe through)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -191,9 +236,7 @@ fun NowPlayingSheet(
                 )
         )
 
-        // 3. Player Layout (Adaptive Portrait vs Landscape)
         if (isLandscape) {
-            // LANDSCAPE / TABLET LAYOUT: 2-Column Side-by-Side
             Row(
                 modifier = Modifier
                     .fillMaxSize()
@@ -202,7 +245,6 @@ fun NowPlayingSheet(
                     .padding(24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left Column: Hero Artwork
                 Box(
                     modifier = Modifier
                         .weight(1f)
@@ -224,14 +266,12 @@ fun NowPlayingSheet(
 
                 Spacer(modifier = Modifier.width(32.dp))
 
-                // Right Column: Info, Seekbar, Controls
                 Column(
                     modifier = Modifier
                         .weight(1.2f)
                         .fillMaxHeight(),
                     verticalArrangement = Arrangement.Center
                 ) {
-                    // Header bar
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -244,7 +284,6 @@ fun NowPlayingSheet(
                             Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(32.dp))
                         }
 
-                        // Signal Path Badge
                         SignalPathBadge(audioOutputInfo = audioOutputInfo, track = track, accent = accent)
 
                         IconButton(onClick = {
@@ -288,19 +327,16 @@ fun NowPlayingSheet(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Seekbar
                     PlayerSeekBar(
                         currentMs = currentMs,
                         totalMs = totalMs,
                         progress = progress,
-                        accent = accent,
                         onSeek = { isSeeking = true; sliderPosition = it * totalMs },
                         onSeekFinished = { isSeeking = false; onSeekTo(sliderPosition.toLong()) }
                     )
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Playback Controls
                     PlayerControlButtons(
                         isPlaying = isPlaying,
                         accent = accent,
@@ -315,7 +351,6 @@ fun NowPlayingSheet(
 
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Secondary Tools Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -343,7 +378,6 @@ fun NowPlayingSheet(
                 }
             }
         } else {
-            // PORTRAIT LAYOUT: Clean Vertical Hierarchy
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -354,7 +388,6 @@ fun NowPlayingSheet(
             ) {
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Top Header Row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -381,7 +414,7 @@ fun NowPlayingSheet(
                                     .padding(horizontal = 8.dp, vertical = 4.dp)
                             ) {
                                 Text(
-                                    text = "⏱ ${sleepTimerRemainingSec / 60}m",
+                                    text = "${sleepTimerRemainingSec / 60}m",
                                     style = MaterialTheme.typography.labelSmall.copy(
                                         color = accent,
                                         fontWeight = FontWeight.Bold,
@@ -425,11 +458,7 @@ fun NowPlayingSheet(
                                 DropdownMenuItem(
                                     text = { Text("Add to Playlist", color = Color.White) },
                                     leadingIcon = {
-                                        Icon(
-                                            Icons.Rounded.PlaylistAdd,
-                                            contentDescription = null,
-                                            tint = accent
-                                        )
+                                        Icon(Icons.Rounded.PlaylistAdd, contentDescription = null, tint = accent)
                                     },
                                     onClick = {
                                         showTopMenu = false
@@ -439,11 +468,7 @@ fun NowPlayingSheet(
                                 DropdownMenuItem(
                                     text = { Text("Queue (${queue.size})", color = Color.White) },
                                     leadingIcon = {
-                                        Icon(
-                                            Icons.Rounded.QueueMusic,
-                                            contentDescription = null,
-                                            tint = accent
-                                        )
+                                        Icon(Icons.Rounded.QueueMusic, contentDescription = null, tint = accent)
                                     },
                                     onClick = {
                                         showTopMenu = false
@@ -488,11 +513,7 @@ fun NowPlayingSheet(
                                 DropdownMenuItem(
                                     text = { Text("Equalizer & DSP", color = Color.White) },
                                     leadingIcon = {
-                                        Icon(
-                                            Icons.Rounded.Tune,
-                                            contentDescription = null,
-                                            tint = accent
-                                        )
+                                        Icon(Icons.Rounded.Tune, contentDescription = null, tint = accent)
                                     },
                                     onClick = {
                                         showTopMenu = false
@@ -502,17 +523,25 @@ fun NowPlayingSheet(
                                 DropdownMenuItem(
                                     text = { Text("Audio Signal Path", color = Color.White) },
                                     leadingIcon = {
-                                        Icon(
-                                            Icons.Rounded.Info,
-                                            contentDescription = null,
-                                            tint = Color.White.copy(alpha = 0.8f)
-                                        )
+                                        Icon(Icons.Rounded.Info, contentDescription = null, tint = Color.White.copy(alpha = 0.8f))
                                     },
                                     onClick = {
                                         showTopMenu = false
                                         showTrackDetailsSheet = true
                                     }
                                 )
+                                if (onDownloadTrack != null && !track.isDownloaded) {
+                                    DropdownMenuItem(
+                                        text = { Text("Download Song", color = Color.White) },
+                                        leadingIcon = {
+                                            Icon(Icons.Rounded.Download, contentDescription = null, tint = accent)
+                                        },
+                                        onClick = {
+                                            showTopMenu = false
+                                            onDownloadTrack.invoke(track)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -520,7 +549,6 @@ fun NowPlayingSheet(
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Hero Center Stage (Artwork, Spectrogram or Synced Lyrics)
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -538,55 +566,31 @@ fun NowPlayingSheet(
                                 .clickable { showSpectrogram = false }
                         )
                     } else {
-                        Crossfade(targetState = showLyrics, label = "HeroCrossfade") { isLyrics ->
-                            if (isLyrics) {
-                                com.nodeplayer.ui.lyrics.FullScreenLyricsView(
-                                    track = track,
-                                    lyrics = lyrics,
-                                    isPlaying = isPlaying,
-                                    currentPositionMs = currentMs,
-                                    positionProvider = { currentMs },
-                                    durationMs = track.durationMs,
-                                    isLoading = isLyricsLoading,
-                                    isOnlineMode = true,
-                                    onPlayPause = onPlayPauseClick,
-                                    onNext = onSkipNextClick,
-                                    onPrevious = onSkipPreviousClick,
-                                    onSeekTo = onSeekTo,
-                                    onClose = { showLyrics = false },
-                                    onSearchAgain = { lyricsRefreshTrigger++ },
-                                    onOpenOffsetControls = { showLyricsOffsetDialog = true },
-                                    onKeepScreenOn = { keep ->
-                                        (context as? android.app.Activity)?.let { act ->
-                                            if (keep) {
-                                                act.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                                            } else {
-                                                act.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                HeroArtwork(
-                                    track = track,
-                                    accent = accent,
-                                    view = view,
-                                    onSkipNext = onSkipNextClick,
-                                    onSkipPrevious = onSkipPreviousClick,
-                                    onLongPress = { showTrackDetailsSheet = true },
-                                    modifier = Modifier
-                                        .fillMaxWidth(0.88f)
-                                        .aspectRatio(1f)
-                                )
-                            }
-                        }
+                        val isMusicVideo = track.mimeType.contains("video", ignoreCase = true) ||
+                            track.formatDescription.contains("video", ignoreCase = true) ||
+                            track.genre?.contains("video", ignoreCase = true) == true ||
+                            track.path.contains("video", ignoreCase = true)
+                        val heroAspect by animateFloatAsState(
+                            targetValue = if (isMusicVideo) 16f / 9f else 1f,
+                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                            label = "HeroAspectMorph"
+                        )
+                        HeroArtwork(
+                            track = track,
+                            accent = accent,
+                            view = view,
+                            onSkipNext = onSkipNextClick,
+                            onSkipPrevious = onSkipPreviousClick,
+                            onLongPress = { showTrackDetailsSheet = true },
+                            modifier = Modifier
+                                .fillMaxWidth(0.92f)
+                                .aspectRatio(heroAspect)
+                        )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // 2. Track Title & Artist (High contrast, clean hierarchy)
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -615,7 +619,6 @@ fun NowPlayingSheet(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // 3. One Quality Line (Source format + Bit-perfect / Resampled sink)
                     if (LocalGlassThemeConfig.current.formatBadgeVisible) {
                         val qualitySinkLine = remember(track, audioOutputInfo) {
                             val srcFormat = if (track.formatBadgeText.isNotBlank()) track.formatBadgeText else "${track.sampleRate} Hz"
@@ -661,19 +664,16 @@ fun NowPlayingSheet(
 
                 Spacer(modifier = Modifier.height(18.dp))
 
-                // 4. Seekbar with elapsed & remaining times
                 PlayerSeekBar(
                     currentMs = currentMs,
                     totalMs = totalMs,
                     progress = progress,
-                    accent = accent,
                     onSeek = { isSeeking = true; sliderPosition = it * totalMs },
                     onSeekFinished = { isSeeking = false; onSeekTo(sliderPosition.toLong()) }
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 5. Primary Transport Controls
                 PlayerControlButtons(
                     isPlaying = isPlaying,
                     accent = accent,
@@ -688,7 +688,6 @@ fun NowPlayingSheet(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 6. Secondary Tools Row: Shuffle, Repeat, Queue, Lyrics, Sleep Timer, EQ (all >= 48dp)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -696,7 +695,6 @@ fun NowPlayingSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Shuffle
                     IconButton(
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -712,7 +710,6 @@ fun NowPlayingSheet(
                         )
                     }
 
-                    // Repeat
                     IconButton(
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -728,7 +725,6 @@ fun NowPlayingSheet(
                         )
                     }
 
-                    // Queue Bottom Sheet Trigger
                     Box(contentAlignment = Alignment.TopEnd) {
                         IconButton(
                             onClick = {
@@ -764,7 +760,6 @@ fun NowPlayingSheet(
                         }
                     }
 
-                    // Lyrics
                     IconButton(
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -781,7 +776,6 @@ fun NowPlayingSheet(
                         )
                     }
 
-                    // Sleep Timer
                     Box(contentAlignment = Alignment.TopEnd) {
                         IconButton(
                             onClick = {
@@ -807,7 +801,6 @@ fun NowPlayingSheet(
                         }
                     }
 
-                    // EQ
                     IconButton(
                         onClick = {
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -829,26 +822,23 @@ fun NowPlayingSheet(
         }
     }
 
-    // Lyrics Offset Dialog
     if (showLyricsOffsetDialog) {
-        val currentTrackOffset = remember(track.id) {
-            mutableStateOf(0L)
-        }
+        val currentTrackOffset = remember(track.id) { mutableLongStateOf(0L) }
         LaunchedEffect(track.id) {
-            currentTrackOffset.value = LyricsManager.getTrackOffset(context, track.id)
+            currentTrackOffset.longValue = LyricsManager.getTrackOffset(context, track.id)
         }
 
         com.nodeplayer.ui.lyrics.LyricsOffsetDialog(
-            currentOffsetMs = currentTrackOffset.value,
+            currentOffsetMs = currentTrackOffset.longValue,
             onOffsetChanged = { newOffset ->
-                currentTrackOffset.value = newOffset
+                currentTrackOffset.longValue = newOffset
                 coroutineScope.launch {
                     LyricsManager.setTrackOffset(context, track.id, newOffset)
                     lyricsRefreshTrigger++
                 }
             },
             onReset = {
-                currentTrackOffset.value = 0L
+                currentTrackOffset.longValue = 0L
                 coroutineScope.launch {
                     LyricsManager.setTrackOffset(context, track.id, 0L)
                     lyricsRefreshTrigger++
@@ -858,7 +848,6 @@ fun NowPlayingSheet(
         )
     }
 
-    // Queue Modal Bottom Sheet
     if (showQueueSheet) {
         ModalBottomSheet(
             onDismissRequest = { showQueueSheet = false },
@@ -1026,9 +1015,73 @@ fun NowPlayingSheet(
                 }
             }
         }
+
+        if (showLyrics) {
+            com.nodeplayer.ui.lyrics.FullScreenLyricsView(
+                track = track,
+                lyrics = lyrics,
+                lyricsSettings = lyricsSettings,
+                onUpdateLyricsSettings = { updated ->
+                    com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { updated }
+                },
+                isPlaying = isPlaying,
+                currentPositionMs = currentMs,
+                positionProvider = { currentMs },
+                durationMs = track.durationMs,
+                isLoading = isLyricsLoading,
+                palette = com.nodeplayer.ui.theme.PaletteExtractor.getCachedPalette(track),
+                isOnlineMode = true,
+                isShuffle = isShuffle,
+                onToggleShuffle = onToggleShuffle,
+                repeatMode = if (isRepeatOne) 2 else 0,
+                onToggleRepeat = { isRepeatOne = !isRepeatOne },
+                onPlayPause = onPlayPauseClick,
+                onNext = onSkipNextClick,
+                onPrevious = onSkipPreviousClick,
+                onSeekTo = onSeekTo,
+                onClose = { showLyrics = false },
+                onSearchAgain = { lyricsRefreshTrigger++ },
+                onOpenOffsetControls = { showLyricsOffsetDialog = true },
+                onShareCard = { lines, cardTrack, cardPalette ->
+                    val t = cardTrack ?: track
+                    coroutineScope.launch {
+                        val art = t?.let { com.nodeplayer.ui.components.PlatformArtworkProvider.loadArtwork(it)?.asAndroidBitmap() }
+                        com.nodeplayer.music.lyrics.LyricCardRenderer.shareCard(
+                            context = context,
+                            track = t,
+                            lines = lines,
+                            palette = cardPalette,
+                            artwork = art
+                        )
+                    }
+                },
+                onSaveCard = { lines, cardTrack, cardPalette ->
+                    val t = cardTrack ?: track
+                    coroutineScope.launch {
+                        val art = t?.let { com.nodeplayer.ui.components.PlatformArtworkProvider.loadArtwork(it)?.asAndroidBitmap() }
+                        com.nodeplayer.music.lyrics.LyricCardRenderer.saveCardToGallery(
+                            context = context,
+                            track = t,
+                            lines = lines,
+                            palette = cardPalette,
+                            artwork = art
+                        )
+                    }
+                },
+                onKeepScreenOn = { keep ->
+                    (context as? android.app.Activity)?.let { act ->
+                        if (keep) {
+                            act.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        } else {
+                            act.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     }
 
-    // Sleep Timer Dialog
     if (showSleepTimerDialog) {
         AlertDialog(
             onDismissRequest = { showSleepTimerDialog = false },
@@ -1088,7 +1141,6 @@ fun NowPlayingSheet(
         )
     }
 
-    // Quick Action Dialog (Triggered on Long Press)
     if (showQuickActionDialog) {
         AlertDialog(
             onDismissRequest = { showQuickActionDialog = false },
@@ -1137,60 +1189,152 @@ private fun HeroArtwork(
     modifier: Modifier = Modifier
 ) {
     val squircleShape = remember { ContinuousRoundedRectangle(24.dp) }
-    Box(
+    val themeConfig = LocalGlassThemeConfig.current
+    var dragOffsetX by remember(track.id) { mutableFloatStateOf(0f) }
+    val animatedOffsetX by animateFloatAsState(
+        targetValue = dragOffsetX,
+        animationSpec = MotionTokens.resolveSpringSpec(themeConfig, MotionTokens.Snappy),
+        label = "ArtworkDragOffset"
+    )
+
+    AnimatedContent(
+        targetState = track,
+        transitionSpec = {
+            (slideInHorizontally(initialOffsetX = { it / 6 }) + fadeIn()) togetherWith
+                (slideOutHorizontally(targetOffsetX = { -it / 6 }) + fadeOut())
+        },
+        label = "HeroTrackCrossfade",
         modifier = modifier
-            .clip(squircleShape)
-            .background(Color(0xFF10131E).copy(alpha = 0.65f))
-            .border(
-                width = 1.dp,
-                brush = Brush.verticalGradient(
-                    listOf(
-                        Color.White.copy(alpha = 0.25f),
-                        Color.White.copy(alpha = 0.06f)
-                    )
-                ),
-                shape = squircleShape
-            )
-            .pointerInput(track.id) {
-                // Horizontal swipe to skip track + Long press for quick actions
-                detectTapGestures(
-                    onLongPress = {
-                        view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        onLongPress()
-                    }
-                )
-            }
-            .pointerInput(track.id) {
-                detectHorizontalDragGestures { change, dragAmount ->
-                    if (abs(dragAmount) > 28f) {
-                        change.consume()
-                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                        if (dragAmount < 0) {
-                            onSkipNext()
-                        } else {
-                            onSkipPrevious()
-                        }
-                    }
-                }
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        // Fallback Obsidian placeholder for track with no artwork
-        Icon(
-            imageVector = Icons.Rounded.MusicNote,
-            contentDescription = null,
-            tint = accent.copy(alpha = 0.40f),
-            modifier = Modifier.size(96.dp)
-        )
-        // High-resolution artwork
-        AsyncImage(
-            model = track,
-            contentDescription = track.album,
-            contentScale = ContentScale.Crop,
+    ) { activeTrack ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer {
+                    translationX = animatedOffsetX
+                    rotationZ = (animatedOffsetX / 28f).coerceIn(-6f, 6f)
+                }
                 .clip(squircleShape)
-        )
+                .background(Color(0xFF10131E).copy(alpha = 0.65f))
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.25f),
+                            Color.White.copy(alpha = 0.06f)
+                        )
+                    ),
+                    shape = squircleShape
+                )
+                .pointerInput(activeTrack.id) {
+                    detectTapGestures(
+                        onLongPress = {
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            onLongPress()
+                        }
+                    )
+                }
+                .pointerInput(activeTrack.id) {
+                    detectHorizontalDragGestures(
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            dragOffsetX = (dragOffsetX + dragAmount).coerceIn(-160f, 160f)
+                        },
+                        onDragEnd = {
+                            if (dragOffsetX < -65f) {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                onSkipNext()
+                            } else if (dragOffsetX > 65f) {
+                                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                onSkipPrevious()
+                            }
+                            dragOffsetX = 0f
+                        },
+                        onDragCancel = {
+                            dragOffsetX = 0f
+                        }
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Rounded.MusicNote,
+                contentDescription = null,
+                tint = accent.copy(alpha = 0.40f),
+                modifier = Modifier.size(96.dp)
+            )
+            AsyncImage(
+                model = activeTrack,
+                contentDescription = activeTrack.album,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(squircleShape)
+            )
+
+            val isMusicVideo = activeTrack.mimeType.contains("video", ignoreCase = true) ||
+                activeTrack.formatDescription.contains("video", ignoreCase = true) ||
+                activeTrack.genre?.contains("video", ignoreCase = true) == true ||
+                activeTrack.path.contains("video", ignoreCase = true)
+
+            if (isMusicVideo) {
+                val livePlayer = com.nodeplayer.music.service.PlaybackService.instance?.player
+                if (livePlayer != null) {
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = { ctx ->
+                            androidx.media3.ui.PlayerView(ctx).apply {
+                                player = livePlayer
+                                useController = false
+                                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(squircleShape)
+                    )
+                }
+            }
+
+            // Quality Badge and Fullscreen Expand Overlay (Only shown for music videos)
+            if (isMusicVideo) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "480p",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.Black.copy(alpha = 0.55f))
+                            .clickable { },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Fullscreen,
+                            contentDescription = "Fullscreen",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1223,20 +1367,14 @@ private fun PlayerSeekBar(
     currentMs: Long,
     totalMs: Long,
     progress: Float,
-    accent: Color,
     onSeek: (Float) -> Unit,
     onSeekFinished: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
-        androidx.compose.material3.Slider(
+        LiquidGlassSlider(
             value = progress,
             onValueChange = onSeek,
             onValueChangeFinished = onSeekFinished,
-            colors = androidx.compose.material3.SliderDefaults.colors(
-                thumbColor = Color.White,
-                activeTrackColor = accent,
-                inactiveTrackColor = Color.White.copy(alpha = 0.20f)
-            ),
             modifier = Modifier.fillMaxWidth()
         )
         Row(
@@ -1245,11 +1383,21 @@ private fun PlayerSeekBar(
         ) {
             Text(
                 text = formatTime(currentMs),
-                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.70f), fontSize = 12.sp)
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = Color.White.copy(alpha = 0.70f),
+                    fontSize = 12.sp,
+                    fontFeatureSettings = "tnum",
+                    fontWeight = FontWeight.SemiBold
+                )
             )
             Text(
                 text = formatTime(totalMs),
-                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.70f), fontSize = 12.sp)
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = Color.White.copy(alpha = 0.70f),
+                    fontSize = 12.sp,
+                    fontFeatureSettings = "tnum",
+                    fontWeight = FontWeight.SemiBold
+                )
             )
         }
     }
@@ -1270,15 +1418,12 @@ private fun PlayerControlButtons(
     val cfg = themeConfig ?: LocalGlassThemeConfig.current
     val lensStrength = cfg.lensRefractionStrength
     val rimSpecular = cfg.lensRimSpecular
-    val grainStrength = cfg.grainStrengthValue()
-    val chromaticFringe = cfg.chromaticFringeValue()
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Visualizer indicator
         Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
             SoundWaveVisualizer(
                 isPlaying = isPlaying,
@@ -1289,7 +1434,6 @@ private fun PlayerControlButtons(
             )
         }
 
-        // Previous
         IconButton(
             onClick = {
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -1300,7 +1444,6 @@ private fun PlayerControlButtons(
             Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", tint = Color.White, modifier = Modifier.size(38.dp))
         }
 
-        // Hero Play / Pause Liquid-Glass Lens Bubble
         val density = LocalDensity.current
         Box(
             modifier = Modifier
@@ -1358,7 +1501,6 @@ private fun PlayerControlButtons(
             )
         }
 
-        // Next
         IconButton(
             onClick = {
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
@@ -1369,56 +1511,7 @@ private fun PlayerControlButtons(
             Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Color.White, modifier = Modifier.size(38.dp))
         }
 
-        // Symmetry spacer
         Spacer(modifier = Modifier.size(48.dp))
-    }
-}
-
-@Composable
-private fun SyncedLyricsGlassView(
-    lyrics: Lyrics?,
-    currentPositionMs: Long,
-    accentColor: Color,
-    onSeekTo: (Long) -> Unit
-) {
-    if (lyrics == null || lyrics.lines.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("No lyrics available", color = Color.White.copy(alpha = 0.50f))
-        }
-        return
-    }
-
-    val listState = rememberLazyListState()
-    val activeIndex = lyrics.lines.indexOfLast { it.timestampMs <= currentPositionMs }.coerceAtLeast(0)
-
-    LaunchedEffect(activeIndex) {
-        listState.animateScrollToItem((activeIndex - 2).coerceAtLeast(0))
-    }
-
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 40.dp)
-    ) {
-        itemsIndexed(lyrics.lines) { index, line ->
-            val isActive = index == activeIndex
-            Text(
-                text = line.text,
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                    fontSize = if (isActive) 20.sp else 16.sp,
-                    color = if (isActive) accentColor else Color.White.copy(alpha = 0.40f)
-                ),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-                    .clickable { onSeekTo(line.timestampMs) }
-            )
-        }
     }
 }
 

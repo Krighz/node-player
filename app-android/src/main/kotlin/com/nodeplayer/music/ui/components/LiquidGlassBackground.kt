@@ -1,8 +1,5 @@
 package com.nodeplayer.music.ui.components
 
-import android.graphics.Bitmap
-import android.graphics.BitmapShader
-import android.graphics.Shader
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +11,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.unit.dp
@@ -22,10 +18,9 @@ import com.nodeplayer.model.GlassThemeConfig
 import com.nodeplayer.ui.components.shouldAnimateLiquidGlassBackground
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlin.random.Random
 
 private val LIGHT_BASE_COLORS = listOf(Color(0xFFFFFFFF), Color(0xFFF4F5FB), Color(0xFFE8EAF6))
-private val DARK_BASE_COLORS = listOf(Color(0xFF090A10), Color(0xFF0C0D14), Color(0xFF06070B))
+private val DARK_BASE_COLORS = listOf(Color(0xFF202020), Color(0xFF262626), Color(0xFF1C1C1C))
 
 @Composable
 private fun rememberAnimatedBackgroundMotion(baseDurationMs: Int): Pair<State<Float>, State<Float>> {
@@ -51,18 +46,6 @@ private fun rememberAnimatedBackgroundMotion(baseDurationMs: Int): Pair<State<Fl
     return animProgress to pulse
 }
 
-/**
- * High-end Liquid Glass Background supporting 6 animation styles:
- * 1. Liquid blobs (organic chrome & obsidian contours with chromatic caustics)
- * 2. Aurora (sweeping wave curtains)
- * 3. Mesh gradient (interpolated 4-quadrant ambient patches)
- * 4. Album-art blur (dynamic dominant color bleed)
- * 5. Slow caustics (liquid optical light refraction filaments)
- * 6. Static (frozen gradient glass, zero CPU/GPU overhead)
- *
- * Fully supports speed, intensity, color source, play-state gating,
- * frame-rate caps, adaptive quality, and anti-banding dithering.
- */
 @Composable
 fun LiquidGlassBackground(
     accentColor: Color = Color(0xFF6366F1),
@@ -105,10 +88,6 @@ fun LiquidGlassBackground(
                 mutableFloatStateOf(1.0f)
             )
         }
-    }
-
-    val ditherPaint = remember(cfg.antiBandingDithering) {
-        if (!cfg.antiBandingDithering) null else createDitherPaint()
     }
 
     val effectiveOled = isOled || cfg.isOledBlack
@@ -159,13 +138,11 @@ fun LiquidGlassBackground(
                     }
 
                     if (glassStrength == "OFF") {
-                        val flatColor = if (isLight) Color(0xFFF4F5FB) else Color(0xFF0C0D14)
+                        val flatColor = if (isLight) Color(0xFFF4F5FB) else Color(0xFF262626)
                         return@drawWithCache onDrawBehind {
                             drawRect(color = flatColor)
                         }
                     }
-
-                    val activeDither = if (cfg.antiBandingDithering && !isLight) ditherPaint else null
 
                     when (style) {
                         "AURORA" -> {
@@ -200,7 +177,6 @@ fun LiquidGlassBackground(
                                     progress = animProgressState.value,
                                     pulse = pulseState.value
                                 )
-                                drawDitherOverlay(width, height, activeDither)
                             }
                         }
                         "MESH_GRADIENT" -> {
@@ -240,7 +216,6 @@ fun LiquidGlassBackground(
                                     b4 = b4, r4 = r4,
                                     progress = animProgressState.value
                                 )
-                                drawDitherOverlay(width, height, activeDither)
                             }
                         }
                         "ALBUM_ART_BLUR" -> {
@@ -274,7 +249,6 @@ fun LiquidGlassBackground(
                                     secondaryRadius = secondaryRadius,
                                     pulse = pulseState.value
                                 )
-                                drawDitherOverlay(width, height, activeDither)
                             }
                         }
                         "SLOW_CAUSTICS" -> {
@@ -307,7 +281,6 @@ fun LiquidGlassBackground(
                                     paths = causticsPaths,
                                     progress = animProgressState.value
                                 )
-                                drawDitherOverlay(width, height, activeDither)
                             }
                         }
                         else -> {
@@ -411,21 +384,12 @@ fun LiquidGlassBackground(
                                             pulse = pulseState.value
                                         )
                                     }
-                                    drawDitherOverlay(width, height, activeDither)
                                 }
                             }
                         }
                     }
                 }
         )
-    }
-}
-
-private fun DrawScope.drawDitherOverlay(width: Float, height: Float, ditherPaint: android.graphics.Paint?) {
-    if (ditherPaint != null) {
-        drawIntoCanvas { canvas ->
-            canvas.nativeCanvas.drawRect(0f, 0f, width, height, ditherPaint)
-        }
     }
 }
 
@@ -637,29 +601,6 @@ private fun DrawScope.drawSlowCausticsStyle(
 
     translate(left = width * 0.5f + shiftX, top = height * 0.55f + shiftY) {
         drawCircle(brush = poolBrush, radius = poolRadius, center = Offset.Zero)
-    }
-}
-
-/**
- * Creates a cached native Paint with a 64x64 blue-noise / dithering BitmapShader.
- * Completely eliminates gradient stepping and color banding on 8-bit displays.
- */
-private fun createDitherPaint(): android.graphics.Paint {
-    val size = 64
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-    val random = Random(42)
-    for (y in 0 until size) {
-        for (x in 0 until size) {
-            val noise = (random.nextInt(7) - 3)
-            val alpha = (8 + noise).coerceIn(2, 16)
-            bitmap.setPixel(x, y, android.graphics.Color.argb(alpha, 255, 255, 255))
-        }
-    }
-    val shader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
-    return android.graphics.Paint().apply {
-        isAntiAlias = false
-        isFilterBitmap = false
-        this.shader = shader
     }
 }
 

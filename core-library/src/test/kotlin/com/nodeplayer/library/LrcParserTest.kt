@@ -142,4 +142,30 @@ class LrcParserTest {
         assertEquals(3456L, lyrics.lines[1].timestampMs)
         assertTrue(lyrics.plainText.contains("Random un-bracketed line in between"))
     }
+
+    @Test
+    fun testSectionMarkersParsing() {
+        val lrc = """
+            [intro]
+            [00:05.00]Instrumental intro starts
+            [verse 1]
+            [00:20.00]First verse begins here
+            [00:45.00][chorus] Sing the chorus loud
+            [01:10.00]Outro starts
+        """.trimIndent()
+
+        val lyrics = LrcParser.parse(lrc)
+        assertEquals(3, lyrics.sections.size)
+        assertEquals("Intro", lyrics.sections[0].title)
+        assertEquals(5000L, lyrics.sections[0].startMs)
+        assertEquals(20000L, lyrics.sections[0].endMs)
+
+        assertEquals("Verse 1", lyrics.sections[1].title)
+        assertEquals(20000L, lyrics.sections[1].startMs)
+        assertEquals(45000L, lyrics.sections[1].endMs)
+
+        assertEquals("Chorus", lyrics.sections[2].title)
+        assertEquals(45000L, lyrics.sections[2].startMs)
+        assertEquals("Sing the chorus loud", lyrics.lines[2].text)
+    }
 }

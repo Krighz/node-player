@@ -77,4 +77,16 @@ class AudioCacheTest {
         assertNull(AudioCache.getUserAgentForUrl(url))
     }
 
+    @Test
+    fun testIsFullyCachedReturnsFalseWhenUninitialized() {
+        // Without SimpleCache initialized, isFullyCached should safely return false without throwing
+        org.junit.Assert.assertFalse(AudioCache.isFullyCached("nodeplayer_yt_test123"))
+    }
+
+    @Test
+    fun testUpdateCacheRedirectedUriSafeWhenUninitialized() {
+        // updateCacheRedirectedUri should not throw even if SimpleCache is not initialized
+        AudioCache.updateCacheRedirectedUri("nodeplayer_yt_test123", "https://example.com/audio")
+    }
+
 }

@@ -99,6 +99,8 @@ fun HomeProfileSheet(
     onSleepTimerClick: () -> Unit = {},
     onRegionClick: () -> Unit = {},
     onAboutClick: () -> Unit = {},
+    isDiscordIncognito: Boolean = false,
+    onToggleDiscordIncognito: ((Boolean) -> Unit)? = null,
     backdrop: Backdrop = remember { emptyBackdrop() },
     modifier: Modifier = Modifier
 ) {
@@ -372,6 +374,23 @@ fun HomeProfileSheet(
                             onAboutClick()
                         }
                     )
+
+                    if (onToggleDiscordIncognito != null) {
+                        ProfileSheetItem(
+                            icon = if (isDiscordIncognito) Icons.Rounded.VisibilityOff else Icons.Rounded.Visibility,
+                            title = "Discord Incognito",
+                            subtitle = if (isDiscordIncognito) "Presence hidden from Discord" else "Broadcasting active playback",
+                            onClick = {
+                                onToggleDiscordIncognito(!isDiscordIncognito)
+                            },
+                            trailingContent = {
+                                LiquidToggle(
+                                    checked = isDiscordIncognito,
+                                    onCheckedChange = onToggleDiscordIncognito
+                                )
+                            }
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -385,7 +404,8 @@ private fun ProfileSheetItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     val itemShape = remember { ContinuousRoundedRectangle(12.dp) }
     Row(
@@ -431,11 +451,15 @@ private fun ProfileSheetItem(
             )
         }
 
-        Icon(
-            imageVector = Icons.Rounded.ChevronRight,
-            contentDescription = null,
-            tint = Color.White.copy(alpha = 0.35f),
-            modifier = Modifier.size(18.dp)
-        )
+        if (trailingContent != null) {
+            trailingContent()
+        } else {
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.35f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }

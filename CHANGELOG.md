@@ -6,6 +6,164 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-11-23
+
+### Added
+- **Opt-In Privacy-First Cloud Backup & Sync with Google Drive (`GoogleAuthManager.kt`, `GoogleDriveApiClient.kt`, `CloudSyncManager.kt`, `CloudSyncWorker.kt`)**:
+  - **Zero Developer-Hosted Servers**: Backs up user playlists, bookmarked favorites, per-song listening statistics, and playback history directly to the user's personal Google Drive.
+  - **Strict `appDataFolder` Scope Isolation**: Authenticates via Google OAuth 2.0 PKCE requesting exclusively `https://www.googleapis.com/auth/drive.appdata` inside Google Drive's hidden `appDataFolder` (`spaces=appDataFolder`). The application cannot read, write, or see personal Drive files.
+  - **Safe Conflict-Resolution Merge Engine (`SyncMergeEngine.kt`)**: Automatically downloads remote backups and merges before uploading:
+    - *Playlists & Saved Items*: Newer `updatedAt` timestamp wins.
+    - *Song Statistics*: Keeps the higher `totalPlayTimeSeconds` and `playCount`, and latest `lastPlayedAt` per track.
+    - *Playback History*: Deduplicates by `(songId, playedAt)`, sorts descending, and caps at the latest 200 entries.
+  - **Dirty-Flag Background Optimization (`CloudSyncManager.kt`)**: Tracks local `hasUnsyncedChanges` to skip background uploads if no playlists were altered or tracks played.
+  - **Periodic Sync Scheduling**: Background `WorkManager` execution supporting **Every Hour**, **Once a Day**, or **Manual Only** sync frequencies with network constraints.
+  - **Dedicated Settings Tab (`SettingsScreen.kt`)**: Integrated directly into **Online Music & Streaming Services** as a dedicated sub-tab with account status, sync frequency chips, "Sync Now" button with progress indicator, and "Delete Cloud Backup" option.
+  - **Hardware Keystore AES-256-GCM Token Encryption**: Securely persists OAuth tokens in platform-encrypted storage (`SecureSessionStore.kt`) with automatic 401 refresh handling.
+  - **RFC 8252 Reverse-DNS Redirect URI**: Official Google OAuth Client IDs injected from `local.properties` via `BuildConfig.GDRIVE_CLIENT_ID` with reverse-DNS custom scheme handling (`com.googleusercontent.apps.*`).
+- **Auto-Collapsing Left Hero Controls in Landscape Cinematic Mode (`FullScreenLyricsView.kt`)**:
+  - Implemented dynamic 4.5-second inactivity auto-collapse for the left-hand column (album art, seek bar, and transport controls).
+  - Designed fluid spring collapse & expand animations anchored at the left-middle field (`TransformOrigin(0f, 0.5f)` near camera cutout) that smoothly tucks into the screen edge when playing.
+  - Tapping anywhere on screen or clicking the sleek floating left-center chevron immediately expands controls back out.
+  - Controls remain permanently expanded when playback is paused.
+- **Active Transport Button State Contrast & Cleanup (`FullScreenLyricsView.kt`)**:
+  - Transport buttons (Shuffle and Repeat) dynamically invert when active: background turns solid `Color.White` with pitch `Color.Black` icons, mirroring the Play button.
+  - Removed the redundant favorite heart button from the landscape transport controls row.
+- **Edge-to-Edge Display Cutout & Status Bar Immersion (`MainActivity.kt`, `themes.xml`, `AppSettingsRepository.kt`, `LyricsSettingsRepository.kt`, `SettingsScreen.kt`)**:
+  - Configured `android:windowLayoutInDisplayCutoutMode = shortEdges` (`LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`) across XML themes and runtime activity setup, eliminating Android letterboxing and black bars around camera cutouts in landscape.
+  - Added "Hide Status Bar" options in both Settings (`Customize UI` global immersive mode) and Lyrics Settings (auto-hide status bar when entering full-screen lyrics), enabling uninterrupted edge-to-edge viewing.
+  - Upgraded Landscape `CinematicKineticLyricsView` to span 100% of the display edge-to-edge with right-weighted camera centering (`wPx * 0.68f`), allowing floating lyrics to render with zero constraining box borders.
+- **Landscape Two-Column FullScreenLyricsView (`FullScreenLyricsView.kt`, `LyricsSettingsBottomSheet.kt`, `LyricsSettings.kt`)**:
+  - **Split Landscape Architecture**: Implemented a responsive two-column split layout for landscape viewports (`maxWidth > maxHeight && maxWidth >= 600.dp`).
+  - **Left Hero Column**: Interactive shapeable album art hero, song title, artist label, time-seek slider with formatted elapsed/total durations, and Previous / Play-Pause / Next playback controls.
+  - **Right Lyrics Column**: Synchronized lyrics column supporting both Cinematic Kinetic word-by-word visualizer and selectable Classic multi-line view.
+  - **Album Art Shape Customizer**: Added `AlbumArtShape` (`SQUIRCLE`, `CIRCLE`, `HEART`) selectable from the top-right three-dot menu `( ⋮ )` bottom sheet, featuring custom Bezier vector clipping for the heart shape.
+  - **Dynamic Theme Palette & Starfield Preservation**: Left-to-right ambient gradient derived from album art colors with kinetic starfield backdrop.
+- **Selectable Lyrics with Text Selection (`FullScreenLyricsView.kt`)**:
+  - Wrapped Classic full-screen and landscape lyrics in `SelectionContainer`, allowing users to highlight, copy, and interact with synchronized lyrics directly on screen.
+- **Multi-Provider Lyrics Expansion (`LyricsRepository.kt`, `Musixmatch.kt`, `Unison.kt`, `FastbootEraseLrcRead.kt`)**:
+  - Expanded the lyrics search network to include **Musixmatch** (with strict duration delta verification `abs(duration - expected) <= 4`) and **Unison** / `FastbootErase` fallback sources.
+  - Visual status indicator icons in the lyrics source selector:
+    - 🔍 **Searching**: Background query in progress.
+    - 🎵 **Found & Connected**: Valid synced lyrics loaded.
+    - ⚠️ / ❌ **Unmatched / Estimated**: Fallback word-estimation or plain text.
+- **Offline Lyrics Romanization & Dual-Line Translation (`LyricsRomanizer.kt`, `LyricsSettingsBottomSheet.kt`)**:
+  - Embedded multi-script romanization engine for Japanese (Hiragana/Katakana), Korean (Hangul), Chinese (Pinyin), Cyrillic, Greek, Devanagari (Hindi), and Arabic.
+  - Dual-line rendering option with phonetics below original lyrics, accessible via an interactive 50% bottom sheet.
+- **1200p Ultra-High-Resolution Album Art Pipeline (`InnerTubeClient.kt`)**:
+  - Automatic URL transformer upgrading `lh3.googleusercontent.com` and `yt3.ggpht.com` covers from 120p/544p thumbnails to pristine 1200×1200p artwork.
+
+### Fixed
+- **Genuine Library Screen Listening Metrics (`LibraryScreen.kt`)**:
+  - Replaced placeholder fallback calculations (which previously substituted total track file durations and count when listening history was empty) with genuine real-time statistics from `dailyStats` and track play counters.
+- **Cinematic Kinetic Sweep & Playback Pausing (`CinematicKineticLyricsView.kt`)**:
+  - Bound `isPlaying` dynamically with `rememberUpdatedState` inside the 60–120fps animation ticker, immediately halting downward sweeping, star drifting, and time progression when playback is paused.
+- **Landscape Classic Lyrics Typography, Spring Bounce & Glow Parity (`FullScreenLyricsView.kt`)**:
+  - Integrated `WordByWordKaraokeText` into landscape classic mode, restoring `LocalLyricsFontFamily` font rendering, per-word bounce springs (`dampingRatio = 0.62f`), and subtle active glow shadows (`Shadow(blurRadius = 18f)`).
+- **32-Bit Float Audio Silence & Sinks (`PlaybackService.kt`, `WindowsPlaybackEngine.kt`)**:
+  - Enforced sample-rate and bit-depth clamping in the audio sink pipeline, resolving silent playback on legacy Android versions.
+- **Vorbis/Opus Tag Metadata Parsing (`AudioHeaderParser.kt`)**:
+  - Corrected comment block parsing when user metadata contains multi-line comments or non-standard padding.
+- **Opus Transcoder Video Track Crash (`OpusTranscoder.kt`)**:
+  - Safely ignored embedded video track headers during audio-only transcode pipelines.
+- **Cold-Start Replay HTTP 403 (`InnerTubeStreamResolver.kt`)**:
+  - Reset byte-range request offsets during stream re-anchoring, eliminating stale 403 Forbidden errors on cached audio chunks.
+
+### Performance
+- **Zero-Allocation DSP Filtering**: Vectorized in-place `FloatArray` buffers for real-time 10-band IIR biquad equalizer and loudness calculation.
+
+---
+
+## [2.0.0] - 2026-11-19
+
+### Added
+- **BitChord-Inspired 2-Tier Music Video Resolution & Smart Alignment (`VideoTrackMatcher.kt`, `InnerTubeClient.kt`, `PlayerViewModel.kt`)**:
+  - **Tier 1 (Official InnerTube Counterparts)**: Added `fetchOfficialVersionPair` parsing `playlistPanelVideoWrapperRenderer` and `counterparts` from YouTube Music `/next`. Extracts exact official paired music videos and parses `segmentMap` (`primaryVideoStartTimeMilliseconds`, `counterpartVideoStartTimeMilliseconds`) for intro/outro time-offset alignment.
+  - **Tier 2 (Intelligent Video Matcher)**: Added `VideoTrackMatcher` decomposing track titles into core recording identity versus listing packaging (e.g. "(Official Video)", "[4K]", "Lyrics"), validating artist overlap, enforcing version fidelity (Remix, Acoustic, Live), and validating duration tolerance (±120s) to discard 1-hour loops or reaction videos.
+  - **Background Pre-Resolution & UI Lighting**: Automatically resolves video availability asynchronously on track change in `PlayerViewModel`, setting `isAvailable = true` to light up the existing "Video" button in `NowPlayingView` without modifying UI layout or video engines.
+
+### Fixed
+- **Release Crash & Concurrent Drag Gesture Contention (MainActivity.kt, NowPlayingView.kt)**:
+  - Replaced unmanaged coroutine dispatches with a dedicated composeScope and sequential job cancellation (dragAnimJob?.cancel()), preventing concurrent nimateTo interruptions and CancellationException crashes upon touch release.
+  - Added safe 	ry / catch boundary around drag release spring animations and an isDismissingSheet lock to prevent redundant dismiss triggers.
+- **Centered Floating Video Window & Status Bar Inset (NowPlayingView.kt)**:
+  - Enforced contentAlignment = Alignment.Center and Modifier.fillMaxSize() on AnimatedContent hero container, eliminating top clipping behind the status bar and header.
+  - Added statusBarsPadding().padding(top = 48.dp, bottom = 12.dp) positioning the 16:9 video window symmetrically centered in the hero viewport, completely clear of the top header and camera notch.
+
+### Added
+- **Smooth Quadratic Backdrop Blur & Dynamic Dissolve Curve (MainActivity.kt)**:
+  - Added an interactive background glass blur (36.dp) that is rich and blurry when Now Playing is fully expanded on top, and smoothly dissolves along an exponential quadratic curve ((1f - progress)^2) to complete transparency as dragged down, revealing the underlying screen seamlessly.
+
+### Fixed
+- **Apple Music-Style Smooth Lyrics Sweep & Overlay Fix (`WordByWordKaraokeText.kt`, `FullScreenLyricsView.kt`)**:
+  - Eliminated the stuck white rectangular overlay and halo box artifact around active words by removing the erroneous `drawRect(BlendMode.DstIn)` feathering and word-level `Shadow` blur that previously rendered white gradient blocks over active lyrics.
+  - Implemented hardware-accelerated, frame-synchronized sub-pixel `clipRect` wiping driven by `withFrameNanos`, ensuring continuous 60/120 FPS sweep animation across syllables and lines without freezing or stuttering.
+  - Fixed compilation order in `FullScreenLyricsView.kt` where `enterSelectionMode()` referenced `activeIndex` before its declaration.
+  - Resolved Lyric Card text mismatch: card generator now pre-selects the playing on-screen lyrics (`activeIndex..activeIndex+3`), scrolls to the active position, and renders in crisp, bold sans-serif typography (`Typeface.SANS_SERIF, Typeface.BOLD`), completely preventing fallback to Android cursive system fonts.
+
+### Added
+- **Instant Lyric Card Generator (`LyricCardView.kt`, `LyricCardRenderer.kt`)**: Added high-resolution (1080×1920) 9:16 vertical Lyric Card generator matching BitChord and Apple Music aesthetics:
+  - Album art thumbnail with dedicated share indicator in `FullScreenLyricsView` top bar opens interactive line-selection mode.
+  - Interactive multi-line selection (up to 6 lines) in squircle card containers (`ContinuousRoundedRectangle(16.dp)`) with illuminated selection state and a floating glass pill dock `[ ✕ Cancel | Share ]`.
+  - High-res card composition featuring dynamic vertical ambient gradients derived from `AlbumArtPalette`, "Node Player" brand watermark, bold typography, squircle album art, track title, and artist name.
+  - Android `LyricCardRenderer` generates crisp PNG exports, automatically launches the native Android Share Sheet via `FileProvider`, and supports saving directly to device Pictures / MediaStore gallery.
+- **Thicker High-Impact Lyrics Typography (`WordByWordKaraokeText.kt`, `LyricLineItem.kt`, `FullScreenLyricsView.kt`)**:
+  - Increased font weight to `FontWeight.Black` (active) and `FontWeight.ExtraBold` (inactive) with `-0.45sp` letter spacing and `32.sp` default scale, ensuring punchy, highly legible typography against ambient backgrounds.
+  - Increased unsung text alpha from `0.35f` to `0.48f` for bolder character strokes.
+- **Carbon / Zinc Design System (`CarbonZincPalette.kt`)**: Added neutral dark palette (`#09090B` floor, `#121215` container, `#1C1C21` elevated surface, `#5EEAD4` AccentTeal) and unified typography scale.
+- **Fixed Slim Top Bar & Mode Switcher (`OnlineHomeView.kt`)**: Slim 38dp pinned header featuring a unified mode switcher `[ • YT Music | Device Files ]` with active teal indicator dot and instant toggle to offline files, accompanied by a circular profile avatar button.
+- **Scrollable Mood Filter Bar & Content Divider**: Horizontally scrollable mood chips (`Pop`, `Chill`, `Party`, `Commute`, `Romance`...) placed at the top of the Home feed, followed by a `1.dp` subtle divider that scrolls up cleanly under the fixed top bar.
+- **Modern "Your Mix" Cards & Squircle Art Covering (`YourMixShelf.kt`)**: Redesigned cards with 20.dp continuous rounded rectangle borders, 136×136dp inner album art with 14.dp squircle curvature, and an elevated capsule pill "Play" button.
+- **Hardware-Synchronized System Volume Slider**: Real-time integration of the volume slider in `NowPlayingView` with Android's `AudioManager.STREAM_MUSIC`, complete with drag/tap seeking and a `BroadcastReceiver` listening to `"android.media.VOLUME_CHANGED_ACTION"` for hardware rocker synchronization.
+- **Widescreen 16:9 Music Video Player**: Automatic container aspect ratio transition to 16:9 for video streams, with stream quality badge (`480p`) and fullscreen expand controls conditionally visible only for video playback.
+- **Multi-Shelf YouTube Music Discovery**: Integrated 6 dynamic shelves on Home: Top Picks for You, Recents, Find Your Mood (with duotone category matrix filters), Albums & Singles, Music Videos, and Trending.
+- **Profile Avatar & Session Hydration**: Added authentic Google/YouTube avatar thumbnails, channel handle (`@username`), and account metadata in `HomeProfileSheet` backed by encrypted `SecureSessionStore`.
+- **TTML Syllable Lyrics & Karaoke**: Added syllable-level karaoke lyrics parsing from TTML formats, duet vocalist alignment, backing vocals, and instrumental break countdown dots.
+- **Bottom-Left Jump to Current**: Added a compact `36.dp` circular white button (`Icons.Rounded.ArrowDownward`, `Color.White.copy(alpha = 0.16f)`) anchored in the bottom-left corner of `FullScreenLyricsView`.
+
+### Performance & Optimization (CPU, Network & Memory)
+- **Unthrottled Stream Resolution Architecture (`AudioCache.kt`, `RangedUpstreamDataSource.kt`)**: Primary YouTube audio stream resolution now delegates directly to `NewPipeFallback.resolveStream(videoId)` with signature deciphering (matching the video engine's architecture). Eliminates the 12–14s startup waterfall previously caused by rotating through dead clients (`VISIONOS`, `WEB_REMIX`), dropping stream start latency to ~1.1s with continuous, uninterrupted 100% full-song playback and seamless seeking across all tracks.
+- **Demuxer Crash Prevention & Clean Container Lifecycle (`RangedUpstreamDataSource.kt`)**: Removed mid-stream URL swapping at byte 1,048,576. Eliminates `java.io.EOFException` inside Media3's `FragmentedMp4Extractor` caused by splicing disparate container formats (WebM/Opus vs MP4/AAC) into an active demuxer pipeline.
+- **Reactive Now Playing Position Ticker (`NowPlayingTimeline.kt`, `NowPlayingView.kt`, `FullScreenLyricsView.kt`, `ConvxMiniPlayer.kt`)**: Replaced non-reactive `derivedStateOf { positionProvider() }` evaluations with leaf-level `produceState` coroutine tickers running at 100ms/150ms intervals. Restored real-time slider progress updates, elapsed/remaining time counters, synchronized lyric highlighting, and miniplayer progress tracking without triggering root `MainActivity` recompositions.
+- **Direct Head Probe & Fast Timeout (`StreamResolver.kt`)**: Reverted 1 MiB offset probing back to direct head verification (`Range: bytes=0-1024`) with `PROBE_TIMEOUT_MS` reduced to `1_500L`. Eliminates HTTP 403 Forbidden errors triggered by Google Video CDN on unauthenticated mid-stream probes, preventing client rotation exhaustion and eliminating the 11–12s playback startup waterfall.
+- **Parallel Taste Recommendation Dispatch (`TasteRecommendationEngine.kt`)**: Converted sequential seed candidate iteration to parallel coroutine dispatch using `async(Dispatchers.IO) { historySource.getRadioForTrack(...) }`, cutting "Your Mix" load time from ~3,200ms to ~850ms while preserving deterministic quota deduction.
+- **Ktor CIO HTTP Connection Pooling (`InnerTubeClient.kt`)**: Tuned CIO engine endpoint settings with `maxConnectionsPerRoute = 20`, `pipelineMaxSize = 1`, and `keepAliveTime = 30_000`, eliminating redundant TLS handshakes across concurrent YouTube Music calls.
+- **Recomposition Isolation & Stable Keys (`YourMixShelf.kt`)**: Added stable composite keys (`${track.extractVideoId() ?: track.id}_$index`) and explicit `contentType = "your_mix_card"`, eliminating duplicate-key crashes and preventing unnecessary recompositions during horizontal list scrolling.
+- **In-Memory Station Cache & Deduplicated Cold Start (`OnlineHomeView.kt`)**: Added `sessionCachedTasteStation` cache and single-flight `yourMixJob` mutex, eliminating duplicate concurrent API queries on app launch and preventing startup UI thread freezes.
+- **Audio-Tuned ExoPlayer Load Control (`CrossfadePlayerManager.kt`)**: Configured tailored `DefaultLoadControl` (min buffer 15s, buffer for playback 800ms vs 2,500ms default), cutting stream start latency by ~1.7s without buffer starvation risk.
+- **Zero-Allocation Fading Loop (`CrossfadePlayerManager.kt`)**: Removed per-tick `String.format("%.3f")` allocations from the 25ms monitor loop, preventing GC pressure and micro-stutters during active track crossfades.
+- **Persistent HTTP/2 Pool & Reduced Logging Overhead (`AudioCache.kt`)**: Added dedicated `ConnectionPool(32, 5, TimeUnit.MINUTES)` and eliminated per-chunk log outputs from `AudioCache`, eliminating main thread logging contention.
+- **Compound Database Indices & Migration v8 (`Entities.kt`, `NodeDatabase.kt`, `NodePlayerApplication.kt`)**: Added indices on `TrackEntity(["isHidden", "title"])` and `TrackEntity(["isFavorite"])` via Room `MIGRATION_7_8`, speeding up library queries from ~280ms to <15ms.
+- **Root-Level 60Hz State Hoisting Elimination (`MainActivity.kt`)**: Replaced root-level `collectAsState()` on `currentPositionMs` and `currentRms` with deferred lambda providers `{ viewModel.currentPositionMs.value }`, preventing root-to-leaf full UI recompositions on every 16ms frame.
+- **Incremental Library Scan Metadata Caching (`LibraryScanner.kt`)**: Reused existing sample rate, bit depth, channels, bitrate, and format description from Room database when `dateAdded` matches, skipping expensive `MediaMetadataRetriever` disk I/O on re-scans.
+- **Widget Update Resource Guard (`WidgetUpdateManager.kt`)**: Added active widget detection guard and removed duplicate `appWidgetManager` instantiation, saving CPU cycles and battery when widgets are not on home screen.
+
+### Changed
+- **Online Stream & AAC Badge Accent**: Updated YouTube stream and AAC badges in `AudioFormatBadge.kt` to use `CarbonZincPalette.AccentTeal` (`#5EEAD4`) text, stroke, and translucent container tint.
+- **Home Feed Shelves Hierarchy**: Updated home screen sections, video cards, and squircle album cards to utilize the Carbon/Zinc surface hierarchy.
+- **Default Dark Mode Theme Color**: Set default dark mode background to charcoal `#262626` across `Theme.kt`, `LiquidGlassBackground.kt`, and `GlassTheme.kt` with `#303030` elevated card surfaces, while strictly maintaining pure `#000000` pitch black for OLED mode.
+- **FullScreenLyricsView Redesigned Top Bar**: Centered drag handle pill (`36.dp` × `4.dp`), `48.dp` × `42.dp` thumbnail, song title & artist typography, favorite star button, and dynamic context action button (More Options when controls are open, Share when controls are collapsed).
+- **Default Collapsed Lyrics Controls**: Full-screen lyrics playback dock now starts collapsed by default for an unobstructed, distraction-free reading experience, auto-collapsing after 3.5 seconds of inactivity when revealed.
+
+### Fixed
+- **YouTube Playback 1m04s / 1 MiB CDN 403 Stall & 128 KB Chunking**:
+  - Implemented 128 KB bounded chunk range requests (`DEFAULT_CHUNK_SIZE = 128L * 1024`) in `RangedUpstreamDataSource.kt` to bypass Google Video CDN's 1 MiB cutoff on mobile unauthenticated streams.
+  - Rewrote upstream chunk read loop to prevent premature `RESULT_END_OF_INPUT` signals on chunk boundaries, enabling continuous audio buffering without stalls.
+  - Fixed `openChildWithRetry` to extract and pass the real 11-character `videoId` during stream refreshes instead of passing raw googlevideo URLs.
+  - Integrated `media3-datasource-okhttp` to maintain persistent HTTP/2 connection pooling across chunk boundaries.
+- **YouTube Stream Resolution & Client Rotation (`StreamResolver.kt`, `YouTubeModels.kt`)**:
+  - Upgraded Apple client models (`IOS`, `IPADOS`) with complete iOS 18.2 client metadata (`21.03.1`).
+  - Demoted broken `ANDROID_VR` and bot-blocked `TVHTML5` clients in stream rotation, requiring HTTP 200/206 validation before handing streams to ExoPlayer.
+- **MusicVideoEngine Video Playback Failure**:
+  - Configured `DefaultMediaSourceFactory` using `AudioCache.createDataSourceFactory()` for `MusicVideoEngine`'s secondary player to prevent naked unbounded video requests that triggered CDN 403 errors.
+  - Added playback error listener to `MusicVideoEngine` for immediate diagnosis.
+- **Lyrics Scroll Auto-Popup Bug**: Decoupled manual list scrolling from control visibility so scrolling the lyrics list never unexpectedly brings up the bottom playback bar.
+- **Bottom Scrim Vignette Removal**: Removed the black gradient scrim overlay at the bottom of `FullScreenLyricsView`, enabling the dynamic album art palette to flow cleanly to the bottom edge.
+- **Root Screen Background De-Hardcoding**: Removed hardcoded `Color.Black` roots in `OnlineHomeView`, `PlaylistDetailView`, and `LibraryScreen`, enabling proper rendering of `#262626` in standard dark mode while preserving pure black in OLED mode.
+- **Windows Build File Locking**: Resolved file lock conflicts during multiplatform jar bundling (`bundleLibCompileToJarDebug`).
+
+---
+
 ## [1.6.0] - 2026-11-06
 
 ### Added

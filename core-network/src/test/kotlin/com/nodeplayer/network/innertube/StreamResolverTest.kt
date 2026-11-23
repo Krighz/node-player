@@ -103,12 +103,18 @@ class StreamResolverTest {
             PlayerResponse.StreamingData.Format(itag = 139, bitrate = 48000, mimeType = "audio/mp4")
         )
 
-        val ranked = resolver.rankAudioFormats(formats)
-        assertEquals(4, ranked.size)
-        assertEquals(251, ranked[0].itag)
-        assertEquals(140, ranked[1].itag)
-        assertEquals(250, ranked[2].itag)
-        assertEquals(139, ranked[3].itag)
+        // Default HIGH quality prioritizes itag 251 (Opus 160k high-fidelity)
+        val rankedHigh = resolver.rankAudioFormats(formats, com.nodeplayer.model.StreamingAudioQuality.HIGH)
+        assertEquals(4, rankedHigh.size)
+        assertEquals(251, rankedHigh[0].itag)
+        assertEquals(140, rankedHigh[1].itag)
+        assertEquals(250, rankedHigh[2].itag)
+        assertEquals(139, rankedHigh[3].itag)
+
+        // MEDIUM quality prioritizes itag 140 (AAC 128k balanced)
+        val rankedMedium = resolver.rankAudioFormats(formats, com.nodeplayer.model.StreamingAudioQuality.MEDIUM)
+        assertEquals(140, rankedMedium[0].itag)
+        assertEquals(251, rankedMedium[1].itag)
     }
 
     @Test
@@ -146,15 +152,15 @@ class StreamResolverTest {
                 val clientName = request.headers["X-YouTube-Client-Name"] ?: "unknown"
                 requestedClients.add(clientName)
 
-                // Primary client is VISIONOS (clientId = "101") -> Return 403 / error playability
-                if (clientName == "101") {
+                // Primary client IOS (5) fails -> falls through to WEB_REMIX (67)
+                if (clientName == "5" || clientName == "101") {
                     respond(
                         content = samplePlayerResponse(status = "ERROR"),
                         status = HttpStatusCode.OK,
                         headers = headersOf(HttpHeaders.ContentType, "application/json")
                     )
-                } else if (clientName == "28") {
-                    // Secondary client is ANDROID_VR (clientId = "28") -> Return valid player response with format 140
+                } else if (clientName == "67") {
+                    // WEB_REMIX (clientId = "67") -> Return valid player response with format 140
                     respond(
                         content = samplePlayerResponse(status = "OK", formats = listOf(format140)),
                         status = HttpStatusCode.OK,
@@ -183,13 +189,13 @@ class StreamResolverTest {
         val result = resolver.resolveStream("test_video_123")
         assertTrue(result.isSuccess)
         val stream = result.getOrThrow()
-        assertEquals("ANDROID_VR", stream.clientName)
+        assertEquals("WEB_REMIX", stream.clientName)
         assertEquals(140, stream.itag)
         assertEquals("https://googlevideo.com/playback?itag=140", stream.streamUrl)
         assertEquals(-5.5, stream.loudnessDb ?: 0.0, 0.01)
 
-        // Verify rotation sequence tried VISIONOS (101) first, then ANDROID_VR (28)
-        assertEquals(listOf("101", "28"), requestedClients)
+        // Verify rotation sequence tried IOS (5), IPADOS (5), VISIONOS (101) first, then WEB_REMIX (67)
+        assertEquals(listOf("5", "5", "101", "67"), requestedClients)
 
         innerTubeClient.close()
         resolver.close()
@@ -249,10 +255,17 @@ class StreamResolverTest {
     fun testRangeProbeFailureRotatesToNextClient() = runTest {
         val innerTubeEngine = MockEngine { request ->
             val clientName = request.headers["X-YouTube-Client-Name"] ?: "unknown"
-            if (clientName == "28") {
-                // ANDROID_VR returns url that fails probe
+            if (clientName == "7") {
+                // TVHTML5 returns url that fails probe
                 respond(
                     content = samplePlayerResponse(status = "OK", formats = listOf(format251.replace("googlevideo.com", "forbidden.com"))),
+                    status = HttpStatusCode.OK,
+                    headers = headersOf(HttpHeaders.ContentType, "application/json")
+                )
+            } else if (clientName == "67") {
+                // WEB_REMIX returns ERROR
+                respond(
+                    content = samplePlayerResponse(status = "ERROR"),
                     status = HttpStatusCode.OK,
                     headers = headersOf(HttpHeaders.ContentType, "application/json")
                 )

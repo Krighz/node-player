@@ -10,18 +10,20 @@ class AudioArtworkSizingTest {
 
     @Test
     fun testResolveTargetSizeClampsPixelDimensionsAndDefaultsUndefined() {
-        // Exact bounds within [96, 512]
+        // Exact bounds within [96, 1440]
         assertEquals(144 to 144, AudioArtworkFetcher.resolveTargetSize(Size(144, 144)))
         assertEquals(320 to 240, AudioArtworkFetcher.resolveTargetSize(Size(320, 240)))
+        assertEquals(1200 to 1200, AudioArtworkFetcher.resolveTargetSize(Size(1200, 1200)))
 
-        // Clamped below minimum (96) and above maximum (512)
+        // Clamped below minimum (96) and above maximum (2048)
         assertEquals(96 to 96, AudioArtworkFetcher.resolveTargetSize(Size(32, 48)))
-        assertEquals(512 to 512, AudioArtworkFetcher.resolveTargetSize(Size(1200, 1200)))
+        assertEquals(2048 to 2048, AudioArtworkFetcher.resolveTargetSize(Size(3000, 3000)))
 
-        // Undefined dimensions fall back to 256
-        assertEquals(256 to 256, AudioArtworkFetcher.resolveTargetSize(Size.ORIGINAL))
-        assertEquals(144 to 256, AudioArtworkFetcher.resolveTargetSize(Size(Dimension.Pixels(144), Dimension.Undefined)))
-        assertEquals(256 to 512, AudioArtworkFetcher.resolveTargetSize(Size(Dimension.Undefined, Dimension.Pixels(800))))
+        // Undefined dimensions fall back to default target size
+        val defaultPx = AudioArtworkFetcher.DEFAULT_TARGET_SIZE_PX
+        assertEquals(defaultPx to defaultPx, AudioArtworkFetcher.resolveTargetSize(Size.ORIGINAL))
+        assertEquals(144 to defaultPx, AudioArtworkFetcher.resolveTargetSize(Size(Dimension.Pixels(144), Dimension.Undefined)))
+        assertEquals(defaultPx to 800, AudioArtworkFetcher.resolveTargetSize(Size(Dimension.Undefined, Dimension.Pixels(800))))
     }
 
     @Test

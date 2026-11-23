@@ -1,7 +1,5 @@
 package com.nodeplayer.music.ui.screens
 
-import android.content.Context
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,10 +26,10 @@ import androidx.compose.ui.unit.sp
 import com.nodeplayer.model.Track
 import com.nodeplayer.model.WidgetAccentMode
 import com.nodeplayer.model.WidgetSettings
+import com.nodeplayer.music.ui.theme.LocalAccentColor
 import com.nodeplayer.music.ui.theme.glassSurface
 import com.nodeplayer.music.widget.WidgetPreferences
 import com.nodeplayer.music.widget.WidgetUpdateManager
-import com.nodeplayer.music.ui.components.HazeState
 import com.nodeplayer.ui.components.LiquidChip
 import com.nodeplayer.ui.components.LiquidRadioButton
 import com.nodeplayer.ui.components.LiquidSlider
@@ -52,6 +50,7 @@ fun WidgetSettingsScreen(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
+    val accent = LocalAccentColor.current
     var settings by remember { mutableStateOf(WidgetPreferences.getSettings(context)) }
     var selectedVariant by remember { mutableStateOf(WidgetVariant.CARD_4X2) }
 
@@ -85,11 +84,10 @@ fun WidgetSettingsScreen(
                 actions = {
                     TextButton(
                         onClick = {
-                            val defaultSettings = WidgetSettings()
-                            updateSettings(defaultSettings)
+                            updateSettings(WidgetSettings())
                         }
                     ) {
-                        Text("Reset", color = Color(0xFF6366F1), fontWeight = FontWeight.SemiBold)
+                        Text("Reset", color = accent, fontWeight = FontWeight.SemiBold)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -107,11 +105,10 @@ fun WidgetSettingsScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            // Notice: Static RemoteViews architecture
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .glassSurface( shape = RoundedCornerShape(16.dp), tintAlpha = 0.45f)
+                    .glassSurface(shape = RoundedCornerShape(16.dp), tintAlpha = 0.45f)
                     .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
                     .padding(14.dp)
             ) {
@@ -119,7 +116,7 @@ fun WidgetSettingsScreen(
                     Icon(
                         imageVector = Icons.Rounded.Info,
                         contentDescription = null,
-                        tint = Color(0xFF60A5FA),
+                        tint = accent,
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
@@ -136,11 +133,10 @@ fun WidgetSettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Variant Selector Tabs
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .glassSurface( shape = RoundedCornerShape(20.dp), tintAlpha = 0.35f)
+                    .glassSurface(shape = RoundedCornerShape(20.dp), tintAlpha = 0.35f)
                     .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -151,7 +147,7 @@ fun WidgetSettingsScreen(
                         modifier = Modifier
                             .weight(1f)
                             .clip(RoundedCornerShape(16.dp))
-                            .background(if (isSelected) Color.White.copy(alpha = 0.18f) else Color.Transparent)
+                            .background(if (isSelected) accent.copy(alpha = 0.30f) else Color.Transparent)
                             .clickable { selectedVariant = variant }
                             .padding(vertical = 8.dp),
                         contentAlignment = Alignment.Center
@@ -170,7 +166,6 @@ fun WidgetSettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Live In-App Widget Preview
             Text(
                 text = "LIVE IN-APP PREVIEW",
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -187,12 +182,11 @@ fun WidgetSettingsScreen(
                 title = displayTitle,
                 artist = displayArtist,
                 isPlaying = isPlaying,
-                
+                accent = accent
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Section: Element Visibility Toggles
             Text(
                 text = "ELEMENT VISIBILITY",
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -206,7 +200,7 @@ fun WidgetSettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .glassSurface( shape = RoundedCornerShape(20.dp), tintAlpha = 0.50f)
+                    .glassSurface(shape = RoundedCornerShape(20.dp), tintAlpha = 0.50f)
                     .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -216,6 +210,7 @@ fun WidgetSettingsScreen(
                     label = "Album Artwork",
                     desc = "Show track cover art thumbnail",
                     checked = settings.showArt,
+                    accent = accent,
                     onCheckedChange = { updateSettings(settings.copy(showArt = it)) }
                 )
 
@@ -226,6 +221,7 @@ fun WidgetSettingsScreen(
                     label = "Waveform Glyph",
                     desc = "Show waveform indicator badge",
                     checked = settings.showWaveform,
+                    accent = accent,
                     onCheckedChange = { updateSettings(settings.copy(showWaveform = it)) }
                 )
 
@@ -236,6 +232,7 @@ fun WidgetSettingsScreen(
                     label = "Title & Artist",
                     desc = "Show song name and performer",
                     checked = settings.showTitleArtist,
+                    accent = accent,
                     onCheckedChange = { updateSettings(settings.copy(showTitleArtist = it)) }
                 )
 
@@ -246,6 +243,7 @@ fun WidgetSettingsScreen(
                     label = "Seekbar & Elapsed Times",
                     desc = "Show progress bar with tap zones",
                     checked = settings.showSeekbarTimes,
+                    accent = accent,
                     onCheckedChange = { updateSettings(settings.copy(showSeekbarTimes = it)) }
                 )
 
@@ -256,6 +254,7 @@ fun WidgetSettingsScreen(
                     label = "Transport Controls",
                     desc = "Show Play, Pause, Previous, Next",
                     checked = settings.showTransport,
+                    accent = accent,
                     onCheckedChange = { updateSettings(settings.copy(showTransport = it)) }
                 )
 
@@ -266,13 +265,13 @@ fun WidgetSettingsScreen(
                     label = "Synced Lyrics Lines",
                     desc = "Show lyrics container on 4x3 card",
                     checked = settings.showLyrics,
+                    accent = accent,
                     onCheckedChange = { updateSettings(settings.copy(showLyrics = it)) }
                 )
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // Section: Appearance & Optical Glass
             Text(
                 text = "GLASS APPEARANCE",
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -286,12 +285,11 @@ fun WidgetSettingsScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .glassSurface( shape = RoundedCornerShape(20.dp), tintAlpha = 0.50f)
+                    .glassSurface(shape = RoundedCornerShape(20.dp), tintAlpha = 0.50f)
                     .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(20.dp))
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Accent Mode Selector
                 Column {
                     Text(
                         text = "Accent Color Mode",
@@ -307,18 +305,14 @@ fun WidgetSettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(12.dp))
-                                .background(if (isModeSelected) Color.White.copy(alpha = 0.12f) else Color.Transparent)
+                                .background(if (isModeSelected) accent.copy(alpha = 0.18f) else Color.Transparent)
                                 .clickable { updateSettings(settings.copy(accentMode = mode)) }
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             LiquidRadioButton(
                                 selected = isModeSelected,
-                                onClick = { updateSettings(settings.copy(accentMode = mode)) },
-                                colors = RadioButtonDefaults.colors(
-                                    selectedColor = Color(0xFF6366F1),
-                                    unselectedColor = Color.White.copy(alpha = 0.4f)
-                                )
+                                onClick = { updateSettings(settings.copy(accentMode = mode)) }
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
@@ -334,7 +328,6 @@ fun WidgetSettingsScreen(
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
-                // Liquid Refraction Style
                 Column {
                     Text(
                         text = "Liquid Refraction Style",
@@ -359,13 +352,7 @@ fun WidgetSettingsScreen(
                             LiquidChip(
                                 selected = isSel,
                                 onClick = { updateSettings(settings.copy(refractionStyle = styleKey)) },
-                                label = { Text(styleLabel, fontSize = 11.sp) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFF6366F1).copy(alpha = 0.35f),
-                                    selectedLabelColor = Color.White,
-                                    containerColor = Color.White.copy(alpha = 0.06f),
-                                    labelColor = Color.White.copy(alpha = 0.75f)
-                                )
+                                label = { Text(styleLabel, fontSize = 11.sp) }
                             )
                         }
                     }
@@ -373,7 +360,6 @@ fun WidgetSettingsScreen(
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
-                // Glass Opacity Slider
                 Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -388,23 +374,18 @@ fun WidgetSettingsScreen(
                         )
                         Text(
                             text = "${(settings.glassOpacity * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF6366F1), fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.bodyMedium.copy(color = accent, fontWeight = FontWeight.Bold)
                         )
                     }
                     LiquidSlider(
                         value = settings.glassOpacity,
                         onValueChange = { updateSettings(settings.copy(glassOpacity = it)) },
-                        valueRange = 0.1f..1.0f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF6366F1),
-                            activeTrackColor = Color(0xFF6366F1)
-                        )
+                        valueRange = 0.1f..1.0f
                     )
                 }
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
-                // Edge Specular Highlight Slider
                 Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -419,23 +400,18 @@ fun WidgetSettingsScreen(
                         )
                         Text(
                             text = "${(settings.edgeHighlightStrength * 100).toInt()}%",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF6366F1), fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.bodyMedium.copy(color = accent, fontWeight = FontWeight.Bold)
                         )
                     }
                     LiquidSlider(
                         value = settings.edgeHighlightStrength,
                         onValueChange = { updateSettings(settings.copy(edgeHighlightStrength = it)) },
-                        valueRange = 0.0f..1.0f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF6366F1),
-                            activeTrackColor = Color(0xFF6366F1)
-                        )
+                        valueRange = 0.0f..1.0f
                     )
                 }
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
-                // Corner Radius Slider
                 Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -450,39 +426,35 @@ fun WidgetSettingsScreen(
                         )
                         Text(
                             text = "${settings.cornerRadiusDp.toInt()} dp",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF6366F1), fontWeight = FontWeight.Bold)
+                            style = MaterialTheme.typography.bodyMedium.copy(color = accent, fontWeight = FontWeight.Bold)
                         )
                     }
                     LiquidSlider(
                         value = settings.cornerRadiusDp,
                         onValueChange = { updateSettings(settings.copy(cornerRadiusDp = it)) },
-                        valueRange = 12f..36f,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color(0xFF6366F1),
-                            activeTrackColor = Color(0xFF6366F1)
-                        )
+                        valueRange = 12f..36f
                     )
                 }
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
-                // High-DPI Razor Rendering Toggle
                 WidgetToggleRow(
                     icon = Icons.Rounded.HighQuality,
                     label = "High-DPI Razor Rendering",
                     desc = "Renders widgets at 2x resolution for razor-sharp clarity on 1080p+ displays",
                     checked = settings.highDpi,
+                    accent = accent,
                     onCheckedChange = { updateSettings(settings.copy(highDpi = it)) }
                 )
 
                 HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
 
-                // Performance Mode Toggle
                 WidgetToggleRow(
                     icon = Icons.Rounded.BatteryChargingFull,
                     label = "Performance Mode",
                     desc = "Disable complex specular shaders for low-end devices",
                     checked = settings.isPerformanceMode,
+                    accent = accent,
                     onCheckedChange = { updateSettings(settings.copy(isPerformanceMode = it)) }
                 )
             }
@@ -499,7 +471,7 @@ private fun WidgetLivePreviewCard(
     title: String,
     artist: String,
     isPlaying: Boolean,
-    hazeState: HazeState? = null
+    accent: Color
 ) {
     val cornerShape = RoundedCornerShape(settings.cornerRadiusDp.dp)
 
@@ -515,7 +487,6 @@ private fun WidgetLivePreviewCard(
                 }
             )
             .glassSurface(
-                
                 shape = cornerShape,
                 tintAlpha = settings.glassOpacity.coerceIn(0.1f, 0.95f)
             )
@@ -524,7 +495,7 @@ private fun WidgetLivePreviewCard(
                 brush = Brush.verticalGradient(
                     listOf(
                         Color.White.copy(alpha = 0.90f * settings.edgeHighlightStrength),
-                        Color(0xFFBAE6FD).copy(alpha = 0.40f * settings.edgeHighlightStrength),
+                        accent.copy(alpha = 0.40f * settings.edgeHighlightStrength),
                         Color.White.copy(alpha = 0.45f * settings.edgeHighlightStrength)
                     )
                 ),
@@ -538,7 +509,6 @@ private fun WidgetLivePreviewCard(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Header
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -588,13 +558,12 @@ private fun WidgetLivePreviewCard(
                             Icon(
                                 imageVector = Icons.Rounded.GraphicEq,
                                 contentDescription = null,
-                                tint = Color(0xFF60A5FA),
+                                tint = accent,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
                     }
 
-                    // Seekbar
                     if (settings.showSeekbarTimes) {
                         Column {
                             Box(
@@ -608,7 +577,7 @@ private fun WidgetLivePreviewCard(
                                     modifier = Modifier
                                         .fillMaxWidth(0.35f)
                                         .fillMaxHeight()
-                                        .background(Color.White)
+                                        .background(accent)
                                 )
                             }
                             Spacer(modifier = Modifier.height(4.dp))
@@ -622,7 +591,6 @@ private fun WidgetLivePreviewCard(
                         }
                     }
 
-                    // Transport Controls
                     if (settings.showTransport) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -635,7 +603,7 @@ private fun WidgetLivePreviewCard(
                                 modifier = Modifier
                                     .size(42.dp)
                                     .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.20f))
+                                    .background(accent.copy(alpha = 0.30f))
                                     .border(1.dp, Color.White.copy(alpha = 0.4f), CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -657,7 +625,6 @@ private fun WidgetLivePreviewCard(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Header
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (settings.showArt) {
                             Box(
@@ -679,19 +646,17 @@ private fun WidgetLivePreviewCard(
                         }
                     }
 
-                    // Lyrics
                     if (settings.showLyrics) {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Text("Všechno, co jsme chtěli mít", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.45f)))
-                            Text("Teď mizí v dálce jako dým", style = MaterialTheme.typography.bodyMedium.copy(color = Color.White, fontWeight = FontWeight.Bold))
-                            Text("A já tu stojím sám a vím", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.45f)))
+                            Text("Synced lyrics preview line 1", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.45f)))
+                            Text("Active karaoke lyric line highlighted", style = MaterialTheme.typography.bodyMedium.copy(color = Color.White, fontWeight = FontWeight.Bold))
+                            Text("Upcoming lyric line preview", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.45f)))
                         }
                     }
 
-                    // Controls
                     if (settings.showTransport) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -766,7 +731,7 @@ private fun WidgetLivePreviewCard(
                                     .offset(x = 6.dp, y = 6.dp)
                                     .size(30.dp)
                                     .clip(CircleShape)
-                                    .background(Color(0xFF6366F1)),
+                                    .background(accent),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
@@ -797,6 +762,7 @@ private fun WidgetToggleRow(
     label: String,
     desc: String,
     checked: Boolean,
+    accent: Color,
     onCheckedChange: (Boolean) -> Unit
 ) {
     Row(
@@ -806,7 +772,7 @@ private fun WidgetToggleRow(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color(0xFF6366F1),
+            tint = accent,
             modifier = Modifier.size(22.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -828,13 +794,7 @@ private fun WidgetToggleRow(
         }
         LiquidToggle(
             checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFF6366F1),
-                uncheckedThumbColor = Color.White.copy(alpha = 0.5f),
-                uncheckedTrackColor = Color.White.copy(alpha = 0.15f)
-            )
+            onCheckedChange = onCheckedChange
         )
     }
 }

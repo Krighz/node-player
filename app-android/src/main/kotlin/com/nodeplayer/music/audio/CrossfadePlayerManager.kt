@@ -24,6 +24,8 @@ import com.nodeplayer.model.AudioEffectConfig
 import com.nodeplayer.model.CrossfadeConfig
 import com.nodeplayer.model.FadeCurve
 import com.nodeplayer.model.Track
+import com.nodeplayer.common.logging.NodeLog
+import com.nodeplayer.music.NodePlayerApplication
 import kotlin.math.min
 
 /**
@@ -135,8 +137,10 @@ class CrossfadePlayerManager(
     }
 
     private fun createPlayer(processor: DspAudioProcessor): ExoPlayer {
+        val supportsFloat = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q
         val customAudioSink = DefaultAudioSink.Builder(context)
             .setAudioProcessors(arrayOf(processor))
+            .setEnableFloatOutput(supportsFloat)
             .build()
 
         val renderersFactory = object : DefaultRenderersFactory(context) {
@@ -146,11 +150,22 @@ class CrossfadePlayerManager(
                 enableAudioTrackPlaybackParams: Boolean
             ): AudioSink = customAudioSink
         }.apply {
-            setEnableAudioFloatOutput(true)
+            setEnableAudioFloatOutput(supportsFloat)
             setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
         }
 
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 15_000,
+                /* maxBufferMs = */ 30_000,
+                /* bufferForPlaybackMs = */ 800,
+                /* bufferForPlaybackAfterRebufferMs = */ 2_500
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
         val player = ExoPlayer.Builder(context, renderersFactory)
+            .setLoadControl(loadControl)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
@@ -261,12 +276,18 @@ class CrossfadePlayerManager(
         if (playbackState == Player.STATE_ENDED) {
             if (isCrossfading) {
                 completeCrossfade()
+            } else if (activePlayer.repeatMode == Player.REPEAT_MODE_ONE) {
+                Log.d(TAG, "[Gapless] Repeat ONE: replaying track $currentQueueIndex")
+                playIndex(currentQueueIndex, 0L)
             } else if (currentQueueIndex + 1 < currentQueue.size) {
                 Log.d(TAG, "[Gapless] Natural end of track reached, advancing gapless to track ${currentQueueIndex + 1}")
                 playIndex(currentQueueIndex + 1, 0L)
-            } else if (currentQueue.isNotEmpty()) {
-                Log.d(TAG, "[Gapless] Natural end of queue reached, wrapping around to track 0")
+            } else if (currentQueue.isNotEmpty() && activePlayer.repeatMode == Player.REPEAT_MODE_ALL) {
+                Log.d(TAG, "[Gapless] Natural end of queue reached, wrapping around to track 0 (REPEAT_MODE_ALL)")
                 playIndex(0, 0L)
+            } else {
+                Log.d(TAG, "[Gapless] Natural end of queue reached with REPEAT_MODE_OFF, stopping playback")
+                activePlayer.pause()
             }
         }
     }
@@ -601,9 +622,7 @@ class CrossfadePlayerManager(
             val pct = (progress * 100).toInt()
             if (pct % 25 == 0 && pct != lastLoggedPercent) {
                 lastLoggedPercent = pct
-                val outStr = "%.3f".format(outGain)
-                val inStr = "%.3f".format(inGain)
-                Log.d(TAG, "[Crossfade] Progress $pct% | OutVol: $outStr | InVol: $inStr | Elapsed: ${elapsed}ms / ${currentEffectiveFadeMs}ms")
+                Log.d(TAG, "[Crossfade] Progress $pct% | Elapsed: ${elapsed}ms / ${currentEffectiveFadeMs}ms")
             }
 
             if (progress >= 1.0f) {
@@ -755,6 +774,19 @@ class CrossfadePlayerManager(
 
     private fun setPlayerMediaSource(player: ExoPlayer, track: Track) {
         retriedStreams.remove(player)
+
+        // --- SMART MIXTAPE INTERCEPTION HOOK ---
+        val mixtapeFile = (context.applicationContext as? NodePlayerApplication)
+            ?.smartMixtapeManager
+            ?.interceptPlayback(track.path)
+
+        if (mixtapeFile != null && mixtapeFile.exists()) {
+            NodeLog.d(TAG, "Playback Intercepted: Playing cached mixtape file for ${track.title}")
+            val localMediaItem = MediaItem.fromUri(Uri.fromFile(mixtapeFile))
+            player.setMediaItem(localMediaItem)
+            return
+        }
+
         val mediaItem = createMediaItem(track)
         val uri = mediaItem.localConfiguration?.uri
         val isSyntheticYouTube = track.path.startsWith("nodeplayer://youtube/") ||
@@ -789,7 +821,7 @@ class CrossfadePlayerManager(
         }
         val albumArtBaseUri = Uri.parse("content://media/external/audio/albumart")
         val artworkUri = if (track.path.startsWith("nodeplayer://youtube/")) {
-            Uri.parse("https://i.ytimg.com/vi/${track.path.removePrefix("nodeplayer://youtube/")}/hqdefault.jpg")
+            Uri.parse("https://i.ytimg.com/vi/${track.path.removePrefix("nodeplayer://youtube/")}/maxresdefault.jpg")
         } else ContentUris.withAppendedId(albumArtBaseUri, track.albumId)
         val metadata = MediaMetadata.Builder()
             .setTitle(track.title)

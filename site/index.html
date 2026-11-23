@@ -1,310 +1,404 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Node Player — Audiophile Music Player with Liquid Glass & 120 Hz</title>
-  <meta name="description" content="Node Player is a local-first audiophile music player built with Compose Multiplatform, 32-bit float audio pipeline, 120 Hz fluid refresh rate, and hardware-accelerated liquid glass shaders.">
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
-  <meta property="og:title" content="Node Player — Liquid Glass Audiophile Player">
-  <meta property="og:description" content="Experience high-fidelity 32-bit audio with real-time liquid glass aesthetics and fluid 120 Hz support.">
-  <meta property="og:image" content="og_image.png">
-  <meta property="og:type" content="website">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Node Player — Audiophile 32-Bit & Hybrid YouTube Music Player</title>
+  <meta name="description" content="Audiophile 32-bit floating-point music player & hybrid YouTube Music client with 120 Hz liquid glass UI, word-by-word karaoke, offline mixtape, and Node Connect P2P audio casting." />
+  <meta property="og:title" content="Node Player — Liquid Glass Audiophile & YouTube Music Player" />
+  <meta property="og:description" content="Local-first audiophile music player with 120 Hz liquid glass UI, 5-provider word-by-word karaoke, AutoEQ, and zero-telemetry privacy." />
+  <meta property="og:image" content="assets/brand/og-preview.png" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="assets/css/theme.css" />
 </head>
 <body>
 
-  <!-- Sticky Morphing Glass Navigation -->
-  <header class="header-nav">
-    <a href="#" class="nav-brand">
-      <img src="favicon.svg" alt="Node Player Logo" width="28" height="28">
-      <span>Node Player</span>
-    </a>
-    <ul class="nav-links">
-      <li><a href="#fidelity">120 Hz & Audio</a></li>
-      <li><a href="#screens">Screenshots</a></li>
-      <li><a href="#features">Features</a></li>
-      <li><a href="#download">Download</a></li>
-    </ul>
-    <div class="nav-actions">
-      <button class="theme-toggle-btn" id="themeToggle" aria-label="Toggle theme">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line>
-          <line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line>
-          <line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-      </button>
-      <a href="#download" class="btn btn-primary">Get v1.8.0</a>
+  <!-- Top Sticky Glass Navbar -->
+  <header class="site-nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand">
+        <img src="favicon.svg" alt="Node Player Logo" width="28" height="28" />
+        <span>Node Player</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html" class="active">Showcase</a></li>
+        <li><a href="features.html">Features</a></li>
+        <li><a href="docs.html">Technical Docs</a></li>
+        <li><a href="changelog.html">Changelog</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a href="#download" class="btn-pill btn-accent">Download Latest</a>
+        <a href="https://github.com/Krighz/node-player" target="_blank" rel="noopener noreferrer" class="btn-pill btn-ghost">GitHub</a>
+      </div>
     </div>
   </header>
 
-  <!-- Hero Section -->
-  <main>
-    <section class="hero-section">
-      <div class="hero-content">
-        <span class="version-pill">Release v1.8.0 • Liquid Glass & 120 Hz</span>
-        <h1 class="hero-title">Purity in Sound. Fluidity in Glass.</h1>
-        <p class="hero-subtitle">
-          An audiophile music player built from the ground up for bit-perfect local listening. Engineered with custom AGSL liquid glass shaders, 32-bit float audio engine, and native 120 Hz display refresh support.
+  <!-- Interactive Hero Section -->
+  <section class="hero">
+    <div class="hero-bg-glow"></div>
+    <div class="hero-content">
+      <div class="hero-text">
+        <div class="badge-pill">
+          <span class="badge-dot"></span>
+          <span>v2.1.0 Release Live</span>
+        </div>
+        <h1 class="hero-title">
+          Audiophile Precision.<br />
+          <span>Liquid Glass Motion.</span>
+        </h1>
+        <p class="hero-desc">
+          The hybrid YouTube Music &amp; bit-perfect 32-bit local audio player built with Compose Multiplatform for Android and Windows Desktop. Engineered with custom 120 Hz AGSL liquid shaders, 5-provider synced karaoke, and zero telemetry.
         </p>
-        <div class="hero-cta">
-          <a href="#download" class="btn btn-primary">Download APK / Windows</a>
-          <a href="https://github.com/Krighz/node-player" target="_blank" rel="noopener" class="btn btn-secondary">
-            GitHub Repository
+
+        <!-- Live Mode Switcher -->
+        <div class="mode-switcher-wrap">
+          <div class="mode-switcher">
+            <button id="hero-mode-yt" class="mode-btn active" type="button">
+              <span class="mode-indicator"></span>YT Music Online
+            </button>
+            <button id="hero-mode-files" class="mode-btn" type="button">
+              Device Files Offline
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Mode Metrics -->
+        <div class="stats-grid">
+          <div class="stat-item">
+            <div id="stat-1-val" class="stat-val">~1.1s</div>
+            <div id="stat-1-label" class="stat-label">Stream Startup</div>
+          </div>
+          <div class="stat-item">
+            <div id="stat-2-val" class="stat-val">128 KB</div>
+            <div id="stat-2-label" class="stat-label">Chunked Buffer</div>
+          </div>
+          <div class="stat-item">
+            <div id="stat-3-val" class="stat-val">6 Shelves</div>
+            <div id="stat-3-label" class="stat-label">Curated Moods &amp; Mixes</div>
+          </div>
+          <div class="stat-item">
+            <div id="stat-4-val" class="stat-val">16:9</div>
+            <div id="stat-4-label" class="stat-label">Music Video Support</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+          <a href="#download" class="btn-pill btn-accent" style="padding: 0.75rem 1.75rem; font-size: 0.95rem;">Get Node Player</a>
+          <a href="features.html" class="btn-pill btn-ghost" style="padding: 0.75rem 1.5rem; font-size: 0.95rem;">Explore All Features</a>
+        </div>
+      </div>
+
+      <!-- Live Mockup Preview -->
+      <div class="phone-mockup-wrapper">
+        <div class="phone-mockup">
+          <div class="phone-notch"></div>
+          <div id="hero-phone-screen" class="phone-screen">
+            <img src="screenshots/01_home_ytmusic.webp" alt="Node Player Android Home Interface" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8-Card Asymmetric Bento Grid (Post-v1.8.0 Features) -->
+  <section class="section">
+    <div class="section-header">
+      <div class="section-badge">Architecture &amp; Features</div>
+      <h2 class="section-title">Engineered For The Modern Listener</h2>
+      <p class="section-subtitle">A seamless blend of studio-grade signal processing and cutting-edge visual craft.</p>
+    </div>
+
+    <div class="bento-grid">
+      <!-- 1. Karaoke Lyrics (2 Col) -->
+      <div class="bento-card col-span-2">
+        <div class="bento-header">
+          <div class="bento-icon">🎤</div>
+          <h3 class="bento-card-title">5-Provider Word-by-Word Karaoke</h3>
+          <p class="bento-card-desc">
+            Sub-pixel 120 FPS syllable sweep powered by BiniLyrics, BetterLyrics, LyricsPlus, LrcLib, KuGou, and TTML. Features active-word glow, smooth autoscroll, and non-blocking cascading fallback.
+          </p>
+        </div>
+        <div class="bento-visual">
+          <img src="screenshots/03_karaoke_lyrics.webp" alt="Word-by-word synced karaoke lyrics" />
+        </div>
+      </div>
+
+      <!-- 2. Lyric Cards (1 Col) -->
+      <div class="bento-card">
+        <div class="bento-header">
+          <div class="bento-icon">🎨</div>
+          <h3 class="bento-card-title">1080×1920 &amp; 4:3 Lyric Cards</h3>
+          <p class="bento-card-desc">
+            Select up to 6 lines to generate beautiful shareable lyric cards with artwork-derived gradients, squircle disc marks, and instant Instagram Stories or Gallery export.
+          </p>
+        </div>
+        <div class="bento-visual">
+          <img src="screenshots/04_lyric_card.webp" alt="Shareable Lyric Card Dialog" />
+        </div>
+      </div>
+
+      <!-- 3. Smart Offline Mixtape (1 Col) -->
+      <div class="bento-card">
+        <div class="bento-header">
+          <div class="bento-icon">⚡</div>
+          <h3 class="bento-card-title">Smart Offline Mixtape</h3>
+          <p class="bento-card-desc">
+            Autonomous background caching over Wi-Fi balancing 60% fresh recommendations and 40% heavy rotation. Two-tier LRU eviction keeps your favorite music ready without network latency.
+          </p>
+        </div>
+      </div>
+
+      <!-- 4. Interactive Artist Pages (2 Col) -->
+      <div class="bento-card col-span-2">
+        <div class="bento-header">
+          <div class="bento-icon">👤</div>
+          <h3 class="bento-card-title">Full Interactive Artist Pages</h3>
+          <p class="bento-card-desc">
+            Immersive 380dp edge-to-edge artist portraits, Shuffle/Play/Follow trio, Latest Release card, 4-row Top Songs, and 7 categorized shelves with dedicated discography sheets.
+          </p>
+        </div>
+        <div class="bento-visual">
+          <img src="screenshots/05_artist_page.webp" alt="Interactive Artist Page on Node Player" />
+        </div>
+      </div>
+
+      <!-- 5. Section Markers (1 Col) -->
+      <div class="bento-card">
+        <div class="bento-header">
+          <div class="bento-icon">📍</div>
+          <h3 class="bento-card-title">Song Section Markers</h3>
+          <p class="bento-card-desc">
+            Navigate songs structurally with one-tap Intro, Verse, Chorus, Drop, Bridge, and Solo pills floating directly above the timeline scrubber.
+          </p>
+        </div>
+      </div>
+
+      <!-- 6. 10-Band EQ + AutoEQ (2 Col) -->
+      <div class="bento-card col-span-2">
+        <div class="bento-header">
+          <div class="bento-icon">🎛️</div>
+          <h3 class="bento-card-title">32-Bit Float DSP, AutoEQ &amp; DJ Blend</h3>
+          <p class="bento-card-desc">
+            10-band biquad parametric EQ with built-in Harman IEM profiles (Sony, Sennheiser, Moondrop, Tangzu, 7Hz, AirPods Pro 2) and acoustic-power normalized DJ Blend continuous crossfading.
+          </p>
+        </div>
+        <div class="bento-visual">
+          <img src="screenshots/06_mixtape_and_dsp.webp" alt="10-Band Parametric EQ and AutoEQ" />
+        </div>
+      </div>
+
+      <!-- 7. Node Connect P2P Mesh (1 Col) -->
+      <div class="bento-card">
+        <div class="bento-header">
+          <div class="bento-icon">🔗</div>
+          <h3 class="bento-card-title">Node Connect P2P Mesh</h3>
+          <p class="bento-card-desc">
+            Zero-config Wi-Fi 16-bit 48kHz PCM casting, stateful playback handoff, and encrypted mutual-TLS QR pairing between Windows PC and Android phones.
+          </p>
+        </div>
+      </div>
+
+      <!-- 8. 120 Hz Zero-Recomposition Engine (2 Col) -->
+      <div class="bento-card col-span-2">
+        <div class="bento-header">
+          <div class="bento-icon">🚀</div>
+          <h3 class="bento-card-title">120 Hz Zero-Recomposition Engine</h3>
+          <p class="bento-card-desc">
+            Leaf-level state tickers, Room compound index queries under 15ms, and custom hardware AGSL liquid glass shaders with Safe Graphics automated diagnostics.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live UI Motion & Screenshot Gallery -->
+  <section class="section">
+    <div class="section-header">
+      <div class="section-badge">Gallery</div>
+      <h2 class="section-title">Visual Craft in Every Pixel</h2>
+      <p class="section-subtitle">Captured live on connected Android hardware over ADB.</p>
+    </div>
+
+    <div class="gallery-grid">
+      <div class="gallery-item">
+        <div class="gallery-thumb">
+          <img src="screenshots/01_home_ytmusic.webp" alt="Home Screen" loading="lazy" />
+        </div>
+        <div class="gallery-meta">
+          <h4>01. Home &amp; Discovery</h4>
+          <p>Dual [YT Music | Device Files] bar with mood chips and algorithmic mix cards.</p>
+        </div>
+      </div>
+
+      <div class="gallery-item">
+        <div class="gallery-thumb">
+          <img src="screenshots/02_now_playing.webp" alt="Now Playing Screen" loading="lazy" />
+        </div>
+        <div class="gallery-meta">
+          <h4>02. Now Playing Sheet</h4>
+          <p>Album art gradient bleed, section markers, volume slider, and output indicators.</p>
+        </div>
+      </div>
+
+      <div class="gallery-item">
+        <div class="gallery-thumb">
+          <img src="screenshots/03_karaoke_lyrics.webp" alt="Word-by-Word Karaoke" loading="lazy" />
+        </div>
+        <div class="gallery-meta">
+          <h4>03. Word-by-Word Karaoke</h4>
+          <p>120 FPS sub-pixel sweep with active-word glow and instant provider fallback.</p>
+        </div>
+      </div>
+
+      <div class="gallery-item">
+        <div class="gallery-thumb">
+          <img src="screenshots/04_lyric_card.webp" alt="Lyric Card Generator" loading="lazy" />
+        </div>
+        <div class="gallery-meta">
+          <h4>04. Lyric Card Studio</h4>
+          <p>Multi-line lyric selection with high-res 4:3 social sharing export.</p>
+        </div>
+      </div>
+
+      <div class="gallery-item">
+        <div class="gallery-thumb">
+          <img src="screenshots/05_artist_page.webp" alt="Artist Detail Page" loading="lazy" />
+        </div>
+        <div class="gallery-meta">
+          <h4>05. Artist Experience</h4>
+          <p>380dp hero portrait, Shuffle/Play/Follow, and complete catalog exploration.</p>
+        </div>
+      </div>
+
+      <div class="gallery-item">
+        <div class="gallery-thumb">
+          <img src="screenshots/06_mixtape_and_dsp.webp" alt="Equalizer & DSP" loading="lazy" />
+        </div>
+        <div class="gallery-meta">
+          <h4>06. 10-Band EQ &amp; DSP</h4>
+          <p>Studio-grade biquad equalization, AutoEQ headphone curves, and A/B comparison.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Auto-Updating Download Hub -->
+  <section id="download" class="download-section">
+    <div class="section-header">
+      <div class="section-badge">Get Node Player</div>
+      <h2 class="section-title">Install on Android &amp; Windows</h2>
+      <p class="section-subtitle">100% free, open-source, and zero tracking. Release <span id="release-version-badge" style="color:var(--accent-teal); font-weight:700;">v2.1.0</span>.</p>
+    </div>
+
+    <div class="download-cards">
+      <!-- Android Card -->
+      <div class="dl-card">
+        <div>
+          <div class="dl-card-header">
+            <div class="dl-platform-icon">🤖</div>
+            <div>
+              <h3>Android Application</h3>
+              <div id="apk-size-label" class="dl-meta-badge">v2.1.0 • ~50 MB • Android 8.0+</div>
+            </div>
+          </div>
+          <p style="color: var(--text-secondary); font-size: 0.92rem; margin-top: 1rem;">
+            Signed with the official Node Player release key. Includes 120 Hz refresh rate lock, AGSL hardware shaders, and offline media store integration.
+          </p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <a id="btn-download-apk" href="https://github.com/Krighz/node-player/releases/latest" class="btn-pill btn-accent" style="width: 100%;">
+            Download Android APK
           </a>
         </div>
-        <div class="hero-specs">
-          <div><strong>120 Hz</strong> Display Sync</div>
-          <div><strong>32-bit Float</strong> Audio Path</div>
-          <div><strong>10-Band</strong> Parametric EQ</div>
-          <div><strong>Node Connect</strong> Lossless Cast</div>
-        </div>
       </div>
 
-      <div class="hero-visual">
-        <div class="phone-mockup" id="heroMockup">
-          <div class="phone-screen">
-            <picture>
-              <source type="image/webp" srcset="screenshots/01_home_dock.webp 1x, screenshots/01_home_dock@2x.webp 2x">
-              <img src="screenshots/01_home_dock.png" alt="Node Player Home Screen" width="1080" height="2376" loading="eager">
-            </picture>
+      <!-- Windows Card -->
+      <div class="dl-card">
+        <div>
+          <div class="dl-card-header">
+            <div class="dl-platform-icon">🪟</div>
+            <div>
+              <h3>Windows Desktop</h3>
+              <div id="win-size-label" class="dl-meta-badge">v2.1.0 • ~120 MB • Windows 10/11 x64</div>
+            </div>
           </div>
+          <p style="color: var(--text-secondary); font-size: 0.92rem; margin-top: 1rem;">
+            Standalone portable desktop application with bit-perfect WASAPI audio output, expanding liquid glass dock, hotkey matrix, and local SQLite library.
+          </p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <a id="btn-download-win" href="https://github.com/Krighz/node-player/releases/latest" class="btn-pill btn-accent" style="width: 100%;">
+            Download Windows App
+          </a>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- 120 Hz & High Fidelity Section -->
-    <section class="fidelity-section" id="fidelity">
-      <div class="fidelity-container">
-        <div class="feature-highlight-card">
-          <span class="highlight-badge">Display Engine</span>
-          <h2 class="highlight-card-title">120 Hz Fluid Refresh Rate</h2>
-          <p class="highlight-card-desc">
-            Node Player dynamically locks onto your screen's peak refresh rate. Experience ultra-smooth scrolling, spring-physics dock transitions, and responsive fluid tactile controls without frame stutter.
-          </p>
-          <div class="live-fps-meter">
-            <span class="fps-num" id="liveFps">120</span>
-            <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-muted);">FPS / Active VSync</span>
-          </div>
-          <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 6px;">
-            Heads-up: Real-time glass effects at 120 Hz are GPU-heavy. Mid-range phones can reduce shader complexity anytime under Settings &gt; Performance Mode.
-          </p>
-        </div>
-
-        <div class="feature-highlight-card">
-          <span class="highlight-badge">Audio Engine</span>
-          <h2 class="highlight-card-title">Bit-Perfect 32-Bit Processing</h2>
-          <p class="highlight-card-desc">
-            Equipped with 10-band IIR biquad filters, EBU R128 loudness normalization, true peak headroom limiting, and WASAPI exclusive / Android direct audio sink routing for uncompromised acoustic fidelity.
-          </p>
-          <div style="display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap;">
-            <span style="padding: 6px 12px; background: var(--bg-surface); border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 600;">EBU R128</span>
-            <span style="padding: 6px 12px; background: var(--bg-surface); border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 600;">Dual-Exo Crossfade</span>
-            <span style="padding: 6px 12px; background: var(--bg-surface); border-radius: var(--radius-sm); font-size: 0.85rem; font-weight: 600;">Zero Distortion Limiter</span>
-          </div>
-        </div>
+    <!-- SHA256 Checksums -->
+    <div style="max-width: 960px; margin: 2rem auto 0;">
+      <div class="checksum-box">
+        <span id="sha256-hash-label">Verify release integrity with SHA256SUMS.txt on GitHub Releases</span>
+        <a href="https://github.com/Krighz/node-player/releases/latest" target="_blank" rel="noopener noreferrer" class="copy-btn">View Hashes</a>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <!-- Interactive Screenshots Carousel (1:1 Native Aspect Ratio) -->
-    <section class="carousel-section" id="screens">
-      <div class="section-header">
-        <h2 class="section-title">Crafted with Pure Liquid Glass</h2>
-        <p class="section-subtitle">
-          Real-time refraction, fluid spring physics, and intuitive touch ergonomics. Every screen operates at exact 1080×2376 native aspect ratio.
+  <!-- Sticky Glass Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <div class="nav-brand">
+          <img src="favicon.svg" alt="Node Player Logo" width="28" height="28" />
+          <span>Node Player</span>
+        </div>
+        <p>
+          Bit-perfect 32-bit audiophile music reproduction meets fluid liquid glass design on Android and Windows Desktop.
+        </p>
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 0.75rem;">
+          Liquid glass components adapted from <a href="https://github.com/Kyant0/AndroidLiquidGlass" target="_blank" rel="noopener noreferrer" style="color:var(--text-secondary); text-decoration:underline;">Kyant0 AndroidLiquidGlass</a> (Apache-2.0).
         </p>
       </div>
 
-      <div class="carousel-wrapper">
-        <div class="carousel-track" id="carouselTrack">
-          <!-- Slide 1 -->
-          <div class="carousel-slide">
-            <div class="carousel-frame">
-              <picture>
-                <source type="image/webp" srcset="screenshots/01_home_dock.webp 1x, screenshots/01_home_dock@2x.webp 2x">
-                <img src="screenshots/01_home_dock.png" alt="Home Screen with Liquid Dock" width="1080" height="2376" loading="lazy">
-              </picture>
-            </div>
-            <div class="slide-caption">1. Dynamic Liquid Dock & Mini Player</div>
+      <div class="footer-col">
+        <h5>Navigation</h5>
+        <ul>
+          <li><a href="index.html">Showcase</a></li>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="docs.html">Technical Docs</a></li>
+          <li><a href="changelog.html">Changelog</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h5>Community</h5>
+        <ul>
+          <li><a href="https://github.com/Krighz/node-player" target="_blank" rel="noopener noreferrer">GitHub Repo</a></li>
+          <li><a href="https://github.com/Krighz/node-player/releases" target="_blank" rel="noopener noreferrer">Releases</a></li>
+          <li><a href="https://github.com/Krighz/node-player/discussions" target="_blank" rel="noopener noreferrer">Discussions</a></li>
+          <li><a href="https://github.com/Krighz/node-player/blob/features-Peak/THIRD_PARTY_LICENSES.md" target="_blank" rel="noopener noreferrer">Licenses</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h5>Voluntary Support</h5>
+        <div class="upi-card">
+          <p style="font-size: 0.82rem; color: var(--text-secondary);">Support independent audiophile software development:</p>
+          <div class="upi-id-row">
+            <span>7063061981@fam</span>
+            <button class="copy-btn" data-copy="7063061981@fam" type="button">Copy UPI</button>
           </div>
-
-          <!-- Slide 2 -->
-          <div class="carousel-slide">
-            <div class="carousel-frame">
-              <picture>
-                <source type="image/webp" srcset="screenshots/02_now_playing.webp 1x, screenshots/02_now_playing@2x.webp 2x">
-                <img src="screenshots/02_now_playing.png" alt="Now Playing Screen" width="1080" height="2376" loading="lazy">
-              </picture>
-            </div>
-            <div class="slide-caption">2. Now Playing & Fluid Caustics</div>
-          </div>
-
-          <!-- Slide 3 -->
-          <div class="carousel-slide">
-            <div class="carousel-frame">
-              <picture>
-                <source type="image/webp" srcset="screenshots/03_equalizer.webp 1x, screenshots/03_equalizer@2x.webp 2x">
-                <img src="screenshots/03_equalizer.png" alt="10-Band Equalizer" width="1080" height="2376" loading="lazy">
-              </picture>
-            </div>
-            <div class="slide-caption">3. 10-Band Equalizer & Spatial DSP</div>
-          </div>
-
-          <!-- Slide 4 -->
-          <div class="carousel-slide">
-            <div class="carousel-frame">
-              <picture>
-                <source type="image/webp" srcset="screenshots/04_settings.webp 1x, screenshots/04_settings@2x.webp 2x">
-                <img src="screenshots/04_settings.png" alt="Settings Screen" width="1080" height="2376" loading="lazy">
-              </picture>
-            </div>
-            <div class="slide-caption">4. Deep Customization & 120 Hz Settings</div>
-          </div>
-        </div>
-
-        <div class="carousel-nav-btns">
-          <button class="btn btn-secondary" id="prevSlide" aria-label="Previous Slide">← Previous</button>
-          <button class="btn btn-secondary" id="nextSlide" aria-label="Next Slide">Next →</button>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.4rem;">Payee: Krighz</p>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- Features Section -->
-    <section class="features-section" id="features">
-      <div class="section-header">
-        <h2 class="section-title">Built for Discerning Listeners</h2>
-        <p class="section-subtitle">Local-first, completely private, and free of telemetry or tracking.</p>
-      </div>
-
-      <div class="features-grid">
-        <div class="feature-box">
-          <h4>Liquid Glass Shaders</h4>
-          <p>Real-time AGSL lens refraction, chromatic fringe, and tactile spring responsiveness powered by Kyant's backdrop engine.</p>
-        </div>
-        <div class="feature-box">
-          <h4>Continuous Crossfade</h4>
-          <p>Dual ExoPlayer architecture with equal-power curves and intelligent gapless transition bypass for continuous albums.</p>
-        </div>
-        <div class="feature-box">
-          <h4>Node Connect P2P</h4>
-          <p>Zero-configuration cross-device audio casting and state handoff over TLS between Android and Windows.</p>
-        </div>
-        <div class="feature-box">
-          <h4>Offline-First Caching</h4>
-          <p>Autonomous 512MB LRU audio caching ensuring online discovery playback stays instantly available offline.</p>
-        </div>
-        <div class="feature-box">
-          <h4>Synchronized Lyrics</h4>
-          <p>Built-in LRC parser displaying smooth scrolling timestamped lyrics with instant jump-to-time scrubbing.</p>
-        </div>
-        <div class="feature-box">
-          <h4>Multiplatform Architecture</h4>
-          <p>Unified Kotlin Compose Multiplatform codebase sharing domain models, DSP pipeline, and responsive layouts.</p>
-        </div>
-      </div>
-    </section>
-
-    <!-- Download Section -->
-    <section class="download-section" id="download">
-      <div class="download-container">
-        <div class="section-header">
-          <h2 class="section-title">Download Node Player v1.8.0</h2>
-          <p class="section-subtitle">Choose your platform below. Verify checksums with SHA256SUMS.txt.</p>
-        </div>
-
-        <div class="download-cards">
-          <!-- Android Card -->
-          <div class="download-card" id="cardAndroid">
-            <span class="card-badge" id="badgeAndroid">Recommended</span>
-            <div>
-              <h3 style="font-size: 1.5rem; margin-bottom: 8px;">Android Release</h3>
-              <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 20px;">
-                Android 8.0+ (API 26+) • Phone, Tablet &amp; Automotive. Supports 120 Hz high refresh rate and AGSL glass effects.
-              </p>
-              <a href="https://github.com/Krighz/node-player/releases/download/v1.8.0/NodePlayer-1.8.0-android.apk" class="btn btn-primary" style="width: 100%;">
-                Download Android APK
-              </a>
-            </div>
-            <div class="sha-container">
-              <span id="shaAndroidText">041b3335e41a5bb4cf68af6f8e42b8ce0a08017f5629b173b96410d262239eda</span>
-              <button class="sha-copy-btn" onclick="navigator.clipboard.writeText('041b3335e41a5bb4cf68af6f8e42b8ce0a08017f5629b173b96410d262239eda')">Copy</button>
-            </div>
-          </div>
-
-          <!-- Windows Card -->
-          <div class="download-card" id="cardWindows">
-            <span class="card-badge" id="badgeWindows" style="display: none;">Recommended</span>
-            <div>
-              <h3 style="font-size: 1.5rem; margin-bottom: 8px;">Windows Desktop</h3>
-              <p style="color: var(--text-secondary); font-size: 0.95rem; margin-bottom: 20px;">
-                Windows 10 / 11 64-bit • Standalone portable zip with WASAPI bit-perfect output and SMTC media integration.
-              </p>
-              <a href="https://github.com/Krighz/node-player/releases/download/v1.8.0/NodePlayer-1.8.0-windows-x64.zip" class="btn btn-secondary" style="width: 100%;">
-                Download Windows Zip
-              </a>
-            </div>
-            <div class="sha-container">
-              <span id="shaWinText">2e8247477f6cb96311db7d155a3c82fd83e4fe03fdd9b0de62888d64d371f319</span>
-              <button class="sha-copy-btn" onclick="navigator.clipboard.writeText('2e8247477f6cb96311db7d155a3c82fd83e4fe03fdd9b0de62888d64d371f319')">Copy</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- FAQ Accordion -->
-    <section class="faq-section">
-      <div class="section-header">
-        <h2 class="section-title">Frequently Asked Questions</h2>
-      </div>
-
-      <div class="faq-item">
-        <div class="faq-question">How does 120 Hz display mode work? <span>+</span></div>
-        <div class="faq-answer">
-          Node Player queries your device's supported display modes via Android DisplayManager and requests the peak available refresh rate (e.g., 120 Hz on supported displays). You can adjust this anytime in Settings &gt; Refresh Rate (Auto, 60 Hz, 120 Hz, Highest).
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <div class="faq-question">Why does my phone get warm during playback? <span>+</span></div>
-        <div class="faq-answer">
-          Real-time liquid glass shaders compute caustics, rim speculars, and lens refractions per frame. Running at 120 Hz increases GPU utilization. To minimize battery use, enable "Performance Mode" in Settings.
-        </div>
-      </div>
-
-      <div class="faq-item">
-        <div class="faq-question">Is Node Player open source? <span>+</span></div>
-        <div class="faq-answer">
-          Yes! Node Player is licensed under open source terms with full source code available on GitHub.
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <!-- Footer -->
-  <footer class="site-footer">
-    <div class="footer-content">
-      <div>
-        <p><strong>Node Player</strong> — Audiophile music player with liquid glass.</p>
-        <p style="margin-top: 6px;">Includes Kyant0 AndroidLiquidGlass backdrop components (Apache-2.0).</p>
-      </div>
-      <div class="footer-links">
-        <a href="https://github.com/Krighz/node-player" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://github.com/Krighz/node-player/releases" target="_blank" rel="noopener">Releases</a>
-        <a href="https://github.com/Krighz/node-player/blob/main/THIRD_PARTY_LICENSES.md" target="_blank" rel="noopener">Licenses</a>
-      </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Node Player Team. Released under the Apache 2.0 License.</span>
+      <span>Engineered for Android &amp; Windows Desktop</span>
     </div>
   </footer>
 
-  <script src="script.js"></script>
+  <script src="assets/js/app.js"></script>
 </body>
 </html>

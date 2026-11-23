@@ -174,7 +174,8 @@ data class AudioEffectConfig(
 enum class FadeCurve(val displayName: String) {
     LINEAR("Linear"),
     EQUAL_POWER("Equal Power"),
-    LOGARITHMIC("Logarithmic")
+    LOGARITHMIC("Logarithmic"),
+    DJ_BLEND("DJ Blend (Constant Bass)")
 }
 
 data class CrossfadeConfig(
@@ -217,7 +218,9 @@ data class LyricsViewConfig(
     val wordFillStyle: String = "GRADIENT_SWEEP", // GRADIENT_SWEEP, PER_WORD_FADE
     val autoHideDelaySec: Int = 5,
     val showPreviewLine: Boolean = true,
-    val keepScreenOn: Boolean = true
+    val keepScreenOn: Boolean = true,
+    val romanizeForeignLyrics: Boolean = true,
+    val lyricsDisplayMode: LyricsDisplayMode = LyricsDisplayMode.DUAL_LINE
 )
 
 data class GlassThemeConfig(
@@ -275,6 +278,8 @@ data class GlassThemeConfig(
     val dockGlassLensEnabled: Boolean = true,
     val dockGlassRimEnabled: Boolean = true,
     val dockGlassPuckEnabled: Boolean = true,
+    val artZoomScale: Float = 1.03f,
+    val artVerticalOffsetDp: Int = 0,
     val dockAutoHideEnabled: Boolean = true,
     val dockAutoHideMiniPlayer: Boolean = true,
     val dockScrollSensitivity: Float = 1.0f,

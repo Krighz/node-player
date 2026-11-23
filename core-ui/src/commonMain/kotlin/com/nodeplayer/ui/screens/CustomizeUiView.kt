@@ -43,7 +43,8 @@ import com.nodeplayer.ui.theme.LiquidColors
 fun CustomizeUiView(
     themeConfig: GlassThemeConfig,
     onThemeConfigChange: (GlassThemeConfig) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isEmbedded: Boolean = false
 ) {
     val accent = LocalAccentColor.current
     val scrollState = rememberScrollState()
@@ -69,16 +70,20 @@ fun CustomizeUiView(
     var expandedMotion by remember { mutableStateOf(false) }
     var expandedAccordions by remember { mutableStateOf(setOf<GlassComponentType>()) }
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = if (isEmbedded) modifier.fillMaxWidth() else modifier.fillMaxSize()) {
         val isDesktopSplit = maxWidth > 840.dp
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+            modifier = if (isEmbedded) {
+                Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            } else {
+                Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp)
+            }
         ) {
-            ScreenHeader()
-            Spacer(modifier = Modifier.height(10.dp))
+            if (!isEmbedded) {
+                ScreenHeader()
+                Spacer(modifier = Modifier.height(10.dp))
+            }
 
             // 1. Pinned Interactive Live Preview Card (D-03)
             LiveInteractiveGlassPreviewCard(
@@ -89,11 +94,13 @@ fun CustomizeUiView(
             Spacer(modifier = Modifier.height(14.dp))
 
             // 2. Scrollable Accordion Sections
+            val accordionModifier = if (isEmbedded) {
+                Modifier.fillMaxWidth()
+            } else {
+                Modifier.fillMaxWidth().weight(1f).verticalScroll(scrollState)
+            }
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(scrollState),
+                modifier = accordionModifier,
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // Master Glass Shaders & Presets Card

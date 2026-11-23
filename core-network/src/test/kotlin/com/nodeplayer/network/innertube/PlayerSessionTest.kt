@@ -27,12 +27,13 @@ class PlayerSessionTest {
                     assertEquals("SAPISID=synthetic", request.headers[HttpHeaders.Cookie])
                     assertNotNull(request.headers[HttpHeaders.Authorization])
                     assertTrue(body.contains("\"signatureTimestamp\":12345"))
+                    assertEquals(listOf(YouTubeClient.ORIGIN_YOUTUBE_MUSIC), request.headers.getAll("Origin"))
                 } else {
                     assertNull(request.headers[HttpHeaders.Cookie])
                     assertNull(request.headers[HttpHeaders.Authorization])
                     assertNull(request.headers["X-Origin"])
+                    assertNull(request.headers["Origin"])
                 }
-                assertEquals(listOf(YouTubeClient.ORIGIN_YOUTUBE_MUSIC), request.headers.getAll("Origin"))
             }
             respond("{}", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
         }

@@ -44,7 +44,7 @@ fun HomeView(
     onPairNewDevice: () -> Unit = {},
     onCastToPeer: (DiscoveredPeerInfo) -> Unit = {},
     onToggleNodeConnect: (Boolean) -> Unit = {},
-    onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
+    onOpenPlaylistDetail: ((id: String, title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
     youTubeAccount: com.nodeplayer.model.YouTubeAccount? = null,
     modifier: Modifier = Modifier
 ) {

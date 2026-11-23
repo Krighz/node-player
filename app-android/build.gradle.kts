@@ -31,6 +31,12 @@ val lastFmApiSecret = getPropValue(localProperties, "LASTFM_API_SECRET")
     ?: getPropValue(defaultLastFmProperties, "LASTFM_API_SECRET")
     ?: System.getenv("LASTFM_API_SECRET")
     ?: ""
+val gdriveClientIdDebug = getPropValue(localProperties, "google.drive.clientId.debug")
+    ?: System.getenv("GDRIVE_CLIENT_ID_DEBUG")
+    ?: ""
+val gdriveClientIdRelease = getPropValue(localProperties, "google.drive.clientId.release")
+    ?: System.getenv("GDRIVE_CLIENT_ID_RELEASE")
+    ?: ""
 
 android {
     namespace = "com.nodeplayer.music"
@@ -40,13 +46,14 @@ android {
         applicationId = "com.nodeplayer.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = (project.findProperty("appVersionCode") as? String)?.toInt() ?: 13
-        versionName = (project.findProperty("appVersionName") as? String) ?: "1.8.0"
+        versionCode = (project.findProperty("appVersionCode") as? String)?.toInt() ?: 15
+        versionName = (project.findProperty("appVersionName") as? String) ?: "2.1.0"
 
         manifestPlaceholders["appName"] = "Node Player"
 
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmApiKey\"")
         buildConfigField("String", "LASTFM_API_SECRET", "\"$lastFmApiSecret\"")
+        buildConfigField("String", "GDRIVE_CLIENT_ID", "\"$gdriveClientIdDebug\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -100,7 +107,11 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            buildConfigField("String", "GDRIVE_CLIENT_ID", "\"$gdriveClientIdDebug\"")
+        }
         release {
+            buildConfigField("String", "GDRIVE_CLIENT_ID", "\"$gdriveClientIdRelease\"")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -112,6 +123,7 @@ android {
         }
         create("staging") {
             initWith(getByName("release"))
+            buildConfigField("String", "GDRIVE_CLIENT_ID", "\"$gdriveClientIdRelease\"")
             applicationIdSuffix = ".staging"
             manifestPlaceholders["appName"] = "Node Player (Test)"
             matchingFallbacks += listOf("release")
@@ -141,6 +153,25 @@ android {
     }
 }
 
+val newPipeExtractorRaw: Configuration by configurations.creating {
+    isTransitive = false
+    isCanBeConsumed = false
+}
+
+dependencies {
+    newPipeExtractorRaw("com.github.TeamNewPipe:NewPipeExtractor:v0.26.3")
+}
+
+val newPipeExtractorStripped = tasks.register<org.gradle.api.tasks.bundling.Jar>("stripNewPipeExtractorUtils") {
+    archiveFileName.set("NewPipeExtractor-v0.26.3-noutils.jar")
+    destinationDirectory.set(layout.buildDirectory.dir("intermediates/newpipe"))
+    from(provider { newPipeExtractorRaw.map { zipTree(it) } }) {
+        exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
+        exclude("org/schabi/newpipe/extractor/utils/Utils.class")
+        exclude("org/schabi/newpipe/extractor/utils/Utils$*.class")
+    }
+}
+
 dependencies {
     implementation(project(":core-common"))
     implementation(project(":core-model"))
@@ -152,6 +183,18 @@ dependencies {
 
     // Security / EncryptedSharedPreferences (Hardware Keystore backed AES-256-GCM)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // On-device audio transcoding (LGPL)
+    implementation("dev.ffmpegkit-maintained:ffmpeg-kit-audio:6.0.4")
+
+    // NewPipeExtractor (failsafe stream resolution without 1 MiB cap)
+    implementation(files(newPipeExtractorStripped))
+    implementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0a5d5ef20ca7ef09549996")
+    implementation("com.google.protobuf:protobuf-javalite:3.25.3")
+    implementation("com.google.code.findbugs:jsr305:3.0.2")
+    implementation("org.jsoup:jsoup:1.17.2")
+    implementation("org.mozilla:rhino:1.7.14")
+    implementation("org.mozilla:rhino-engine:1.7.14")
 
     // Ktor client (required by core-network StreamResolver)
     val ktorVersion = "2.3.12"
@@ -178,6 +221,7 @@ dependencies {
     implementation("androidx.media3:media3-session:$media3Version")
     implementation("androidx.media3:media3-common:$media3Version")
     implementation("androidx.media3:media3-ui:$media3Version")
+    implementation("androidx.media3:media3-datasource-okhttp:$media3Version")
 
     // Palette & Coil
     implementation("androidx.palette:palette-ktx:1.0.0")
@@ -208,6 +252,14 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
+    testImplementation(files(newPipeExtractorStripped))
+    testImplementation("com.github.TeamNewPipe:nanojson:e9d656ddb49a412a5a0a5d5ef20ca7ef09549996")
+    testImplementation("com.google.protobuf:protobuf-javalite:3.25.3")
+    testImplementation("org.jsoup:jsoup:1.17.2")
+    testImplementation("org.mozilla:rhino:1.7.14")
+    testImplementation("org.mozilla:rhino-engine:1.7.14")
+    testImplementation("com.squareup.okhttp3:okhttp:4.12.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
     androidTestImplementation(platform("androidx.compose:compose-bom:2024.10.01"))
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")

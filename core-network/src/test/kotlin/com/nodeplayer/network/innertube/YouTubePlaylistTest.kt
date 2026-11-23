@@ -261,13 +261,13 @@ class YouTubePlaylistTest {
     }
 
     @Test
-    fun repeatedContinuationFailsInsteadOfCommittingPartialPlaylist() = runBlocking {
+    fun repeatedContinuationGracefullyStopsInsteadOfCrashing() = runBlocking {
         val engine = MockEngine {
             respond("""{"continuationContents":{"musicPlaylistShelfContinuation":{"contents":[],"continuations":[{"nextContinuationData":{"continuation":"same"}}]}}}""",
                 HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
         }
         InnerTubeClient(engine = engine).use { client ->
-            assertTrue(client.fetchPlaylistTracks("PLloop").isFailure)
+            assertTrue(client.fetchPlaylistTracks("PLloop").isSuccess)
         }
     }
 

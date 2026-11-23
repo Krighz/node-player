@@ -30,6 +30,7 @@ class WindowsPlaybackEngine(
     var preDspPcmTap: ((ByteArray, Long) -> Unit)? = null
     var onSeekFlushCallback: ((Long) -> Unit)? = null
     var onTrackStartedCallback: ((Track) -> Unit)? = null
+    var onTrackCompletedCallback: ((Track) -> Unit)? = null
 
     private val _queue = MutableStateFlow<List<Track>>(emptyList())
     val queue: StateFlow<List<Track>> = _queue.asStateFlow()
@@ -292,20 +293,51 @@ class WindowsPlaybackEngine(
                 _currentTrack.value?.let { playTrack(it) }
             }
             1 -> { // Repeat ALL
-                val nextIdx = (_currentQueueIndex.value + 1) % q.size
+                val nextIdx = if (_isShuffle.value && q.size > 1) {
+                    var r = (0 until q.size).random()
+                    while (r == _currentQueueIndex.value && q.size > 1) {
+                        r = (0 until q.size).random()
+                    }
+                    r
+                } else {
+                    (_currentQueueIndex.value + 1) % q.size
+                }
                 _currentQueueIndex.value = nextIdx
                 playTrack(q[nextIdx])
             }
             else -> { // Repeat OFF
-                val nextIdx = _currentQueueIndex.value + 1
-                if (nextIdx < q.size) {
-                    _currentQueueIndex.value = nextIdx
-                    playTrack(q[nextIdx])
+                if (_isShuffle.value && q.size > 1) {
+                    var r = (0 until q.size).random()
+                    while (r == _currentQueueIndex.value && q.size > 1) {
+                        r = (0 until q.size).random()
+                    }
+                    _currentQueueIndex.value = r
+                    playTrack(q[r])
                 } else {
-                    stop()
+                    val nextIdx = _currentQueueIndex.value + 1
+                    if (nextIdx < q.size) {
+                        _currentQueueIndex.value = nextIdx
+                        playTrack(q[nextIdx])
+                    } else {
+                        stop()
+                    }
                 }
             }
         }
+    }
+
+    fun updateCurrentTrack(track: Track) {
+        if (_currentTrack.value?.id == track.id) {
+            _currentTrack.value = track
+        }
+    }
+
+    fun setShuffle(shuffle: Boolean) {
+        _isShuffle.value = shuffle
+    }
+
+    fun setRepeatMode(mode: Int) {
+        _repeatMode.value = mode.coerceIn(0, 2)
     }
 
     fun previous() {
@@ -487,6 +519,7 @@ class WindowsPlaybackEngine(
     }
 
     private fun onTrackCompleted() {
+        _currentTrack.value?.let { onTrackCompletedCallback?.invoke(it) }
         next()
     }
 }

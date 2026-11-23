@@ -151,6 +151,112 @@ Added in Milestone v2.5 (Phase 3) to provide centralized physics tokens, interac
 | **`staggeredListAnimation`**| Boolean | `true`, `false` | `true` | Zero | Applies staggered entrance cascade to lazy list items, deferred strictly to `Modifier.graphicsLayer`. | • `MotionModifiers.kt`<br>• `OnlineHomeView.kt` |
 | **`screenTransitionStyle`** | String | `"FADE_THROUGH"`, `"SHARED_AXIS_X"`, `"SHARED_AXIS_Y"`, `"SLIDE"` | `"FADE_THROUGH"` | Zero | Transition style for top-level screen and destination changes in `SharedPlayerLayout`. | • `ScreenTransitions.kt`<br>• `SharedPlayerLayout.kt` |
 
+---
+
+## 7. Discord Rich Presence Settings (`SettingsRegistry`)
+
+Accessible via **Settings > Online, Connect & Network > Discord Rich Presence (Desktop Only)**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`discord_enabled`** | Boolean | `true`, `false` | `false` | Desktop | Master toggle for Discord IPC rich presence | `PresenceController.kt`, `DiscordRichPresenceCard.kt`, `Main.kt` |
+| **`discord_incognito`** | Boolean | `true`, `false` | `false` | Desktop | Incognito mode: immediately clears presence and suspends updates | `PresenceController.kt`, `HomeProfileSheet.kt`, `DiscordRichPresenceCard.kt` |
+| **`discord_show_cover`** | Boolean | `true`, `false` | `true` | Desktop | Displays track cover art image in profile presence card | `PresenceController.kt`, `DiscordActivityBuilder.kt` |
+| **`discord_show_album`** | Boolean | `true`, `false` | `true` | Desktop | Displays album name alongside artist name | `PresenceController.kt`, `DiscordActivityBuilder.kt` |
+| **`discord_show_while_paused`** | Boolean | `true`, `false` | `false` | Desktop | Retains presence card when playback is paused instead of clearing | `PresenceController.kt` |
+| **`discord_app_id`** | String | Valid Discord Client ID | `""` | Desktop | Custom Application Client ID created in Discord Developer Portal | `PresenceController.kt`, `DiscordIpcTransport.kt` |
+
+---
+
+## 8. Audio Converter Settings (`SettingsRegistry`)
+
+Accessible via **Settings > Library & Files > Audio Converter**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`convert_default_preset`** | Choice | `"192"`, `"128"`, `"96"`, `"CUSTOM"` | `"128"` | All | Default Opus bitrate preset | `AudioConverterView.kt`, `SettingsRegistry.kt` |
+| **`convert_custom_bitrate`** | IntRange | 32 .. 320 kbps | `160` | All | Custom target bitrate when Custom preset is selected | `AudioConverterView.kt`, `SettingsRegistry.kt` |
+| **`convert_vbr`** | Toggle | `true`, `false` | `true` | All | Dynamic bitrate allocation tailored to acoustic complexity | `AudioConverterView.kt`, `TranscodeJob.kt` |
+| **`convert_application`** | Choice | `"audio"`, `"voip"`, `"lowdelay"` | `"audio"` | All | Opus encoder application mode tuning | `AudioConverterView.kt`, `TranscodeJob.kt` |
+| **`convert_compression_level`** | IntRange | 0 .. 10 | `10` | All | Opus encoder computational complexity | `AudioConverterView.kt`, `TranscodeJob.kt` |
+| **`convert_keep_original`** | Toggle | `true`, `false` | `true` | All | Keep original source FLAC files after verified conversion | `AudioConverterView.kt`, `TranscodeQueueManager.kt` |
+| **`convert_output_mode`** | Choice | `"CUSTOM_FOLDER"`, `"NEXT_TO_ORIGINAL"` | `"CUSTOM_FOLDER"` | All | Output file destination location strategy | `AudioConverterView.kt`, `SettingsRegistry.kt` |
+| **`convert_output_folder`** | Text | Valid directory path | `""` | All | Target folder path where converted Opus files are saved | `AudioConverterView.kt`, `SettingsRegistry.kt` |
+| **`convert_name_template`** | Text | Template string | `"{title}"` | All | File naming pattern for transcoded outputs | `SettingsRegistry.kt` |
+| **`convert_workers`** | IntRange | 1 .. 4 | `2` | All | Number of parallel transcode worker threads | `AudioConverterView.kt`, `TranscodeQueueManager.kt` |
+| **`convert_write_r128`** | Toggle | `true`, `false` | `false` | All | Calculate and inject R128 loudness tags into output files | `AudioConverterView.kt`, `TranscodeJob.kt` |
+| **`convert_ffmpeg_path`** | Text | Executable path | `""` | Desktop | Custom manual override for FFmpeg executable on Desktop | `DesktopFFmpegTranscoder.kt`, `Main.kt` |
+| **`convert_rescan_after`** | Toggle | `true`, `false` | `true` | All | Automatically trigger local library scan when batch finishes | `TranscodeQueueManager.kt`, `SettingsRegistry.kt` |
+
+---
+
+## 11. Music Videos & Cinema Player Settings (`SettingsRegistry`)
+
+Accessible via **Settings > Online, Connect & Network > Music Videos**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`video_auto_play`** | Toggle | `true`, `false` | `false` | All | Automatically start video for music tracks that have a video stream | `PlayerViewModel.kt`, `NowPlayingView.kt` |
+| **`video_default_quality`** | Choice | `"auto"`, `"1080"`, `"720"`, `"480"`, `"360"` | `"auto"` | All | Preferred default resolution when playing music videos | `StreamResolver.kt`, `PlayerViewModel.kt` |
+| **`video_seek_step_s`** | IntRange | 5 .. 30 | `10` | All | Step duration in seconds for double-tap seeking | `FullscreenCinemaPlayer.kt`, `VideoMath.kt` |
+| **`video_gestures`** | Toggle | `true`, `false` | `true` | All | Enable swipe gestures (brightness on left, volume on right) | `FullscreenCinemaPlayer.kt` |
+| **`video_pip`** | Toggle | `true`, `false` | `true` | Android | Auto-enter Picture-in-Picture when leaving the app while video is active | `MainActivity.kt` |
+| **`video_background_audio_only`** | Toggle | `true`, `false` | `false` | Android | Data saver: switch video to audio-only background track when minimized | `MainActivity.kt` |
+| **`video_controls_autohide_s`** | IntRange | 2 .. 10 | `4` | All | Seconds of inactivity before fading cinema player controls | `FullscreenCinemaPlayer.kt` |
+| **`video_show_quality_pill`** | Toggle | `true`, `false` | `true` | All | Display interactive resolution badge pill in Now Playing hero card | `NowPlayingView.kt` |
+
+---
+
+## 12. Cinematic Kinetic & Lyrics Engine Settings (`LyricsSettings`)
+
+Accessible via **Lyrics Screen Overflow Menu (`⋮`)** & **Settings > Lyrics**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`lyrics_style`** | Enum | `CINEMATIC_KINETIC`, `CLASSIC_FULLSCREEN` | `CINEMATIC_KINETIC` | All | Active lyrics rendering engine: Cinematic Kinetic canvas or Classic Full-Screen view | `FullScreenLyricsView.kt`, `CinematicKineticLyricsView.kt` |
+| **`lyrics_common_zoom`** | Float | 0.40 .. 1.80 | `1.00` | All | Master scale applied to viewport zoom (Kinetic) and typography/layout (Classic) | `CinematicKineticLyricsView.kt`, `FullScreenLyricsView.kt` |
+| **`lyrics_sparkle_density`** | Float | 0.00 .. 1.00 | `0.35` | All | Background 3-layer parallax floating starfield density | `CinematicKineticLyricsView.kt` |
+| **`lyrics_lr_swing`** | Float | 0.00 .. 1.00 | `0.80` | All | Horizontal left/right choreography spread multiplier | `CinematicKineticLyricsView.kt` |
+| **`lyrics_vertical_spacing`** | Float | 0.70 .. 1.60 | `1.15` | All | Multiplier for intra-phrase, inter-phrase, and stanza void gaps | `CinematicKineticLyricsView.kt` |
+| **`lyrics_camera_glide`** | Float | 0.30 .. 1.50 | `1.00` | All | Critically-damped virtual camera spring responsiveness | `CinematicKineticLyricsView.kt` |
+| **`lyrics_bounce`** | Float | 0.00 .. 1.50 | `1.00` | All | Active word pop scale and float lift energy | `CinematicKineticLyricsView.kt` |
+| **`lyrics_glow_palette`** | Enum | `white`, `blue`, `gold`, `violet` | `white` | All | Active word illumination and ambient glow color palette | `CinematicKineticLyricsView.kt` |
+| **`lyrics_show_top_bar`** | Boolean | `true`, `false` | `true` | All | Visibility toggle for the compact top header bar | `FullScreenLyricsView.kt` |
+| **`lyrics_preferred_provider`** | Enum | `auto`, `lrcred`, `bini`, `musixmatch`, `unison`, `lrclib`, `betterlyrics`, `lyricsplus`, `kugou`, `local` | `auto` | All | Preferred synchronized lyrics provider with instant per-track interchange and status badges (Click to Search, Lyrics Found, Connected OK) | `LyricsRepository.kt`, `LyricsSettingsBottomSheet.kt` |
+| **`lyrics_romanize_foreign`** | Boolean | `true`, `false` | `true` | All | Automatic offline romanization of foreign scripts (Hangul, Romaji, Pinyin, Urdu Nastaliq, Devanagari, Cyrillic) | `LyricsRomanizer.kt`, `LyricsSettingsBottomSheet.kt` |
+| **`lyrics_display_mode`** | Enum | `ORIGINAL_ONLY`, `DUAL_LINE`, `ROMANIZED_ONLY` | `DUAL_LINE` | All | Apple Music style display mode: original glyphs only, dual-line stacked transliteration/translation, or romanized-only | `LyricLineItem.kt`, `WordByWordKaraokeText.kt`, `LyricsSettingsBottomSheet.kt` |
+
+---
+
+## 13. Online Music Services & Media Resolution Settings
+
+Accessible via **Settings > Online Music & Streaming Services**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`streaming_audio_quality`** | Enum | `HIGH`, `MEDIUM`, `LOW` | `HIGH` | All | Online music audio bitrate: High (~160-256 kbps, Opus 160k / AAC 256k), Medium (~128 kbps, AAC/Opus 128k), Low (~48-70 kbps, Data Saver) | `StreamResolver.kt`, `MediaQualitySettings.kt`, `AppSettingsRepository.kt` |
+| **`album_art_quality`** | Enum | `HIGH`, `MEDIUM`, `LOW` | `HIGH` | All | Target resolution for artwork: High (1080p-1200p HD, `=w1200`), Medium (544p Balanced, `=w544`), Low (256p Data Saver, `=w256`) | `ArtworkUrlResolver.kt`, `AudioArtworkFetcher.kt`, `ArtworkLoader.kt` |
+| **`video_default_quality`** | Choice | `"auto"`, `"1080"`, `"720"`, `"480"`, `"360"` | `"auto"` | All | Preferred video stream playback resolution with client-side format ranking | `StreamResolver.kt`, `SettingsScreen.kt` |
+| **`online_mode_enabled`** | Boolean | `true`, `false` | `true` | All | Master switch for online YouTube Music catalog browsing, recommendations, and search | `SettingsScreen.kt`, `OnlineHomeView.kt` |
+| **`scrobble_enabled`** | Boolean | `true`, `false` | `false` | All | Last.fm real-time scrobbling and offline queue retry | `LastFmClient.kt`, `SettingsScreen.kt` |
+
+---
+
+## 14. Cloud Backup & Sync Settings (Google Drive `appDataFolder`)
+
+Accessible via **Settings > Online Music & Cloud Sync > Cloud Sync (Drive) Tab**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`cloud_sync_enabled`** | Boolean | `true`, `false` | `false` (Opt-in only) | Android | Master state for cloud backup. Disabled by default until user connects account. | `GoogleAuthManager.kt`, `CloudSyncManager.kt` |
+| **`sync_frequency`** | Enum | `HOURLY`, `DAILY`, `MANUAL` | `MANUAL` | Android | Frequency for background WorkManager sync jobs. | `CloudSyncManager.kt`, `CloudSyncWorker.kt` |
+| **`has_unsynced_changes`** | Boolean | `true`, `false` | `false` | Android | Local dirty flag optimization; skips cloud upload if nothing changed. | `CloudSyncManager.kt`, `PlaybackService.kt`, `PlayerViewModel.kt` |
+| **`gdrive_custom_client_id`**| String | Freeform text | Injected from `local.properties` | Android | Google Cloud Console OAuth 2.0 client ID from `local.properties` via `BuildConfig.GDRIVE_CLIENT_ID`. | `GoogleAuthManager.kt` |
+| **`gdrive_redirect_uri`**| String | Reverse-DNS URI | `com.googleusercontent.apps.<client_id_prefix>:/oauth2redirect` | Android | Reverse-DNS redirect URI conforming to RFC 8252 for Android clients. | `GoogleAuthManager.kt`, `AndroidManifest.xml` |
+
+
+
+
 
 
 

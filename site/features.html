@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Features — Node Player Deep Dive</title>
+  <meta name="description" content="Explore every technical pillar of Node Player: 32-bit floating DSP, 5-provider word-by-word karaoke, AutoEQ headphone correction, and 120 Hz AGSL liquid shaders." />
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="stylesheet" href="assets/css/theme.css" />
+  <style>
+    .feature-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3.5rem;
+      align-items: center;
+      margin-bottom: 5rem;
+    }
+    .feature-row:nth-child(even) {
+      direction: rtl;
+    }
+    .feature-row:nth-child(even) > * {
+      direction: ltr;
+    }
+    .feature-media-frame {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.6);
+    }
+    .feature-media-frame img,
+    .feature-media-frame video {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+    .feature-detail-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      margin-top: 1.25rem;
+    }
+    .feature-detail-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+    }
+    .feature-detail-list li span.bullet {
+      color: var(--accent-teal);
+      font-weight: bold;
+    }
+    @media (max-width: 900px) {
+      .feature-row {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+        margin-bottom: 3.5rem;
+      }
+      .feature-row:nth-child(even) {
+        direction: ltr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Sticky Glass Navbar -->
+  <header class="site-nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand">
+        <img src="favicon.svg" alt="Node Player Logo" width="28" height="28" />
+        <span>Node Player</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">Showcase</a></li>
+        <li><a href="features.html" class="active">Features</a></li>
+        <li><a href="docs.html">Technical Docs</a></li>
+        <li><a href="changelog.html">Changelog</a></li>
+      </ul>
+      <div class="nav-actions">
+        <a href="index.html#download" class="btn-pill btn-accent">Download Latest</a>
+        <a href="https://github.com/Krighz/node-player" target="_blank" rel="noopener noreferrer" class="btn-pill btn-ghost">GitHub</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Page Header -->
+  <section class="section" style="padding-bottom: 2rem;">
+    <div class="section-header">
+      <div class="section-badge">Deep-Dive Walkthroughs</div>
+      <h1 class="section-title">Designed for Audiophiles.<br />Crafted for Daily Listening.</h1>
+      <p class="section-subtitle">Discover how Node Player bridges online discovery with uncompromised studio-grade audio fidelity.</p>
+    </div>
+  </section>
+
+  <!-- 6 Detailed Visual Deep Dives -->
+  <section class="section" style="padding-top: 0;">
+    
+    <!-- 1. Hybrid Architecture -->
+    <div class="feature-row">
+      <div class="feature-media-frame">
+        <img src="screenshots/01_home_ytmusic.webp" alt="Hybrid Home Screen" />
+      </div>
+      <div>
+        <div class="section-badge">01 • Core Engine</div>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 1rem;">Hybrid YouTube Music &amp; Bit-Perfect Local Audio</h2>
+        <p style="color: var(--text-secondary); line-height: 1.65;">
+          Switch effortlessly between limitless cloud streaming and pure offline playback with a single tap. Node Player provides a dedicated dual-mode architecture that respects both formats equally.
+        </p>
+        <ul class="feature-detail-list">
+          <li><span class="bullet">✔</span> ~1.1s instant cloud stream startup using 128 KB chunked range caching.</li>
+          <li><span class="bullet">✔</span> 32-bit floating-point audio decoding for lossless FLAC, ALAC, WAV, and MP3.</li>
+          <li><span class="bullet">✔</span> 6 dynamically hydrated shelves (Moods, Top Picks, Music Videos, Trending).</li>
+          <li><span class="bullet">✔</span> 100% offline mode option: Zero telemetry, zero analytics, absolute silence.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 2. 120 Hz Liquid Glass & Now Playing -->
+    <div class="feature-row">
+      <div class="feature-media-frame">
+        <img src="screenshots/02_now_playing.webp" alt="Now Playing Screen" />
+      </div>
+      <div>
+        <div class="section-badge">02 • Visual Design</div>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 1rem;">120 Hz Hardware Liquid Glass UI</h2>
+        <p style="color: var(--text-secondary); line-height: 1.65;">
+          Experience genuine optical depth. Using custom AGSL shaders on Android 13+ and Skia hardware renderers on Desktop, Node Player renders dynamic chromatic aberration, lens refraction, and rim specular light.
+        </p>
+        <ul class="feature-detail-list">
+          <li><span class="bullet">✔</span> 120 Hz refresh rate lock with automatic display capability detection.</li>
+          <li><span class="bullet">✔</span> Fluid spring physics tuned with Convx-inspired non-linear deceleration curves.</li>
+          <li><span class="bullet">✔</span> Real-time album artwork palette bleed that adapts to every track transition.</li>
+          <li><span class="bullet">✔</span> Hardware-synced volume slider mirroring physical device volume rocker steps.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 3. Word-by-Word Karaoke -->
+    <div class="feature-row">
+      <div class="feature-media-frame">
+        <img src="screenshots/03_karaoke_lyrics.webp" alt="Word-by-Word Karaoke Lyrics" />
+      </div>
+      <div>
+        <div class="section-badge">03 • Lyrics Suite</div>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 1rem;">5-Provider Word-by-Word Karaoke</h2>
+        <p style="color: var(--text-secondary); line-height: 1.65;">
+          Sing along with studio-accurate synchronization. Node Player queries 5 distinct lyrics providers with intelligent cascading fallback, rendering every syllable with sub-pixel 120 FPS sweep precision.
+        </p>
+        <ul class="feature-detail-list">
+          <li><span class="bullet">✔</span> Multi-provider fallback: BiniLyrics, BetterLyrics, LyricsPlus, LrcLib, KuGou.</li>
+          <li><span class="bullet">✔</span> Real-time active-word glow and smooth centered automatic scrolling.</li>
+          <li><span class="bullet">✔</span> Support for syllable-level TTML and synchronized word-timed timestamps.</li>
+          <li><span class="bullet">✔</span> One-tap seek: Tap any lyric line to instantly jump playback to that exact millisecond.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 4. Shareable Lyric Cards -->
+    <div class="feature-row">
+      <div class="feature-media-frame">
+        <img src="screenshots/04_lyric_card.webp" alt="Shareable Lyric Card" />
+      </div>
+      <div>
+        <div class="section-badge">04 • Social Sharing</div>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 1rem;">1080×1920 &amp; 4:3 Shareable Lyric Cards</h2>
+        <p style="color: var(--text-secondary); line-height: 1.65;">
+          Turn moving verses into exportable works of art. Select multiple lines in the lyrics view to launch the Lyric Card Studio with rich formatting options.
+        </p>
+        <ul class="feature-detail-list">
+          <li><span class="bullet">✔</span> Select up to 6 lines with real-time selection dock feedback.</li>
+          <li><span class="bullet">✔</span> Continuous squircle album art badge and Node Player brand watermark.</li>
+          <li><span class="bullet">✔</span> High-resolution canvas rendering optimized for Instagram Stories and messaging apps.</li>
+          <li><span class="bullet">✔</span> One-click direct share sheet or immediate PNG save to gallery.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 5. Full Interactive Artist Pages -->
+    <div class="feature-row">
+      <div class="feature-media-frame">
+        <img src="screenshots/05_artist_page.webp" alt="Artist Detail Page" />
+      </div>
+      <div>
+        <div class="section-badge">05 • Discovery</div>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 1rem;">Full Interactive Artist Pages</h2>
+        <p style="color: var(--text-secondary); line-height: 1.65;">
+          Dive deep into any artist's discography. Explore rich biographical details, discography timelines, and high-resolution visuals curated directly from YouTube Music.
+        </p>
+        <ul class="feature-detail-list">
+          <li><span class="bullet">✔</span> 380dp edge-to-edge hero portrait with dynamic title blur transitions.</li>
+          <li><span class="bullet">✔</span> Shuffle / Play / Follow action trio with persistent library follow tracking.</li>
+          <li><span class="bullet">✔</span> Latest Release hero card alongside horizontally paged 4-row Top Songs.</li>
+          <li><span class="bullet">✔</span> 7 categorized shelves (Albums, Singles, Videos, Featured, Fans Also Like).</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 6. 10-Band EQ & AutoEQ -->
+    <div class="feature-row">
+      <div class="feature-media-frame">
+        <img src="screenshots/06_mixtape_and_dsp.webp" alt="Parametric EQ and AutoEQ" />
+      </div>
+      <div>
+        <div class="section-badge">06 • Audiophile DSP</div>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 1rem;">32-Bit Float DSP &amp; AutoEQ Integration</h2>
+        <p style="color: var(--text-secondary); line-height: 1.65;">
+          Take complete control over your sound signature. Built with true biquad IIR filters operating on 32-bit floating-point samples, Node Player prevents digital clipping while maximizing dynamic range.
+        </p>
+        <ul class="feature-detail-list">
+          <li><span class="bullet">✔</span> 10-Band parametric biquad equalizer with ±12 dB adjustment per band.</li>
+          <li><span class="bullet">✔</span> Built-in AutoEQ Harman correction presets for popular IEMs and headphones.</li>
+          <li><span class="bullet">✔</span> Real-time A/B comparison to instantly evaluate DSP tuning against flat signal.</li>
+          <li><span class="bullet">✔</span> Continuous DJ Blend crossfade with normalized acoustic power curves.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 7. Privacy-First Google Drive Cloud Sync -->
+    <div class="feature-row">
+      <div class="feature-media-frame">
+        <img src="screenshots/01_home_ytmusic.webp" alt="Google Drive Cloud Sync" />
+      </div>
+      <div>
+        <div class="section-badge">07 • Cloud &amp; Privacy</div>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 1rem;">Serverless Google Drive Cloud Backup &amp; Sync</h2>
+        <p style="color: var(--text-secondary); line-height: 1.65;">
+          Back up your music library directly to your own Google Drive. Zero developer servers, zero telemetry, and complete data ownership.
+        </p>
+        <ul class="feature-detail-list">
+          <li><span class="bullet">✔</span> <strong>Strict Isolation:</strong> Uses exclusively the hidden <code>appDataFolder</code> space; Node Player never touches personal files.</li>
+          <li><span class="bullet">✔</span> <strong>Safe Conflict Resolution:</strong> Deterministic snapshot merging (latest timestamp wins for playlists/favorites, highest stats win).</li>
+          <li><span class="bullet">✔</span> <strong>Dirty-Flag WorkManager:</strong> Skips uploads when nothing changed; configurable Hourly, Daily, or Manual sync.</li>
+          <li><span class="bullet">✔</span> <strong>Hardware Security:</strong> OAuth tokens protected by Android Keystore AES-256-GCM encryption.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 8. Landscape FullScreen Lyrics & Shapeable Art -->
+    <div class="feature-row">
+      <div class="feature-media-frame">
+        <img src="screenshots/03_karaoke_lyrics.webp" alt="Landscape Cinematic Lyrics" />
+      </div>
+      <div>
+        <div class="section-badge">08 • Visual Innovation</div>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 1rem;">Two-Column Landscape Lyrics &amp; Shapeable Art</h2>
+        <p style="color: var(--text-secondary); line-height: 1.65;">
+          Turn any tablet, car head-unit, or rotated phone into a dedicated karaoke canvas with auto-collapsing hero transport controls.
+        </p>
+        <ul class="feature-detail-list">
+          <li><span class="bullet">✔</span> Responsive split-screen view with synchronized word-by-word karaoke on the right.</li>
+          <li><span class="bullet">✔</span> Shapeable album art: switch between Squircle, Circle, and Heart shapes with Bezier vector clipping.</li>
+          <li><span class="bullet">✔</span> 4.5s inactivity auto-collapse for left controls that gently tucks away during playback.</li>
+          <li><span class="bullet">✔</span> Multi-script phonetic romanization for Japanese, Korean, Chinese, Hindi, Cyrillic, and Greek.</li>
+        </ul>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- Sticky Glass Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <div class="nav-brand">
+          <img src="favicon.svg" alt="Node Player Logo" width="28" height="28" />
+          <span>Node Player</span>
+        </div>
+        <p>
+          Bit-perfect 32-bit audiophile music reproduction meets fluid liquid glass design on Android and Windows Desktop.
+        </p>
+      </div>
+      <div class="footer-col">
+        <h5>Navigation</h5>
+        <ul>
+          <li><a href="index.html">Showcase</a></li>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="docs.html">Technical Docs</a></li>
+          <li><a href="changelog.html">Changelog</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Community</h5>
+        <ul>
+          <li><a href="https://github.com/Krighz/node-player" target="_blank" rel="noopener noreferrer">GitHub Repo</a></li>
+          <li><a href="https://github.com/Krighz/node-player/releases" target="_blank" rel="noopener noreferrer">Releases</a></li>
+          <li><a href="https://github.com/Krighz/node-player/discussions" target="_blank" rel="noopener noreferrer">Discussions</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h5>Support</h5>
+        <div class="upi-card">
+          <p style="font-size: 0.82rem; color: var(--text-secondary);">UPI Direct Support:</p>
+          <div class="upi-id-row">
+            <span>7063061981@fam</span>
+            <button class="copy-btn" data-copy="7063061981@fam" type="button">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2026 Node Player Team. Released under Apache 2.0.</span>
+    </div>
+  </footer>
+
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

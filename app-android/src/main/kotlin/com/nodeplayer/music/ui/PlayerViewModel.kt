@@ -27,19 +27,25 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.nodeplayer.dsp.*
 import com.nodeplayer.model.*
+import com.nodeplayer.model.video.VideoPlayerState
+import com.nodeplayer.model.video.VideoQuality
+import com.nodeplayer.model.video.VideoMath
 import com.nodeplayer.music.NodePlayerApplication
 import com.nodeplayer.music.data.TrackEntity
+import com.nodeplayer.music.data.FollowedArtistEntity
+import com.nodeplayer.model.ArtistPageData
+import kotlinx.coroutines.flow.first
 import com.nodeplayer.music.diagnostics.GlassShaderSelfTest
 import com.nodeplayer.music.diagnostics.GraphicsEventTracker
 import com.nodeplayer.music.diagnostics.ShaderSelfTestResult
 import com.nodeplayer.music.service.PlaybackService
 import com.nodeplayer.music.ui.theme.DefaultAccent
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -58,7 +64,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var mediaController: MediaController? = null
         private set
 
-    // State flows
     val allTracks = dao.getAllTracks().map { list -> list.map { it.toTrack() } }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -81,6 +86,27 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     val playlists = dao.getAllPlaylists()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val downloadQueueManager: com.nodeplayer.library.downloader.DownloadQueueManager
+        get() = app.downloadQueueManager
+
+    val downloadTasks: StateFlow<List<com.nodeplayer.model.storage.DownloadTask>>
+        get() = app.downloadQueueManager.tasks
+
+    fun enqueueDownload(
+        track: Track,
+        option: com.nodeplayer.model.storage.AudioStreamOption? = null
+    ) {
+        val qualityStr = prefs.getString("download_default_quality", "ASK") ?: "ASK"
+        val formatStr = prefs.getString("download_preferred_format", "AUTO") ?: "AUTO"
+
+        val preset = runCatching { com.nodeplayer.model.storage.DownloadQualityPreset.valueOf(qualityStr) }
+            .getOrDefault(com.nodeplayer.model.storage.DownloadQualityPreset.HIGHEST)
+        val format = runCatching { com.nodeplayer.model.storage.DownloadContainerFormat.valueOf(formatStr) }
+            .getOrDefault(com.nodeplayer.model.storage.DownloadContainerFormat.AUTO)
+
+        app.downloadQueueManager.enqueue(track, option, preset, format)
+    }
 
     private val _youTubePlaylistSyncing = MutableStateFlow(false)
     val youTubePlaylistSyncing = _youTubePlaylistSyncing.asStateFlow()
@@ -148,22 +174,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _effectConfig = MutableStateFlow(AudioEffectConfig())
     val effectConfig: StateFlow<AudioEffectConfig> = _effectConfig.asStateFlow()
 
-    private val _themeConfig = MutableStateFlow(GlassThemeConfig())
+    private val _themeConfig = MutableStateFlow(GlassThemeConfig(glassTexture = 0.0f, noiseGrainAlpha = 0.0f))
     val themeConfig: StateFlow<GlassThemeConfig> = _themeConfig.asStateFlow()
 
-    // Real audio amplitude tracking from DSP processor
     private val _currentRms = MutableStateFlow(0.0f)
     val currentRms: StateFlow<Float> = _currentRms.asStateFlow()
 
-    // Crossfade configuration
     private val _crossfadeConfig = MutableStateFlow(CrossfadeConfig())
     val crossfadeConfig: StateFlow<CrossfadeConfig> = _crossfadeConfig.asStateFlow()
 
-    // Shuffle state
     private val _isShuffleEnabled = MutableStateFlow(false)
     val isShuffleEnabled: StateFlow<Boolean> = _isShuffleEnabled.asStateFlow()
 
-    // Folder Filtering & Library Preferences
+    private val _repeatMode = MutableStateFlow(0)
+    val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
+
     private val _minDurationSeconds = MutableStateFlow(30)
     val minDurationSeconds: StateFlow<Int> = _minDurationSeconds.asStateFlow()
 
@@ -179,28 +204,329 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _excludedTracks = MutableStateFlow<List<Track>>(emptyList())
     val excludedTracks: StateFlow<List<Track>> = _excludedTracks.asStateFlow()
 
-    // System-Wide Equalizer
     private val _systemEqEnabled = MutableStateFlow(false)
     val systemEqEnabled: StateFlow<Boolean> = _systemEqEnabled.asStateFlow()
     val systemEqSessions: StateFlow<List<com.nodeplayer.music.service.SystemWideEqService.SessionInfo>> =
         com.nodeplayer.music.service.SystemWideEqService.activeSessionsState
 
-    // Output Device & Per-Device Profile
     private val _currentDeviceType = MutableStateFlow(OutputDeviceType.SPEAKER)
     val currentDeviceType: StateFlow<OutputDeviceType> = _currentDeviceType.asStateFlow()
 
     private val _autoDeviceProfilesEnabled = MutableStateFlow(true)
     val autoDeviceProfilesEnabled: StateFlow<Boolean> = _autoDeviceProfilesEnabled.asStateFlow()
 
-    // Convolver CPU Tracking
     private val _convolverCpuPercent = MutableStateFlow(0.0f)
     val convolverCpuPercent: StateFlow<Float> = _convolverCpuPercent.asStateFlow()
 
-    // App Settings DataStore Flow
+    private val _videoPlayerState = MutableStateFlow(VideoPlayerState())
+    val videoPlayerState: StateFlow<VideoPlayerState> = _videoPlayerState.asStateFlow()
+
+    data class ResolvedVideoEntry(
+        val videoId: String,
+        val timeOffsetMs: Long = 0L,
+        val isOfficial: Boolean = false
+    )
+    private val resolvedVideoMap = java.util.concurrent.ConcurrentHashMap<String, ResolvedVideoEntry>()
+
+    fun checkVideoAvailabilityForTrack(track: Track) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val vid = resolveVideoIdForTrack(track)
+            if (vid != null) {
+                _videoPlayerState.update { it.copy(isAvailable = true) }
+            }
+        }
+    }
+
+    private val _trackExtendedInfo = MutableStateFlow<TrackExtendedInfo?>(null)
+    val trackExtendedInfo: StateFlow<TrackExtendedInfo?> = _trackExtendedInfo.asStateFlow()
+    private var trackExtendedInfoJob: Job? = null
+
+    private val _artistPageData = MutableStateFlow<ArtistPageData?>(null)
+    val artistPageData: StateFlow<ArtistPageData?> = _artistPageData.asStateFlow()
+
+    private val _isArtistPageLoading = MutableStateFlow(false)
+    val isArtistPageLoading: StateFlow<Boolean> = _isArtistPageLoading.asStateFlow()
+
+    private var artistPageJob: Job? = null
+
+    fun loadArtistPage(browseId: String) {
+        artistPageJob?.cancel()
+        _isArtistPageLoading.value = true
+        artistPageJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val client = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+                val isFollowed = dao.isArtistFollowed(browseId).first()
+                val result = client.getArtistPage(browseId).getOrNull()
+                _artistPageData.value = result?.copy(isFollowed = isFollowed)
+            } catch (e: Exception) {
+                com.nodeplayer.common.logging.NodeLog.e("PlayerViewModel", "Error loading artist page for $browseId", e)
+            } finally {
+                _isArtistPageLoading.value = false
+            }
+        }
+    }
+
+    fun toggleFollowArtist(browseId: String, name: String, avatarUrl: String?) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val isFollowed = dao.isArtistFollowed(browseId).first()
+            if (isFollowed) {
+                dao.unfollowArtist(browseId)
+            } else {
+                dao.followArtist(FollowedArtistEntity(browseId, name, avatarUrl))
+            }
+            _artistPageData.value?.let { current ->
+                if (current.browseId == browseId) {
+                    _artistPageData.value = current.copy(isFollowed = !isFollowed)
+                }
+            }
+        }
+    }
+
+    private fun updateTrackExtendedInfo(track: Track?) {
+        trackExtendedInfoJob?.cancel()
+        if (track == null) {
+            _trackExtendedInfo.value = null
+            return
+        }
+
+        val client = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+        val videoId = track.extractVideoId()
+        val cacheKey = videoId ?: track.id.toString()
+        val cached = client.getCachedExtendedInfo(cacheKey)
+        if (cached != null) {
+            _trackExtendedInfo.value = cached
+            return
+        }
+
+        val baselineCredits = client.parseLocalCredits(track)
+        _trackExtendedInfo.value = TrackExtendedInfo(
+            credits = baselineCredits,
+            artistName = track.artist
+        )
+
+        trackExtendedInfoJob = viewModelScope.launch(Dispatchers.IO) {
+            val result = client.fetchTrackExtendedInfo(track)
+            result.onSuccess { info ->
+                _trackExtendedInfo.value = info
+            }
+        }
+    }
+
+    fun setCinemaExpanded(expanded: Boolean) {
+        _videoPlayerState.update { it.copy(isCinemaExpanded = expanded) }
+    }
+
+    fun setPreferredVideoQuality(quality: VideoQuality) {
+        viewModelScope.launch {
+            com.nodeplayer.music.data.AppSettingsRepository.updateSetting(
+                app,
+                com.nodeplayer.music.data.AppSettingsRepository.KEY_YOUTUBE_VIDEO_QUALITY,
+                quality.key
+            )
+            switchVideoQuality(quality)
+        }
+    }
+
+    fun onVideoFirstFrameRendered() {
+        _videoPlayerState.update { it.copy(hasRenderedFirstFrame = true) }
+    }
+
+    fun toggleVideoMode(enable: Boolean? = null, fallbackTrack: Track? = null) {
+        val currentState = _videoPlayerState.value
+        val track = _currentTrack.value
+            ?: fallbackTrack
+            ?: PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
+            ?: _queue.value.firstOrNull()
+
+        com.nodeplayer.common.logging.NodeLog.i("PlayerViewModel", "toggleVideoMode: enable=$enable, currentState=$currentState, track=${track?.title}")
+        if (enable == null && currentState.isVideoActive) {
+            val isEnginePlaying = com.nodeplayer.music.ui.video.MusicVideoEngine.isPlaying()
+            if (isEnginePlaying) {
+                com.nodeplayer.music.ui.video.MusicVideoEngine.pause()
+            } else {
+                com.nodeplayer.music.ui.video.MusicVideoEngine.resume()
+            }
+            return
+        }
+
+        val targetEnable = enable ?: !currentState.isVideoActive
+        if (!targetEnable) {
+            stopVideoMode()
+            return
+        }
+
+        if (track == null) {
+            com.nodeplayer.common.logging.NodeLog.w("PlayerViewModel", "toggleVideoMode: cannot enable video because track is null")
+            return
+        }
+        if (_currentTrack.value == null) {
+            _currentTrack.value = track
+        }
+
+        val activePlayer = PlaybackService.instance?.crossfadeManager?.activePlayer
+            ?: PlaybackService.instance?.player
+            ?: mediaController
+
+        viewModelScope.launch(Dispatchers.IO) {
+            _videoPlayerState.update { it.copy(isBuffering = true) }
+
+            val videoId = resolveVideoIdForTrack(track)
+            if (videoId == null) {
+                com.nodeplayer.common.logging.NodeLog.e("PlayerViewModel", "No video stream available for ${track.title}")
+                _videoPlayerState.update { it.copy(isBuffering = false) }
+                return@launch
+            }
+
+            com.nodeplayer.common.logging.NodeLog.i("PlayerViewModel", "Resolving video stream for videoId=$videoId")
+
+            val prefHeight = when (val q = _videoPlayerState.value.selectedQuality) {
+                VideoQuality.AUTO -> null
+                else -> q.height
+            }
+
+            var streamUrl: String? = null
+            var userAgent: String? = null
+            var streamHeight: Int? = null
+            var availableHeights: List<Int> = emptyList()
+
+            // Try NewPipe first for continuous unthrottled video playback without iOS 1-minute 403 limits
+            try {
+                com.nodeplayer.music.playback.NewPipeFallback.init(com.nodeplayer.music.playback.AudioCache.sharedOkHttpClient)
+                val (npUrl, npHeaders) = com.nodeplayer.music.playback.NewPipeFallback.resolveVideoStream(videoId, prefHeight)
+                streamUrl = npUrl
+                userAgent = npHeaders["User-Agent"]
+                streamHeight = prefHeight ?: 480
+                availableHeights = listOf(720, 480, 360)
+                com.nodeplayer.common.logging.NodeLog.i("PlayerViewModel", "Resolved unthrottled video stream via NewPipe for $videoId")
+            } catch (e: Exception) {
+                com.nodeplayer.common.logging.NodeLog.w("PlayerViewModel", "NewPipe video resolution failed: ${e.message}, falling back to StreamResolver")
+            }
+
+            if (streamUrl == null) {
+                val resolver = com.nodeplayer.music.playback.AudioCache.getStreamResolver()
+                val result = resolver.resolveVideoStream(videoId, prefHeight)
+                if (result.isSuccess) {
+                    val stream = result.getOrThrow()
+                    com.nodeplayer.common.logging.NodeLog.i("PlayerViewModel", "Successfully resolved video stream for $videoId at ${stream.height}p via ${stream.clientName}")
+                    streamUrl = stream.streamUrl
+                    streamHeight = stream.height
+                    availableHeights = stream.availableHeights
+                    userAgent = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
+                        .firstOrNull { it.clientName.equals(stream.clientName, ignoreCase = true) }?.userAgent
+                        ?: com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
+                } else {
+                    com.nodeplayer.common.logging.NodeLog.e("PlayerViewModel", "Failed to resolve video stream: ${result.exceptionOrNull()?.message}")
+                    _videoPlayerState.update { it.copy(isBuffering = false) }
+                    return@launch
+                }
+            }
+
+            val finalUrl = streamUrl ?: return@launch
+            val finalUa = userAgent ?: com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
+            com.nodeplayer.music.playback.AudioCache.cacheResolvedUrl("video_$videoId", finalUrl, finalUa)
+
+            withContext(Dispatchers.Main) {
+                com.nodeplayer.music.ui.video.MusicVideoEngine.initialize(app)
+                val livePlayer = PlaybackService.instance?.crossfadeManager?.activePlayer
+                    ?: PlaybackService.instance?.player
+                    ?: mediaController
+                if (livePlayer != null) {
+                    com.nodeplayer.music.ui.video.MusicVideoEngine.attachAudioController(livePlayer)
+                }
+                val cacheKey = extractYouTubeVideoId(track.path) ?: "${track.title}_${track.artist}".trim().lowercase()
+                val offsetMs = resolvedVideoMap[cacheKey]?.timeOffsetMs ?: 0L
+                val pos = (livePlayer?.currentPosition ?: 0L) + offsetMs
+                com.nodeplayer.music.ui.video.MusicVideoEngine.loadVideoStream(finalUrl, pos.coerceAtLeast(0L), finalUa, videoId)
+
+                _videoPlayerState.update {
+                    it.copy(
+                        isVideoActive = true,
+                        isAvailable = true,
+                        currentHeight = streamHeight,
+                        availableHeights = availableHeights,
+                        isBuffering = false,
+                        hasRenderedFirstFrame = false
+                    )
+                }
+            }
+        }
+    }
+
+    fun stopVideoMode() {
+        viewModelScope.launch(Dispatchers.Main) {
+            com.nodeplayer.music.ui.video.MusicVideoEngine.stop()
+            _videoPlayerState.update {
+                it.copy(
+                    isVideoActive = false,
+                    isBuffering = false,
+                    isCinemaExpanded = false,
+                    hasRenderedFirstFrame = false
+                )
+            }
+        }
+    }
+
+    fun switchVideoQuality(quality: VideoQuality) {
+        val track = _currentTrack.value
+            ?: PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
+            ?: _queue.value.firstOrNull()
+            ?: return
+        if (_currentTrack.value == null) {
+            _currentTrack.value = track
+        }
+        if (!_videoPlayerState.value.isVideoActive) {
+            _videoPlayerState.update { it.copy(selectedQuality = quality) }
+            return
+        }
+        val activePlayer = PlaybackService.instance?.crossfadeManager?.activePlayer
+            ?: PlaybackService.instance?.player
+            ?: mediaController
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val videoId = resolveVideoIdForTrack(track) ?: return@launch
+            _videoPlayerState.update { it.copy(isBuffering = true, selectedQuality = quality) }
+
+            val resolver = com.nodeplayer.music.playback.AudioCache.getStreamResolver()
+            val result = resolver.resolveVideoStream(videoId, quality.height)
+            if (result.isSuccess) {
+                val stream = result.getOrThrow()
+                val clientUa = com.nodeplayer.network.innertube.StreamResolver.CLIENT_ROTATION
+                    .firstOrNull { it.clientName.equals(stream.clientName, ignoreCase = true) }?.userAgent
+                    ?: com.nodeplayer.network.innertube.YouTubeClient.IOS.userAgent
+                com.nodeplayer.music.playback.AudioCache.cacheResolvedUrl("video_$videoId", stream.streamUrl, clientUa)
+
+                withContext(Dispatchers.Main) {
+                    val cacheKey = extractYouTubeVideoId(track.path) ?: "${track.title}_${track.artist}".trim().lowercase()
+                    val offsetMs = resolvedVideoMap[cacheKey]?.timeOffsetMs ?: 0L
+                    val pos = (activePlayer?.currentPosition ?: 0L) + offsetMs
+                    com.nodeplayer.music.ui.video.MusicVideoEngine.loadVideoStream(stream.streamUrl, pos.coerceAtLeast(0L), clientUa, videoId)
+                    _videoPlayerState.update {
+                        it.copy(
+                            currentHeight = stream.height,
+                            availableHeights = stream.availableHeights,
+                            isBuffering = false
+                        )
+                    }
+                }
+            } else {
+                com.nodeplayer.common.logging.NodeLog.e("PlayerViewModel", "Failed to switch video quality: ${result.exceptionOrNull()?.message}")
+                _videoPlayerState.update { it.copy(isBuffering = false) }
+            }
+        }
+    }
+
     val appSettings = com.nodeplayer.music.data.AppSettingsRepository.getSettingsFlow(app)
         .stateIn(viewModelScope, SharingStarted.Lazily, com.nodeplayer.music.data.AppSettingsRepository.AppSettings())
 
-    // Daily Listening Stats Flow
+    val lyricsSettings = com.nodeplayer.music.data.LyricsSettingsRepository.getSettingsFlow(app)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, com.nodeplayer.model.LyricsSettings())
+
+    fun updateLyricsSettings(settings: com.nodeplayer.model.LyricsSettings) {
+        viewModelScope.launch {
+            com.nodeplayer.music.data.LyricsSettingsRepository.updateSettings(app, settings)
+        }
+    }
+
     val dailyListeningStats = dao.getAllDailyStats()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -209,24 +535,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var lastSessionTickMs = System.currentTimeMillis()
     private var lastPrefsSaveMs = 0L
 
-    // Resume on Headset Connect
     private val _resumeOnHeadsetConnect = MutableStateFlow(true)
     val resumeOnHeadsetConnect: StateFlow<Boolean> = _resumeOnHeadsetConnect.asStateFlow()
 
-    // Resampler Output Rate
-    private val _resamplerRateChoice = MutableStateFlow(0) // 0 = Auto
+    private val _resamplerRateChoice = MutableStateFlow(0)
     val resamplerRateChoice: StateFlow<Int> = _resamplerRateChoice.asStateFlow()
 
-    // Active Preset (Track or Album)
     private val _activePresetLabel = MutableStateFlow<String?>(null)
     val activePresetLabel: StateFlow<String?> = _activePresetLabel.asStateFlow()
 
-    // Graphics Self-Test Result & Fallback State (hydrated asynchronously in init)
     private val _shaderSelfTestResult = MutableStateFlow(ShaderSelfTestResult(passed = true, reason = "Not executed yet"))
     val shaderSelfTestResult: StateFlow<ShaderSelfTestResult> = _shaderSelfTestResult.asStateFlow()
 
     private var audioDeviceCallback: AudioDeviceCallback? = null
-
     private var progressJob: Job? = null
     private val seekPersistDebouncer = TrailingSeekDebouncer(
         scope = viewModelScope,
@@ -256,6 +577,32 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         restoreLastPlaybackSession()
 
         viewModelScope.launch {
+            _currentTrack.collect { track ->
+                updateTrackExtendedInfo(track)
+            }
+        }
+
+        viewModelScope.launch {
+            appSettings.collect { settings ->
+                val q = VideoQuality.fromKey(settings.youtubeVideoQuality)
+                if (_videoPlayerState.value.selectedQuality != q && !_videoPlayerState.value.isVideoActive) {
+                    _videoPlayerState.update { it.copy(selectedQuality = q) }
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            var lastCompleted = 0
+            app.downloadQueueManager.tasks.collect { tasks ->
+                val currentCompleted = tasks.count { it.state == com.nodeplayer.model.storage.DownloadState.COMPLETED }
+                if (currentCompleted > lastCompleted) {
+                    lastCompleted = currentCompleted
+                    refreshLibrary()
+                }
+            }
+        }
+
+        viewModelScope.launch {
             combine(
                 com.nodeplayer.music.auth.YouTubeAccountManager.authState,
                 com.nodeplayer.common.AppModeState.isOnlineMode
@@ -266,7 +613,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
         }
 
-        // Sync and observe AppModeState with persistent settings
         viewModelScope.launch {
             appSettings.collect { settings ->
                 com.nodeplayer.common.AppModeState.setOnlineMode(settings.isOnlineMode)
@@ -279,7 +625,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val result = GlassShaderSelfTest.checkAndRunIfNeeded(app)
             _shaderSelfTestResult.value = result
             if (!result.passed) {
-                // Refresh theme config so safe fallback is applied
                 _themeConfig.value = loadThemeConfig()
             }
         }
@@ -315,6 +660,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             autoGapless = cfAutoGapless
         )
         _isShuffleEnabled.value = prefs.getBoolean("shuffle_enabled", false)
+        _repeatMode.value = prefs.getInt("repeat_mode", 0)
 
         val sysEq = prefs.getBoolean("system_eq_enabled", false)
         _systemEqEnabled.value = sysEq
@@ -353,7 +699,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             shaderMode = prefs.getString("glass_shader_mode", "AUTO") ?: "AUTO",
             glassOpacity = prefs.getFloat("glass_opacity", 0.65f),
             blurStrength = prefs.getFloat("glass_blur_strength", 0.70f),
-            glassTexture = prefs.getFloat("glass_texture", 0.40f),
+            glassTexture = 0.0f,
             edgeHighlightStrength = prefs.getFloat("glass_edge_highlight_strength", 0.60f),
             isFullyTransparent = prefs.getBoolean("glass_fully_transparent", false),
             keepTextReadable = prefs.getBoolean("glass_keep_text_readable", true),
@@ -453,7 +799,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun initMediaController() {
-        val bindTimer: (com.nodeplayer.music.service.PlaybackService) -> Unit = { srv ->
+        val bindTimer: (PlaybackService) -> Unit = { srv ->
             val timer = srv.sleepTimer
             if (timer != null) {
                 viewModelScope.launch(Dispatchers.Main) {
@@ -509,10 +855,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     updateSignalPath(track)
                     dao.incrementPlayCount(track.id)
                     checkAndApplyTrackOrAlbumPreset(track)
+                    checkVideoAvailabilityForTrack(track)
                 }
             }
             service.crossfadeManager.crossfadeConfig = _crossfadeConfig.value
             service.crossfadeManager.setShuffle(_isShuffleEnabled.value)
+            service.crossfadeManager.activePlayer.repeatMode = _repeatMode.value
+            service.crossfadeManager.standbyPlayer.repeatMode = _repeatMode.value
             service.crossfadeManager.applyEffectConfig(_effectConfig.value)
         }
 
@@ -527,16 +876,26 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                val mediaId = mediaItem?.mediaId?.toLongOrNull() ?: return
+                if (mediaItem == null) return
+                val mediaIdStr = mediaItem.mediaId
+                val mediaId = mediaIdStr.toLongOrNull()
                 viewModelScope.launch {
-                    val trackEntity = dao.getTrackById(mediaId)
+                    val trackEntity = mediaId?.let { dao.getTrackById(it) }
+                    val currentInService = PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
                     val track = trackEntity?.toTrack()
-                    _currentTrack.value = track
-                    track?.let {
-                        updatePaletteAccent(it)
-                        updateSignalPath(it)
-                        dao.incrementPlayCount(it.id)
-                        checkAndApplyTrackOrAlbumPreset(it)
+                        ?: _queue.value.firstOrNull { it.id.toString() == mediaIdStr || it.path == mediaIdStr }
+                        ?: (if (currentInService?.id.toString() == mediaIdStr || currentInService?.path == mediaIdStr) currentInService else null)
+
+                    if (track != null) {
+                        _currentTrack.value = track
+                        updatePaletteAccent(track)
+                        updateSignalPath(track)
+                        dao.incrementPlayCount(track.id)
+                        checkAndApplyTrackOrAlbumPreset(track)
+                        checkVideoAvailabilityForTrack(track)
+                    } else if (_currentTrack.value == null && currentInService != null) {
+                        _currentTrack.value = currentInService
+                        checkVideoAvailabilityForTrack(currentInService)
                     }
                 }
             }
@@ -553,13 +912,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         libraryRefreshJob?.cancel()
         libraryRefreshJob = viewModelScope.launch(Dispatchers.IO) {
             val minMs = minDurationSec * 1000L
+            val existingTracks = dao.getAllRawTracksList().associateBy { it.id }
             val scannedTracks = scanner.scanAllTracks(
                 minDurationMs = minMs,
                 includedFolders = includedFolders,
-                whitelistedTrackIds = whitelistedIds
+                whitelistedTrackIds = whitelistedIds,
+                cachedTracksById = existingTracks
             )
 
-            // Index all detected folders in the separate folder index
             val detectedFolders = scanner.extractFolders(scannedTracks)
             val folderEntities = detectedFolders.map { f ->
                 com.nodeplayer.music.data.ScannedFolderEntity(
@@ -571,8 +931,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             dao.insertScannedFolders(folderEntities)
 
-            // Mark tracks in excluded folders as hidden (do NOT delete them)
-            val existingTracks = dao.getAllRawTracksList().associateBy { it.id }
             val entities = scannedTracks.map { track ->
                 val isHidden = excludedFolders.any { excludedPath ->
                     track.path.startsWith(excludedPath, ignoreCase = true)
@@ -629,7 +987,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             _excludedFolders.value = current
             prefs.edit().putStringSet("excluded_folders", current).apply()
 
-            // Update tracks isHidden without deleting them
             val prefix = if (folderPath.endsWith("/")) folderPath else "$folderPath/"
             dao.setTracksHiddenForFolder(prefix, isHidden = willBeExcluded)
             dao.setTracksHiddenForFolder(folderPath, isHidden = willBeExcluded)
@@ -668,12 +1025,32 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         _isPlaying.value = true
         updatePaletteAccent(track)
         updateSignalPath(track)
+        val direct = extractYouTubeVideoId(track.path)
+        val isExplicitVideo = track.mimeType.contains("video", ignoreCase = true) ||
+            track.formatDescription.contains("video", ignoreCase = true) ||
+            track.genre?.contains("video", ignoreCase = true) == true ||
+            track.path.contains("video", ignoreCase = true)
+        val cacheKey = direct ?: "${track.title}_${track.artist}".trim().lowercase()
+        val hasCachedVideo = isExplicitVideo || resolvedVideoMap.containsKey(cacheKey)
+
+        com.nodeplayer.music.ui.video.MusicVideoEngine.stop()
+        _videoPlayerState.update {
+            it.copy(
+                isAvailable = hasCachedVideo,
+                isVideoActive = false,
+                isBuffering = false,
+                hasRenderedFirstFrame = false
+            )
+        }
+        checkVideoAvailabilityForTrack(track)
 
         val targetIndex = effectiveQueue.indexOfFirst { it.id == track.id }.coerceAtLeast(0)
         val service = PlaybackService.instance
         if (service != null) {
             service.crossfadeManager.crossfadeConfig = _crossfadeConfig.value
             service.crossfadeManager.setShuffle(_isShuffleEnabled.value)
+            service.crossfadeManager.activePlayer.repeatMode = _repeatMode.value
+            service.crossfadeManager.standbyPlayer.repeatMode = _repeatMode.value
             service.crossfadeManager.playQueue(effectiveQueue, targetIndex, 0L)
             _isPlaying.value = true
             startPositionTracking()
@@ -700,7 +1077,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, it.id)
                     }
                     val artworkUri = if (it.path.startsWith("nodeplayer://youtube/")) {
-                        Uri.parse("https://i.ytimg.com/vi/${it.path.removePrefix("nodeplayer://youtube/")}/hqdefault.jpg")
+                        Uri.parse("https://i.ytimg.com/vi/${it.path.removePrefix("nodeplayer://youtube/")}/maxresdefault.jpg")
                     } else if (it.path.startsWith("nodeplayer://")) {
                         Uri.parse(it.path)
                     } else {
@@ -731,7 +1108,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             return
         }
 
-        // Neither service nor mediaController is ready yet: QUEUE IT, NEVER DROP IT
         Log.i("PlayerViewModel", "Playback service/controller not ready; queued tap for '${track.title}'. Starting service eagerly...")
         pendingPlayRequest = PendingPlayRequest(track, effectiveQueue, targetIndex, tapTime)
         try {
@@ -826,6 +1202,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun cycleRepeatMode() {
+        val nextMode = (_repeatMode.value + 1) % 3
+        _repeatMode.value = nextMode
+        prefs.edit().putInt("repeat_mode", nextMode).apply()
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.activePlayer.repeatMode = nextMode
+            service.crossfadeManager.standbyPlayer.repeatMode = nextMode
+        }
+    }
+
     fun playNext(track: Track) {
         val service = PlaybackService.instance
         if (service != null) {
@@ -888,11 +1275,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private val _sleepTimerRemainingSeconds = MutableStateFlow<Long?>(null)
     val sleepTimerRemainingSeconds: StateFlow<Long?> = _sleepTimerRemainingSeconds.asStateFlow()
-    private var sleepTimerJob: kotlinx.coroutines.Job? = null
+    private var sleepTimerJob: Job? = null
 
     fun setSleepTimer(minutes: Int?) {
         sleepTimerJob?.cancel()
-        val srv = com.nodeplayer.music.service.PlaybackService.instance
+        val srv = PlaybackService.instance
         val timer = srv?.sleepTimer
         if (timer != null) {
             if (minutes == null || minutes <= 0) {
@@ -918,7 +1305,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         sleepTimerJob = viewModelScope.launch(Dispatchers.Default) {
             var rem = totalSec
             while (rem > 0) {
-                kotlinx.coroutines.delay(1000L)
+                delay(1000L)
                 rem--
                 _sleepTimerRemainingSeconds.value = rem
             }
@@ -991,7 +1378,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     lastSessionTickMs = System.currentTimeMillis()
                 }
 
-                // Read real RMS audio level from DSP engine (suppress noise below threshold)
                 val nextRms = if (playing) (service?.dspAudioProcessor?.currentRms ?: 0.0f) else 0.0f
                 if (shouldEmitFloatDelta(_currentRms.value, nextRms, epsilon = 0.002f)) {
                     _currentRms.value = nextRms
@@ -1049,7 +1435,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun detectAudioOutput() {
-        val audioManager = getApplication<Application>().getSystemService(android.content.Context.AUDIO_SERVICE) as AudioManager
+        val audioManager = getApplication<Application>().getSystemService(Context.AUDIO_SERVICE) as AudioManager
         var deviceName = "Internal Speaker"
         var deviceType = OutputDeviceType.SPEAKER
         var isBitPerfect = false
@@ -1329,7 +1715,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         updateCrossfadeConfig(_crossfadeConfig.value.copy(autoGapless = enabled))
     }
 
-    fun updateThemeConfig(newConfig: GlassThemeConfig) {
+    fun updateThemeConfig(rawConfig: GlassThemeConfig) {
+        val newConfig = rawConfig.copy(glassTexture = 0.0f, noiseGrainAlpha = 0.0f)
         _themeConfig.value = newConfig
         prefs.edit()
             .putString("glass_strength", newConfig.glassStrength)
@@ -1351,7 +1738,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .putString("glass_shader_mode", newConfig.shaderMode)
             .putFloat("glass_opacity", newConfig.glassOpacity)
             .putFloat("glass_blur_strength", newConfig.blurStrength)
-            .putFloat("glass_texture", newConfig.glassTexture)
+            .putFloat("glass_texture", 0.0f)
             .putFloat("glass_edge_highlight_strength", newConfig.edgeHighlightStrength)
             .putBoolean("glass_fully_transparent", newConfig.isFullyTransparent)
             .putBoolean("glass_keep_text_readable", newConfig.keepTextReadable)
@@ -1387,13 +1774,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .putBoolean("dock_auto_hide_mini_player", newConfig.dockAutoHideMiniPlayer)
             .putFloat("dock_scroll_sensitivity", newConfig.dockScrollSensitivity)
             .putLong("dock_return_delay_ms", newConfig.dockReturnDelayMs)
-            .putBoolean("lyrics_animation_enabled", newConfig.lyricsAnimationEnabled)
             .putFloat("lyrics_font_size_sp", newConfig.lyricsViewConfig.fontSizeSp)
             .putInt("lyrics_auto_hide_delay_sec", newConfig.lyricsViewConfig.autoHideDelaySec)
             .putBoolean("controls_glass_enabled", newConfig.controlsGlassEnabled)
             .apply()
 
-        // Sync widgets with current glass settings and re-render
         val widgetOpacity = if (newConfig.isFullyTransparent) 0.0f else newConfig.glassOpacity
         prefs.edit().putFloat("widget_glass_opacity", widgetOpacity).apply()
         try {
@@ -1410,6 +1795,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 glassOpacity = 0.65f,
                 blurStrength = 0.60f,
                 glassTexture = 0.0f,
+                noiseGrainAlpha = 0.0f,
                 edgeHighlightStrength = 0.40f,
                 isFullyTransparent = false
             )
@@ -1417,7 +1803,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun resetThemeConfigToDefault() {
-        updateThemeConfig(GlassThemeConfig())
+        updateThemeConfig(GlassThemeConfig(glassTexture = 0.0f, noiseGrainAlpha = 0.0f))
     }
 
     fun <T> updateSetting(key: androidx.datastore.preferences.core.Preferences.Key<T>, value: T) {
@@ -1475,7 +1861,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun startSleepTimer(minutes: Int, finishTrack: Boolean = true, fadeSeconds: Int = 10, stopAfterTracks: Int = 0, shakeExtend: Boolean = true) {
-        val intent = android.content.Intent(app, PlaybackService::class.java).apply {
+        val intent = Intent(app, PlaybackService::class.java).apply {
             action = PlaybackService.ACTION_SLEEP_START
             putExtra(PlaybackService.EXTRA_SLEEP_MINUTES, minutes)
             putExtra(PlaybackService.EXTRA_SLEEP_FINISH_TRACK, finishTrack)
@@ -1487,14 +1873,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun cancelSleepTimer() {
-        val intent = android.content.Intent(app, PlaybackService::class.java).apply {
+        val intent = Intent(app, PlaybackService::class.java).apply {
             action = PlaybackService.ACTION_SLEEP_CANCEL
         }
         app.startService(intent)
     }
 
     val isNodeConnectEnabled = MutableStateFlow(prefs.getBoolean("node_connect_enabled", true))
-
     val nodeConnectHub get() = PlaybackService.instance?.nodeConnectHub
 
     fun setNodeConnectEnabled(enabled: Boolean) {
@@ -1513,24 +1898,160 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun createPlaylist(name: String, initialTracks: List<Track> = emptyList()) {
         if (name.isBlank()) return
         viewModelScope.launch(Dispatchers.IO) {
-            val playlistId = dao.insertPlaylist(com.nodeplayer.music.data.PlaylistEntity(name = name.trim()))
-            if (initialTracks.isNotEmpty()) {
-                dao.insertTracks(initialTracks.map { com.nodeplayer.music.data.TrackEntity.fromTrack(it) })
-                val refs = initialTracks.mapIndexed { index, t ->
-                    com.nodeplayer.music.data.PlaylistTrackCrossRef(
-                        playlistId = playlistId,
-                        trackId = t.id,
-                        position = index
-                    )
+            createPlaylistWithTracks(name, initialTracks)
+        }
+    }
+
+    fun extractYouTubeVideoId(path: String): String? {
+        if (path.startsWith("nodeplayer://youtube/", ignoreCase = true)) {
+            val after = path.removePrefix("nodeplayer://youtube/").trimStart('/')
+            val cleaned = when {
+                after.startsWith("track/", ignoreCase = true) -> after.substring("track/".length)
+                after.startsWith("video/", ignoreCase = true) -> after.substring("video/".length)
+                else -> after
+            }.substringBefore("?").substringBefore("/").substringBefore("#")
+            if (cleaned.length == 11) return cleaned
+        }
+        if (path.contains("watch?v=")) {
+            val candidate = path.substringAfter("watch?v=").take(11)
+            if (candidate.length == 11) return candidate
+        }
+        if (path.contains("youtu.be/")) {
+            val candidate = path.substringAfter("youtu.be/").substringBefore("?").take(11)
+            if (candidate.length == 11) return candidate
+        }
+        return null
+    }
+
+    suspend fun resolveVideoIdForTrack(track: Track): String? {
+        val direct = extractYouTubeVideoId(track.path)
+
+        // If local video or already an explicit music video track from video shelves
+        val isExplicitVideoTrack = track.mimeType.contains("video", ignoreCase = true) ||
+            track.formatDescription.contains("video", ignoreCase = true) ||
+            track.genre?.contains("video", ignoreCase = true) == true ||
+            track.path.contains("video", ignoreCase = true)
+
+        if (isExplicitVideoTrack && direct != null) {
+            return direct
+        }
+
+        val cacheKey = direct ?: "${track.title}_${track.artist}".trim().lowercase()
+        resolvedVideoMap[cacheKey]?.let { return it.videoId }
+
+        return withContext(Dispatchers.IO) {
+            try {
+                val client = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+
+                // Tier 1: Query InnerTube /next for official paired counterpart (BitChord algorithm)
+                if (direct != null) {
+                    val pair = client.fetchOfficialVersionPair(direct, wantAudio = false)
+                    if (pair != null) {
+                        val offsetMs = pair.timeMap?.segments?.firstOrNull()?.let {
+                            it.toStartMs - it.fromStartMs
+                        } ?: 0L
+                        com.nodeplayer.common.logging.NodeLog.i(
+                            "PlayerViewModel",
+                            "Resolved official paired music video for '${track.title}': ${pair.videoId} (offset=${offsetMs}ms)"
+                        )
+                        resolvedVideoMap[cacheKey] = ResolvedVideoEntry(pair.videoId, offsetMs, isOfficial = true)
+                        return@withContext pair.videoId
+                    }
                 }
-                dao.insertPlaylistTracks(refs)
+
+                // Tier 2: Search YouTube Music with VideoTrackMatcher verification (BitChord algorithm)
+                val matchedVideo = client.searchMusicVideo(track.title, track.artist, track.durationMs)
+                if (matchedVideo != null) {
+                    val matchedVid = extractYouTubeVideoId(matchedVideo.path)
+                    if (matchedVid != null) {
+                        com.nodeplayer.common.logging.NodeLog.i(
+                            "PlayerViewModel",
+                            "Resolved matched music video via VideoTrackMatcher for '${track.title}': $matchedVid"
+                        )
+                        resolvedVideoMap[cacheKey] = ResolvedVideoEntry(matchedVid, 0L, isOfficial = false)
+                        return@withContext matchedVid
+                    }
+                }
+
+                // If online track but no music video exists in YouTube Music, return null
+                null
+            } catch (e: Exception) {
+                com.nodeplayer.common.logging.NodeLog.w("PlayerViewModel", "Video resolution failed for '${track.title}': ${e.message}")
+                null
             }
         }
     }
 
+    suspend fun createPlaylistWithTracks(
+        name: String,
+        initialTracks: List<Track> = emptyList(),
+        alsoCreateYouTube: Boolean = false
+    ): Long = withContext(Dispatchers.IO) {
+        val playlistId = dao.insertPlaylist(com.nodeplayer.music.data.PlaylistEntity(name = name.trim()))
+        if (initialTracks.isNotEmpty()) {
+            dao.insertTracks(initialTracks.map { TrackEntity.fromTrack(it) })
+            val refs = initialTracks.mapIndexed { index, t ->
+                com.nodeplayer.music.data.PlaylistTrackCrossRef(
+                    playlistId = playlistId,
+                    trackId = t.id,
+                    position = index
+                )
+            }
+            dao.insertPlaylistTracks(refs)
+        }
+
+        // Always create on YouTube when signed in (or requested via alsoCreateYouTube)
+        val isSignedIn = com.nodeplayer.music.auth.YouTubeAccountManager.isLoggedIn()
+        val ytClient = com.nodeplayer.music.auth.YouTubeAccountManager.innerTubeClient
+        if ((isSignedIn || alsoCreateYouTube) && ytClient != null) {
+            try {
+                val ytVideoIds = mutableListOf<String>()
+                var localOnlyCount = 0
+                for (t in initialTracks) {
+                    val vid = extractYouTubeVideoId(t.path)
+                    if (vid != null) {
+                        ytVideoIds.add(vid)
+                    } else {
+                        localOnlyCount++
+                    }
+                }
+                com.nodeplayer.common.logging.NodeLog.i(
+                    "NP_IMPORT",
+                    "Creating YouTube playlist '$name': ytTracks=${ytVideoIds.size}, localOnlySkipped=$localOnlyCount"
+                )
+                val createRes = ytClient.createPlaylist(
+                    title = name.trim(),
+                    videoIds = ytVideoIds.take(50)
+                )
+                createRes.onSuccess { ytPlaylistId ->
+                    val remaining = ytVideoIds.drop(50)
+                    if (remaining.isNotEmpty()) {
+                        remaining.chunked(50).forEach { chunk ->
+                            ytClient.addTracksToPlaylist(ytPlaylistId, chunk)
+                        }
+                    }
+                    com.nodeplayer.common.logging.NodeLog.i(
+                        "NP_IMPORT",
+                        "Successfully created YouTube playlist $ytPlaylistId with ${ytVideoIds.size} tracks (skipped $localOnlyCount local tracks)"
+                    )
+                }.onFailure { err ->
+                    com.nodeplayer.common.logging.NodeLog.e(
+                        "NP_IMPORT",
+                        "Failed to create YouTube playlist '$name': ${err.message}",
+                        err
+                    )
+                }
+            } catch (e: Exception) {
+                com.nodeplayer.common.logging.NodeLog.e("NP_IMPORT", "Error syncing imported playlist to YouTube", e)
+            }
+        }
+        com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
+        playlistId
+    }
+
     fun addTrackToPlaylist(playlistId: Long, track: Track) {
         viewModelScope.launch(Dispatchers.IO) {
-            dao.insertTracks(listOf(com.nodeplayer.music.data.TrackEntity.fromTrack(track)))
+            dao.insertTracks(listOf(TrackEntity.fromTrack(track)))
             val existingIds = dao.getPlaylistTrackIds(playlistId)
             if (!existingIds.contains(track.id)) {
                 val ref = com.nodeplayer.music.data.PlaylistTrackCrossRef(
@@ -1539,6 +2060,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     position = existingIds.size
                 )
                 dao.insertPlaylistTracks(listOf(ref))
+                com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
             }
         }
     }
@@ -1546,25 +2068,31 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun deletePlaylist(playlist: com.nodeplayer.music.data.PlaylistEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.deletePlaylist(playlist)
+            com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
         }
     }
 
     fun deletePlaylistById(playlistId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             val p = dao.getAllPlaylistsList().find { it.id == playlistId }
-            if (p != null) dao.deletePlaylist(p)
+            if (p != null) {
+                dao.deletePlaylist(p)
+                com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
+            }
         }
     }
 
     fun renamePlaylist(playlistId: Long, newName: String) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.renamePlaylist(playlistId, newName)
+            com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
         }
     }
 
     fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.removeTrackFromPlaylist(playlistId, trackId)
+            com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
         }
     }
 
@@ -1579,6 +2107,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
             dao.insertPlaylistTracks(refs)
+            com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
+        }
+    }
+
+    fun setFavorite(trackId: Long, isFav: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.setFavorite(trackId, isFav)
+            com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
         }
     }
 
@@ -1631,7 +2167,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             shaderMode: String = "AUTO",
             glassOpacity: Float = 0.65f,
             blurStrength: Float = 0.70f,
-            glassTexture: Float = 0.40f,
+            @Suppress("UNUSED_PARAMETER") glassTexture: Float = 0.0f,
             edgeHighlightStrength: Float = 0.60f,
             isFullyTransparent: Boolean = false,
             keepTextReadable: Boolean = true,
@@ -1682,6 +2218,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 blurRadiusDp = blurRadiusDp,
                 tintAlpha = tintAlpha,
                 borderAlpha = borderAlpha,
+                noiseGrainAlpha = 0.0f,
                 isOledBlack = isOledBlack,
                 useDynamicAccent = useDynamicAccent,
                 fixedAccentColorArgb = fixedAccentColorArgb,
@@ -1692,7 +2229,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 shaderMode = shaderMode,
                 glassOpacity = glassOpacity,
                 blurStrength = blurStrength,
-                glassTexture = glassTexture,
+                glassTexture = 0.0f,
                 edgeHighlightStrength = edgeHighlightStrength,
                 isFullyTransparent = isFullyTransparent,
                 keepTextReadable = keepTextReadable,
@@ -1728,7 +2265,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 dockAutoHideMiniPlayer = dockAutoHideMiniPlayer,
                 dockScrollSensitivity = dockScrollSensitivity,
                 dockReturnDelayMs = dockReturnDelayMs,
-                lyricsViewConfig = com.nodeplayer.model.LyricsViewConfig(
+                lyricsViewConfig = LyricsViewConfig(
                     fontSizeSp = lyricsFontSizeSp,
                     autoHideDelaySec = lyricsAutoHideDelaySec
                 ),

@@ -130,32 +130,27 @@ fun AudioFormatBadge(
 
     when (badgeData.style) {
         BadgeStyle.YOUTUBE_STREAM -> {
-            val cyanColor = LiquidColors.ElectricCyan
+            val tealColor = com.nodeplayer.ui.theme.CarbonZincPalette.AccentTeal
             Box(
                 modifier = modifier
                     .clip(shape)
-                    .background(LiquidColors.CyanDeep.copy(alpha = 0.55f))
+                    .background(tealColor.copy(alpha = 0.12f))
                     .border(
                         width = 1.dp,
-                        brush = Brush.verticalGradient(
-                            listOf(
-                                cyanColor.copy(alpha = 0.60f),
-                                cyanColor.copy(alpha = 0.20f)
-                            )
-                        ),
+                        color = tealColor.copy(alpha = 0.40f),
                         shape = shape
                     )
                     .padding(
-                        horizontal = if (isCompact) 5.dp else 8.dp,
-                        vertical = if (isCompact) 1.5.dp else 3.dp
+                        horizontal = if (isCompact) 6.dp else 8.dp,
+                        vertical = if (isCompact) 2.dp else 3.5.dp
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = badgeData.mainText,
-                    fontSize = if (isCompact) 9.sp else 10.5.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = cyanColor,
+                    fontSize = if (isCompact) 9.5.sp else 10.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = tealColor,
                     maxLines = 1
                 )
             }

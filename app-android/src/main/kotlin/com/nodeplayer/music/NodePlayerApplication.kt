@@ -2,6 +2,7 @@ package com.nodeplayer.music
 
 import android.app.Application
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
@@ -52,6 +53,13 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
     lateinit var libraryScanner: LibraryScanner
         private set
 
+    lateinit var downloadQueueManager: com.nodeplayer.library.downloader.DownloadQueueManager
+        private set
+
+    val smartMixtapeManager by lazy {
+        com.nodeplayer.music.mixtape.SmartMixtapeManager(this)
+    }
+
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     @Volatile
@@ -76,6 +84,8 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             }
         }
         NodeLog.isVerbose = BuildConfig.DEBUG
+        com.nodeplayer.music.data.LyricsSettingsRepository.init(this)
+        com.nodeplayer.common.platform.PlatformTransliteratorRegistry.instance = com.nodeplayer.music.lyrics.AndroidIcuTransliterator()
         // Keep GlassDebug opt-in so debug benchmarks and normal scrolling never pay per-frame nanoTime/logging overhead
         com.nodeplayer.ui.debug.GlassDebug.isEnabled = false
         NodeLog.i("app/lifecycle", "NodePlayerApplication initialized")
@@ -105,30 +115,58 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             NodeDatabase::class.java,
             "node_player.db"
         )
-            .addMigrations(NodeDatabase.MIGRATION_6_7)
+            .addMigrations(
+                NodeDatabase.MIGRATION_6_7, 
+                NodeDatabase.MIGRATION_7_8, 
+                NodeDatabase.MIGRATION_8_9,
+                NodeDatabase.MIGRATION_9_10
+            )
             .fallbackToDestructiveMigration()
             .build()
 
         libraryScanner = LibraryScanner(applicationContext)
         com.nodeplayer.network.cache.HomeFeedDiskCache.defaultCacheDir = cacheDir.resolve("home_feeds")
+        initializeDownloadAndStorage()
 
         com.nodeplayer.ui.components.PlatformArtworkProvider.remoteImageFetcher = { url, maxSizePx ->
+            val quality = com.nodeplayer.model.MediaQualitySettingsState.albumArtQuality.value
             val targetPx = maxSizePx.coerceIn(
                 AudioArtworkFetcher.MIN_TARGET_SIZE_PX,
                 AudioArtworkFetcher.MAX_TARGET_SIZE_PX
             )
-            val request = ImageRequest.Builder(this@NodePlayerApplication)
-                .data(url)
-                .size(targetPx, targetPx)
-                .allowHardware(false)
-                .build()
-            val result = Coil.imageLoader(this@NodePlayerApplication).execute(request)
-            if (result is SuccessResult) {
-                val bmp = (result.drawable as? BitmapDrawable)?.bitmap ?: result.drawable.toBitmap()
-                bmp.asImageBitmap()
+            val videoId = com.nodeplayer.model.ArtworkUrlResolver.extractYouTubeVideoId(url)
+
+            val urlsToTry = if (videoId != null) {
+                com.nodeplayer.model.ArtworkUrlResolver.resolveYouTubeThumbnailCandidates(url, quality)
             } else {
-                null
+                listOfNotNull(com.nodeplayer.model.ArtworkUrlResolver.resolveArtworkUrl(url, quality))
             }
+
+            var imageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
+            for (u in urlsToTry) {
+                val request = ImageRequest.Builder(this@NodePlayerApplication)
+                    .data(u)
+                    .size(targetPx, targetPx)
+                    .allowHardware(false)
+                    .build()
+                val result = Coil.imageLoader(this@NodePlayerApplication).execute(request)
+                if (result is SuccessResult) {
+                    val bmp = (result.drawable as? BitmapDrawable)?.bitmap ?: result.drawable.toBitmap()
+                    val cropped = if (u.contains("hqdefault") || u.contains("sddefault")) {
+                        val aspect = bmp.width.toFloat() / bmp.height.toFloat()
+                        if (aspect in 1.30f..1.36f) {
+                            val trimPx = (bmp.height * 0.125f).toInt()
+                            val activeHeight = (bmp.height * 0.75f).toInt()
+                            if (trimPx > 0 && activeHeight > 0 && trimPx + activeHeight <= bmp.height) {
+                                Bitmap.createBitmap(bmp, 0, trimPx, bmp.width, activeHeight)
+                            } else bmp
+                        } else bmp
+                    } else bmp
+                    imageBitmap = cropped.asImageBitmap()
+                    break
+                }
+            }
+            imageBitmap
         }
 
         startAsyncBootstrap()
@@ -149,11 +187,124 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
                 getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
                 val sharedInnerTube = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
                 com.nodeplayer.music.auth.YouTubeAccountManager.initialize(this@NodePlayerApplication, sharedInnerTube)
+                com.nodeplayer.music.auth.SpotifyAccountManager.initialize(this@NodePlayerApplication)
                 com.nodeplayer.music.lyrics.LyricsManager.initialize(this@NodePlayerApplication)
+                com.nodeplayer.music.sync.CloudSyncManager.initialize(this@NodePlayerApplication)
             } catch (t: Throwable) {
                 NodeLog.w("app/lifecycle", "Async bootstrap partial failure: ${t.message}")
             }
         }
+    }
+
+    private fun initializeDownloadAndStorage() {
+        val downloadsDir = getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC) ?: java.io.File(filesDir, "downloads")
+        val resolver = com.nodeplayer.network.downloader.StreamFormatResolver()
+        val httpSource = com.nodeplayer.network.downloader.DownloadHttpSource()
+        val searchClient = com.nodeplayer.network.innertube.InnerTubeClient()
+
+        val prefs = getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
+        val concurrent = prefs.getInt("download_concurrent_limit", 2)
+        val wifiOnly = prefs.getBoolean("download_wifi_only", false)
+
+        downloadQueueManager = com.nodeplayer.library.downloader.DownloadQueueManager(
+            downloadsDir = downloadsDir,
+            streamOptionResolver = { targetId, preset, format ->
+                var resolvedVid = targetId
+                if (targetId.startsWith("query:") || targetId.length != 11) {
+                    val query = if (targetId.startsWith("query:")) targetId.removePrefix("query:") else targetId
+                    val searchRes = searchClient.search(query, com.nodeplayer.network.innertube.SearchFilter.SONGS).getOrNull()
+                    val firstSong = searchRes?.songs?.firstOrNull()
+                    val songVid = firstSong?.let { s ->
+                        when {
+                            s.path.startsWith("nodeplayer://youtube/track/") -> s.path.removePrefix("nodeplayer://youtube/track/").substringBefore("?").substringBefore("/")
+                            s.path.startsWith("nodeplayer://youtube/") -> s.path.removePrefix("nodeplayer://youtube/").substringBefore("?").substringBefore("/")
+                            s.path.startsWith("online://") -> s.path.removePrefix("online://").substringBefore("?").substringBefore("/")
+                            s.path.length == 11 && !s.path.contains("/") -> s.path
+                            else -> null
+                        }
+                    }
+                    if (songVid != null) {
+                        resolvedVid = songVid
+                    }
+                }
+                val opts = resolver.resolveAvailableAudioOptions(resolvedVid).getOrThrow()
+                val best = resolver.selectBestOption(opts, preset, format)
+                    ?: throw IllegalStateException("No format matched preset")
+                Result.success(best)
+            },
+            streamDownloader = { url, destFile, expected, onProg ->
+                httpSource.downloadToFile(url, destFile, expected, onProg)
+            },
+            tagger = com.nodeplayer.music.downloader.AndroidDownloadTagger(this),
+            initialConcurrentLimit = concurrent,
+            initialWifiOnly = wifiOnly,
+            onDownloadCompleted = { savedFile, originalTrack ->
+                applicationScope.launch(Dispatchers.IO) {
+                    val trackId = if (originalTrack.id > 0L) originalTrack.id else (savedFile.absolutePath.hashCode().toLong() and 0x7FFFFFFFFFFFFFFFL)
+                    val downloadedTrack = originalTrack.copy(
+                        id = trackId,
+                        path = savedFile.absolutePath,
+                        size = savedFile.length()
+                    )
+                    database.playerDao().insertTracks(listOf(com.nodeplayer.music.data.TrackEntity.fromTrack(downloadedTrack)))
+                    com.nodeplayer.common.logging.NodeLog.i("NodeApp", "Downloaded and persisted track to DB: ${downloadedTrack.title}")
+                }
+            }
+        )
+
+        val reg = com.nodeplayer.library.storage.StorageCategoryRegistry
+        reg.registerCategory(
+            reg.createDirectoryCategory(
+                id = reg.CATEGORY_AUDIO_CACHE,
+                displayName = "Audio & Stream Cache",
+                description = "ExoPlayer LRU stream cache",
+                directory = cacheDir.resolve(com.nodeplayer.music.playback.AudioCache.CACHE_DIR_NAME)
+            )
+        )
+        reg.registerCategory(
+            reg.createDirectoryCategory(
+                id = reg.CATEGORY_IMAGE_CACHE,
+                displayName = "Cover Art & Images",
+                description = "Coil disk cache for album artwork",
+                directory = cacheDir.resolve("image_cache"),
+                limitSettingKey = "cache_limit_images_mb"
+            )
+        )
+        reg.registerCategory(
+            reg.createDirectoryCategory(
+                id = reg.CATEGORY_LYRICS_CACHE,
+                displayName = "Synchronized Lyrics",
+                description = "Local LRC/TTML lyrics cache",
+                directory = cacheDir.resolve("lyrics_cache"),
+                limitSettingKey = "cache_limit_lyrics_mb"
+            )
+        )
+        reg.registerCategory(
+            reg.createDirectoryCategory(
+                id = reg.CATEGORY_FEED_CACHE,
+                displayName = "Home Feed Cache",
+                description = "Home feed and mood shelves cache",
+                directory = cacheDir.resolve("home_feeds"),
+                limitSettingKey = "cache_limit_feed_mb"
+            )
+        )
+        reg.registerCategory(
+            reg.createDirectoryCategory(
+                id = reg.CATEGORY_TASTE_CACHE,
+                displayName = "Taste & Recommendations",
+                description = "Taste profile and mix cache",
+                directory = cacheDir.resolve("taste_cache")
+            )
+        )
+        reg.registerCategory(
+            reg.createDirectoryCategory(
+                id = reg.CATEGORY_OFFLINE_DOWNLOADS,
+                displayName = "Offline Downloads",
+                description = "Downloaded audio files",
+                directory = downloadsDir,
+                clearable = false
+            )
+        )
     }
 
     companion object {

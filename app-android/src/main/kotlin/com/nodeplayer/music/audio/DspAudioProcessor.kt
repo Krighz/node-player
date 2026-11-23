@@ -12,7 +12,10 @@ import java.nio.ByteOrder
  * Supports both PCM Float and PCM 16-bit (Mono and Stereo).
  * Extracts real RMS audio levels for visualizers and live signal path metrics.
  */
-class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
+class DspAudioProcessor(
+    val dspChain: DspChain,
+    val force16BitOutput: Boolean = android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q
+) : BaseAudioProcessor() {
 
     @Volatile
     var currentRms: Float = 0.0f
@@ -35,9 +38,16 @@ class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
         }
         dspChain.sampleRate = inputAudioFormat.sampleRate
         actualSampleRate = inputAudioFormat.sampleRate
-        actualEncoding = if (inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT) "PCM_FLOAT (32-bit)" else "PCM_16BIT (16-bit)"
-        // Keep output format identical to input format to avoid any sink negotiation issues
-        return inputAudioFormat
+        actualEncoding = if (inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT) {
+            if (force16BitOutput) "PCM_FLOAT (32-bit internal -> 16-bit sink)" else "PCM_FLOAT (32-bit)"
+        } else {
+            "PCM_16BIT (16-bit)"
+        }
+        return if (force16BitOutput && inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT) {
+            AudioProcessor.AudioFormat(inputAudioFormat.sampleRate, inputAudioFormat.channelCount, C.ENCODING_PCM_16BIT)
+        } else {
+            inputAudioFormat
+        }
     }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
@@ -47,9 +57,6 @@ class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
         val inputFormat = inputAudioFormat
         val channels = inputFormat.channelCount
         val sampleRate = inputFormat.sampleRate
-
-        val outputBuffer = replaceOutputBuffer(remaining)
-        outputBuffer.order(ByteOrder.nativeOrder())
 
         if (inputFormat.encoding == C.ENCODING_PCM_FLOAT) {
             val floatCount = remaining / 4
@@ -90,9 +97,21 @@ class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
                 }
             }
 
-            outputBuffer.asFloatBuffer().put(floatArray)
-            outputBuffer.position(0)
-            outputBuffer.limit(remaining)
+            if (force16BitOutput) {
+                val outputBuffer = replaceOutputBuffer(floatCount * 2)
+                outputBuffer.order(ByteOrder.nativeOrder())
+                for (i in 0 until floatCount) {
+                    val clamped = (floatArray[i] * 32767.0f).coerceIn(-32768.0f, 32767.0f).toInt().toShort()
+                    outputBuffer.putShort(clamped)
+                }
+                outputBuffer.position(0)
+            } else {
+                val outputBuffer = replaceOutputBuffer(remaining)
+                outputBuffer.order(ByteOrder.nativeOrder())
+                outputBuffer.asFloatBuffer().put(floatArray)
+                outputBuffer.position(0)
+                outputBuffer.limit(remaining)
+            }
             inputBuffer.position(inputBuffer.limit())
 
         } else if (inputFormat.encoding == C.ENCODING_PCM_16BIT) {
@@ -131,6 +150,9 @@ class DspAudioProcessor(val dspChain: DspChain) : BaseAudioProcessor() {
                     floatArray[i] = (stereo[i * 2] + stereo[i * 2 + 1]) * 0.5f
                 }
             }
+
+            val outputBuffer = replaceOutputBuffer(remaining)
+            outputBuffer.order(ByteOrder.nativeOrder())
 
             // Convert back to 16-bit PCM for output
             for (i in 0 until sampleCount) {

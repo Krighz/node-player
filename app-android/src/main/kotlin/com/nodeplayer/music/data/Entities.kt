@@ -1,11 +1,18 @@
 package com.nodeplayer.music.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.nodeplayer.model.HiResStatus
 import com.nodeplayer.model.Track
 
-@Entity(tableName = "tracks")
+@Entity(
+    tableName = "tracks",
+    indices = [
+        Index(value = ["isHidden", "title"]),
+        Index(value = ["isFavorite"])
+    ]
+)
 data class TrackEntity(
     @PrimaryKey val id: Long,
     val title: String,
@@ -192,4 +199,36 @@ data class AudioPresetEntity(
     val isAlbum: Boolean,
     val presetName: String,
     val configJson: String
+)
+
+@Entity(tableName = "followed_artists")
+data class FollowedArtistEntity(
+    @PrimaryKey val artistBrowseId: String,
+    val artistName: String,
+    val avatarUrl: String? = null,
+    val followedAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "playback_history",
+    indices = [
+        Index(value = ["songId", "playedAt"]),
+        Index(value = ["playedAt"])
+    ]
+)
+data class PlaybackHistoryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val songId: String,
+    val playedAt: Long,
+    val durationPlayedSeconds: Long
+)
+
+@Entity(tableName = "song_stats")
+data class SongStatsEntity(
+    @PrimaryKey val songId: String,
+    val title: String,
+    val artist: String,
+    val totalPlayTimeSeconds: Long = 0L,
+    val playCount: Int = 0,
+    val lastPlayedAt: Long = 0L
 )

@@ -35,19 +35,37 @@ class AudioArtworkFetcher(
     override suspend fun fetch(): FetchResult? {
         val (targetW, targetH) = resolveTargetSize(options.size)
         val maxDim = maxOf(targetW, targetH)
+        val artQuality = com.nodeplayer.model.MediaQualitySettingsState.albumArtQuality.value
 
-        // Online tracks have no MediaStore album ID. Use Coil's shared HTTP/disk cache.
-        if (path.startsWith("nodeplayer://youtube/")) {
-            val videoId = path.removePrefix("nodeplayer://youtube/").substringBefore('?').substringBefore('/')
-            val request = coil.request.ImageRequest.Builder(context)
-                .data("https://i.ytimg.com/vi/$videoId/hqdefault.jpg")
-                .size(targetW, targetH)
-                .allowHardware(false)
-                .build()
-            val result = coil.Coil.imageLoader(context).execute(request)
-            return (result as? coil.request.SuccessResult)?.let {
-                DrawableResult(it.drawable, isSampled = true, dataSource = it.dataSource)
+        // Online tracks / YouTube Music tracks
+        if (path.startsWith("nodeplayer://youtube/") || path.contains("i.ytimg.com") || path.contains("googleusercontent.com") || path.startsWith("http://") || path.startsWith("https://")) {
+            val variants = com.nodeplayer.model.ArtworkUrlResolver.resolveYouTubeThumbnailCandidates(path, artQuality)
+            val urlsToTry = if (variants.isNotEmpty() && variants.first() != path) {
+                variants
+            } else {
+                listOfNotNull(com.nodeplayer.model.ArtworkUrlResolver.resolveArtworkUrl(path, artQuality))
             }
+
+            for (url in urlsToTry) {
+                val request = coil.request.ImageRequest.Builder(context)
+                    .data(url)
+                    .size(targetW, targetH)
+                    .allowHardware(false)
+                    .build()
+                val result = coil.Coil.imageLoader(context).execute(request)
+                if (result is coil.request.SuccessResult) {
+                    val rawBmp = (result.drawable as? BitmapDrawable)?.bitmap
+                        ?: (result.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                        ?: drawableToBitmap(result.drawable)
+                    val cropped = cropYouTubeLetterbox(rawBmp)
+                    return DrawableResult(
+                        drawable = BitmapDrawable(context.resources, cropped),
+                        isSampled = true,
+                        dataSource = result.dataSource
+                    )
+                }
+            }
+            return null
         }
 
         // 0. Check in-memory byte cache for Node Connect virtual streams/tracks
@@ -68,20 +86,7 @@ class AudioArtworkFetcher(
             )
         }
 
-        // 1. Android 10+ MediaStore thumbnail if trackId > 0 — return DrawableResult directly without JPEG re-encode
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && trackId > 0) {
-            try {
-                val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, trackId)
-                val thumb = context.contentResolver.loadThumbnail(trackUri, Size(targetW, targetH), null)
-                return DrawableResult(
-                    drawable = BitmapDrawable(context.resources, thumb),
-                    isSampled = true,
-                    dataSource = DataSource.DISK
-                )
-            } catch (_: Exception) {}
-        }
-
-        // 2. Embedded picture via MediaMetadataRetriever from file path (downsampled via inSampleSize)
+        // 1. High-Resolution Embedded picture via MediaMetadataRetriever directly from audio file
         if (path.isNotBlank()) {
             val file = File(path)
             if (file.exists() && file.canRead()) {
@@ -89,7 +94,7 @@ class AudioArtworkFetcher(
                 try {
                     mmr.setDataSource(file.absolutePath)
                     val picture = mmr.embeddedPicture
-                    if (picture != null) {
+                    if (picture != null && picture.isNotEmpty()) {
                         decodeSampledDrawable(picture, maxDim)?.let { drawable ->
                             return DrawableResult(
                                 drawable = drawable,
@@ -107,10 +112,47 @@ class AudioArtworkFetcher(
                 } finally {
                     try { mmr.release() } catch (_: Exception) {}
                 }
+
+                // Check companion cover file in the same directory (cover.jpg, folder.jpg, etc.)
+                val companionCover = listOf(
+                    File(file.parentFile, "${file.nameWithoutExtension}.jpg"),
+                    File(file.parentFile, "${file.nameWithoutExtension}.png"),
+                    File(file.parentFile, "cover.jpg"),
+                    File(file.parentFile, "folder.jpg"),
+                    File(file.parentFile, "front.jpg")
+                ).firstOrNull { it.exists() && it.canRead() && it.length() > 0L }
+
+                if (companionCover != null) {
+                    try {
+                        val bytes = companionCover.readBytes()
+                        if (bytes.isNotEmpty()) {
+                            decodeSampledDrawable(bytes, maxDim)?.let { drawable ->
+                                return DrawableResult(
+                                    drawable = drawable,
+                                    isSampled = true,
+                                    dataSource = DataSource.DISK
+                                )
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
             }
         }
 
-        // 3. MediaStore album art URI
+        // 2. Fallback: Android 10+ MediaStore thumbnail if trackId > 0
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && trackId > 0) {
+            try {
+                val trackUri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, trackId)
+                val thumb = context.contentResolver.loadThumbnail(trackUri, Size(targetW, targetH), null)
+                return DrawableResult(
+                    drawable = BitmapDrawable(context.resources, thumb),
+                    isSampled = true,
+                    dataSource = DataSource.DISK
+                )
+            } catch (_: Exception) {}
+        }
+
+        // 3. Fallback: MediaStore album art URI
         if (albumId > 0) {
             try {
                 val uri = Uri.parse("content://media/external/audio/albumart/$albumId")
@@ -137,6 +179,29 @@ class AudioArtworkFetcher(
         return null
     }
 
+    private fun cropYouTubeLetterbox(bitmap: Bitmap): Bitmap {
+        val aspect = bitmap.width.toFloat() / bitmap.height.toFloat()
+        if (aspect in 1.30f..1.36f) {
+            val trimPx = (bitmap.height * 0.125f).toInt()
+            val activeHeight = (bitmap.height * 0.75f).toInt()
+            if (trimPx > 0 && activeHeight > 0 && trimPx + activeHeight <= bitmap.height) {
+                return Bitmap.createBitmap(bitmap, 0, trimPx, bitmap.width, activeHeight)
+            }
+        }
+        return bitmap
+    }
+
+    private fun drawableToBitmap(drawable: android.graphics.drawable.Drawable): Bitmap {
+        if (drawable is BitmapDrawable && drawable.bitmap != null) return drawable.bitmap
+        val width = drawable.intrinsicWidth.coerceAtLeast(1)
+        val height = drawable.intrinsicHeight.coerceAtLeast(1)
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return bitmap
+    }
+
     private fun decodeSampledDrawable(bytes: ByteArray, maxDim: Int): BitmapDrawable? {
         val boundsOpts = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
@@ -146,10 +211,11 @@ class AudioArtworkFetcher(
         val sampleSize = computeBitmapSampleSize(boundsOpts.outWidth, boundsOpts.outHeight, maxDim)
         val decodeOpts = BitmapFactory.Options().apply {
             inSampleSize = sampleSize
-            inPreferredConfig = Bitmap.Config.RGB_565
+            inPreferredConfig = Bitmap.Config.ARGB_8888
         }
         val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOpts) ?: return null
-        return BitmapDrawable(context.resources, bitmap)
+        val cropped = cropYouTubeLetterbox(bitmap)
+        return BitmapDrawable(context.resources, cropped)
     }
 
     class FileFactory : Fetcher.Factory<File> {
@@ -169,19 +235,21 @@ class AudioArtworkFetcher(
     }
 
     companion object {
-        const val DEFAULT_TARGET_SIZE_PX = 256
+        val DEFAULT_TARGET_SIZE_PX: Int
+            get() = com.nodeplayer.model.MediaQualitySettingsState.albumArtQuality.value.targetPx
         const val MIN_TARGET_SIZE_PX = 96
-        const val MAX_TARGET_SIZE_PX = 512
+        const val MAX_TARGET_SIZE_PX = 2048
 
         val AUDIO_EXTENSIONS = setOf("flac", "mp3", "m4a", "aac", "ogg", "opus", "wav", "alac", "aiff", "wma")
 
         fun resolveTargetSize(coilSize: coil.size.Size): Pair<Int, Int> {
+            val defaultPx = DEFAULT_TARGET_SIZE_PX
             val width = (coilSize.width as? Dimension.Pixels)?.px
                 ?.coerceIn(MIN_TARGET_SIZE_PX, MAX_TARGET_SIZE_PX)
-                ?: DEFAULT_TARGET_SIZE_PX
+                ?: defaultPx
             val height = (coilSize.height as? Dimension.Pixels)?.px
                 ?.coerceIn(MIN_TARGET_SIZE_PX, MAX_TARGET_SIZE_PX)
-                ?: DEFAULT_TARGET_SIZE_PX
+                ?: defaultPx
             return width to height
         }
     }

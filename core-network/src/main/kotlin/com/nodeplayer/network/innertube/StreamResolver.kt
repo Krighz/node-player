@@ -26,6 +26,8 @@ data class ResolvedStream(
     val durationSeconds: Long,
     val loudnessDb: Double?,
     val clientName: String,
+    val height: Int? = null,
+    val availableHeights: List<Int> = emptyList()
 )
 
 /**
@@ -44,13 +46,13 @@ data class ResolvedStream(
  * - Highest audio bitrate format fallback
  */
 class StreamResolver(
-    val innerTubeClient: InnerTubeClient = InnerTubeClient(),
+    val innerTubeClient: InnerTubeClient = SharedInnerTubeProvider.get(),
     private val cipherSolver: CipherSolver? = CipherSolver.current,
     probeEngine: HttpClientEngine? = null,
 ) : Closeable {
 
     constructor(
-        innerTubeClient: InnerTubeClient = InnerTubeClient(),
+        innerTubeClient: InnerTubeClient = SharedInnerTubeProvider.get(),
         cipherSolver: CipherSolver? = CipherSolver.current,
     ) : this(innerTubeClient, cipherSolver, null)
 
@@ -76,16 +78,37 @@ class StreamResolver(
     /**
      * Resolves playable audio stream for [videoId] executing client rotation and active range probing.
      */
-    suspend fun resolveStream(videoId: String): Result<ResolvedStream> {
-        NodeLog.d(TAG, "Resolving stream for videoId=$videoId across clients")
+    suspend fun resolveStream(
+        videoId: String,
+        audioQuality: com.nodeplayer.model.StreamingAudioQuality = com.nodeplayer.model.MediaQualitySettingsState.streamingAudioQuality.value
+    ): Result<ResolvedStream> {
+        return resolveStreamInternal(videoId, isVideo = false, audioQuality = audioQuality)
+    }
+
+    /**
+     * Resolves video stream for [videoId] with optional [preferredHeight] executing client rotation.
+     */
+    suspend fun resolveVideoStream(videoId: String, preferredHeight: Int? = null): Result<ResolvedStream> {
+        return resolveStreamInternal(videoId, isVideo = true, preferredHeight = preferredHeight)
+    }
+
+    private suspend fun resolveStreamInternal(
+        videoId: String,
+        isVideo: Boolean,
+        preferredHeight: Int? = null,
+        audioQuality: com.nodeplayer.model.StreamingAudioQuality = com.nodeplayer.model.MediaQualitySettingsState.streamingAudioQuality.value
+    ): Result<ResolvedStream> {
+        NodeLog.d(TAG, "Resolving stream for videoId=$videoId across clients (isVideo=$isVideo, preferredHeight=$preferredHeight, audioQuality=$audioQuality)")
         val errors = mutableListOf<String>()
 
         val clients = if (!innerTubeClient.sessionCookie.isNullOrBlank()) {
             listOf(YouTubeClient.WEB_REMIX) + CLIENT_ROTATION.filterNot { it == YouTubeClient.WEB_REMIX }
+        } else if (isVideo) {
+            CLIENT_ROTATION.filterNot { it == YouTubeClient.VISIONOS }
         } else CLIENT_ROTATION
         for (client in clients) {
             currentCoroutineContext().ensureActive()
-            NodeLog.d(TAG, "Attempting stream resolution for videoId=$videoId with client=${client.clientName}")
+            NodeLog.d(TAG, "Attempting stream resolution for videoId=$videoId with client=${client.clientName} (isVideo=$isVideo)")
             val responseResult = innerTubeClient.getPlayerResponse(videoId, client)
 
             if (responseResult.isFailure) {
@@ -114,10 +137,11 @@ class StreamResolver(
             }
 
             val allFormats = streamingData.adaptiveFormats + (streamingData.formats ?: emptyList())
-            val audioCandidates = rankAudioFormats(allFormats)
+            val availableHeights = allFormats.mapNotNull { it.height }.distinct().sortedDescending()
+            val streamCandidates = if (isVideo) rankVideoFormats(allFormats, preferredHeight) else rankAudioFormats(allFormats, audioQuality)
 
-            if (audioCandidates.isEmpty()) {
-                val errorMsg = "Client ${client.clientName} has no valid audio formats"
+            if (streamCandidates.isEmpty()) {
+                val errorMsg = "Client ${client.clientName} has no valid ${if (isVideo) "video" else "audio"} formats"
                 NodeLog.w(TAG, errorMsg)
                 errors.add(errorMsg)
                 continue
@@ -126,7 +150,7 @@ class StreamResolver(
             var chosenCandidate: Pair<PlayerResponse.StreamingData.Format, String>? = null
 
             var probeAttempted = false
-            for (candidate in audioCandidates) {
+            for (candidate in streamCandidates) {
                 var url = candidate.url
 
                 // Decipher if url is absent but cipher / signatureCipher is present
@@ -167,21 +191,11 @@ class StreamResolver(
 
                 // Active HTTP Range Probe validation
                 probeAttempted = true
-                if (verifyStreamUrl(url, client.userAgent)) {
+                if (verifyStreamUrl(url, client.userAgent, isVideo = isVideo)) {
                     chosenCandidate = candidate to url
                     break
                 } else {
-                    NodeLog.w(TAG, "Range probe failed for client ${client.clientName}, itag ${candidate.itag}")
-                }
-            }
-
-            // Fallback: Only if candidate URLs were present but no probe was attempted (e.g. all empty URLs)
-            // or if direct fallback is needed without probe failure
-            if (chosenCandidate == null && audioCandidates.isNotEmpty() && !probeAttempted) {
-                val directFallback = audioCandidates.firstOrNull { !it.url.isNullOrBlank() }
-                if (directFallback != null) {
-                    NodeLog.i(TAG, "Using direct audio format itag=${directFallback.itag} as fallback for ${client.clientName}")
-                    chosenCandidate = directFallback to directFallback.url!!
+                    NodeLog.w(TAG, "Range probe failed for client ${client.clientName}, itag ${candidate.itag} (isVideo=$isVideo)")
                 }
             }
 
@@ -200,9 +214,11 @@ class StreamResolver(
                     bitrate = format.bitrate?.toLong() ?: 0L,
                     durationSeconds = durationSeconds,
                     loudnessDb = loudnessDb,
-                    clientName = client.clientName
+                    clientName = client.clientName,
+                    height = format.height,
+                    availableHeights = availableHeights
                 )
-                NodeLog.i(TAG, "Successfully resolved stream for $videoId via ${client.clientName} (itag=${format.itag})")
+                NodeLog.i(TAG, "Successfully resolved ${if (isVideo) "video" else "audio"} stream for $videoId via ${client.clientName} (itag=${format.itag})")
                 return Result.success(resolved)
             } else {
                 errors.add("All candidates failed probe for client ${client.clientName}")
@@ -219,7 +235,7 @@ class StreamResolver(
      * Sends GET request with Range: bytes=0-1024 and 3-second timeout.
      * Accepts HTTP 206 (Partial Content) or 200 (OK).
      */
-    internal suspend fun verifyStreamUrl(url: String, userAgent: String): Boolean {
+    internal suspend fun verifyStreamUrl(url: String, userAgent: String, isVideo: Boolean = false): Boolean {
         return try {
             probeClient.prepareGet(url) {
                 header("Range", "bytes=0-1024")
@@ -229,36 +245,84 @@ class StreamResolver(
             }
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            NodeLog.w(TAG, "Stream probe network error for $url: ${e.message}")
+            NodeLog.w(TAG, "Stream probe error for $url: ${e.message}")
             false
         }
     }
 
     /**
-     * Prioritizes formats:
-     * 1. itag 251 (Opus 160k, 48kHz)
-     * 2. itag 140 (AAC 128k, 44.1kHz)
-     * 3. Other audio formats sorted by bitrate descending
+     * Prioritizes audio formats according to user-selected [quality]:
+     * - HIGH: itag 251 (Opus 160k, 48kHz) first, then itag 140 (AAC 128k), then remaining by bitrate descending
+     * - MEDIUM: itag 140 (AAC 128k, 44.1kHz - native resilient chunking), then itag 251, then remaining
+     * - LOW: itag 250 (Opus 70k) or itag 139 (AAC 48k) data saver streams first
      */
-    internal fun rankAudioFormats(formats: List<PlayerResponse.StreamingData.Format>): List<PlayerResponse.StreamingData.Format> {
+    internal fun rankAudioFormats(
+        formats: List<PlayerResponse.StreamingData.Format>,
+        quality: com.nodeplayer.model.StreamingAudioQuality = com.nodeplayer.model.MediaQualitySettingsState.streamingAudioQuality.value
+    ): List<PlayerResponse.StreamingData.Format> {
         val audioFormats = formats.filter { it.isAudio || it.mimeType.contains("audio", ignoreCase = true) }
-        val itag251 = audioFormats.filter { it.itag == 251 }
-        val itag140 = audioFormats.filter { it.itag == 140 }
-        val others = audioFormats.filter { it.itag != 251 && it.itag != 140 }
-            .sortedByDescending { it.bitrate ?: 0 }
 
-        return itag251 + itag140 + others
+        return when (quality) {
+            com.nodeplayer.model.StreamingAudioQuality.HIGH -> {
+                val itag251 = audioFormats.filter { it.itag == 251 }
+                val itag140 = audioFormats.filter { it.itag == 140 }
+                val others = audioFormats.filter { it.itag != 251 && it.itag != 140 }
+                    .sortedByDescending { it.bitrate ?: 0 }
+                itag251 + itag140 + others
+            }
+            com.nodeplayer.model.StreamingAudioQuality.MEDIUM -> {
+                val itag140 = audioFormats.filter { it.itag == 140 }
+                val itag251 = audioFormats.filter { it.itag == 251 }
+                val others = audioFormats.filter { it.itag != 140 && it.itag != 251 }
+                    .sortedByDescending { it.bitrate ?: 0 }
+                itag140 + itag251 + others
+            }
+            com.nodeplayer.model.StreamingAudioQuality.LOW -> {
+                val lowItags = audioFormats.filter { it.itag in listOf(250, 139, 249) }
+                    .sortedBy { it.bitrate ?: 0 }
+                val remaining = audioFormats.filter { it.itag !in listOf(250, 139, 249) }
+                    .sortedBy { it.bitrate ?: 0 }
+                lowItags + remaining
+            }
+        }
+    }
+
+    /**
+     * Ranks video formats by preferred height and bitrate.
+     * If [preferredHeight] is specified, formats closest to and <= preferredHeight are prioritized.
+     */
+    internal fun rankVideoFormats(
+        formats: List<PlayerResponse.StreamingData.Format>,
+        preferredHeight: Int? = null
+    ): List<PlayerResponse.StreamingData.Format> {
+        val videoFormats = formats.filter {
+            it.height != null || it.mimeType.contains("video", ignoreCase = true)
+        }
+        val available = videoFormats.mapNotNull { it.height }.distinct().sorted()
+        val effPreferred = preferredHeight ?: 480
+        val targetHeight = if (available.isNotEmpty()) {
+            available.lastOrNull { it <= effPreferred } ?: available.first()
+        } else null
+
+        return videoFormats.sortedWith(
+            compareByDescending<PlayerResponse.StreamingData.Format> { format ->
+                if (targetHeight != null && format.height == targetHeight) 1000
+                else if (targetHeight != null && format.height != null) -(kotlin.math.abs(format.height - targetHeight))
+                else 0
+            }.thenByDescending { it.height ?: 360 }
+             .thenByDescending { it.bitrate ?: 0 }
+        )
     }
 
     companion object {
         private const val TAG = "stream-resolver"
-        private const val PROBE_TIMEOUT_MS = 5_000L
+        private const val PROBE_TIMEOUT_MS = 1_500L
 
         val CLIENT_ROTATION = listOf(
-            YouTubeClient.VISIONOS,
-            YouTubeClient.ANDROID_VR,
             YouTubeClient.IOS,
-            YouTubeClient.WEB_REMIX,
+            YouTubeClient.IPADOS,
+            YouTubeClient.VISIONOS,
+            YouTubeClient.WEB_REMIX
         )
     }
 }

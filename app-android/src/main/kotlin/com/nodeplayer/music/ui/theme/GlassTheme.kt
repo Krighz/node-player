@@ -1,14 +1,7 @@
 package com.nodeplayer.music.ui.theme
 
-import android.graphics.Bitmap
-import android.graphics.BitmapShader
-import android.graphics.Shader
-import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -23,7 +16,7 @@ import androidx.compose.ui.unit.dp
 data class GlassTokensData(
     val opacity: Float = 0.65f,
     val blurStrength: Float = 0.70f,
-    val grainStrength: Float = 0.40f,
+    val grainStrength: Float = 0.0f,
     val rimStrength: Float = 0.60f,
     val isFullyTransparent: Boolean = false,
     val keepTextReadable: Boolean = true,
@@ -31,7 +24,7 @@ data class GlassTokensData(
     val defaultCornerRadius: Dp = 26.dp,
     val cardCornerRadius: Dp = 22.dp,
     val pillCornerRadius: Dp = 999.dp,
-    val borderWidth: Dp = 1.2.dp
+    val borderWidth: Dp = 1.dp
 ) {
     val effectiveBlurRadius: Dp
         get() {
@@ -46,26 +39,25 @@ data class GlassTokensData(
         }
 
     fun liquidBorderBrush(isOled: Boolean = false): Brush {
-        val rimScale = if (isFullyTransparent) 1.0f else rimStrength.coerceIn(0.1f, 1.0f)
-        val alphaWhite = (0xCC * rimScale).toInt().coerceIn(0, 255)
-        val alphaSoft = (0x44 * rimScale).toInt().coerceIn(0, 255)
-        val alphaSide = (0x15 * rimScale).toInt().coerceIn(0, 255)
+        val rimScale = if (isFullyTransparent) 1.0f else rimStrength.coerceIn(0.15f, 1.0f)
+        val alphaTop = (0x55 * rimScale).toInt().coerceIn(0, 255)
+        val alphaMid = (0x22 * rimScale).toInt().coerceIn(0, 255)
+        val alphaBottom = (0x0C * rimScale).toInt().coerceIn(0, 255)
 
         return Brush.verticalGradient(
             colors = listOf(
-                Color(alphaWhite shl 24 or 0x00FFFFFF),
-                Color(alphaSoft shl 24 or 0x00FFFFFF),
-                Color(alphaSide shl 24 or 0x00FFFFFF),
-                Color(0x05000000)
+                Color(alphaTop shl 24 or 0x00FFFFFF),
+                Color(alphaMid shl 24 or 0x00FFFFFF),
+                Color(alphaBottom shl 24 or 0x00FFFFFF)
             )
         )
     }
 
     fun oledBorderBrush(): Brush = Brush.verticalGradient(
         colors = listOf(
-            Color(0x88FFFFFF),
-            Color(0x22FFFFFF),
-            Color.Transparent
+            Color(0x44FFFFFF),
+            Color(0x18FFFFFF),
+            Color(0x08FFFFFF)
         )
     )
 }
@@ -77,55 +69,23 @@ object GlassTokens {
     val cardCornerRadius: Dp = 22.dp
     val pillCornerRadius: Dp = 999.dp
     val defaultBlurRadius: Dp = 28.dp
-    val borderWidth: Dp = 1.2.dp
+    val borderWidth: Dp = 1.dp
 
     fun liquidBorderBrush(): Brush = Brush.verticalGradient(
         colors = listOf(
-            Color(0xCCFFFFFF),
-            Color(0x44FFFFFF),
-            Color(0x15FFFFFF),
-            Color(0x05000000)
+            Color(0x55FFFFFF),
+            Color(0x22FFFFFF),
+            Color(0x0CFFFFFF)
         )
     )
 
     fun oledBorderBrush(): Brush = Brush.verticalGradient(
         colors = listOf(
-            Color(0x88FFFFFF),
-            Color(0x22FFFFFF),
-            Color.Transparent
+            Color(0x44FFFFFF),
+            Color(0x18FFFFFF),
+            Color(0x08FFFFFF)
         )
     )
-}
-
-object GlassNoiseCache {
-    private var cachedPaint: android.graphics.Paint? = null
-    private var lastStrength: Float = -1f
-
-    fun getPaint(strength: Float): android.graphics.Paint {
-        val s = (strength * 100).toInt() / 100f
-        if (cachedPaint != null && kotlin.math.abs(lastStrength - s) < 0.05f) {
-            return cachedPaint!!
-        }
-        val size = 64
-        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
-        val random = kotlin.random.Random(1337)
-        val maxAlpha = (28 * s).toInt().coerceIn(2, 65)
-        for (y in 0 until size) {
-            for (x in 0 until size) {
-                val noise = random.nextInt(maxAlpha.coerceAtLeast(3))
-                bitmap.setPixel(x, y, android.graphics.Color.argb(noise, 255, 255, 255))
-            }
-        }
-        val shader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
-        val paint = android.graphics.Paint().apply {
-            isAntiAlias = false
-            isFilterBitmap = false
-            this.shader = shader
-        }
-        cachedPaint = paint
-        lastStrength = s
-        return paint
-    }
 }
 
 @Composable
@@ -137,39 +97,34 @@ fun Modifier.glassSurface(
     customTint: Color? = null
 ): Modifier {
     val tokens = LocalGlassTokens.current
+    val accent = LocalAccentColor.current
     val masterOpacity = tokens.effectiveTintAlpha
     val effectiveAlpha = when {
         tokens.isFullyTransparent -> 0.0f
-        tintAlpha != null -> (tintAlpha * (masterOpacity / 0.65f).coerceIn(0.15f, 2.0f)).coerceIn(0.0f, 1.0f)
+        tintAlpha != null -> (tintAlpha * (masterOpacity / 0.65f).coerceIn(0.25f, 1.8f)).coerceIn(0.0f, 0.96f)
         else -> masterOpacity
     }
 
     val baseTint = when {
         tokens.isFullyTransparent -> Color.Transparent
         customTint != null -> customTint.copy(alpha = effectiveAlpha)
-        isOled -> Color(0xFF000000).copy(alpha = 0.88f * effectiveAlpha)
-        isDark -> Color(0xFF131520).copy(alpha = effectiveAlpha)
+        isOled -> Color.Black.copy(alpha = (0.86f * effectiveAlpha).coerceIn(0.35f, 0.92f))
+        isDark -> Color(0xFF262626).copy(alpha = (0.78f * effectiveAlpha).coerceIn(0.30f, 0.88f))
         else -> Color(0xFFEBF0FA).copy(alpha = effectiveAlpha)
     }
 
-    val borderBrush = if (isOled) tokens.oledBorderBrush() else tokens.liquidBorderBrush(isOled)
-    val blurRadius = tokens.effectiveBlurRadius
-    val canBlur = false
-
-    val scrimModifier = if (tokens.keepTextReadable && effectiveAlpha < 0.25f && !tokens.isFullyTransparent) {
-        Modifier.background(Color.Black.copy(alpha = 0.12f), shape)
+    val topSheen = if (tokens.isFullyTransparent) {
+        Color.Transparent
+    } else if (customTint != null) {
+        customTint.copy(alpha = (effectiveAlpha * 1.15f).coerceAtMost(0.95f))
     } else {
-        Modifier
+        Color.White.copy(alpha = if (isDark) 0.06f * tokens.rimStrength else 0.25f)
     }
 
-    val grainModifier = if (tokens.grainStrength > 0.01f && !tokens.isFullyTransparent && !tokens.isPerformanceMode) {
-        Modifier.drawWithContent {
-            drawContent()
-            val paint = GlassNoiseCache.getPaint(tokens.grainStrength)
-            drawIntoCanvas { canvas ->
-                canvas.nativeCanvas.drawRect(0f, 0f, size.width, size.height, paint)
-            }
-        }
+    val borderBrush = if (isOled) tokens.oledBorderBrush() else tokens.liquidBorderBrush(isOled)
+
+    val scrimModifier = if (tokens.keepTextReadable && effectiveAlpha < 0.25f && !tokens.isFullyTransparent) {
+        Modifier.background(Color.Black.copy(alpha = 0.16f), shape)
     } else {
         Modifier
     }
@@ -179,20 +134,30 @@ fun Modifier.glassSurface(
         .then(scrimModifier)
         .then(
             if (!tokens.isFullyTransparent && effectiveAlpha > 0.001f) {
-                Modifier.background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            baseTint.copy(alpha = (effectiveAlpha * 1.1f).coerceAtMost(1f)),
-                            baseTint.copy(alpha = (effectiveAlpha * 0.85f))
-                        )
-                    ),
-                    shape
-                )
+                Modifier
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                baseTint.copy(alpha = (baseTint.alpha * 1.08f).coerceAtMost(0.96f)),
+                                baseTint.copy(alpha = (baseTint.alpha * 0.88f))
+                            )
+                        ),
+                        shape
+                    )
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                topSheen,
+                                accent.copy(alpha = 0.03f),
+                                Color.Transparent
+                            )
+                        ),
+                        shape
+                    )
             } else {
                 Modifier
             }
         )
-        .then(grainModifier)
         .border(
             width = tokens.borderWidth,
             brush = borderBrush,

@@ -62,7 +62,7 @@ class CipherWebView private constructor(
 
         val exports = buildList {
             if (sigFuncName != null) {
-                add("window._cipherSigFunc = typeof $sigFuncName !== 'undefined' ? $sigFuncName : null;")
+                add("window._cipherSigFunc = (typeof g !== 'undefined' && g && typeof g.$sigFuncName === 'function') ? g.$sigFuncName : (typeof $sigFuncName === 'function' ? $sigFuncName : null);")
             }
             if (nFuncName != null) {
                 val nExpr = if (nArrayIdx != null) {
@@ -70,7 +70,7 @@ class CipherWebView private constructor(
                 } else {
                     nFuncName
                 }
-                add("window._nTransformFunc = typeof $nFuncName !== 'undefined' ? $nExpr : null;")
+                add("window._nTransformFunc = (typeof g !== 'undefined' && g && typeof g.$nExpr === 'function') ? g.$nExpr : (typeof $nExpr === 'function' ? $nExpr : null);")
             }
         }
 

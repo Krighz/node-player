@@ -37,7 +37,12 @@ data class YouTubeClient(
     val isEmbedded: Boolean = false,
     val useWebPoTokens: Boolean = false,
 ) {
-    fun toContext(locale: YouTubeLocale, visitorData: String? = null, dataSyncId: String? = null) = Context(
+    fun toContext(
+        locale: YouTubeLocale,
+        visitorData: String? = null,
+        dataSyncId: String? = null,
+        embedVideoId: String? = null
+    ) = Context(
         client = Context.Client(
             clientName = clientName,
             clientVersion = clientVersion,
@@ -50,6 +55,11 @@ data class YouTubeClient(
             hl = locale.hl,
             visitorData = visitorData
         ),
+        thirdParty = if (isEmbedded && embedVideoId != null) {
+            Context.ThirdParty("https://www.youtube.com/embed/$embedVideoId")
+        } else if (isEmbedded) {
+            Context.ThirdParty("https://www.youtube.com")
+        } else null,
         user = Context.User(
             onBehalfOfUser = if (loginSupported) dataSyncId else null
         ),
@@ -83,10 +93,33 @@ data class YouTubeClient(
             clientVersion = "2.0",
             clientId = "85",
             userAgent = "Mozilla/5.0 (PlayStation; PlayStation 4/12.02) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.4 Safari/605.1.15",
-            loginSupported = true,
+            loginSupported = false,
             loginRequired = false,
             useSignatureTimestamp = true,
             isEmbedded = true,
+            friendlyName = "TVHTML5 Simply Embedded",
+        )
+
+        val TVHTML5 = YouTubeClient(
+            clientName = "TVHTML5",
+            clientVersion = "7.20260707.07.00",
+            clientId = "7",
+            userAgent = "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)",
+            friendlyName = "TV HTML5",
+            loginSupported = true,
+            useSignatureTimestamp = true,
+            useWebPoTokens = true,
+        )
+
+        val TVHTML5_SAMSUNG = YouTubeClient(
+            clientName = "TVHTML5",
+            clientVersion = "5.20260707",
+            clientId = "7",
+            userAgent = "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1",
+            deviceMake = "Samsung",
+            friendlyName = "TV HTML5 Samsung",
+            loginSupported = false,
+            useSignatureTimestamp = true,
         )
 
         val ANDROID_VR_1_65_10 = YouTubeClient(
@@ -113,7 +146,27 @@ data class YouTubeClient(
             clientVersion = "21.03.1",
             clientId = "5",
             userAgent = "com.google.ios.youtube/21.03.1 (iPhone16,2; U; CPU iOS 18_2 like Mac OS X;)",
+            osName = "iOS",
             osVersion = "18.2.22C152",
+            deviceMake = "Apple",
+            deviceModel = "iPhone16,2",
+            friendlyName = "iOS",
+            loginSupported = false,
+            useSignatureTimestamp = false
+        )
+
+        val IPADOS = YouTubeClient(
+            clientName = "IOS",
+            clientVersion = "21.03.1",
+            clientId = "5",
+            userAgent = "com.google.ios.youtube/21.03.1 (iPad14,1; U; CPU OS 18_2 like Mac OS X;)",
+            osName = "iOS",
+            osVersion = "18.2.22C152",
+            deviceMake = "Apple",
+            deviceModel = "iPad14,1",
+            friendlyName = "iPadOS",
+            loginSupported = false,
+            useSignatureTimestamp = false
         )
 
         val VISIONOS = YouTubeClient(
@@ -573,8 +626,15 @@ data class ItemSectionRenderer(
     data class Content(
         val musicResponsiveListItemRenderer: MusicResponsiveListItemRenderer? = null,
         val musicShelfRenderer: MusicShelfRenderer? = null,
+        val messageRenderer: MessageRenderer? = null,
     )
 }
+
+@Serializable
+data class MessageRenderer(
+    val text: Runs? = null,
+    val trackingParams: String? = null
+)
 
 @Serializable
 data class MusicCarouselShelfRenderer(
@@ -758,6 +818,7 @@ data class SearchSuggestion(
 data class BrowseResponse(
     val contents: Contents? = null,
     val continuationContents: ContinuationContents? = null,
+    val header: BrowseHeader? = null,
     val responseContext: ResponseContext? = null,
     val background: ThumbnailRenderer? = null,
 ) {
@@ -786,6 +847,46 @@ data class BrowseResponse(
         )
     }
 }
+
+@Serializable
+data class BrowseHeader(
+    val musicImmersiveHeaderRenderer: MusicImmersiveHeaderRenderer? = null,
+    val musicVisualHeaderRenderer: MusicVisualHeaderRenderer? = null,
+    val musicHeaderRenderer: MusicHeaderRenderer? = null,
+)
+
+@Serializable
+data class MusicImmersiveHeaderRenderer(
+    val title: Runs? = null,
+    val description: Runs? = null,
+    val subscriptionButton: SubscriptionButton? = null,
+    val thumbnail: ThumbnailRenderer? = null,
+)
+
+@Serializable
+data class MusicVisualHeaderRenderer(
+    val title: Runs? = null,
+    val foregroundThumbnail: ThumbnailRenderer? = null,
+    val thumbnail: ThumbnailRenderer? = null,
+)
+
+@Serializable
+data class MusicHeaderRenderer(
+    val title: Runs? = null,
+    val subtitle: Runs? = null,
+    val thumbnail: ThumbnailRenderer? = null,
+)
+
+@Serializable
+data class SubscriptionButton(
+    val subscribeButtonRenderer: SubscribeButtonRenderer? = null,
+)
+
+@Serializable
+data class SubscribeButtonRenderer(
+    val subscriberCountText: Runs? = null,
+    val subscriberCountWithSubscribeText: Runs? = null,
+)
 
 /* ==========================================================================
    Next Response & Radio
@@ -853,6 +954,53 @@ data class PlaylistPanelVideoRenderer(
     val thumbnail: Thumbnails? = null,
     val navigationEndpoint: NavigationEndpoint? = null,
 )
+
+/**
+ * Representation of an official counterpart version (e.g. Song <-> Official Music Video)
+ * paired by YouTube Music via playlistPanelVideoWrapperRenderer.
+ */
+@Serializable
+data class VersionPair(
+    val videoId: String,
+    val title: String,
+    val artist: String,
+    val thumbnailUrl: String? = null,
+    val isVideo: Boolean = true,
+    val timeMap: VersionTimeMap? = null
+)
+
+/**
+ * Millisecond timestamp alignment segments between audio and official video (for narrative intro/outro compensation).
+ */
+@Serializable
+data class VersionTimeMap(
+    val segments: List<Segment> = emptyList()
+) {
+    @Serializable
+    data class Segment(
+        val fromStartMs: Long,
+        val toStartMs: Long,
+        val durationMs: Long
+    )
+
+    fun mapPosition(positionMs: Long): Long {
+        val segment = segments.firstOrNull {
+            positionMs >= it.fromStartMs && positionMs < (it.fromStartMs + it.durationMs)
+        } ?: return positionMs
+        val offset = positionMs - segment.fromStartMs
+        return segment.toStartMs + offset
+    }
+
+    fun inverted(): VersionTimeMap = VersionTimeMap(
+        segments = segments.map {
+            Segment(
+                fromStartMs = it.toStartMs,
+                toStartMs = it.fromStartMs,
+                durationMs = it.durationMs
+            )
+        }
+    )
+}
 
 /* ==========================================================================
    Player Response & Streaming Data

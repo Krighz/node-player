@@ -12,12 +12,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -31,6 +32,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlin.math.max
 
 /**
@@ -51,6 +54,16 @@ fun NowPlayingTimeline(
     var isDragging by remember { mutableStateOf(false) }
     var dragFraction by remember { mutableFloatStateOf(0f) }
     val currentPositionProvider by rememberUpdatedState(positionProvider)
+
+    val currentPositionMs by produceState(
+        initialValue = if (positionMs > 0L) positionMs else currentPositionProvider(),
+        positionProvider
+    ) {
+        while (isActive) {
+            value = currentPositionProvider()
+            delay(100L)
+        }
+    }
 
     val trackHeight by animateDpAsState(
         targetValue = if (isDragging) 8.dp else 4.dp,
@@ -100,7 +113,7 @@ fun NowPlayingTimeline(
             val currentFraction = if (isDragging) {
                 dragFraction
             } else {
-                (currentPositionProvider().toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
+                (currentPositionMs.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
             }
 
             drawRoundRect(
@@ -127,7 +140,7 @@ fun NowPlayingTimeline(
             safeDuration = safeDuration,
             isDraggingProvider = { isDragging },
             dragFractionProvider = { dragFraction },
-            positionProvider = currentPositionProvider
+            currentPositionMs = currentPositionMs
         )
     }
 }
@@ -137,19 +150,14 @@ private fun TimelineTimeLabels(
     safeDuration: Long,
     isDraggingProvider: () -> Boolean,
     dragFractionProvider: () -> Float,
-    positionProvider: () -> Long
+    currentPositionMs: Long
 ) {
-    val displaySecond by remember(safeDuration) {
-        derivedStateOf {
-            val posMs = if (isDraggingProvider()) {
-                (dragFractionProvider() * safeDuration).toLong()
-            } else {
-                positionProvider()
-            }
-            (posMs.coerceIn(0L, safeDuration) / 1000L)
-        }
+    val posMs = if (isDraggingProvider()) {
+        (dragFractionProvider() * safeDuration).toLong()
+    } else {
+        currentPositionMs
     }
-
+    val displaySecond = posMs.coerceIn(0L, safeDuration) / 1000L
     val displayPositionMs = displaySecond * 1000L
     val remainingMs = max(0L, safeDuration - displayPositionMs)
 
@@ -162,15 +170,21 @@ private fun TimelineTimeLabels(
     ) {
         Text(
             text = formatDuration(displayPositionMs),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color.White.copy(alpha = 0.65f)
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontFeatureSettings = "tnum",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.65f)
+            )
         )
         Text(
             text = "-${formatDuration(remainingMs)}",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            color = Color.White.copy(alpha = 0.65f)
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontFeatureSettings = "tnum",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp,
+                color = Color.White.copy(alpha = 0.65f)
+            )
         )
     }
 }

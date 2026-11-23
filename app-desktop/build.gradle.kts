@@ -36,6 +36,9 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.14.0")
     implementation("net.java.dev.jna:jna-platform:5.14.0")
 
+    // VLCJ Desktop Video Player
+    implementation("uk.co.caprica:vlcj:4.8.3")
+
     // SQLite JDBC for desktop library database
     implementation("org.xerial:sqlite-jdbc:3.45.1.0")
 
@@ -49,7 +52,7 @@ compose.desktop {
         nativeDistributions {
             targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = "NodePlayer"
-            packageVersion = (project.findProperty("appVersionName") as? String) ?: "1.8.0"
+            packageVersion = (project.findProperty("appVersionName") as? String) ?: "2.1.0"
             description = "Node Player for Windows - Shared Liquid Glass Pure Audio"
             vendor = "Krighz"
             copyright = "© 2026 Krighz. Licensed under GPLv3."
@@ -60,7 +63,7 @@ compose.desktop {
                 menu = true
                 shortcut = true
                 upgradeUuid = "63d1bc8e-1f8d-4f05-89f3-8b7bf48291f0"
-                iconFile.set(project.file("src/main/resources/icon.ico"))
+                iconFile.set(project.file("src/main/resources/brand/nodeplayer.ico"))
             }
         }
     }

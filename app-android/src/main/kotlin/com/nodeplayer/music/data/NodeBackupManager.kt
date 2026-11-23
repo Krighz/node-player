@@ -91,6 +91,18 @@ object NodeBackupManager {
             eqObj.put("bands", bandsArr)
             root.put("eqConfig", eqObj)
 
+            // 6. Followed Artists
+            val followedArtistsArray = JSONArray()
+            val followed = database.playerDao().getAllFollowedArtistsList()
+            followed.forEach { artist ->
+                val aObj = JSONObject()
+                aObj.put("browseId", artist.artistBrowseId)
+                aObj.put("name", artist.artistName)
+                if (artist.avatarUrl != null) aObj.put("avatarUrl", artist.avatarUrl)
+                followedArtistsArray.put(aObj)
+            }
+            root.put("followedArtists", followedArtistsArray)
+
             val backupFile = File(context.cacheDir, "node_player_backup_${System.currentTimeMillis()}.nodebackup")
             backupFile.writeText(root.toString(2))
             Log.i(TAG, "Exported .nodebackup successfully (${backupFile.length()} bytes)")
@@ -192,7 +204,21 @@ object NodeBackupManager {
                 onThemeRestored(theme)
             }
 
-            "Restored: $restoredPlaylists playlists, $restoredFavorites favorites, $restoredPlayCounts play counts."
+            // 5. Followed Artists
+            var restoredArtists = 0
+            if (root.has("followedArtists")) {
+                val followedArr = root.getJSONArray("followedArtists")
+                for (i in 0 until followedArr.length()) {
+                    val aObj = followedArr.getJSONObject(i)
+                    val browseId = aObj.getString("browseId")
+                    val name = aObj.getString("name")
+                    val avatar = if (aObj.has("avatarUrl")) aObj.getString("avatarUrl") else null
+                    database.playerDao().followArtist(FollowedArtistEntity(browseId, name, avatar))
+                    restoredArtists++
+                }
+            }
+
+            "Restored: $restoredPlaylists playlists, $restoredFavorites favorites, $restoredPlayCounts play counts, $restoredArtists artists."
         } catch (e: Exception) {
             Log.e(TAG, "Error importing .nodebackup", e)
             "Restore failed: ${e.message}"

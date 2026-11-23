@@ -108,13 +108,23 @@ object WidgetUpdateManager : WidgetFeatureApi {
                     } catch (_: Exception) { null }
                 }
 
+                val appWidgetManager = AppWidgetManager.getInstance(context)
+                val hasActiveWidgets = appWidgetManager.getAppWidgetIds(ComponentName(context, WidgetCard4x2Provider::class.java)).isNotEmpty() ||
+                    appWidgetManager.getAppWidgetIds(ComponentName(context, WidgetLyrics4x3Provider::class.java)).isNotEmpty() ||
+                    appWidgetManager.getAppWidgetIds(ComponentName(context, WidgetSlim4x1Provider::class.java)).isNotEmpty() ||
+                    appWidgetManager.getAppWidgetIds(ComponentName(context, WidgetSquare2x2Provider::class.java)).isNotEmpty() ||
+                    appWidgetManager.getAppWidgetIds(ComponentName(context, NodePlayerWidget::class.java)).isNotEmpty() ||
+                    FloatingOverlayService.isRunning
+
+                if (!hasActiveWidgets) {
+                    return@launch
+                }
+
                 val settings = WidgetPreferences.getSettings(context)
 
                 // Load artwork thumbnail for Palette and Widget ImageView
                 val artworkBitmap = loadArtwork(context, currentTrack)
                 val colors = resolveColors(settings, artworkBitmap)
-
-                val appWidgetManager = AppWidgetManager.getInstance(context)
 
                 // Update Variant 1: Card 4x2
                 updateCard4x2(context, appWidgetManager, currentTrack, isPlaying, currentPositionMs, durationMs, settings, colors, artworkBitmap)

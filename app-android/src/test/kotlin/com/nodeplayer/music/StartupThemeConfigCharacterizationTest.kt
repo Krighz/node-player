@@ -48,7 +48,9 @@ class StartupThemeConfigCharacterizationTest {
                 isOledBlack = true,
                 fixedAccentColorArgb = 0xFF6366F1,
                 animateOnlyWhilePlaying = true,
-                controlsGlassEnabled = true
+                controlsGlassEnabled = true,
+                noiseGrainAlpha = 0.0f,
+                glassTexture = 0.0f
             ),
             fromPrefFallbacks
         )
@@ -74,7 +76,7 @@ class StartupThemeConfigCharacterizationTest {
             shaderMode = "SIMPLE",
             glassOpacity = 0.5f,
             blurStrength = 0.4f,
-            glassTexture = 0.2f,
+            glassTexture = 0.0f,
             edgeHighlightStrength = 0.3f,
             isFullyTransparent = true,
             keepTextReadable = false,
@@ -135,7 +137,8 @@ class StartupThemeConfigCharacterizationTest {
             shaderMode = "SIMPLE",
             glassOpacity = 0.5f,
             blurStrength = 0.4f,
-            glassTexture = 0.2f,
+            glassTexture = 0.0f,
+            noiseGrainAlpha = 0.0f,
             edgeHighlightStrength = 0.3f,
             isFullyTransparent = true,
             keepTextReadable = false,

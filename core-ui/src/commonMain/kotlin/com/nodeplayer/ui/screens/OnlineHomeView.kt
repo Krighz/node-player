@@ -36,24 +36,36 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.distinctUntilChanged
 import com.nodeplayer.common.AppModeState
+import com.nodeplayer.model.MoodGenre
 import com.nodeplayer.model.MoodGenreSection
 import com.nodeplayer.model.Track
+import com.nodeplayer.ui.theme.CarbonZincPalette
 import com.nodeplayer.network.cache.HomeFeedDiskCache
 import com.nodeplayer.network.innertube.SharedInnerTubeProvider
 import com.nodeplayer.network.innertube.YouTubeSection
 import com.nodeplayer.network.innertube.YouTubePlaylistSummary
 import com.nodeplayer.network.recommender.HomeFeedRecommender
 import com.nodeplayer.ui.LocalBottomBarPadding
+import com.nodeplayer.ui.component.OfflineMixtapeHomeCard
 import com.nodeplayer.ui.component.shapes.ContinuousCapsule
 import com.nodeplayer.ui.component.shapes.ContinuousRoundedRectangle
 import com.nodeplayer.ui.components.DockScrollController
 import com.nodeplayer.ui.components.HomeProfileSheet
 import com.nodeplayer.ui.components.PlatformArtworkProvider
 import com.nodeplayer.ui.components.TrackArtwork
+import com.nodeplayer.ui.components.YourMixShelf
+import com.nodeplayer.ui.components.GlassBadge
+import com.nodeplayer.ui.components.GlassCard
 import com.nodeplayer.ui.components.rememberDockScrollConnection
 import com.nodeplayer.ui.theme.LocalAccentColor
 import com.nodeplayer.ui.theme.LocalGlassThemeConfig
 import com.nodeplayer.ui.theme.LiquidColors
+import com.nodeplayer.library.taste.TasteRecommendationEngine
+import com.nodeplayer.library.taste.TasteStation
+import com.nodeplayer.model.MoodBucket
+import com.nodeplayer.model.bucketFor
+import com.nodeplayer.network.innertube.InnerTubeTasteHistoryAdapter
+import java.time.LocalTime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
@@ -68,6 +80,7 @@ private val HOME_CAPSULE_SHAPE = ContinuousCapsule()
 private val HOME_BANNER_SHAPE_16 = ContinuousRoundedRectangle(16.dp)
 private val HOME_BANNER_ICON_SHAPE_10 = ContinuousRoundedRectangle(10.dp)
 private val HOME_BTN_SHAPE_12 = ContinuousRoundedRectangle(12.dp)
+private var sessionCachedTasteStation: TasteStation? = null
 
 fun <T> uniqueLazyKeys(items: List<T>, baseKeySelector: (T) -> String): List<String> {
     if (items.isEmpty()) return emptyList()
@@ -119,7 +132,12 @@ fun OnlineHomeView(
     onOpenDeviceConnect: () -> Unit = {},
     onSignInClick: () -> Unit = {},
     onRescanClick: () -> Unit = {},
-    onOpenPlaylistDetail: ((title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
+    onOpenPlaylistDetail: ((id: String, title: String, subtitle: String, artworkUrl: String?, items: List<Track>) -> Unit)? = null,
+    onOpenCategory: ((com.nodeplayer.model.MoodGenre, List<com.nodeplayer.model.Playlist>) -> Unit)? = null,
+    onCategoryClick: ((com.nodeplayer.model.MoodGenre) -> Unit)? = null,
+    onNavigateToExplore: (() -> Unit)? = null,
+    offlineMixtapeSongCount: Int = 0,
+    onPlayOfflineMixtape: (() -> Unit)? = null,
     listState: LazyListState = rememberLazyListState(),
     modifier: Modifier = Modifier
 ) {
@@ -149,6 +167,43 @@ fun OnlineHomeView(
     var categories by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<List<MoodGenreSection>>(emptyList()) }
     var categorySections by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<List<YouTubeSection>?>(null) }
     var actionJob by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<Job?>(null) }
+
+    var yourMixTracks by remember(isLoggedIn, accountId) { mutableStateOf<List<Track>>(sessionCachedTasteStation?.tracks ?: emptyList()) }
+    var isYourMixLoading by remember(isLoggedIn, accountId) { mutableStateOf(sessionCachedTasteStation == null) }
+    var isYourMixFallback by remember(isLoggedIn, accountId) { mutableStateOf(sessionCachedTasteStation?.isFallback ?: false) }
+    var yourMixJob by remember(isLoggedIn, accountId) { mutableStateOf<Job?>(null) }
+
+    val tasteEngine = remember(isLoggedIn, accountId) {
+        val adapter = InnerTubeTasteHistoryAdapter(SharedInnerTubeProvider.get())
+        TasteRecommendationEngine(adapter)
+    }
+
+    suspend fun loadYourMix(force: Boolean = false) {
+        if (!force && yourMixJob?.isActive == true) return
+        yourMixJob?.cancel()
+        if (sessionCachedTasteStation == null) {
+            isYourMixLoading = true
+        }
+        yourMixJob = scope.launch {
+            try {
+                val stationRes = withContext(Dispatchers.IO) {
+                    tasteEngine.generateTasteStationDetailed()
+                }
+                stationRes.onSuccess { station ->
+                    sessionCachedTasteStation = station
+                    yourMixTracks = station.tracks
+                    isYourMixFallback = station.isFallback
+                }.onFailure {
+                    isYourMixFallback = true
+                }
+            } catch (_: Throwable) {
+                isYourMixFallback = true
+            } finally {
+                isYourMixLoading = false
+            }
+        }
+    }
+
     DisposableEffect(isLoggedIn, accountId, currentRoute) {
         onDispose { actionJob?.cancel() }
     }
@@ -157,6 +212,7 @@ fun OnlineHomeView(
         isRefreshing = true
         errorMessage = null
         try {
+            scope.launch { loadYourMix(force = true) }
             val result = withContext(Dispatchers.IO) {
                 val innerClient = SharedInnerTubeProvider.get()
                 if (currentRoute == "new" || currentRoute == "explore") {
@@ -204,8 +260,13 @@ fun OnlineHomeView(
     }
 
     LaunchedEffect(isLoggedIn, accountId) {
-        categories = withContext(Dispatchers.IO) {
-            SharedInnerTubeProvider.get().browseMoodAndGenres().getOrDefault(emptyList())
+        launch {
+            categories = withContext(Dispatchers.IO) {
+                SharedInnerTubeProvider.get().browseMoodAndGenres().getOrDefault(emptyList())
+            }
+        }
+        launch {
+            loadYourMix()
         }
     }
 
@@ -228,252 +289,376 @@ fun OnlineHomeView(
     }
     val shelfListStates = remember { mutableMapOf<String, LazyListState>() }
 
-    Box(modifier = modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(dockConnection),
-            contentPadding = PaddingValues(
-                start = 20.dp,
-                end = 20.dp,
-                top = 16.dp,
-                bottom = LocalBottomBarPadding.current + 20.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(26.dp)
-        ) {
-            // Header: Flow title & Top-Right Profile Avatar button per D-02 / D-03
-            item(key = "home_header", contentType = "home_header") {
+    val currentHour = remember { LocalTime.now().hour }
+    val greetingText = remember(currentHour) {
+        when (currentHour) {
+            in 5..11 -> "Good morning"
+            in 12..16 -> "Good afternoon"
+            in 17..21 -> "Good evening"
+            else -> "Good night"
+        }
+    }
+    val activeMoodBucket = remember(currentHour) {
+        bucketFor(currentHour, MoodBucket.DEFAULT_BUCKETS)
+    }
+    val matchingMoodCategory = remember(categories, activeMoodBucket) {
+        if (activeMoodBucket == null) null
+        else {
+            val allItems = categories.flatMap { it.items }
+            allItems.firstOrNull { item ->
+                activeMoodBucket.categoryKeywords.any { kw -> item.title.contains(kw, ignoreCase = true) }
+            }
+        }
+    }
+
+    val defaultMoodCategories = remember {
+        listOf(
+            MoodGenre("Pop", null, "FEmusic_moods_and_genres_category", null),
+            MoodGenre("Chill", null, "FEmusic_moods_and_genres_category", null),
+            MoodGenre("Party", null, "FEmusic_moods_and_genres_category", null),
+            MoodGenre("Commute", null, "FEmusic_moods_and_genres_category", null),
+            MoodGenre("Romance", null, "FEmusic_moods_and_genres_category", null),
+            MoodGenre("Focus", null, "FEmusic_moods_and_genres_category", null),
+            MoodGenre("Workout", null, "FEmusic_moods_and_genres_category", null)
+        )
+    }
+
+    val moodChips = remember(categories) {
+        val fromApi = categories.flatMap { it.items }.distinctBy { it.title }
+        if (fromApi.isNotEmpty()) fromApi else defaultMoodCategories
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(CarbonZincPalette.Background)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Fixed Top Bar: Slimmer Switcher [ • YT Music | Device Files ] + Profile Avatar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Slimmer Mode Switcher Track
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier
+                        .height(38.dp)
+                        .clip(HOME_CAPSULE_SHAPE)
+                        .background(CarbonZincPalette.SurfaceContainer)
+                        .border(1.dp, CarbonZincPalette.BorderSubtle, HOME_CAPSULE_SHAPE)
+                        .padding(3.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(8.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isFallbackMode) LiquidColors.AmberWarning else LiquidColors.ElectricCyan)
-                            )
-                            Text(
-                                text = if (currentRoute == "new" || currentRoute == "explore") "NEW RELEASES & CHARTS" else if (isFallbackMode) "OFFLINE / LOCAL FALLBACK" else "ONLINE FLOW",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 1.3.sp,
-                                    color = if (isFallbackMode) LiquidColors.AmberWarning else LiquidColors.ElectricCyan
-                                )
-                            )
-                        }
-                        Text(
-                            text = if (currentRoute == "new" || currentRoute == "explore") "Explore & Charts" else "YouTube Music",
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White
-                            )
-                        )
-                    }
-
-                    // Top-Right Profile Avatar Button
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(if (isLoggedIn) accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.08f))
-                            .border(1.dp, if (isLoggedIn) accent else Color.White.copy(alpha = 0.20f), CircleShape)
-                            .clickable { showProfileSheet = true },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        var avatar by remember(avatarUrl) { mutableStateOf<ImageBitmap?>(null) }
-                        LaunchedEffect(avatarUrl) {
-                            avatar = if (avatarUrl.isNullOrBlank()) null else withContext(Dispatchers.IO) {
-                                PlatformArtworkProvider.loadArtwork(avatarUrl, maxSizePx = 128)
-                            }
-                        }
-                        val image = avatar
-                        if (image != null) {
-                            Image(image, contentDescription = "Profile & Settings", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-                        } else {
-                            Icon(
-                                imageVector = if (isLoggedIn) Icons.Rounded.AccountCircle else Icons.Rounded.Person,
-                                contentDescription = "Profile & Settings",
-                                tint = if (isLoggedIn) accent else Color.White,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // YouTube Music Onboarding / Sign-in Banner (as seen in Convx reference video)
-            if (!isLoggedIn && showOnboardingBanner) {
-                item(key = "yt_onboarding_banner", contentType = "onboarding_banner") {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(HOME_BANNER_SHAPE_16)
-                            .background(Color(0xFF1E212A))
-                            .border(1.dp, Color.White.copy(alpha = 0.08f), HOME_BANNER_SHAPE_16)
-                            .padding(16.dp)
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.Top,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(HOME_BANNER_ICON_SHAPE_10)
-                                            .background(Color(0xFFFF0033).copy(alpha = 0.15f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.MusicNote,
-                                            contentDescription = null,
-                                            tint = Color(0xFFFF0033),
-                                            modifier = Modifier.size(24.dp)
-                                        )
-                                    }
-                                    Text(
-                                        text = "Bring your YouTube Music library, playlists and mixes here.",
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color.White,
-                                            lineHeight = 20.sp
-                                        )
-                                    )
-                                }
-                                IconButton(
-                                    onClick = { showOnboardingBanner = false },
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Close,
-                                        contentDescription = "Dismiss",
-                                        tint = Color.White.copy(alpha = 0.5f),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Button(
-                                onClick = onSignInClick,
-                                modifier = Modifier.fillMaxWidth().height(42.dp),
-                                shape = HOME_BTN_SHAPE_12,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = Color(0xFFFF0033).copy(alpha = 0.22f),
-                                    contentColor = Color(0xFFFF4D6D)
-                                )
-                            ) {
-                                Text(
-                                    text = "Get Started",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Subtle Status / Scan local library banner when fallback mode is active
-            if (isFallbackMode && recentTracks.isEmpty()) {
-                item(key = "offline_fallback_banner", contentType = "fallback_banner") {
+                    // Active "YT Music" Pill
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(HOME_BTN_SHAPE_12)
-                            .background(LiquidColors.SurfaceDark.copy(alpha = 0.85f))
-                            .border(1.dp, LiquidColors.AmberWarning.copy(alpha = 0.35f), HOME_BTN_SHAPE_12)
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .fillMaxHeight()
+                            .clip(HOME_CAPSULE_SHAPE)
+                            .background(CarbonZincPalette.SurfaceElevated)
+                            .border(1.dp, CarbonZincPalette.BorderActive, HOME_CAPSULE_SHAPE)
+                            .clickable { AppModeState.setOnlineMode(true) }
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = "Offline fallback active — scan local files to boost recommendations",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = LiquidColors.AmberLight,
-                                fontSize = 11.5.sp
-                            ),
-                            modifier = Modifier.weight(1f)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Scan",
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = LiquidColors.AmberWarning
-                            ),
+                        Box(
                             modifier = Modifier
-                                .clip(HOME_CAPSULE_SHAPE)
-                                .clickable { onRescanClick() }
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(CarbonZincPalette.AccentTeal)
+                        )
+                        Text(
+                            text = "YT Music",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = CarbonZincPalette.TextPrimary
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    // Inactive "Device Files" Tab
+                    Text(
+                        text = "Device Files",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = CarbonZincPalette.TextSecondary,
+                        modifier = Modifier
+                            .clip(HOME_CAPSULE_SHAPE)
+                            .clickable {
+                                onOpenOfflineMusic()
+                                AppModeState.setOnlineMode(false)
+                            }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+
+                // Profile Avatar Button (~40dp)
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(CarbonZincPalette.SurfaceElevated)
+                        .border(1.dp, CarbonZincPalette.BorderSubtle, CircleShape)
+                        .clickable { showProfileSheet = true },
+                    contentAlignment = Alignment.Center
+                ) {
+                    var avatar by remember(avatarUrl) { mutableStateOf<ImageBitmap?>(null) }
+                    LaunchedEffect(avatarUrl) {
+                        avatar = if (avatarUrl.isNullOrBlank()) null else withContext(Dispatchers.IO) {
+                            PlatformArtworkProvider.loadArtwork(avatarUrl, maxSizePx = 128)
+                        }
+                    }
+                    val image = avatar
+                    if (image != null) {
+                        Image(
+                            image,
+                            contentDescription = "Profile & Settings",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (isLoggedIn) Icons.Rounded.AccountCircle else Icons.Rounded.Person,
+                            contentDescription = "Profile & Settings",
+                            tint = CarbonZincPalette.TextSecondary,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
             }
 
-            if (errorMessage != null && orderedShelves.isNotEmpty() && !isFallbackMode) {
-                item(key = "playlist_error") {
-                    ErrorRetryCard(message = errorMessage!!, onRetry = { actionJob?.cancel(); actionJob = scope.launch { refreshFeed() } })
-                }
-            }
-
-            if (categorySections != null) {
-                item(key = "category_back") {
-                    Text("‹  All recommendations", color = accent, modifier = Modifier.clickable { categorySections = null })
-                }
-            } else {
-                item(key = "compact_categories") {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        itemsIndexed(categories.flatMap { it.items }.distinctBy { it.browseId to it.params }) { _, category ->
-                                    Text(
-                                        category.title,
-                                        color = Color.White,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        modifier = Modifier.widthIn(max = 140.dp).clip(HOME_CARD_SHAPE_14)
-                                            .background(accent.copy(alpha = 0.25f))
-                                            .clickable {
-                                                actionJob?.cancel()
-                                                errorMessage = null
-                                                actionJob = scope.launch {
-                                                    val result = withContext(Dispatchers.IO) {
-                                                        SharedInnerTubeProvider.get().browseCategoryShelves(category.browseId, category.params)
-                                                    }
-                                                    coroutineContext.ensureActive()
-                                                    result.onSuccess { playlists ->
-                                                        val available = playlists.mapNotNull { playlist ->
-                                                            playlist.externalId?.takeIf { it.isNotBlank() }
-                                                                ?.let { YouTubePlaylistSummary(id = it, title = playlist.name) }
-                                                        }
-                                                        if (available.isNotEmpty()) {
-                                                            categorySections = listOf(YouTubeSection(
-                                                                title = category.title, items = emptyList(), playlists = available
-                                                            ))
-                                                        } else errorMessage = "No playlists available for ${category.title}"
-                                                    }.onFailure { errorMessage = it.message ?: "Unable to load category" }
+            // Scrollable Content
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .nestedScroll(dockConnection),
+                contentPadding = PaddingValues(
+                    start = 20.dp,
+                    end = 20.dp,
+                    top = 10.dp,
+                    bottom = LocalBottomBarPadding.current + 20.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(22.dp)
+            ) {
+                // Moved-up scrollable Pop / Chill mood chips
+                item(key = "home_mood_chips_row", contentType = "mood_chips") {
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(moodChips, key = { it.title }) { chip ->
+                            Box(
+                                modifier = Modifier
+                                    .clip(HOME_CAPSULE_SHAPE)
+                                    .background(CarbonZincPalette.SurfaceElevated)
+                                    .border(1.dp, CarbonZincPalette.BorderSubtle, HOME_CAPSULE_SHAPE)
+                                    .clickable {
+                                        onCategoryClick?.invoke(chip) ?: run {
+                                            actionJob?.cancel()
+                                            errorMessage = null
+                                            actionJob = scope.launch {
+                                                val result = withContext(Dispatchers.IO) {
+                                                    SharedInnerTubeProvider.get().browseCategoryShelves(chip.browseId, chip.params)
                                                 }
-                                            }.padding(horizontal = 12.dp, vertical = 8.dp)
+                                                coroutineContext.ensureActive()
+                                                result.onSuccess { playlists ->
+                                                    val available = playlists.mapNotNull { playlist ->
+                                                        playlist.externalId?.takeIf { it.isNotBlank() }
+                                                            ?.let { YouTubePlaylistSummary(id = it, title = playlist.name) }
+                                                    }
+                                                    if (available.isNotEmpty()) {
+                                                        categorySections = listOf(
+                                                            YouTubeSection(title = chip.title, items = emptyList(), playlists = available)
+                                                        )
+                                                    } else errorMessage = "No playlists available for ${chip.title}"
+                                                }.onFailure { errorMessage = it.message ?: "Unable to load category" }
+                                            }
+                                        }
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = chip.title,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    letterSpacing = 0.1.sp,
+                                    color = CarbonZincPalette.TextPrimary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Horizontal Divider Line right after mood chips
+                item(key = "home_chips_divider", contentType = "divider") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(CarbonZincPalette.BorderSubtle)
+                    )
+                }
+
+                if (offlineMixtapeSongCount > 0 && onPlayOfflineMixtape != null) {
+                    item(key = "home_offline_mixtape_card", contentType = "mixtape_card") {
+                        OfflineMixtapeHomeCard(
+                            cachedSongCount = offlineMixtapeSongCount,
+                            onPlayMixtape = onPlayOfflineMixtape
+                        )
+                    }
+                }
+
+                if (categorySections != null) {
+                    item(key = "category_back") {
+                        Text("‹  All recommendations", color = CarbonZincPalette.AccentTeal, modifier = Modifier.clickable { categorySections = null })
+                    }
+                }
+
+                // YouTube Music Onboarding / Sign-in Banner (as seen in Convx reference video)
+                if (!isLoggedIn && showOnboardingBanner) {
+                    item(key = "yt_onboarding_banner", contentType = "onboarding_banner") {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(HOME_BANNER_SHAPE_16)
+                                .background(CarbonZincPalette.SurfaceContainer)
+                                .border(1.dp, CarbonZincPalette.BorderSubtle, HOME_BANNER_SHAPE_16)
+                                .padding(16.dp)
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.Top,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        horizontalArrangement = Arrangement.spacedBy(14.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(HOME_BANNER_ICON_SHAPE_10)
+                                                .background(Color(0xFFFF0033).copy(alpha = 0.15f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.MusicNote,
+                                                contentDescription = null,
+                                                tint = Color(0xFFFF0033),
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                        Text(
+                                            text = "Bring your YouTube Music library, playlists and mixes here.",
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = CarbonZincPalette.TextPrimary,
+                                                lineHeight = 20.sp
+                                            )
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { showOnboardingBanner = false },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Close,
+                                            contentDescription = "Dismiss",
+                                            tint = CarbonZincPalette.TextSecondary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Button(
+                                    onClick = onSignInClick,
+                                    modifier = Modifier.fillMaxWidth().height(42.dp),
+                                    shape = HOME_BTN_SHAPE_12,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFFFF0033).copy(alpha = 0.22f),
+                                        contentColor = Color(0xFFFF4D6D)
+                                    )
+                                ) {
+                                    Text(
+                                        text = "Get Started",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
                                     )
                                 }
+                            }
+                        }
                     }
                 }
-            }
 
-            // Ordered 5 Shelves: Quick Picks, New music videos, Trending in region, Playlists, Artists
-            if (orderedShelves.isNotEmpty()) {
+                // Subtle Status / Scan local library banner when fallback mode is active
+                if (isFallbackMode && recentTracks.isEmpty()) {
+                    item(key = "offline_fallback_banner", contentType = "fallback_banner") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(HOME_BTN_SHAPE_12)
+                                .background(CarbonZincPalette.SurfaceContainer)
+                                .border(1.dp, LiquidColors.AmberWarning.copy(alpha = 0.35f), HOME_BTN_SHAPE_12)
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Offline fallback active — scan local files to boost recommendations",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = LiquidColors.AmberLight,
+                                    fontSize = 11.5.sp
+                                ),
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Scan",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = LiquidColors.AmberWarning
+                                ),
+                                modifier = Modifier
+                                    .clip(HOME_CAPSULE_SHAPE)
+                                    .clickable { onRescanClick() }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (errorMessage != null && orderedShelves.isNotEmpty() && !isFallbackMode) {
+                    item(key = "playlist_error") {
+                        ErrorRetryCard(message = errorMessage!!, onRetry = { actionJob?.cancel(); actionJob = scope.launch { refreshFeed() } })
+                    }
+                }
+
+                // Shelf: "Your Mix" (First shelf directly under the chips + divider)
+                item(key = "home_your_mix_shelf", contentType = "your_mix_shelf") {
+                    YourMixShelf(
+                        tracks = yourMixTracks,
+                        isLoading = isYourMixLoading,
+                        isFallback = isYourMixFallback,
+                        onTrackClick = { track, remainder ->
+                            onPlayTrack(track, remainder)
+                        },
+                        onPlayAll = { tracks ->
+                            if (tracks.isNotEmpty()) {
+                                onPlayTrack(tracks.first(), tracks)
+                            }
+                        }
+                    )
+                }
+
+                // Ordered 5 Shelves: Quick Picks, New music videos, Trending in region, Playlists, Artists
+                if (orderedShelves.isNotEmpty()) {
                 itemsIndexed(
                     items = orderedShelves,
                     key = { index, _ -> shelfKeys[index] },
@@ -494,10 +679,13 @@ fun OnlineHomeView(
                             onPlayTrack(clickedTrack, shelf.items)
                         },
                         onShelfClick = { clickedShelf ->
+                            val firstTrack = clickedShelf.items.firstOrNull()
+                            val firstTrackThumb = firstTrack?.extractVideoId()?.let { "https://i.ytimg.com/vi/$it/hqdefault.jpg" }
                             onOpenPlaylistDetail?.invoke(
                                 clickedShelf.title,
+                                clickedShelf.title,
                                 "YouTube Music",
-                                clickedShelf.items.firstOrNull()?.path,
+                                firstTrackThumb,
                                 clickedShelf.items
                             )
                         },
@@ -511,7 +699,7 @@ fun OnlineHomeView(
                                 coroutineContext.ensureActive()
                                 result.onSuccess { tracks ->
                                     if (tracks.isNotEmpty()) {
-                                        onOpenPlaylistDetail?.invoke(playlist.title, playlist.author ?: "YouTube Music", playlist.thumbnailUrl, tracks)
+                                        onOpenPlaylistDetail?.invoke(playlist.id, playlist.title, playlist.author ?: "YouTube Music", playlist.thumbnailUrl, tracks)
                                     } else {
                                         errorMessage = "No tracks available in ${playlist.title}"
                                     }
@@ -543,7 +731,85 @@ fun OnlineHomeView(
                     )
                 }
             }
+
+            // Active Contextual Mood Shelf at bottom of feed
+            if (activeMoodBucket != null && matchingMoodCategory != null) {
+                item(key = "home_contextual_mood_shelf", contentType = "mood_shelf") {
+                    GlassCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp, bottom = 8.dp)
+                            .clickable {
+                                actionJob?.cancel()
+                                errorMessage = null
+                                actionJob = scope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        SharedInnerTubeProvider.get().browseCategoryShelves(
+                                            matchingMoodCategory.browseId,
+                                            matchingMoodCategory.params
+                                        )
+                                    }
+                                    coroutineContext.ensureActive()
+                                    result.onSuccess { playlists ->
+                                        val available = playlists.mapNotNull { playlist ->
+                                            playlist.externalId?.takeIf { it.isNotBlank() }
+                                                ?.let { YouTubePlaylistSummary(id = it, title = playlist.name) }
+                                        }
+                                        if (available.isNotEmpty()) {
+                                            categorySections = listOf(
+                                                YouTubeSection(
+                                                    title = activeMoodBucket.title,
+                                                    items = emptyList(),
+                                                    playlists = available
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = activeMoodBucket.title,
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                    GlassBadge(
+                                        text = matchingMoodCategory.title,
+                                        color = accent
+                                    )
+                                }
+                                Text(
+                                    text = activeMoodBucket.subtitle,
+                                    fontSize = 12.sp,
+                                    color = Color.White.copy(alpha = 0.65f)
+                                )
+                            }
+
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowForward,
+                                contentDescription = "Open mood playlists",
+                                tint = accent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
+    }
 
         // Sliding Liquid-Glass Profile Sheet
         HomeProfileSheet(
@@ -573,25 +839,52 @@ fun OnlineHomeView(
 fun organizeShelves(sections: List<YouTubeSection>): List<YouTubeSection> {
     val consumed = HashSet<YouTubeSection>()
 
-    val quickPicks = sections.find { "quick" in it.title.lowercase() || "pick" in it.title.lowercase() }
-        ?.also { consumed.add(it) }
-    val newVideos = sections.find { it !in consumed && ("video" in it.title.lowercase() || "new" in it.title.lowercase() || "release" in it.title.lowercase()) }
-        ?.also { consumed.add(it) }
-    val trending = sections.find { it !in consumed && ("trending" in it.title.lowercase() || "chart" in it.title.lowercase()) }
-        ?.also { consumed.add(it) }
-    val playlists = sections.find { it !in consumed && ("playlist" in it.title.lowercase() || "mix" in it.title.lowercase() || "mood" in it.title.lowercase()) }
-        ?.also { consumed.add(it) }
-    val artists = sections.find { it !in consumed && ("artist" in it.title.lowercase() || "follow" in it.title.lowercase()) }
-        ?.also { consumed.add(it) }
+    // 1. Quick Picks
+    val quickPicks = sections.find { 
+        val t = it.title.lowercase()
+        "quick" in t || "pick" in t || "start radio" in t
+    }?.also { consumed.add(it) }
 
-    val result = ArrayList<YouTubeSection>(5)
+    // 2. Trending / Charts (Prioritized before newVideos so "Video charts" isn't stolen!)
+    val trending = sections.find { 
+        it !in consumed && run {
+            val t = it.title.lowercase()
+            "trending" in t || "chart" in t || "top 50" in t || "top 100" in t
+        }
+    }?.also { consumed.add(it) }
+
+    // 3. New Music Videos (strictly videos, excluding charts & albums)
+    val newVideos = sections.find { 
+        it !in consumed && run {
+            val t = it.title.lowercase()
+            ("video" in t && "chart" !in t) || ("new" in t && "album" !in t && "single" !in t)
+        }
+    }?.also { consumed.add(it) }
+
+    // 4. Playlists & Mixes
+    val playlists = sections.find { 
+        it !in consumed && run {
+            val t = it.title.lowercase()
+            "playlist" in t || "mix" in t || "mood" in t
+        }
+    }?.also { consumed.add(it) }
+
+    // 5. From Artists You Follow
+    val artists = sections.find { 
+        it !in consumed && run {
+            val t = it.title.lowercase()
+            "artist" in t || "follow" in t || "subscriber" in t
+        }
+    }?.also { consumed.add(it) }
+
+    val result = ArrayList<YouTubeSection>()
     if (quickPicks != null) result.add(quickPicks.copy(title = "Quick Picks"))
     if (newVideos != null) result.add(newVideos.copy(title = "New Music Videos"))
     if (trending != null) result.add(trending.copy(title = "Trending in Region"))
     if (playlists != null) result.add(playlists.copy(title = "Playlists & Mixes"))
     if (artists != null) result.add(artists.copy(title = "From Artists You Follow"))
 
-    // Append any remaining sections that weren't categorized
+    // Append any remaining sections that weren't categorized (e.g. "New albums & singles", "Song mixes")
     for (sec in sections) {
         if (sec !in consumed) {
             result.add(sec)
@@ -646,10 +939,10 @@ private fun HomeShelfSection(
             )
             Text(
                 text = shelf.title.uppercase(),
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Medium,
                     letterSpacing = 1.2.sp,
-                    color = Color.White
+                    color = CarbonZincPalette.TextPrimary
                 )
             )
         }
@@ -704,19 +997,23 @@ private fun HomePlaylistCard(playlist: YouTubePlaylistSummary, onClick: () -> Un
     }
     Column(modifier = Modifier.width(136.dp).clickable { onClick() }) {
         Box(
-            modifier = Modifier.size(136.dp).clip(HOME_CARD_SHAPE_14).background(LiquidColors.SurfaceCard),
+            modifier = Modifier
+                .size(136.dp)
+                .clip(HOME_CARD_SHAPE_14)
+                .background(CarbonZincPalette.SurfaceContainer)
+                .border(1.dp, CarbonZincPalette.BorderSubtle, HOME_CARD_SHAPE_14),
             contentAlignment = Alignment.Center
         ) {
             val image = artwork
             if (image != null) {
                 Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else {
-                Icon(Icons.Rounded.LibraryMusic, contentDescription = null, tint = Color.White)
+                Icon(Icons.Rounded.LibraryMusic, contentDescription = null, tint = CarbonZincPalette.TextPrimary)
             }
         }
         Spacer(Modifier.height(8.dp))
-        Text(playlist.title, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
-        playlist.author?.let { Text(it, color = Color.White.copy(alpha = 0.65f), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
+        Text(playlist.title, color = CarbonZincPalette.TextPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium)
+        playlist.author?.let { Text(it, color = CarbonZincPalette.TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall) }
     }
 }
 
@@ -749,9 +1046,10 @@ fun VideoCard16x9(
                 .width(220.dp)
                 .height(124.dp)
                 .clip(cardShape)
+                .background(CarbonZincPalette.SurfaceContainer)
                 .border(
                     width = if (isCurrent) 1.5.dp else 1.dp,
-                    color = if (isCurrent) accent else Color.White.copy(alpha = if (isHovered) 0.35f else 0.12f),
+                    color = if (isCurrent) CarbonZincPalette.AccentTeal else CarbonZincPalette.BorderSubtle,
                     shape = cardShape
                 )
         ) {
@@ -853,9 +1151,9 @@ fun VideoCard16x9(
 
         Text(
             text = track.title,
-            fontSize = 12.5.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (isCurrent) accent else Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (isCurrent) CarbonZincPalette.AccentTeal else CarbonZincPalette.TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -864,9 +1162,9 @@ fun VideoCard16x9(
 
         Text(
             text = track.artist,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Normal,
-            color = Color.White.copy(alpha = 0.60f),
+            color = CarbonZincPalette.TextSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -902,9 +1200,10 @@ fun AudioSquircleCard1x1(
             modifier = Modifier
                 .size(136.dp)
                 .clip(cardShape)
+                .background(CarbonZincPalette.SurfaceContainer)
                 .border(
                     width = if (isCurrent) 1.5.dp else 1.dp,
-                    color = if (isCurrent) accent else Color.White.copy(alpha = if (isHovered) 0.35f else 0.12f),
+                    color = if (isCurrent) CarbonZincPalette.AccentTeal else CarbonZincPalette.BorderSubtle,
                     shape = cardShape
                 )
         ) {
@@ -1006,9 +1305,9 @@ fun AudioSquircleCard1x1(
 
         Text(
             text = track.title,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = if (isCurrent) accent else Color.White,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = if (isCurrent) CarbonZincPalette.AccentTeal else CarbonZincPalette.TextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -1017,9 +1316,9 @@ fun AudioSquircleCard1x1(
 
         Text(
             text = track.artist,
-            fontSize = 10.5.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Normal,
-            color = Color.White.copy(alpha = 0.60f),
+            color = CarbonZincPalette.TextSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )

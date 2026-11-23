@@ -37,8 +37,15 @@ data class Track(
     val playCount: Int = 0,
     val isFavorite: Boolean = false,
     val isHidden: Boolean = false,
-    val analysisAttempts: Int = 0
+    val analysisAttempts: Int = 0,
+    val isrc: String? = null
 ) {
+    val isDownloaded: Boolean
+        get() = path.contains("/downloads/", ignoreCase = true) ||
+            path.contains("\\downloads\\", ignoreCase = true) ||
+            path.contains("com.nodeplayer.music", ignoreCase = true) ||
+            (path.startsWith("file://") && path.contains("download", ignoreCase = true))
+
     val durationFormatted: String
         get() {
             val totalSeconds = durationMs / 1000
@@ -70,4 +77,17 @@ data class Track(
                 if (bitrateKbps in 8..1411) "$fmt $bitrateKbps kbps" else if (rateStr != "—") "$fmt $rateStr" else fmt
             }
         }
+
+    fun extractVideoId(): String? {
+        if (path.startsWith("https://music.youtube.com/watch?v=")) {
+            return path.substringAfter("https://music.youtube.com/watch?v=").substringBefore("&")
+        }
+        if (path.startsWith("https://www.youtube.com/watch?v=")) {
+            return path.substringAfter("https://www.youtube.com/watch?v=").substringBefore("&")
+        }
+        if (path.startsWith("nodeplayer://youtube/")) {
+            return path.removePrefix("nodeplayer://youtube/").substringBefore("?").trimEnd('/')
+        }
+        return if (path.length == 11 && !path.contains("/")) path else null
+    }
 }

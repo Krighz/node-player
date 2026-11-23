@@ -42,7 +42,8 @@ object LyricsManager : LyricsFeatureApi {
     suspend fun getLyrics(
         context: Context,
         track: Track,
-        forceRefresh: Boolean = false
+        forceRefresh: Boolean = false,
+        provider: com.nodeplayer.model.LyricsProviderChoice = com.nodeplayer.model.LyricsProviderChoice.AUTO
     ): Lyrics? {
         if (repository == null) {
             initialize(context.applicationContext)
@@ -63,7 +64,8 @@ object LyricsManager : LyricsFeatureApi {
         return repository?.getLyrics(
             track = track,
             forceRefresh = forceRefresh,
-            userOffsetMs = totalOffsetMs
+            userOffsetMs = totalOffsetMs,
+            provider = provider
         )
     }
 

@@ -64,7 +64,8 @@ enum class PlayerNavDestination(val title: String, val icon: ImageVector) {
     EQUALIZER("Equalizer", Icons.Rounded.GraphicEq),
     CUSTOMIZE("Customize UI", Icons.Rounded.Palette),
     SETTINGS("Settings", Icons.Rounded.Settings),
-    OPTICAL_TEST("Optical Test", Icons.Rounded.Visibility)
+    OPTICAL_TEST("Optical Test", Icons.Rounded.Visibility),
+    AUDIO_CONVERTER("Audio Converter", Icons.Rounded.Transform)
 }
 
 @Composable
@@ -127,6 +128,32 @@ fun SharedPlayerLayout(
     onSetSleepTimer: (Int?) -> Unit = {},
     onKeepScreenOn: (Boolean) -> Unit = {},
     youTubeAccount: YouTubeAccount? = null,
+    showDiscordSettings: Boolean = false,
+    discordStatus: com.nodeplayer.model.presence.PresenceStatus = com.nodeplayer.model.presence.PresenceStatus.DISABLED,
+    discordEnabled: Boolean = false,
+    onToggleDiscordEnabled: (Boolean) -> Unit = {},
+    discordIncognito: Boolean = false,
+    onToggleDiscordIncognito: (Boolean) -> Unit = {},
+    discordShowCover: Boolean = true,
+    onToggleDiscordShowCover: (Boolean) -> Unit = {},
+    discordShowAlbum: Boolean = true,
+    onToggleDiscordShowAlbum: (Boolean) -> Unit = {},
+    discordShowWhilePaused: Boolean = false,
+    onToggleDiscordShowWhilePaused: (Boolean) -> Unit = {},
+    discordAppId: String = "",
+    onDiscordAppIdChange: (String) -> Unit = {},
+    transcodeQueueManager: com.nodeplayer.library.converter.TranscodeQueueManager? = null,
+    videoContent: (@Composable (Modifier) -> Unit)? = null,
+    isVideoActive: Boolean = false,
+    isVideoAvailable: Boolean = false,
+    currentHeight: Int? = null,
+    availableHeights: List<Int> = emptyList(),
+    onToggleVideo: ((Boolean) -> Unit)? = null,
+    onSelectQuality: ((Int?) -> Unit)? = null,
+    onOpenFullscreenCinema: (() -> Unit)? = null,
+    trackExtendedInfo: com.nodeplayer.model.TrackExtendedInfo? = null,
+    onArtistClick: ((String, String?) -> Unit)? = null,
+    onTrackOptionsClick: ((Track) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var currentNav by remember { mutableStateOf(PlayerNavDestination.HOME) }
@@ -134,6 +161,20 @@ fun SharedPlayerLayout(
     var playerPresentationState by remember { mutableStateOf<com.nodeplayer.model.PlayerPresentationState>(com.nodeplayer.model.PlayerPresentationState.Closed) }
     val playerExpansionProgress = remember { androidx.compose.animation.core.Animatable(0f) }
     val springSpec = remember(themeConfig) { MotionTokens.resolveSpringSpec(themeConfig, MotionTokens.Smooth) }
+    var sharedLyricsSettings by remember { mutableStateOf(com.nodeplayer.model.LyricsSettings()) }
+
+    var selectedConverterFiles by remember { mutableStateOf<List<java.io.File>>(emptyList()) }
+    var converterDestinationFolder by remember { mutableStateOf<java.io.File?>(null) }
+    val effectiveConverterManager = remember(transcodeQueueManager) {
+        transcodeQueueManager ?: com.nodeplayer.library.converter.TranscodeQueueManager(
+            transcoder = object : com.nodeplayer.model.converter.AudioTranscoder {
+                override suspend fun transcode(job: com.nodeplayer.model.converter.TranscodeJob, onProgress: (Float) -> Unit): Result<java.io.File> {
+                    return Result.failure(IllegalStateException("No active transcoder"))
+                }
+                override suspend fun verifyIntegrity(file: java.io.File, expectedDurationMs: Long): Boolean = false
+            }
+        )
+    }
 
     LaunchedEffect(playerPresentationState) {
         val target = if (playerPresentationState is com.nodeplayer.model.PlayerPresentationState.NowPlaying) 1.0f else 0.0f
@@ -323,8 +364,22 @@ fun SharedPlayerLayout(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Empty placeholder on left to balance spacing with the optical dock
-                        Box(modifier = Modifier.width(96.dp))
+                        // Brand Logo on left
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            com.nodeplayer.ui.components.NodePlayerLogoMark(
+                                size = 32.dp,
+                                showSquircleBackground = true
+                            )
+                            Text(
+                                text = "Node Player",
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                                color = androidx.compose.ui.graphics.Color.White,
+                                fontSize = 16.sp
+                            )
+                        }
 
                         // Center: Search Capsule
                         SearchCapsule(
@@ -413,9 +468,9 @@ fun SharedPlayerLayout(
                                     onNavigateToLibrary = { currentNav = PlayerNavDestination.LIBRARY },
                                     onNavigateToEqualizer = { currentNav = PlayerNavDestination.EQUALIZER },
                                     youTubeAccount = youTubeAccount,
-                                    onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
+                                    onOpenPlaylistDetail = { id, title, subtitle, artworkUrl, items ->
                                         activeDetailHeader = DetailMediaHeader(
-                                            id = "home_pl_${title.hashCode()}",
+                                            id = id,
                                             title = title,
                                             subtitle = subtitle,
                                             artworkUrl = artworkUrl,
@@ -472,6 +527,7 @@ fun SharedPlayerLayout(
                                     folders = folders,
                                     currentTrack = currentTrack,
                                     isPlaying = isPlaying,
+                                    downloadedTracks = tracks.filter { it.isDownloaded },
                                     onTrackClick = onPlayTrack,
                                     onRescanClick = onRescanLibrary,
                                     searchQuery = searchQuery,
@@ -490,8 +546,14 @@ fun SharedPlayerLayout(
                                         isAlbum = false
                                     )
                                     activeDetailTracks = tracks.filter { it.album.equals(pl.title, ignoreCase = true) }
-                                        .ifEmpty { onlineLibraryManager.state.value.songs.filter { it.album.equals(pl.title, ignoreCase = true) } }
-                                        .ifEmpty { onlineLibraryManager.state.value.songs }
+                                    coroutineScope.launch {
+                                        val fetched = runCatching {
+                                            com.nodeplayer.network.innertube.SharedInnerTubeProvider.get().fetchPlaylistTracks(pl.id).getOrNull()
+                                        }.getOrNull()
+                                        if (!fetched.isNullOrEmpty()) {
+                                            activeDetailTracks = fetched
+                                        }
+                                    }
                                 },
                                 onOpenAlbumDetail = { album ->
                                     activeDetailHeader = DetailMediaHeader(
@@ -541,15 +603,60 @@ fun SharedPlayerLayout(
                                     trackCount = tracks.size,
                                     nodeConnectEnabled = nodeConnectEnabled,
                                     onToggleNodeConnect = onToggleNodeConnect,
+                                    showDiscordSettings = showDiscordSettings,
+                                    discordStatus = discordStatus,
+                                    discordEnabled = discordEnabled,
+                                    onToggleDiscordEnabled = onToggleDiscordEnabled,
+                                    discordIncognito = discordIncognito,
+                                    onToggleDiscordIncognito = onToggleDiscordIncognito,
+                                    discordShowCover = discordShowCover,
+                                    onToggleDiscordShowCover = onToggleDiscordShowCover,
+                                    discordShowAlbum = discordShowAlbum,
+                                    onToggleDiscordShowAlbum = onToggleDiscordShowAlbum,
+                                    discordShowWhilePaused = discordShowWhilePaused,
+                                    onToggleDiscordShowWhilePaused = onToggleDiscordShowWhilePaused,
+                                    discordAppId = discordAppId,
+                                    onDiscordAppIdChange = onDiscordAppIdChange,
                                     themeConfig = themeConfig,
                                     onThemeConfigChange = onThemeConfigChange,
+                                    lyricsSettings = sharedLyricsSettings,
+                                    onLyricsSettingsChange = { sharedLyricsSettings = it },
                                     onOpenOpticalTest = { currentNav = PlayerNavDestination.OPTICAL_TEST },
+                                    onOpenAudioConverter = { currentNav = PlayerNavDestination.AUDIO_CONVERTER },
                                     isExpanded = true
                                 )
                                 PlayerNavDestination.OPTICAL_TEST -> OpticalDiagnosticsView(
                                     onBack = { currentNav = PlayerNavDestination.SETTINGS },
                                     themeConfig = themeConfig
                                 )
+                                PlayerNavDestination.AUDIO_CONVERTER -> {
+                                    val candidateFlacs = remember(tracks) {
+                                        tracks.map { java.io.File(it.path) }.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
+                                    }
+                                    com.nodeplayer.ui.converter.AudioConverterView(
+                                        queueManager = effectiveConverterManager,
+                                        selectedFiles = selectedConverterFiles,
+                                        candidateFiles = candidateFlacs,
+                                        onSelectedFilesChange = { selectedConverterFiles = it },
+                                        onPickIndividualFiles = {
+                                            PlatformFileDialog.pickFlacFiles(currentMusicFolder) { picked ->
+                                                selectedConverterFiles = (selectedConverterFiles + picked).distinctBy { it.absolutePath }
+                                            }
+                                        },
+                                        onPickFiles = {
+                                            selectedConverterFiles = candidateFlacs
+                                        },
+                                        destinationFolder = converterDestinationFolder,
+                                        onPickDestinationFolder = {
+                                            if (currentMusicFolder.isNotBlank()) {
+                                                val dest = java.io.File(currentMusicFolder, "Converted")
+                                                dest.mkdirs()
+                                                converterDestinationFolder = dest
+                                            }
+                                        },
+                                        onBack = { currentNav = PlayerNavDestination.SETTINGS }
+                                    )
+                                }
                             }
                         }
                     }
@@ -577,7 +684,7 @@ fun SharedPlayerLayout(
                         onToggleFavorite = onToggleFavorite,
                         onOpenSignalPath = { currentNav = PlayerNavDestination.EQUALIZER },
                         onOpenOutputDevicePicker = { currentNav = PlayerNavDestination.SETTINGS },
-                        onCastClick = { /* open cast sheet */ },
+                        onCastClick = { onPairNewDevice() },
                         onExpandNowPlaying = { playerPresentationState = com.nodeplayer.model.PlayerPresentationState.NowPlaying },
                         sleepTimerRemainingSec = sleepTimerRemainingSec,
                         onSetSleepTimer = onSetSleepTimer,
@@ -653,9 +760,9 @@ fun SharedPlayerLayout(
                                 onCastToPeer = onCastToPeer,
                                 onToggleNodeConnect = onToggleNodeConnect,
                                 youTubeAccount = youTubeAccount,
-                                onOpenPlaylistDetail = { title, subtitle, artworkUrl, items ->
+                                onOpenPlaylistDetail = { id, title, subtitle, artworkUrl, items ->
                                     activeDetailHeader = DetailMediaHeader(
-                                        id = "home_pl_${title.hashCode()}",
+                                        id = id,
                                         title = title,
                                         subtitle = subtitle,
                                         artworkUrl = artworkUrl,
@@ -713,6 +820,7 @@ fun SharedPlayerLayout(
                                 folders = folders,
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
+                                downloadedTracks = tracks.filter { it.isDownloaded },
                                 onTrackClick = onPlayTrack,
                                 onRescanClick = onRescanLibrary,
                                 searchQuery = searchQuery,
@@ -728,8 +836,14 @@ fun SharedPlayerLayout(
                                         isAlbum = false
                                     )
                                     activeDetailTracks = tracks.filter { it.album.equals(pl.title, ignoreCase = true) }
-                                        .ifEmpty { onlineLibraryManager.state.value.songs.filter { it.album.equals(pl.title, ignoreCase = true) } }
-                                        .ifEmpty { onlineLibraryManager.state.value.songs }
+                                    coroutineScope.launch {
+                                        val fetched = runCatching {
+                                            com.nodeplayer.network.innertube.SharedInnerTubeProvider.get().fetchPlaylistTracks(pl.id).getOrNull()
+                                        }.getOrNull()
+                                        if (!fetched.isNullOrEmpty()) {
+                                            activeDetailTracks = fetched
+                                        }
+                                    }
                                 },
                                 onOpenAlbumDetail = { album ->
                                     activeDetailHeader = DetailMediaHeader(
@@ -780,15 +894,60 @@ fun SharedPlayerLayout(
                                 trackCount = tracks.size,
                                 nodeConnectEnabled = nodeConnectEnabled,
                                 onToggleNodeConnect = onToggleNodeConnect,
+                                showDiscordSettings = showDiscordSettings,
+                                discordStatus = discordStatus,
+                                discordEnabled = discordEnabled,
+                                onToggleDiscordEnabled = onToggleDiscordEnabled,
+                                discordIncognito = discordIncognito,
+                                onToggleDiscordIncognito = onToggleDiscordIncognito,
+                                discordShowCover = discordShowCover,
+                                onToggleDiscordShowCover = onToggleDiscordShowCover,
+                                discordShowAlbum = discordShowAlbum,
+                                onToggleDiscordShowAlbum = onToggleDiscordShowAlbum,
+                                discordShowWhilePaused = discordShowWhilePaused,
+                                onToggleDiscordShowWhilePaused = onToggleDiscordShowWhilePaused,
+                                discordAppId = discordAppId,
+                                onDiscordAppIdChange = onDiscordAppIdChange,
                                 themeConfig = themeConfig,
                                 onThemeConfigChange = onThemeConfigChange,
+                                lyricsSettings = sharedLyricsSettings,
+                                onLyricsSettingsChange = { sharedLyricsSettings = it },
                                 onOpenOpticalTest = { currentNav = PlayerNavDestination.OPTICAL_TEST },
+                                onOpenAudioConverter = { currentNav = PlayerNavDestination.AUDIO_CONVERTER },
                                 isExpanded = false
                             )
                             PlayerNavDestination.OPTICAL_TEST -> OpticalDiagnosticsView(
                                 onBack = { currentNav = PlayerNavDestination.SETTINGS },
                                 themeConfig = themeConfig
                             )
+                            PlayerNavDestination.AUDIO_CONVERTER -> {
+                                val candidateFlacs = remember(tracks) {
+                                    tracks.map { java.io.File(it.path) }.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
+                                }
+                                com.nodeplayer.ui.converter.AudioConverterView(
+                                    queueManager = effectiveConverterManager,
+                                    selectedFiles = selectedConverterFiles,
+                                    candidateFiles = candidateFlacs,
+                                    onSelectedFilesChange = { selectedConverterFiles = it },
+                                    onPickIndividualFiles = {
+                                        PlatformFileDialog.pickFlacFiles(currentMusicFolder) { picked ->
+                                            selectedConverterFiles = (selectedConverterFiles + picked).distinctBy { it.absolutePath }
+                                        }
+                                    },
+                                    onPickFiles = {
+                                        selectedConverterFiles = candidateFlacs
+                                    },
+                                    destinationFolder = converterDestinationFolder,
+                                    onPickDestinationFolder = {
+                                        if (currentMusicFolder.isNotBlank()) {
+                                            val dest = java.io.File(currentMusicFolder, "Converted")
+                                            dest.mkdirs()
+                                            converterDestinationFolder = dest
+                                        }
+                                    },
+                                    onBack = { currentNav = PlayerNavDestination.SETTINGS }
+                                )
+                            }
                         }
                         }
                     }
@@ -1049,10 +1208,23 @@ fun SharedPlayerLayout(
                                 positionMs = positionMs,
                                 positionProvider = { positionMs },
                                 durationMs = durationMs,
+                                volume = volume,
+                                onVolumeChange = onVolumeChange,
+                                isFavorite = isFavorite,
+                                onToggleFavorite = onToggleFavorite,
+                                extendedInfo = trackExtendedInfo,
                                 queue = queue,
                                 currentQueueIndex = currentQueueIndex,
                                 lrcContent = lrcContent,
-                                audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                                audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { if (isExpanded) "This PC" else "This Device" },
+                                videoContent = videoContent,
+                                isVideoActive = isVideoActive,
+                                isVideoAvailable = isVideoAvailable,
+                                currentHeight = currentHeight,
+                                availableHeights = availableHeights,
+                                onToggleVideo = onToggleVideo,
+                                onSelectQuality = onSelectQuality,
+                                onOpenFullscreenCinema = onOpenFullscreenCinema,
                                 onPlayPause = onPlayPause,
                                 onNext = onNext,
                                 onPrevious = onPrevious,
@@ -1063,6 +1235,18 @@ fun SharedPlayerLayout(
                                 onOpenNodeConnect = { onPairNewDevice() },
                                 onOpenPlaybackOptions = { showPlaybackOptions = true },
                                 onOpenThreeDotsMenu = { showQuickSettings = true },
+                                onPlayTrack = { tr ->
+                                    val updatedQueue = if (queue.any { it.id == tr.id }) queue else queue + tr
+                                    onPlayTrack(tr, updatedQueue)
+                                },
+                                onArtistClick = onArtistClick ?: { artistName, _ ->
+                                    searchQuery = artistName
+                                    onSearchQueryChanged?.invoke(artistName)
+                                    currentNav = PlayerNavDestination.LIBRARY
+                                },
+                                onTrackOptionsClick = onTrackOptionsClick ?: { tr ->
+                                    activeContextMenuTrack = tr
+                                },
                                 onClose = {
                                     coroutineScope.launch {
                                         if (themeConfig.reduceMotion || themeConfig.motionLevel == com.nodeplayer.model.MotionLevel.OFF || themeConfig.isPerformanceMode) {
@@ -1120,7 +1304,7 @@ fun SharedPlayerLayout(
                     com.nodeplayer.ui.player.QuickSettingsSheet(
                         visible = showQuickSettings,
                         volume = volume,
-                        outputDeviceName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                        outputDeviceName = audioOutputInfo.outputDeviceName.ifBlank { "This Device" },
                         audioFormatDescription = audioOutputInfo.format,
                         sleepTimerRemainingSec = sleepTimerRemainingSec,
                         accentColor = dynamicArtAccent ?: baseAccent,
@@ -1130,6 +1314,8 @@ fun SharedPlayerLayout(
                             playerPresentationState = com.nodeplayer.model.PlayerPresentationState.Closed
                             currentNav = PlayerNavDestination.EQUALIZER
                         },
+                        isVideoActive = isVideoActive,
+                        onToggleVideo = onToggleVideo?.let { { it(!isVideoActive) } },
                         onDismiss = { showQuickSettings = false }
                     )
                 }
@@ -1152,6 +1338,8 @@ fun SharedPlayerLayout(
                 com.nodeplayer.ui.lyrics.FullScreenLyricsView(
                     track = currentTrack,
                     lyrics = parsedLyrics,
+                    lyricsSettings = sharedLyricsSettings,
+                    onUpdateLyricsSettings = { sharedLyricsSettings = it },
                     isPlaying = isPlaying,
                     currentPositionMs = positionMs,
                     positionProvider = { positionMs },
@@ -1215,6 +1403,8 @@ fun SharedPlayerLayout(
                                 onPlayTrack(tr, listOf(tr) + queue.shuffled().take(15))
                             }
                             com.nodeplayer.model.TrackActionId.GO_TO_ARTIST -> {
+                                searchQuery = tr.artist
+                                onSearchQueryChanged?.invoke(tr.artist)
                                 currentNav = PlayerNavDestination.LIBRARY
                             }
                             com.nodeplayer.model.TrackActionId.GO_TO_ALBUM -> {
