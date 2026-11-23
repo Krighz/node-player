@@ -77,6 +77,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -168,7 +170,7 @@ fun NowPlayingView(
     queue: List<Track> = emptyList(),
     currentQueueIndex: Int = 0,
     lrcContent: String? = null,
-    audioOutputName: String = "krighz's Phone",
+    audioOutputName: String = "This Device",
     sourceLabel: String = "Music videos",
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -198,7 +200,7 @@ fun NowPlayingView(
     onToggleVideo: ((Boolean) -> Unit)? = null,
     onSelectQuality: ((Int?) -> Unit)? = null,
     onOpenFullscreenCinema: (() -> Unit)? = null,
-    artZoomScale: Float = 1.03f,
+    artZoomScale: Float = 1.00f,
     artVerticalOffsetDp: Int = 0,
     extendedInfo: TrackExtendedInfo? = null,
     onPlayTrack: ((Track) -> Unit)? = null,
@@ -283,7 +285,7 @@ fun NowPlayingView(
     }
 
     val heroAspectRatio by animateFloatAsState(
-        targetValue = if (isVideoActive) videoAspect else 1f,
+        targetValue = if (isVideoActive) videoAspect else (4f / 3f),
         animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
         label = "HeroAspectMorph"
     )
@@ -317,15 +319,43 @@ fun NowPlayingView(
         )
     }
 
-    val topArtworkFadeBrush = remember {
+    val gradientBlurAlphaBrush = remember {
         Brush.verticalGradient(
             colorStops = arrayOf(
                 0.00f to Color.Transparent,
                 0.40f to Color.Transparent,
-                0.65f to Color(0xFF000000).copy(alpha = 0.40f),
-                0.82f to Color(0xFF000000).copy(alpha = 0.82f),
-                0.94f to Color(0xFF000000).copy(alpha = 0.96f),
-                1.00f to Color(0xFF000000)
+                0.58f to Color.Black.copy(alpha = 0.40f),
+                0.74f to Color.Black.copy(alpha = 0.85f),
+                0.86f to Color.Black,
+                1.00f to Color.Black
+            )
+        )
+    }
+
+    val heroArtworkAlphaBrush = remember {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.00f to Color.Black,
+                0.50f to Color.Black,
+                0.68f to Color.Black.copy(alpha = 0.88f),
+                0.82f to Color.Black.copy(alpha = 0.45f),
+                0.92f to Color.Black.copy(alpha = 0.10f),
+                0.98f to Color.Transparent,
+                1.00f to Color.Transparent
+            )
+        )
+    }
+
+    val textContrastScrimBrush = remember {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.00f to Color.Transparent,
+                0.40f to Color.Transparent,
+                0.55f to Color.Black.copy(alpha = 0.16f),
+                0.70f to Color.Black.copy(alpha = 0.38f),
+                0.84f to Color.Black.copy(alpha = 0.58f),
+                0.94f to Color.Black.copy(alpha = 0.20f),
+                1.00f to Color.Transparent
             )
         )
     }
@@ -415,11 +445,13 @@ fun NowPlayingView(
                 .background(bottomScrimBrush)
         )
 
-        // Calculate available hero height: spans from y=0 down to the top of the title row
-        // Adjusted to 385.dp (-45dp / ~120px) so the bottom of the artwork dissolves flush with the vignette
-        val bottomControlsReservedHeight = 385.dp
+        // Calculate available hero height: spans from y=0 down behind the top of the controls
+        val bottomControlsReservedHeight = 310.dp
         val availableHeroHeight = (screenHeight - bottomControlsReservedHeight).coerceAtLeast(260.dp)
         val effectiveHeroHeight = (availableHeroHeight + artVerticalOffsetDp.dp).coerceAtLeast(200.dp)
+        // Album art aspect ratio 4:3 with height increased by 20% (approx 55% of screen height)
+        val audioHeroHeight = (screenHeight * 0.55f).coerceIn(408.dp, 528.dp)
+        val heroHeight = if (isVideoActive) effectiveHeroHeight else audioHeroHeight
 
         LazyColumn(
             state = lazyListState,
@@ -437,7 +469,7 @@ fun NowPlayingView(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(effectiveHeroHeight)
+                            .height(heroHeight)
                             .align(Alignment.TopCenter)
                             .pointerInput(onDragDelta, onDragEnd) {
                                 if (onDragDelta != null) {
@@ -496,7 +528,19 @@ fun NowPlayingView(
                                     },
                                     label = "HeroArtworkMorph"
                                 ) { targetTrack ->
-                                    Box(modifier = Modifier.fillMaxSize()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                                            .drawWithContent {
+                                                drawContent()
+                                                drawRect(
+                                                    brush = heroArtworkAlphaBrush,
+                                                    blendMode = BlendMode.DstIn
+                                                )
+                                            }
+                                    ) {
+                                        // 1. Base Layer: Sharp Album Art (Always exists underneath)
                                         TrackArtwork(
                                             track = targetTrack,
                                             modifier = Modifier
@@ -510,11 +554,38 @@ fun NowPlayingView(
                                             scale = artZoomScale
                                         )
 
-                                        // Multi-stop seamless fade to dark background (no hard seam)
+                                        // 2. Overlaid Gradient Blur: Progressively blurs the artwork in the shaded zone
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .background(topArtworkFadeBrush)
+                                                .graphicsLayer {
+                                                    compositingStrategy = CompositingStrategy.Offscreen
+                                                    translationY = artVerticalOffsetDp.dp.toPx()
+                                                }
+                                                .blur(28.dp)
+                                                .drawWithContent {
+                                                    drawContent()
+                                                    drawRect(
+                                                        brush = gradientBlurAlphaBrush,
+                                                        blendMode = BlendMode.DstIn
+                                                    )
+                                                }
+                                        ) {
+                                            TrackArtwork(
+                                                track = targetTrack,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop,
+                                                cornerRadius = 0.dp,
+                                                targetSizePx = ArtworkCache.HERO_TARGET_SIZE_PX,
+                                                scale = artZoomScale
+                                            )
+                                        }
+
+                                        // 3. Soft Text-Contrast Scrim over the shaded area
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(textContrastScrimBrush)
                                         )
                                     }
                                 }
@@ -1014,9 +1085,9 @@ fun NowPlayingView(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Centered Output Device Label: "krighz's Phone"
+                // Centered Output Device Label: "This Device"
                 Text(
-                    text = audioOutputName.ifBlank { "krighz's Phone" },
+                    text = audioOutputName.ifBlank { "This Device" },
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.White.copy(alpha = 0.65f),

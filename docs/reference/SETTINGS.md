@@ -205,6 +205,56 @@ Accessible via **Settings > Online, Connect & Network > Music Videos**:
 | **`video_controls_autohide_s`** | IntRange | 2 .. 10 | `4` | All | Seconds of inactivity before fading cinema player controls | `FullscreenCinemaPlayer.kt` |
 | **`video_show_quality_pill`** | Toggle | `true`, `false` | `true` | All | Display interactive resolution badge pill in Now Playing hero card | `NowPlayingView.kt` |
 
+---
+
+## 12. Cinematic Kinetic & Lyrics Engine Settings (`LyricsSettings`)
+
+Accessible via **Lyrics Screen Overflow Menu (`⋮`)** & **Settings > Lyrics**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`lyrics_style`** | Enum | `CINEMATIC_KINETIC`, `CLASSIC_FULLSCREEN` | `CINEMATIC_KINETIC` | All | Active lyrics rendering engine: Cinematic Kinetic canvas or Classic Full-Screen view | `FullScreenLyricsView.kt`, `CinematicKineticLyricsView.kt` |
+| **`lyrics_common_zoom`** | Float | 0.40 .. 1.80 | `1.00` | All | Master scale applied to viewport zoom (Kinetic) and typography/layout (Classic) | `CinematicKineticLyricsView.kt`, `FullScreenLyricsView.kt` |
+| **`lyrics_sparkle_density`** | Float | 0.00 .. 1.00 | `0.35` | All | Background 3-layer parallax floating starfield density | `CinematicKineticLyricsView.kt` |
+| **`lyrics_lr_swing`** | Float | 0.00 .. 1.00 | `0.80` | All | Horizontal left/right choreography spread multiplier | `CinematicKineticLyricsView.kt` |
+| **`lyrics_vertical_spacing`** | Float | 0.70 .. 1.60 | `1.15` | All | Multiplier for intra-phrase, inter-phrase, and stanza void gaps | `CinematicKineticLyricsView.kt` |
+| **`lyrics_camera_glide`** | Float | 0.30 .. 1.50 | `1.00` | All | Critically-damped virtual camera spring responsiveness | `CinematicKineticLyricsView.kt` |
+| **`lyrics_bounce`** | Float | 0.00 .. 1.50 | `1.00` | All | Active word pop scale and float lift energy | `CinematicKineticLyricsView.kt` |
+| **`lyrics_glow_palette`** | Enum | `white`, `blue`, `gold`, `violet` | `white` | All | Active word illumination and ambient glow color palette | `CinematicKineticLyricsView.kt` |
+| **`lyrics_show_top_bar`** | Boolean | `true`, `false` | `true` | All | Visibility toggle for the compact top header bar | `FullScreenLyricsView.kt` |
+| **`lyrics_preferred_provider`** | Enum | `auto`, `lrcred`, `bini`, `musixmatch`, `unison`, `lrclib`, `betterlyrics`, `lyricsplus`, `kugou`, `local` | `auto` | All | Preferred synchronized lyrics provider with instant per-track interchange and status badges (Click to Search, Lyrics Found, Connected OK) | `LyricsRepository.kt`, `LyricsSettingsBottomSheet.kt` |
+| **`lyrics_romanize_foreign`** | Boolean | `true`, `false` | `true` | All | Automatic offline romanization of foreign scripts (Hangul, Romaji, Pinyin, Urdu Nastaliq, Devanagari, Cyrillic) | `LyricsRomanizer.kt`, `LyricsSettingsBottomSheet.kt` |
+| **`lyrics_display_mode`** | Enum | `ORIGINAL_ONLY`, `DUAL_LINE`, `ROMANIZED_ONLY` | `DUAL_LINE` | All | Apple Music style display mode: original glyphs only, dual-line stacked transliteration/translation, or romanized-only | `LyricLineItem.kt`, `WordByWordKaraokeText.kt`, `LyricsSettingsBottomSheet.kt` |
+
+---
+
+## 13. Online Music Services & Media Resolution Settings
+
+Accessible via **Settings > Online Music & Streaming Services**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`streaming_audio_quality`** | Enum | `HIGH`, `MEDIUM`, `LOW` | `HIGH` | All | Online music audio bitrate: High (~160-256 kbps, Opus 160k / AAC 256k), Medium (~128 kbps, AAC/Opus 128k), Low (~48-70 kbps, Data Saver) | `StreamResolver.kt`, `MediaQualitySettings.kt`, `AppSettingsRepository.kt` |
+| **`album_art_quality`** | Enum | `HIGH`, `MEDIUM`, `LOW` | `HIGH` | All | Target resolution for artwork: High (1080p-1200p HD, `=w1200`), Medium (544p Balanced, `=w544`), Low (256p Data Saver, `=w256`) | `ArtworkUrlResolver.kt`, `AudioArtworkFetcher.kt`, `ArtworkLoader.kt` |
+| **`video_default_quality`** | Choice | `"auto"`, `"1080"`, `"720"`, `"480"`, `"360"` | `"auto"` | All | Preferred video stream playback resolution with client-side format ranking | `StreamResolver.kt`, `SettingsScreen.kt` |
+| **`online_mode_enabled`** | Boolean | `true`, `false` | `true` | All | Master switch for online YouTube Music catalog browsing, recommendations, and search | `SettingsScreen.kt`, `OnlineHomeView.kt` |
+| **`scrobble_enabled`** | Boolean | `true`, `false` | `false` | All | Last.fm real-time scrobbling and offline queue retry | `LastFmClient.kt`, `SettingsScreen.kt` |
+
+---
+
+## 14. Cloud Backup & Sync Settings (Google Drive `appDataFolder`)
+
+Accessible via **Settings > Online Music & Cloud Sync > Cloud Sync (Drive) Tab**:
+
+| Setting Key | Data Type | Options / Range | Default Value | Platform | Description | Consuming Implementation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **`cloud_sync_enabled`** | Boolean | `true`, `false` | `false` (Opt-in only) | Android | Master state for cloud backup. Disabled by default until user connects account. | `GoogleAuthManager.kt`, `CloudSyncManager.kt` |
+| **`sync_frequency`** | Enum | `HOURLY`, `DAILY`, `MANUAL` | `MANUAL` | Android | Frequency for background WorkManager sync jobs. | `CloudSyncManager.kt`, `CloudSyncWorker.kt` |
+| **`has_unsynced_changes`** | Boolean | `true`, `false` | `false` | Android | Local dirty flag optimization; skips cloud upload if nothing changed. | `CloudSyncManager.kt`, `PlaybackService.kt`, `PlayerViewModel.kt` |
+| **`gdrive_custom_client_id`**| String | Freeform text | Injected from `local.properties` | Android | Google Cloud Console OAuth 2.0 client ID from `local.properties` via `BuildConfig.GDRIVE_CLIENT_ID`. | `GoogleAuthManager.kt` |
+| **`gdrive_redirect_uri`**| String | Reverse-DNS URI | `com.googleusercontent.apps.<client_id_prefix>:/oauth2redirect` | Android | Reverse-DNS redirect URI conforming to RFC 8252 for Android clients. | `GoogleAuthManager.kt`, `AndroidManifest.xml` |
+
+
 
 
 

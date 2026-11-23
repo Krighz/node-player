@@ -642,6 +642,25 @@ fun WordByWordKaraokeText(
             }
         }
 
+        // Dual-line romanization / translation subtitle (Apple Music style)
+        val subtitle = line.romanizedText ?: line.translationText
+        if (!subtitle.isNullOrBlank() && subtitle != line.text) {
+            Text(
+                text = subtitle,
+                style = TextStyle(
+                    fontFamily = lyricsFontFamily,
+                    fontSize = if (isActive) (fontSize.value * 0.48f).coerceAtLeast(15f).sp else (fontSize.value * 0.40f).coerceAtLeast(13f).sp,
+                    fontWeight = FontWeight.Normal,
+                    letterSpacing = 0.4.sp,
+                    color = if (isActive) sweepResolvedColor.copy(alpha = 0.85f) else dimmedInactiveColor.copy(alpha = 0.45f),
+                    textAlign = textAlign
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 2.dp)
+            )
+        }
+
         // Backing vocal subtext (LyricsLine.background / x-bg role)
         val bgLine = line.background
         if (bgLine != null) {

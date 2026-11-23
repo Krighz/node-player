@@ -13,12 +13,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 
+import com.nodeplayer.network.innertube.SharedInnerTubeProvider
+
 /**
  * Dynamically queries and parses all available audio-only streams for a YouTube video.
  * Zero hardcoded stream URLs, itags, or fixed bitrate values.
  */
 class StreamFormatResolver(
-    private val innerTubeClient: InnerTubeClient = InnerTubeClient(),
+    private val innerTubeClient: InnerTubeClient = SharedInnerTubeProvider.get(),
     private val cipherSolver: CipherSolver? = CipherSolver.current
 ) {
 

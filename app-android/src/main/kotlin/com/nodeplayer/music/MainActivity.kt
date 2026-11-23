@@ -120,6 +120,11 @@ class MainActivity : ComponentActivity() {
         com.nodeplayer.music.ui.video.MusicVideoEngine.initialize(this)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode =
+                android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -167,6 +172,7 @@ class MainActivity : ComponentActivity() {
 
         checkAndRequestPermissions()
         handleSpotifyCallbackIntent(intent)
+        handleGoogleDriveCallbackIntent(intent)
 
         setContent {
             LaunchedEffect(Unit) {
@@ -216,6 +222,19 @@ class MainActivity : ComponentActivity() {
                 var currentRoute by remember { mutableStateOf(intentRoute ?: "home") }
                 var isNowPlayingExpanded by remember { mutableStateOf(false) }
                 var isLyricsExpanded by remember { mutableStateOf(false) }
+                val lyricsSettingsState by viewModel.lyricsSettings.collectAsState()
+
+                val shouldHideStatusBar = appSettings.hideStatusBar || (isLyricsExpanded && lyricsSettingsState.hideStatusBar)
+                LaunchedEffect(shouldHideStatusBar) {
+                    val insetsController = androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)
+                    if (shouldHideStatusBar) {
+                        insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                        insetsController.systemBarsBehavior =
+                            androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    } else {
+                        insetsController.show(androidx.core.view.WindowInsetsCompat.Type.statusBars())
+                    }
+                }
 
                 val dailyStats by viewModel.dailyListeningStats.collectAsState()
                 val sessionSec by viewModel.sessionListeningSeconds.collectAsState()
@@ -416,6 +435,7 @@ class MainActivity : ComponentActivity() {
                 val minDurationSeconds by viewModel.minDurationSeconds.collectAsState()
                 val crossfadeConfig by viewModel.crossfadeConfig.collectAsState()
                 val isShuffleEnabled by viewModel.isShuffleEnabled.collectAsState()
+                val repeatMode by viewModel.repeatMode.collectAsState()
                 val queue by viewModel.queue.collectAsState()
                 val sleepTimerRemainingSec by viewModel.sleepTimerRemainingSeconds.collectAsState()
 
@@ -698,6 +718,12 @@ class MainActivity : ComponentActivity() {
                                             else if (discoveredPeers.isNotEmpty() || activeSession != null) com.nodeplayer.ui.components.DeviceConnectStatus.DISCOVERING
                                             else com.nodeplayer.ui.components.DeviceConnectStatus.DISCONNECTED,
                                         connectedDeviceCount = connectedPeers.size,
+                                        onStartUpdate = { updateInfo ->
+                                            UpdateDownloadManager.startDownload(this@MainActivity, updateInfo)
+                                        },
+                                        onCancelUpdate = {
+                                            UpdateDownloadManager.cancelDownload(this@MainActivity)
+                                        },
                                         onInstallUpdate = {
                                             val readyApk = (downloadStatus as? DownloadStatus.ReadyToInstall)?.apkFile
                                                 ?: UpdateDownloadManager.getDownloadedApk(this@MainActivity, UpdateManager.availableUpdate.value?.versionName ?: "")
@@ -883,7 +909,10 @@ class MainActivity : ComponentActivity() {
                                             onPlayTrack = { trk -> viewModel.playTrack(trk) },
                                             onShuffleArtist = {
                                                 artistData?.topSongs?.let { songs ->
-                                                    if (songs.isNotEmpty()) viewModel.playTrack(songs.shuffled().first(), songs.shuffled())
+                                                    if (songs.isNotEmpty()) {
+                                                        val shuffled = songs.shuffled()
+                                                        viewModel.playTrack(shuffled.first(), shuffled)
+                                                    }
                                                 }
                                             },
                                             onToggleFollow = {
@@ -986,9 +1015,34 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                         var selectedAndroidFiles by remember { mutableStateOf<List<java.io.File>>(emptyList()) }
-                                        var destinationAndroidFolder by remember { mutableStateOf<java.io.File?>(null) }
+                                        val defaultConvertedDir = remember {
+                                            val musicDir = getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC) ?: filesDir
+                                            java.io.File(musicDir, "Converted").also { it.mkdirs() }
+                                        }
+                                        var destinationAndroidFolder by remember { mutableStateOf<java.io.File?>(defaultConvertedDir) }
                                         val flacs = remember(allTracks) {
                                             allTracks.map { java.io.File(it.path) }.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
+                                        }
+
+                                        val pickFolderLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+                                            contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+                                        ) { uri ->
+                                            if (uri != null) {
+                                                try {
+                                                    val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
+                                                    if (docId.startsWith("primary:")) {
+                                                        val rel = docId.substringAfter("primary:")
+                                                        val f = java.io.File(android.os.Environment.getExternalStorageDirectory(), rel)
+                                                        if (f.exists() || f.mkdirs()) {
+                                                            destinationAndroidFolder = f
+                                                        }
+                                                    } else {
+                                                        destinationAndroidFolder = defaultConvertedDir
+                                                    }
+                                                } catch (_: Exception) {
+                                                    destinationAndroidFolder = defaultConvertedDir
+                                                }
+                                            }
                                         }
 
                                         val pickMultipleDocumentsLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -1033,7 +1087,7 @@ class MainActivity : ComponentActivity() {
                                             },
                                             destinationFolder = destinationAndroidFolder,
                                             onPickDestinationFolder = {
-                                                destinationAndroidFolder = java.io.File(getExternalFilesDir(null), "Converted").also { it.mkdirs() }
+                                                pickFolderLauncher.launch(null)
                                             },
                                             onBack = { currentRoute = "settings" }
                                         )
@@ -1090,17 +1144,19 @@ class MainActivity : ComponentActivity() {
 
                     // Background parallel thread lyrics pre-caching
                     val activityContext = androidx.compose.ui.platform.LocalContext.current
+                    val currentLyricsSettings by viewModel.lyricsSettings.collectAsState()
                     var cachedLyrics by remember(activeNowPlayingTrack?.id) { mutableStateOf<com.nodeplayer.model.Lyrics?>(null) }
                     var isLyricsPreloaded by remember(activeNowPlayingTrack?.id) { mutableStateOf(false) }
 
-                    LaunchedEffect(activeNowPlayingTrack?.id) {
+                    LaunchedEffect(activeNowPlayingTrack?.id, currentLyricsSettings.preferredProvider) {
                         val trk = activeNowPlayingTrack ?: return@LaunchedEffect
                         isLyricsPreloaded = false
                         withContext(Dispatchers.IO) {
                             val result = com.nodeplayer.music.lyrics.LyricsManager.getLyrics(
                                 context = activityContext,
                                 track = trk,
-                                forceRefresh = false
+                                forceRefresh = currentLyricsSettings.preferredProvider != com.nodeplayer.model.LyricsProviderChoice.AUTO,
+                                provider = currentLyricsSettings.preferredProvider
                             )
                             withContext(Dispatchers.Main) {
                                 cachedLyrics = result
@@ -1206,7 +1262,7 @@ class MainActivity : ComponentActivity() {
                                         queue = queue,
                                         currentQueueIndex = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0),
                                         lrcContent = cachedLyrics?.plainText,
-                                        audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                                        audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This Device" },
                                         sourceLabel = if (currentRoute == "search") "Search" else "Library",
                                         palette = activeNowPlayingPalette,
                                         onPaletteChanged = { activeNowPlayingPalette = it },
@@ -1378,11 +1434,11 @@ class MainActivity : ComponentActivity() {
                                         queue = queue,
                                         currentQueueIndex = queue.indexOfFirst { it.id == track.id }.coerceAtLeast(0),
                                         isShuffle = isShuffleEnabled,
-                                        repeatMode = 0,
+                                        repeatMode = repeatMode,
                                         infiniteAutoplay = false,
                                         accentColor = accentColor,
                                         onToggleShuffle = { viewModel.toggleShuffle() },
-                                        onCycleRepeat = { },
+                                        onCycleRepeat = { viewModel.cycleRepeatMode() },
                                         onToggleInfiniteAutoplay = { },
                                         onSelectQueueItem = { idx ->
                                             if (idx in queue.indices) viewModel.playTrack(queue[idx], queue)
@@ -1395,7 +1451,7 @@ class MainActivity : ComponentActivity() {
                                     com.nodeplayer.ui.player.QuickSettingsSheet(
                                         visible = showAndroidQuickSettings,
                                         volume = 1.0f,
-                                        outputDeviceName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                                        outputDeviceName = audioOutputInfo.outputDeviceName.ifBlank { "This Device" },
                                         audioFormatDescription = audioOutputInfo.format,
                                         sleepTimerRemainingSec = sleepTimerRemainingSec,
                                         accentColor = accentColor,
@@ -1431,17 +1487,24 @@ class MainActivity : ComponentActivity() {
                                     ) {
                                         val effectiveLyrics = cachedLyrics
                                         val effectiveLyricsLoading = !isLyricsPreloaded && effectiveLyrics == null
+                                        val effectiveLyricsSettings by viewModel.lyricsSettings.collectAsState()
 
                                         com.nodeplayer.ui.lyrics.FullScreenLyricsView(
                                             track = track,
                                             lyrics = effectiveLyrics,
+                                            lyricsSettings = effectiveLyricsSettings,
+                                            onUpdateLyricsSettings = { viewModel.updateLyricsSettings(it) },
                                             isPlaying = isPlaying,
                                             currentPositionMs = 0L,
                                             positionProvider = { viewModel.currentPositionMs.value },
                                             durationMs = track.durationMs,
                                             isLoading = effectiveLyricsLoading,
                                             palette = activeNowPlayingPalette,
-                                            audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                                            audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { "This Device" },
+                                            isShuffle = isShuffleEnabled,
+                                            onToggleShuffle = { viewModel.toggleShuffle() },
+                                            repeatMode = repeatMode,
+                                            onToggleRepeat = { viewModel.cycleRepeatMode() },
                                             onPlayPause = { viewModel.togglePlayPause() },
                                             onNext = { viewModel.skipNext() },
                                             onPrevious = { viewModel.skipPrevious() },
@@ -1629,8 +1692,9 @@ class MainActivity : ComponentActivity() {
                                 isSpotifyMatching = false
                                 spotifyMatchingCurrentTitle = null
                             },
-                            onResolveUncertain = { spot, _ ->
+                            onResolveUncertain = { spot, resolvedTrack ->
                                 spotifyUncertainTracks = spotifyUncertainTracks.filter { it.first.id != spot.id }
+                                spotifyMatchedTracks = spotifyMatchedTracks + (spot to resolvedTrack)
                             },
                             onManualSearchForTrack = { _ -> },
                             onFinishTransfer = { resolvedTracks ->
@@ -2246,6 +2310,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleSpotifyCallbackIntent(intent)
+        handleGoogleDriveCallbackIntent(intent)
     }
 
     private fun handleSpotifyCallbackIntent(intent: Intent?) {
@@ -2261,6 +2326,30 @@ class MainActivity : ComponentActivity() {
                     .onFailure { e ->
                         runOnUiThread {
                             Toast.makeText(this@MainActivity, "Spotify login failed: ${e.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+            }
+        }
+    }
+
+    private fun handleGoogleDriveCallbackIntent(intent: Intent?) {
+        val uri = intent?.data ?: return
+        val isGdriveCallback = (uri.scheme == "nodeplayer" && (uri.host == "gdrive-callback" || uri.path?.contains("gdrive-callback") == true)) ||
+                (uri.scheme == "com.nodeplayer.music" && (uri.host == "oauth2redirect" || uri.path?.contains("oauth2redirect") == true)) ||
+                (uri.scheme?.startsWith("com.googleusercontent.apps") == true)
+        if (isGdriveCallback) {
+            lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                com.nodeplayer.music.auth.GoogleAuthManager.handleAuthorizationResponse(this@MainActivity, uri)
+                    .onSuccess {
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "Connected to Google Drive!", Toast.LENGTH_SHORT).show()
+                        }
+                        // Initial sync upon successful connection
+                        com.nodeplayer.music.sync.CloudSyncManager.performSync(this@MainActivity, isManualTrigger = true)
+                    }
+                    .onFailure { e ->
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "Google Drive connection failed: ${e.message}", Toast.LENGTH_LONG).show()
                         }
                     }
             }

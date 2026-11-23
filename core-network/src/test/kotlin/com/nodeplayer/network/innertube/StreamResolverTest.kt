@@ -103,12 +103,18 @@ class StreamResolverTest {
             PlayerResponse.StreamingData.Format(itag = 139, bitrate = 48000, mimeType = "audio/mp4")
         )
 
-        val ranked = resolver.rankAudioFormats(formats)
-        assertEquals(4, ranked.size)
-        assertEquals(140, ranked[0].itag)
-        assertEquals(251, ranked[1].itag)
-        assertEquals(250, ranked[2].itag)
-        assertEquals(139, ranked[3].itag)
+        // Default HIGH quality prioritizes itag 251 (Opus 160k high-fidelity)
+        val rankedHigh = resolver.rankAudioFormats(formats, com.nodeplayer.model.StreamingAudioQuality.HIGH)
+        assertEquals(4, rankedHigh.size)
+        assertEquals(251, rankedHigh[0].itag)
+        assertEquals(140, rankedHigh[1].itag)
+        assertEquals(250, rankedHigh[2].itag)
+        assertEquals(139, rankedHigh[3].itag)
+
+        // MEDIUM quality prioritizes itag 140 (AAC 128k balanced)
+        val rankedMedium = resolver.rankAudioFormats(formats, com.nodeplayer.model.StreamingAudioQuality.MEDIUM)
+        assertEquals(140, rankedMedium[0].itag)
+        assertEquals(251, rankedMedium[1].itag)
     }
 
     @Test

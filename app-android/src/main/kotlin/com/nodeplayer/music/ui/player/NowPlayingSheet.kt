@@ -129,18 +129,22 @@ fun NowPlayingSheet(
         0f
     }
 
+    val lyricsSettings by com.nodeplayer.music.data.LyricsSettingsRepository.getSettingsFlow(context)
+        .collectAsState(initial = com.nodeplayer.model.LyricsSettings())
+
     var lyrics by remember(track.id) { mutableStateOf<Lyrics?>(null) }
     var isLyricsLoading by remember(track.id) { mutableStateOf(false) }
     var lyricsRefreshTrigger by remember { mutableIntStateOf(0) }
 
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(track.id, lyricsRefreshTrigger) {
+    LaunchedEffect(track.id, lyricsRefreshTrigger, lyricsSettings.preferredProvider) {
         isLyricsLoading = true
         lyrics = LyricsManager.getLyrics(
             context = context,
             track = track,
-            forceRefresh = lyricsRefreshTrigger > 0
+            forceRefresh = lyricsRefreshTrigger > 0,
+            provider = lyricsSettings.preferredProvider
         )
         isLyricsLoading = false
     }
@@ -1016,6 +1020,10 @@ fun NowPlayingSheet(
             com.nodeplayer.ui.lyrics.FullScreenLyricsView(
                 track = track,
                 lyrics = lyrics,
+                lyricsSettings = lyricsSettings,
+                onUpdateLyricsSettings = { updated ->
+                    com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { updated }
+                },
                 isPlaying = isPlaying,
                 currentPositionMs = currentMs,
                 positionProvider = { currentMs },
@@ -1023,6 +1031,10 @@ fun NowPlayingSheet(
                 isLoading = isLyricsLoading,
                 palette = com.nodeplayer.ui.theme.PaletteExtractor.getCachedPalette(track),
                 isOnlineMode = true,
+                isShuffle = isShuffle,
+                onToggleShuffle = onToggleShuffle,
+                repeatMode = if (isRepeatOne) 2 else 0,
+                onToggleRepeat = { isRepeatOne = !isRepeatOne },
                 onPlayPause = onPlayPauseClick,
                 onNext = onSkipNextClick,
                 onPrevious = onSkipPreviousClick,

@@ -48,9 +48,10 @@ class LyricsRepository(
         track: Track,
         forceRefresh: Boolean = false,
         userOffsetMs: Long = 0L,
-        isrc: String? = null
+        isrc: String? = null,
+        provider: com.nodeplayer.model.LyricsProviderChoice = com.nodeplayer.model.LyricsProviderChoice.AUTO
     ): Lyrics? {
-        val cacheKey = buildCacheKey(track)
+        val cacheKey = buildCacheKey(track) + (if (provider != com.nodeplayer.model.LyricsProviderChoice.AUTO) ":${provider.id}" else "")
 
         // 1. Check in-memory LRU cache if not forcing refresh
         if (!forceRefresh) {
@@ -67,36 +68,105 @@ class LyricsRepository(
             }
         }
 
-        // 2. Check local sidecar files (.ttml, .lrc)
-        val localLyrics = loadLocalLyrics(track)
-        if (localLyrics != null) {
-            val processed = ensureWordTimings(localLyrics)
-            memoryCache.put(cacheKey, processed, isNegative = false)
-            return applyOffset(processed, userOffsetMs)
-        }
-
-        // 3. Fast ISRC identification (capped at 2.5s)
-        var effectiveIsrc = isrc
-        if (effectiveIsrc.isNullOrBlank() && track.title.isNotBlank()) {
-            effectiveIsrc = withTimeoutOrNull(2500) {
-                runCatching {
-                    BiniLyrics.identify(track.title, track.artist, track.durationMs)?.isrc
-                }.getOrNull()
+        // 2. Handle provider selection
+        val fetched: Lyrics? = when (provider) {
+            com.nodeplayer.model.LyricsProviderChoice.LOCAL -> {
+                loadLocalLyrics(track)
             }
-            if (!effectiveIsrc.isNullOrBlank()) {
-                NodeLog.d("LyricsRepo", "Resolved ISRC $effectiveIsrc for ${track.title}")
+            com.nodeplayer.model.LyricsProviderChoice.LRC_RED -> {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        if (!isrc.isNullOrBlank()) {
+                            LrcRed.fetchByIsrc(isrc, trackId = track.id)
+                        } else {
+                            LrcRed.search(track.title, track.artist, track.durationMs, track.id)
+                        }
+                    }.getOrNull()
+                }
+            }
+            com.nodeplayer.model.LyricsProviderChoice.BINI -> {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        BiniLyrics.fetchLyrics(track.title, track.artist, track.durationMs, track.id, track.album, isrc)
+                    }.getOrNull()
+                }
+            }
+            com.nodeplayer.model.LyricsProviderChoice.MUSIXMATCH -> {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        Musixmatch.fetchLyrics(track.title, track.artist, track.durationMs, track.id, track.album)
+                    }.getOrNull()
+                }
+            }
+            com.nodeplayer.model.LyricsProviderChoice.UNISON -> {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        Unison.fetchLyrics(track.title, track.artist, track.durationMs, track.id, track.album)
+                    }.getOrNull()
+                }
+            }
+            com.nodeplayer.model.LyricsProviderChoice.LRCLIB -> {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        val custom = providers.firstOrNull()?.let {
+                            val durationSec = if (track.durationMs > 0) (track.durationMs / 1000).toInt() else null
+                            it.fetchLyrics(track.title, track.artist, track.album, durationSec).getOrNull()
+                        }
+                        custom ?: LrcLib.fetchLyrics(track.title, track.artist, track.durationMs, track.id, track.album)
+                    }.getOrNull()
+                }
+            }
+            com.nodeplayer.model.LyricsProviderChoice.BETTER_LYRICS -> {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        BetterLyrics.fetchLyrics(track.title, track.artist, track.durationMs, track.id, track.album)
+                            ?: BetterLyrics.fetchPortato(track.title, track.artist, track.durationMs, track.id, track.album)
+                    }.getOrNull()
+                }
+            }
+            com.nodeplayer.model.LyricsProviderChoice.LYRICS_PLUS -> {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        LyricsPlus.fetchLyrics(track.title, track.artist, track.durationMs, track.id, isrc)
+                    }.getOrNull()
+                }
+            }
+            com.nodeplayer.model.LyricsProviderChoice.KUGOU -> {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        KuGou.fetchLyrics(track.title, track.artist, track.durationMs, track.id)
+                    }.getOrNull()
+                }
+            }
+            com.nodeplayer.model.LyricsProviderChoice.AUTO -> {
+                val local = loadLocalLyrics(track)
+                if (local != null) {
+                    local
+                } else {
+                    var effectiveIsrc = isrc
+                    if (effectiveIsrc.isNullOrBlank() && track.title.isNotBlank()) {
+                        effectiveIsrc = withTimeoutOrNull(2500) {
+                            runCatching {
+                                BiniLyrics.identify(track.title, track.artist, track.durationMs)?.isrc
+                            }.getOrNull()
+                        }
+                        if (!effectiveIsrc.isNullOrBlank()) {
+                            NodeLog.d("LyricsRepo", "Resolved ISRC $effectiveIsrc for ${track.title}")
+                        }
+                    }
+                    fetchRemoteLyricsConcurrently(track, effectiveIsrc)
+                }
             }
         }
 
-        // 4. Multi-provider concurrent race with Syllable priority
-        val remoteLyrics = fetchRemoteLyricsConcurrently(track, effectiveIsrc)
-        if (remoteLyrics != null && remoteLyrics.lines.isNotEmpty()) {
-            val processed = ensureWordTimings(remoteLyrics)
-            memoryCache.put(cacheKey, processed, isNegative = false)
-            return applyOffset(processed, userOffsetMs)
+        if (fetched != null && fetched.lines.isNotEmpty()) {
+            val processed = ensureWordTimings(fetched)
+            val enriched = com.nodeplayer.library.lyrics.romanization.LyricsRomanizer.enrich(processed)
+            memoryCache.put(cacheKey, enriched, isNegative = false)
+            return applyOffset(enriched, userOffsetMs)
         }
 
-        // 5. Save transient negative cache entry
+        // Save transient negative cache entry
         memoryCache.put(cacheKey, lyrics = null, isNegative = true)
         return null
     }
@@ -142,6 +212,18 @@ class LyricsRepository(
             }.getOrNull()
         }
 
+        val musixmatchJob = async(Dispatchers.IO) {
+            runCatching {
+                Musixmatch.fetchLyrics(track.title, track.artist, track.durationMs, track.id, track.album)
+            }.getOrNull()
+        }
+
+        val unisonJob = async(Dispatchers.IO) {
+            runCatching {
+                Unison.fetchLyrics(track.title, track.artist, track.durationMs, track.id, track.album)
+            }.getOrNull()
+        }
+
         // --- Tier 2: Line-synced Fallbacks ---
         val lrcLibJob = async(Dispatchers.IO) {
             runCatching {
@@ -165,7 +247,7 @@ class LyricsRepository(
         }
 
         val syllableJobs = listOf(lrcRedJob, biniJob, betterLyricsJob, betterPortatoJob, lyricsPlusJob)
-        val lineJobs = listOf(lrcLibJob, kuGouJob) + injectedProvidersJobs
+        val lineJobs = injectedProvidersJobs + listOf(lrcLibJob, kuGouJob, musixmatchJob, unisonJob)
 
         // 1. Check for genuine word/syllable-timed hit first
         for (job in syllableJobs) {

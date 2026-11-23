@@ -46,13 +46,13 @@ data class ResolvedStream(
  * - Highest audio bitrate format fallback
  */
 class StreamResolver(
-    val innerTubeClient: InnerTubeClient = InnerTubeClient(),
+    val innerTubeClient: InnerTubeClient = SharedInnerTubeProvider.get(),
     private val cipherSolver: CipherSolver? = CipherSolver.current,
     probeEngine: HttpClientEngine? = null,
 ) : Closeable {
 
     constructor(
-        innerTubeClient: InnerTubeClient = InnerTubeClient(),
+        innerTubeClient: InnerTubeClient = SharedInnerTubeProvider.get(),
         cipherSolver: CipherSolver? = CipherSolver.current,
     ) : this(innerTubeClient, cipherSolver, null)
 
@@ -78,8 +78,11 @@ class StreamResolver(
     /**
      * Resolves playable audio stream for [videoId] executing client rotation and active range probing.
      */
-    suspend fun resolveStream(videoId: String): Result<ResolvedStream> {
-        return resolveStreamInternal(videoId, isVideo = false)
+    suspend fun resolveStream(
+        videoId: String,
+        audioQuality: com.nodeplayer.model.StreamingAudioQuality = com.nodeplayer.model.MediaQualitySettingsState.streamingAudioQuality.value
+    ): Result<ResolvedStream> {
+        return resolveStreamInternal(videoId, isVideo = false, audioQuality = audioQuality)
     }
 
     /**
@@ -92,9 +95,10 @@ class StreamResolver(
     private suspend fun resolveStreamInternal(
         videoId: String,
         isVideo: Boolean,
-        preferredHeight: Int? = null
+        preferredHeight: Int? = null,
+        audioQuality: com.nodeplayer.model.StreamingAudioQuality = com.nodeplayer.model.MediaQualitySettingsState.streamingAudioQuality.value
     ): Result<ResolvedStream> {
-        NodeLog.d(TAG, "Resolving stream for videoId=$videoId across clients (isVideo=$isVideo, preferredHeight=$preferredHeight)")
+        NodeLog.d(TAG, "Resolving stream for videoId=$videoId across clients (isVideo=$isVideo, preferredHeight=$preferredHeight, audioQuality=$audioQuality)")
         val errors = mutableListOf<String>()
 
         val clients = if (!innerTubeClient.sessionCookie.isNullOrBlank()) {
@@ -134,7 +138,7 @@ class StreamResolver(
 
             val allFormats = streamingData.adaptiveFormats + (streamingData.formats ?: emptyList())
             val availableHeights = allFormats.mapNotNull { it.height }.distinct().sortedDescending()
-            val streamCandidates = if (isVideo) rankVideoFormats(allFormats, preferredHeight) else rankAudioFormats(allFormats)
+            val streamCandidates = if (isVideo) rankVideoFormats(allFormats, preferredHeight) else rankAudioFormats(allFormats, audioQuality)
 
             if (streamCandidates.isEmpty()) {
                 val errorMsg = "Client ${client.clientName} has no valid ${if (isVideo) "video" else "audio"} formats"
@@ -247,19 +251,40 @@ class StreamResolver(
     }
 
     /**
-     * Prioritizes formats:
-     * 1. itag 140 (AAC 128k, 44.1kHz - native Apple client streaming format, resilient to offset chunking)
-     * 2. itag 251 (Opus 160k, 48kHz)
-     * 3. Other audio formats sorted by bitrate descending
+     * Prioritizes audio formats according to user-selected [quality]:
+     * - HIGH: itag 251 (Opus 160k, 48kHz) first, then itag 140 (AAC 128k), then remaining by bitrate descending
+     * - MEDIUM: itag 140 (AAC 128k, 44.1kHz - native resilient chunking), then itag 251, then remaining
+     * - LOW: itag 250 (Opus 70k) or itag 139 (AAC 48k) data saver streams first
      */
-    internal fun rankAudioFormats(formats: List<PlayerResponse.StreamingData.Format>): List<PlayerResponse.StreamingData.Format> {
+    internal fun rankAudioFormats(
+        formats: List<PlayerResponse.StreamingData.Format>,
+        quality: com.nodeplayer.model.StreamingAudioQuality = com.nodeplayer.model.MediaQualitySettingsState.streamingAudioQuality.value
+    ): List<PlayerResponse.StreamingData.Format> {
         val audioFormats = formats.filter { it.isAudio || it.mimeType.contains("audio", ignoreCase = true) }
-        val itag140 = audioFormats.filter { it.itag == 140 }
-        val itag251 = audioFormats.filter { it.itag == 251 }
-        val others = audioFormats.filter { it.itag != 140 && it.itag != 251 }
-            .sortedByDescending { it.bitrate ?: 0 }
 
-        return itag140 + itag251 + others
+        return when (quality) {
+            com.nodeplayer.model.StreamingAudioQuality.HIGH -> {
+                val itag251 = audioFormats.filter { it.itag == 251 }
+                val itag140 = audioFormats.filter { it.itag == 140 }
+                val others = audioFormats.filter { it.itag != 251 && it.itag != 140 }
+                    .sortedByDescending { it.bitrate ?: 0 }
+                itag251 + itag140 + others
+            }
+            com.nodeplayer.model.StreamingAudioQuality.MEDIUM -> {
+                val itag140 = audioFormats.filter { it.itag == 140 }
+                val itag251 = audioFormats.filter { it.itag == 251 }
+                val others = audioFormats.filter { it.itag != 140 && it.itag != 251 }
+                    .sortedByDescending { it.bitrate ?: 0 }
+                itag140 + itag251 + others
+            }
+            com.nodeplayer.model.StreamingAudioQuality.LOW -> {
+                val lowItags = audioFormats.filter { it.itag in listOf(250, 139, 249) }
+                    .sortedBy { it.bitrate ?: 0 }
+                val remaining = audioFormats.filter { it.itag !in listOf(250, 139, 249) }
+                    .sortedBy { it.bitrate ?: 0 }
+                lowItags + remaining
+            }
+        }
     }
 
     /**

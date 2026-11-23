@@ -218,7 +218,9 @@ data class LyricsViewConfig(
     val wordFillStyle: String = "GRADIENT_SWEEP", // GRADIENT_SWEEP, PER_WORD_FADE
     val autoHideDelaySec: Int = 5,
     val showPreviewLine: Boolean = true,
-    val keepScreenOn: Boolean = true
+    val keepScreenOn: Boolean = true,
+    val romanizeForeignLyrics: Boolean = true,
+    val lyricsDisplayMode: LyricsDisplayMode = LyricsDisplayMode.DUAL_LINE
 )
 
 data class GlassThemeConfig(

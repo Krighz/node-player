@@ -157,7 +157,7 @@ object LrcParser {
             marker.copy(endMs = nextStart)
         }
 
-        return Lyrics(
+        val parsed = Lyrics(
             trackId = trackId,
             lines = finalLines,
             source = source,
@@ -167,6 +167,7 @@ object LrcParser {
             offsetMs = lrcOffsetMs,
             sections = finalSections
         )
+        return com.nodeplayer.library.lyrics.romanization.LyricsRomanizer.enrich(parsed)
     }
 
     private fun parseMillis(msPart: String?): Long {
@@ -244,14 +245,11 @@ object LrcParser {
         for (i in tokens.indices) {
             val token = tokens[i]
             val isLast = i == tokens.lastIndex
-            val wordDuration = if (isLast) {
-                lineEndMs - currentStart
-            } else {
-                val share = (token.length.toDouble() / totalChars.toDouble()) * totalDurationMs
-                maxOf(150L, share.toLong())
-            }
+            val remaining = (lineEndMs - currentStart).coerceAtLeast(0L)
+            val share = (token.length.toDouble() / totalChars.toDouble()) * totalDurationMs
+            val wordDuration = if (isLast) remaining else minOf(maxOf(100L, share.toLong()), remaining)
 
-            val wordEnd = if (isLast) lineEndMs else currentStart + wordDuration
+            val wordEnd = (currentStart + wordDuration).coerceAtMost(lineEndMs)
             // Attach a trailing space to all except last token
             val wordWithSpace = if (isLast) token else "$token "
             words.add(LyricWord(text = wordWithSpace, startMs = currentStart, endMs = wordEnd))

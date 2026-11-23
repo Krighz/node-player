@@ -43,8 +43,6 @@ data class Track(
     val isDownloaded: Boolean
         get() = path.contains("/downloads/", ignoreCase = true) ||
             path.contains("\\downloads\\", ignoreCase = true) ||
-            path.contains("/Music/", ignoreCase = true) ||
-            path.contains("\\Music\\", ignoreCase = true) ||
             path.contains("com.nodeplayer.music", ignoreCase = true) ||
             (path.startsWith("file://") && path.contains("download", ignoreCase = true))
 

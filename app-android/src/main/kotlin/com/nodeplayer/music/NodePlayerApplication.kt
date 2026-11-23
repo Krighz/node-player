@@ -84,6 +84,8 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             }
         }
         NodeLog.isVerbose = BuildConfig.DEBUG
+        com.nodeplayer.music.data.LyricsSettingsRepository.init(this)
+        com.nodeplayer.common.platform.PlatformTransliteratorRegistry.instance = com.nodeplayer.music.lyrics.AndroidIcuTransliterator()
         // Keep GlassDebug opt-in so debug benchmarks and normal scrolling never pay per-frame nanoTime/logging overhead
         com.nodeplayer.ui.debug.GlassDebug.isEnabled = false
         NodeLog.i("app/lifecycle", "NodePlayerApplication initialized")
@@ -113,7 +115,12 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
             NodeDatabase::class.java,
             "node_player.db"
         )
-            .addMigrations(NodeDatabase.MIGRATION_6_7, NodeDatabase.MIGRATION_7_8, NodeDatabase.MIGRATION_8_9)
+            .addMigrations(
+                NodeDatabase.MIGRATION_6_7, 
+                NodeDatabase.MIGRATION_7_8, 
+                NodeDatabase.MIGRATION_8_9,
+                NodeDatabase.MIGRATION_9_10
+            )
             .fallbackToDestructiveMigration()
             .build()
 
@@ -122,25 +129,17 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
         initializeDownloadAndStorage()
 
         com.nodeplayer.ui.components.PlatformArtworkProvider.remoteImageFetcher = { url, maxSizePx ->
+            val quality = com.nodeplayer.model.MediaQualitySettingsState.albumArtQuality.value
             val targetPx = maxSizePx.coerceIn(
                 AudioArtworkFetcher.MIN_TARGET_SIZE_PX,
                 AudioArtworkFetcher.MAX_TARGET_SIZE_PX
             )
-            val videoId = if (url.startsWith("nodeplayer://youtube/")) {
-                url.removePrefix("nodeplayer://youtube/").substringBefore('?').substringBefore('/')
-            } else if (url.contains("i.ytimg.com/vi/")) {
-                url.substringAfter("i.ytimg.com/vi/").substringBefore('/')
-            } else null
+            val videoId = com.nodeplayer.model.ArtworkUrlResolver.extractYouTubeVideoId(url)
 
             val urlsToTry = if (videoId != null) {
-                listOf(
-                    "https://i.ytimg.com/vi/$videoId/maxresdefault.jpg",
-                    "https://i.ytimg.com/vi/$videoId/hq720.jpg",
-                    "https://i.ytimg.com/vi/$videoId/sddefault.jpg",
-                    "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
-                )
+                com.nodeplayer.model.ArtworkUrlResolver.resolveYouTubeThumbnailCandidates(url, quality)
             } else {
-                listOf(url)
+                listOfNotNull(com.nodeplayer.model.ArtworkUrlResolver.resolveArtworkUrl(url, quality))
             }
 
             var imageBitmap: androidx.compose.ui.graphics.ImageBitmap? = null
@@ -188,7 +187,9 @@ class NodePlayerApplication : Application(), ImageLoaderFactory {
                 getSharedPreferences("node_player_prefs", Context.MODE_PRIVATE)
                 val sharedInnerTube = com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
                 com.nodeplayer.music.auth.YouTubeAccountManager.initialize(this@NodePlayerApplication, sharedInnerTube)
+                com.nodeplayer.music.auth.SpotifyAccountManager.initialize(this@NodePlayerApplication)
                 com.nodeplayer.music.lyrics.LyricsManager.initialize(this@NodePlayerApplication)
+                com.nodeplayer.music.sync.CloudSyncManager.initialize(this@NodePlayerApplication)
             } catch (t: Throwable) {
                 NodeLog.w("app/lifecycle", "Async bootstrap partial failure: ${t.message}")
             }

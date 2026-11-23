@@ -46,3 +46,6 @@ RELEASE_NOTES_v1.8.0.md
 SHA256SUMS.txt
 docs/FUNCTION_INDEX.md
 release-dist/
+release_artifacts/
+promo-video/node_modules/
+promo-video/out/

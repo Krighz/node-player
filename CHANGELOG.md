@@ -6,6 +6,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.1.0] - 2026-11-23
+
+### Added
+- **Opt-In Privacy-First Cloud Backup & Sync with Google Drive (`GoogleAuthManager.kt`, `GoogleDriveApiClient.kt`, `CloudSyncManager.kt`, `CloudSyncWorker.kt`)**:
+  - **Zero Developer-Hosted Servers**: Backs up user playlists, bookmarked favorites, per-song listening statistics, and playback history directly to the user's personal Google Drive.
+  - **Strict `appDataFolder` Scope Isolation**: Authenticates via Google OAuth 2.0 PKCE requesting exclusively `https://www.googleapis.com/auth/drive.appdata` inside Google Drive's hidden `appDataFolder` (`spaces=appDataFolder`). The application cannot read, write, or see personal Drive files.
+  - **Safe Conflict-Resolution Merge Engine (`SyncMergeEngine.kt`)**: Automatically downloads remote backups and merges before uploading:
+    - *Playlists & Saved Items*: Newer `updatedAt` timestamp wins.
+    - *Song Statistics*: Keeps the higher `totalPlayTimeSeconds` and `playCount`, and latest `lastPlayedAt` per track.
+    - *Playback History*: Deduplicates by `(songId, playedAt)`, sorts descending, and caps at the latest 200 entries.
+  - **Dirty-Flag Background Optimization (`CloudSyncManager.kt`)**: Tracks local `hasUnsyncedChanges` to skip background uploads if no playlists were altered or tracks played.
+  - **Periodic Sync Scheduling**: Background `WorkManager` execution supporting **Every Hour**, **Once a Day**, or **Manual Only** sync frequencies with network constraints.
+  - **Dedicated Settings Tab (`SettingsScreen.kt`)**: Integrated directly into **Online Music & Streaming Services** as a dedicated sub-tab with account status, sync frequency chips, "Sync Now" button with progress indicator, and "Delete Cloud Backup" option.
+  - **Hardware Keystore AES-256-GCM Token Encryption**: Securely persists OAuth tokens in platform-encrypted storage (`SecureSessionStore.kt`) with automatic 401 refresh handling.
+  - **RFC 8252 Reverse-DNS Redirect URI**: Official Google OAuth Client IDs injected from `local.properties` via `BuildConfig.GDRIVE_CLIENT_ID` with reverse-DNS custom scheme handling (`com.googleusercontent.apps.*`).
+- **Auto-Collapsing Left Hero Controls in Landscape Cinematic Mode (`FullScreenLyricsView.kt`)**:
+  - Implemented dynamic 4.5-second inactivity auto-collapse for the left-hand column (album art, seek bar, and transport controls).
+  - Designed fluid spring collapse & expand animations anchored at the left-middle field (`TransformOrigin(0f, 0.5f)` near camera cutout) that smoothly tucks into the screen edge when playing.
+  - Tapping anywhere on screen or clicking the sleek floating left-center chevron immediately expands controls back out.
+  - Controls remain permanently expanded when playback is paused.
+- **Active Transport Button State Contrast & Cleanup (`FullScreenLyricsView.kt`)**:
+  - Transport buttons (Shuffle and Repeat) dynamically invert when active: background turns solid `Color.White` with pitch `Color.Black` icons, mirroring the Play button.
+  - Removed the redundant favorite heart button from the landscape transport controls row.
+- **Edge-to-Edge Display Cutout & Status Bar Immersion (`MainActivity.kt`, `themes.xml`, `AppSettingsRepository.kt`, `LyricsSettingsRepository.kt`, `SettingsScreen.kt`)**:
+  - Configured `android:windowLayoutInDisplayCutoutMode = shortEdges` (`LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`) across XML themes and runtime activity setup, eliminating Android letterboxing and black bars around camera cutouts in landscape.
+  - Added "Hide Status Bar" options in both Settings (`Customize UI` global immersive mode) and Lyrics Settings (auto-hide status bar when entering full-screen lyrics), enabling uninterrupted edge-to-edge viewing.
+  - Upgraded Landscape `CinematicKineticLyricsView` to span 100% of the display edge-to-edge with right-weighted camera centering (`wPx * 0.68f`), allowing floating lyrics to render with zero constraining box borders.
+- **Landscape Two-Column FullScreenLyricsView (`FullScreenLyricsView.kt`, `LyricsSettingsBottomSheet.kt`, `LyricsSettings.kt`)**:
+  - **Split Landscape Architecture**: Implemented a responsive two-column split layout for landscape viewports (`maxWidth > maxHeight && maxWidth >= 600.dp`).
+  - **Left Hero Column**: Interactive shapeable album art hero, song title, artist label, time-seek slider with formatted elapsed/total durations, and Previous / Play-Pause / Next playback controls.
+  - **Right Lyrics Column**: Synchronized lyrics column supporting both Cinematic Kinetic word-by-word visualizer and selectable Classic multi-line view.
+  - **Album Art Shape Customizer**: Added `AlbumArtShape` (`SQUIRCLE`, `CIRCLE`, `HEART`) selectable from the top-right three-dot menu `( ⋮ )` bottom sheet, featuring custom Bezier vector clipping for the heart shape.
+  - **Dynamic Theme Palette & Starfield Preservation**: Left-to-right ambient gradient derived from album art colors with kinetic starfield backdrop.
+- **Selectable Lyrics with Text Selection (`FullScreenLyricsView.kt`)**:
+  - Wrapped Classic full-screen and landscape lyrics in `SelectionContainer`, allowing users to highlight, copy, and interact with synchronized lyrics directly on screen.
+- **Multi-Provider Lyrics Expansion (`LyricsRepository.kt`, `Musixmatch.kt`, `Unison.kt`, `FastbootEraseLrcRead.kt`)**:
+  - Expanded the lyrics search network to include **Musixmatch** (with strict duration delta verification `abs(duration - expected) <= 4`) and **Unison** / `FastbootErase` fallback sources.
+  - Visual status indicator icons in the lyrics source selector:
+    - 🔍 **Searching**: Background query in progress.
+    - 🎵 **Found & Connected**: Valid synced lyrics loaded.
+    - ⚠️ / ❌ **Unmatched / Estimated**: Fallback word-estimation or plain text.
+- **Offline Lyrics Romanization & Dual-Line Translation (`LyricsRomanizer.kt`, `LyricsSettingsBottomSheet.kt`)**:
+  - Embedded multi-script romanization engine for Japanese (Hiragana/Katakana), Korean (Hangul), Chinese (Pinyin), Cyrillic, Greek, Devanagari (Hindi), and Arabic.
+  - Dual-line rendering option with phonetics below original lyrics, accessible via an interactive 50% bottom sheet.
+- **1200p Ultra-High-Resolution Album Art Pipeline (`InnerTubeClient.kt`)**:
+  - Automatic URL transformer upgrading `lh3.googleusercontent.com` and `yt3.ggpht.com` covers from 120p/544p thumbnails to pristine 1200×1200p artwork.
+
+### Fixed
+- **Genuine Library Screen Listening Metrics (`LibraryScreen.kt`)**:
+  - Replaced placeholder fallback calculations (which previously substituted total track file durations and count when listening history was empty) with genuine real-time statistics from `dailyStats` and track play counters.
+- **Cinematic Kinetic Sweep & Playback Pausing (`CinematicKineticLyricsView.kt`)**:
+  - Bound `isPlaying` dynamically with `rememberUpdatedState` inside the 60–120fps animation ticker, immediately halting downward sweeping, star drifting, and time progression when playback is paused.
+- **Landscape Classic Lyrics Typography, Spring Bounce & Glow Parity (`FullScreenLyricsView.kt`)**:
+  - Integrated `WordByWordKaraokeText` into landscape classic mode, restoring `LocalLyricsFontFamily` font rendering, per-word bounce springs (`dampingRatio = 0.62f`), and subtle active glow shadows (`Shadow(blurRadius = 18f)`).
+- **32-Bit Float Audio Silence & Sinks (`PlaybackService.kt`, `WindowsPlaybackEngine.kt`)**:
+  - Enforced sample-rate and bit-depth clamping in the audio sink pipeline, resolving silent playback on legacy Android versions.
+- **Vorbis/Opus Tag Metadata Parsing (`AudioHeaderParser.kt`)**:
+  - Corrected comment block parsing when user metadata contains multi-line comments or non-standard padding.
+- **Opus Transcoder Video Track Crash (`OpusTranscoder.kt`)**:
+  - Safely ignored embedded video track headers during audio-only transcode pipelines.
+- **Cold-Start Replay HTTP 403 (`InnerTubeStreamResolver.kt`)**:
+  - Reset byte-range request offsets during stream re-anchoring, eliminating stale 403 Forbidden errors on cached audio chunks.
+
+### Performance
+- **Zero-Allocation DSP Filtering**: Vectorized in-place `FloatArray` buffers for real-time 10-band IIR biquad equalizer and loudness calculation.
+
+---
+
 ## [2.0.0] - 2026-11-19
 
 ### Added

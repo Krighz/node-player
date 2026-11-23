@@ -5,8 +5,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nodeplayer.model.LyricsDisplayMode
 import com.nodeplayer.model.LyricsLine
 import kotlin.math.abs
 import kotlin.math.floor
@@ -50,6 +55,48 @@ private const val UNSUNG_ALPHA = 0.48f
 
 /** Width of the soft edge that travels across the active line. */
 private val FeatherWidth = 22.dp
+
+@Composable
+fun LyricLineContent(
+    line: LyricsLine,
+    isActive: Boolean,
+    displayMode: LyricsDisplayMode,
+    accentColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        val primaryText = if (displayMode == LyricsDisplayMode.ROMANIZED_ONLY && !line.romanizedText.isNullOrBlank()) {
+            line.romanizedText!!
+        } else {
+            line.text
+        }
+
+        Text(
+            text = primaryText,
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Medium,
+                fontSize = if (isActive) 26.sp else 21.sp
+            ),
+            color = if (isActive) Color.White else Color.White.copy(alpha = 0.40f)
+        )
+
+        if (displayMode == LyricsDisplayMode.DUAL_LINE) {
+            val subtitle = line.romanizedText ?: line.translationText
+            if (!subtitle.isNullOrBlank() && subtitle != line.text) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = if (isActive) 16.sp else 13.sp,
+                        fontWeight = FontWeight.Normal,
+                        letterSpacing = 0.4.sp
+                    ),
+                    color = if (isActive) accentColor.copy(alpha = 0.90f) else Color.White.copy(alpha = 0.30f)
+                )
+            }
+        }
+    }
+}
 
 /**
  * Single lyric line item.
@@ -74,7 +121,8 @@ fun LyricLineItem(
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
     activeHighlightColor: Color = Color.White,
-    positionProvider: (() -> Long)? = null
+    positionProvider: (() -> Long)? = null,
+    displayMode: LyricsDisplayMode = LyricsDisplayMode.DUAL_LINE
 ) {
     val distance = abs(index - activeIndex)
     val isActive = distance == 0
@@ -128,18 +176,86 @@ fun LyricLineItem(
             .padding(vertical = 6.dp)
     ) {
         if (isActive) {
-            ActiveSweepText(
-                line = line,
-                currentPositionMs = currentPositionMs,
-                positionProvider = positionProvider,
-                highlightColor = activeHighlightColor
-            )
+            if (displayMode == LyricsDisplayMode.DUAL_LINE) {
+                val subtitle = line.romanizedText ?: line.translationText
+                if (!subtitle.isNullOrBlank() && subtitle != line.text) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        ActiveSweepText(
+                            line = line,
+                            currentPositionMs = currentPositionMs,
+                            positionProvider = positionProvider,
+                            highlightColor = activeHighlightColor,
+                            displayMode = displayMode
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = subtitle,
+                            style = TextStyle(
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Normal,
+                                letterSpacing = 0.4.sp,
+                                color = activeHighlightColor.copy(alpha = 0.80f)
+                            )
+                        )
+                    }
+                } else {
+                    ActiveSweepText(
+                        line = line,
+                        currentPositionMs = currentPositionMs,
+                        positionProvider = positionProvider,
+                        highlightColor = activeHighlightColor,
+                        displayMode = displayMode
+                    )
+                }
+            } else {
+                ActiveSweepText(
+                    line = line,
+                    currentPositionMs = currentPositionMs,
+                    positionProvider = positionProvider,
+                    highlightColor = activeHighlightColor,
+                    displayMode = displayMode
+                )
+            }
         } else {
-            Text(
-                text = line.text,
-                style = BaseLyricTextStyle.copy(color = baseColor),
-                modifier = Modifier.fillMaxWidth()
-            )
+            val primaryText = if (displayMode == LyricsDisplayMode.ROMANIZED_ONLY && !line.romanizedText.isNullOrBlank()) {
+                line.romanizedText!!
+            } else {
+                line.text
+            }
+            if (displayMode == LyricsDisplayMode.DUAL_LINE) {
+                val subtitle = line.romanizedText ?: line.translationText
+                if (!subtitle.isNullOrBlank() && subtitle != line.text) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = primaryText,
+                            style = BaseLyricTextStyle.copy(color = baseColor),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = subtitle,
+                            style = TextStyle(
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Normal,
+                                letterSpacing = 0.3.sp,
+                                color = baseColor.copy(alpha = 0.55f)
+                            )
+                        )
+                    }
+                } else {
+                    Text(
+                        text = primaryText,
+                        style = BaseLyricTextStyle.copy(color = baseColor),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            } else {
+                Text(
+                    text = primaryText,
+                    style = BaseLyricTextStyle.copy(color = baseColor),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 }
@@ -149,9 +265,15 @@ private fun ActiveSweepText(
     line: LyricsLine,
     currentPositionMs: Long,
     positionProvider: (() -> Long)?,
-    highlightColor: Color
+    highlightColor: Color,
+    displayMode: LyricsDisplayMode = LyricsDisplayMode.DUAL_LINE
 ) {
-    var layout by remember(line.text) { mutableStateOf<TextLayoutResult?>(null) }
+    val textToRender = if (displayMode == LyricsDisplayMode.ROMANIZED_ONLY && !line.romanizedText.isNullOrBlank()) {
+        line.romanizedText!!
+    } else {
+        line.text
+    }
+    var layout by remember(textToRender) { mutableStateOf<TextLayoutResult?>(null) }
     var framePlayPosMs by remember(line) { androidx.compose.runtime.mutableLongStateOf(positionProvider?.invoke() ?: currentPositionMs) }
 
     if (positionProvider != null) {
@@ -166,14 +288,14 @@ private fun ActiveSweepText(
     Box(modifier = Modifier.fillMaxWidth()) {
         // Unsung layer: semi-translucent white.
         Text(
-            text = line.text,
+            text = textToRender,
             style = BaseLyricTextStyle.copy(color = highlightColor.copy(alpha = UNSUNG_ALPHA)),
             modifier = Modifier.fillMaxWidth()
         )
 
         // Sung layer: same text, bright, revealed by the feathered mask.
         Text(
-            text = line.text,
+            text = textToRender,
             style = BaseLyricTextStyle.copy(color = highlightColor),
             onTextLayout = { layout = it },
             modifier = Modifier
@@ -184,7 +306,7 @@ private fun ActiveSweepText(
                     val result = layout ?: return@drawWithContent
                     val position = if (positionProvider != null) framePlayPosMs else currentPositionMs
                     val chars = sungCharPosition(line, position)
-                    drawSweepMask(result, chars, line.text.length, FeatherWidth.toPx())
+                    drawSweepMask(result, chars, textToRender.length, FeatherWidth.toPx())
                 }
         )
     }

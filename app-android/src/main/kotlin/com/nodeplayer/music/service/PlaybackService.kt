@@ -629,7 +629,36 @@ class PlaybackService : MediaSessionService() {
         statsTracker.onPlayCountThresholdReached = { trackId ->
             serviceScope.launch(Dispatchers.IO) {
                 val db = (application as? com.nodeplayer.music.NodePlayerApplication)?.database
-                db?.playerDao()?.recordTrackPlayed(trackId, System.currentTimeMillis())
+                val now = System.currentTimeMillis()
+                db?.playerDao()?.recordTrackPlayed(trackId, now)
+
+                val track = db?.playerDao()?.getTrackById(trackId)
+                if (track != null) {
+                    val listenedSec = synchronized(statsLock) { (statsTracker.currentTrackListenedMsValue / 1000L).coerceAtLeast(1L) }
+                    db.playerDao().insertPlaybackHistory(
+                        com.nodeplayer.music.data.PlaybackHistoryEntity(
+                            songId = trackId.toString(),
+                            playedAt = now,
+                            durationPlayedSeconds = listenedSec
+                        )
+                    )
+                    db.playerDao().trimPlaybackHistory(200)
+
+                    val existingStat = db.playerDao().getSongStats(trackId.toString())
+                    val newTotalTime = (existingStat?.totalPlayTimeSeconds ?: 0L) + listenedSec
+                    val newPlayCount = (existingStat?.playCount ?: track.playCount) + 1
+                    db.playerDao().upsertSongStats(
+                        com.nodeplayer.music.data.SongStatsEntity(
+                            songId = trackId.toString(),
+                            title = track.title,
+                            artist = track.artist,
+                            totalPlayTimeSeconds = newTotalTime,
+                            playCount = newPlayCount,
+                            lastPlayedAt = now
+                        )
+                    )
+                }
+                com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(this@PlaybackService)
             }
         }
 

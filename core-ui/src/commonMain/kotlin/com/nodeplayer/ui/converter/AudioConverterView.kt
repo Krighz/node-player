@@ -75,6 +75,7 @@ fun AudioConverterView(
     // Safety and output mode
     var keepOriginal by remember { mutableStateOf(true) }
     var showDestructiveWarningDialog by remember { mutableStateOf(false) }
+    var showLocationPromptDialog by remember { mutableStateOf(false) }
     var outputNextToOriginal by remember { mutableStateOf(false) }
     var writeR128Tags by remember { mutableStateOf(false) }
     var workersCount by remember { mutableStateOf(2) }
@@ -129,13 +130,20 @@ fun AudioConverterView(
         } else 0L
     }
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(scrollState)
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .background(Color(0xFF141418))
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .verticalScroll(scrollState)
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
         // Navigation Header
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -707,9 +715,9 @@ fun AudioConverterView(
                         Column(modifier = Modifier.weight(1f)) {
                             Text("Dedicated Output Folder", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             Text(
-                                destinationFolder?.absolutePath ?: "Default: ~/Music/Converted",
+                                text = destinationFolder?.absolutePath ?: "Not set — Tap Browse to choose folder",
                                 fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.7f),
+                                color = if (destinationFolder != null) Color.White.copy(alpha = 0.7f) else Color(0xFFFFB74D),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -870,6 +878,11 @@ fun AudioConverterView(
         val canStart = selectedFiles.isNotEmpty() && currentState !is TranscodeBatchState.Running
         LiquidButton(
             onClick = {
+                if (destinationFolder == null && !outputNextToOriginal) {
+                    showLocationPromptDialog = true
+                    return@LiquidButton
+                }
+
                 val effectivePreset = if (selectedPreset == TranscodePreset.PRESET_CUSTOM) {
                     TranscodePreset(
                         id = "CUSTOM",
@@ -1052,6 +1065,118 @@ fun AudioConverterView(
             }
         }
     }
+
+    // Prompt Dialog: Location Selection Required Before Conversion
+    if (showLocationPromptDialog) {
+        Dialog(onDismissRequest = { showLocationPromptDialog = false }) {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(accent.copy(alpha = 0.2f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Rounded.FolderSpecial,
+                            contentDescription = null,
+                            tint = accent,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = "Output Location Required",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "Please choose where your converted Opus files should be saved before starting the batch conversion.",
+                        fontSize = 12.sp,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        LiquidButton(
+                            onClick = {
+                                showLocationPromptDialog = false
+                                onPickDestinationFolder()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Rounded.CreateNewFolder, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Select Destination Folder", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        LiquidButton(
+                            onClick = {
+                                outputNextToOriginal = true
+                                showLocationPromptDialog = false
+
+                                val effectivePreset = if (selectedPreset == TranscodePreset.PRESET_CUSTOM) {
+                                    TranscodePreset(
+                                        id = "CUSTOM",
+                                        name = "Custom",
+                                        bitrateKbps = customBitrate,
+                                        description = "Custom ${customBitrate}k"
+                                    )
+                                } else {
+                                    selectedPreset
+                                }
+
+                                val jobs = queueManager.prepareJobs(
+                                    inputFiles = selectedFiles,
+                                    targetDir = null,
+                                    preset = effectivePreset,
+                                    overwriteExisting = false,
+                                    vbr = customVbr,
+                                    application = customApplication,
+                                    compressionLevel = customCompressionLevel
+                                )
+
+                                queueManager.startBatch(
+                                    jobs = jobs,
+                                    keepOriginal = keepOriginal,
+                                    workersCount = workersCount
+                                )
+                            },
+                            lighterStyle = true,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Rounded.DriveFileMove, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Save Next to Original FLACs", fontSize = 12.sp)
+                        }
+
+                        TextButton(
+                            onClick = { showLocationPromptDialog = false },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Cancel", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    } // Root Box
 }
 
 @Composable

@@ -67,27 +67,30 @@ actual object PlatformArtworkProvider {
                 }
             }
         }
-        val resolvedUrl = if (url.startsWith("nodeplayer://youtube/")) {
-            val videoId = url.removePrefix("nodeplayer://youtube/")
-            "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
-        } else {
-            url
+        val quality = com.nodeplayer.model.MediaQualitySettingsState.albumArtQuality.value
+        val urlsToTry = com.nodeplayer.model.ArtworkUrlResolver.resolveYouTubeThumbnailCandidates(url, quality).ifEmpty {
+            listOfNotNull(com.nodeplayer.model.ArtworkUrlResolver.resolveArtworkUrl(url, quality))
         }
+
         return decodeSemaphore.withPermit {
-            try {
-                val uri = java.net.URI(resolvedUrl).toURL()
-                val conn = uri.openConnection() as java.net.HttpURLConnection
-                conn.connectTimeout = 4000
-                conn.readTimeout = 4000
-                conn.instanceFollowRedirects = true
-                val bytes = conn.inputStream.use { it.readBytes() }
-                if (bytes.isNotEmpty()) {
-                    ArtworkCache.putBytes(url, bytes)
-                    decodeSampledDesktopBitmap(bytes, targetPx)
-                } else null
-            } catch (_: Exception) {
-                null
+            for (candidateUrl in urlsToTry) {
+                try {
+                    val uri = java.net.URI(candidateUrl).toURL()
+                    val conn = uri.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 3000
+                    conn.readTimeout = 3000
+                    conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    conn.instanceFollowRedirects = true
+                    if (conn.responseCode == 200) {
+                        val bytes = conn.inputStream.use { it.readBytes() }
+                        if (bytes.isNotEmpty()) {
+                            ArtworkCache.putBytes(url, bytes)
+                            return@withPermit decodeSampledDesktopBitmap(bytes, targetPx)
+                        }
+                    }
+                } catch (_: Exception) {}
             }
+            null
         }
     }
 

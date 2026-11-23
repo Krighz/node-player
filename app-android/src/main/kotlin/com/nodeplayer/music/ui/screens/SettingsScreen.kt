@@ -389,6 +389,7 @@ fun SettingsScreen(
                 SettingsHubItem("customize_ui", "Customize UI", "Lens dock, themes, bundled fonts, spacing", Icons.Rounded.Palette),
                 SettingsHubItem("widgets", "Widgets & Lock Screen", "4 static styles, shimmer, element toggles", Icons.Rounded.Widgets),
                 SettingsHubItem("lyrics", "Lyrics & Metadata", "Synced LRC, LRCLIB integration, karaoke", Icons.Rounded.Lyrics),
+                SettingsHubItem("online_account", "Online Music & Cloud Sync", "YouTube Music, Google Drive sync & streaming quality", Icons.Rounded.Cloud),
                 SettingsHubItem("lastfm", "Last.fm & Network", "Scrobbling, now playing, custom API keys", Icons.Rounded.CloudQueue),
                 SettingsHubItem("stats", "Stats & Audio Analysis", "Audio quality analysis, genuine Hi-Res, DR", Icons.Rounded.BarChart),
                 SettingsHubItem("updates", "Updates", "GitHub releases, auto-check, download manager", Icons.Rounded.SystemUpdate),
@@ -410,11 +411,12 @@ fun SettingsScreen(
                     (section == "sound_eq" && (q.contains("sound") || q.contains("audio") || q.contains("eq") || q.contains("dac") || q.contains("usb") || q.contains("resampl") || q.contains("float"))) ||
                     (section == "playback" && (q.contains("play") || q.contains("crossfade") || q.contains("gapless") || q.contains("headset") || q.contains("gesture") || q.contains("sleep") || q.contains("timer"))) ||
                     (section == "library" && (q.contains("lib") || q.contains("folder") || q.contains("scan") || q.contains("exclud") || q.contains("durat"))) ||
-                    (section == "customize_ui" && (q.contains("ui") || q.contains("theme") || q.contains("glass") || q.contains("dock") || q.contains("font") || q.contains("color") || q.contains("round"))) ||
+                    (section == "customize_ui" && (q.contains("ui") || q.contains("theme") || q.contains("glass") || q.contains("dock") || q.contains("font") || q.contains("color") || q.contains("round") || q.contains("status") || q.contains("immers"))) ||
                     (section == "widgets" && (q.contains("widg") || q.contains("lock") || q.contains("overlay"))) ||
-                    (section == "lyrics" && (q.contains("lyric") || q.contains("lrc") || q.contains("lrclib"))) ||
+                    (section == "lyrics" && (q.contains("lyric") || q.contains("lrc") || q.contains("lrclib") || q.contains("status") || q.contains("immers"))) ||
                     (section == "storage" && (q.contains("storage") || q.contains("cache") || q.contains("download") || q.contains("disk") || q.contains("space"))) ||
                     (section == "converter" && (q.contains("convert") || q.contains("flac") || q.contains("opus") || q.contains("transcode"))) ||
+                    (section == "online_account" && (q.contains("online") || q.contains("stream") || q.contains("youtube") || q.contains("cloud") || q.contains("drive") || q.contains("sync") || q.contains("google"))) ||
                     (section == "lastfm" && (q.contains("last") || q.contains("scrobbl") || q.contains("api"))) ||
                     (section == "stats" && (q.contains("stat") || q.contains("analys") || q.contains("hires") || q.contains("dr") || q.contains("loud"))) ||
                     (section == "updates" && (q.contains("updat") || q.contains("vers") || q.contains("git") || q.contains("check"))) ||
@@ -656,8 +658,8 @@ fun SettingsScreen(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    SettingsHubCard("Online & YouTube Account", "Online mode, sign-in, account playlists", Icons.Rounded.AccountCircle) { activeSection = "online_account" }
-                    SettingsHubCard("Last.fm & Network", "Scrobbling, now playing, custom API keys", Icons.Rounded.CloudQueue) { activeSection = "lastfm" }
+                    SettingsHubCard("Online Music & Cloud Sync", "YouTube Music, Google Drive sync & streaming quality", Icons.Rounded.Cloud) { activeSection = "online_account" }
+                    SettingsHubCard("Last.fm Scrobbler", "Scrobble history, account auth & custom API keys", Icons.Rounded.CloudQueue) { activeSection = "online_account" }
                     SettingsHubCard("Stats & Audio Analysis", "Audio quality analysis, genuine Hi-Res, DR", Icons.Rounded.BarChart) { activeSection = "stats" }
                     SettingsHubCard("Updates", "GitHub releases, auto-check, download manager", Icons.Rounded.SystemUpdate) { activeSection = "updates" }
                     SettingsHubCard("Backup & Data", "Export settings, restore backup, reset data", Icons.Rounded.Save) { activeSection = "backup" }
@@ -719,8 +721,8 @@ fun SettingsScreen(
                     "customize_ui" -> "Customize UI"
                     "widgets" -> "Widgets & Lock Screen"
                     "lyrics" -> "Lyrics & Metadata"
-                    "online_account" -> "Online & YouTube Account"
-                    "lastfm" -> "Last.fm & Network"
+                    "online_account" -> "Online Music & Streaming Services"
+                    "lastfm" -> "Online Music & Streaming Services"
                     "stats" -> "Stats & Audio Analysis"
                     "updates" -> "Updates"
                     "backup" -> "Backup & Data"
@@ -1527,6 +1529,293 @@ fun SettingsScreen(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 
+                // Cinematic Kinetic Lyrics Engine Settings
+                val lyricsSettings by com.nodeplayer.music.data.LyricsSettingsRepository.getSettingsFlow(context)
+                    .collectAsState(initial = com.nodeplayer.model.LyricsSettings())
+
+                Text(
+                    text = "LYRICS ENGINE & STYLE",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = accent,
+                        letterSpacing = 1.sp
+                    ),
+                    modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
+                )
+
+                // Style Switcher Cards
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    val isKinetic = lyricsSettings.style == com.nodeplayer.model.LyricsStyle.CINEMATIC_KINETIC
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isKinetic) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.05f))
+                            .border(1.dp, if (isKinetic) Color.White else Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                            .clickable {
+                                com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) {
+                                    it.copy(style = com.nodeplayer.model.LyricsStyle.CINEMATIC_KINETIC)
+                                }
+                            }
+                            .padding(12.dp)
+                    ) {
+                        Column {
+                            Text("Cinematic Kinetic", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                            Text("Default · 2x typography + stars", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.65f))
+                        }
+                    }
+
+                    val isClassic = lyricsSettings.style == com.nodeplayer.model.LyricsStyle.CLASSIC_FULLSCREEN
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(if (isClassic) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.05f))
+                            .border(1.dp, if (isClassic) Color.White else Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                            .clickable {
+                                com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) {
+                                    it.copy(style = com.nodeplayer.model.LyricsStyle.CLASSIC_FULLSCREEN)
+                                }
+                            }
+                            .padding(12.dp)
+                    ) {
+                        Column {
+                            Text("Classic Full-Screen", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                            Text("Standard smooth scroll", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.65f))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Common Zoom
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Common Zoom (Master Scale)", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                    Text("%.2fx".format(lyricsSettings.commonZoom), fontSize = 12.5.sp, color = accent, fontWeight = FontWeight.Bold)
+                }
+                Slider(
+                    value = lyricsSettings.commonZoom,
+                    onValueChange = {
+                        val rounded = (it * 20f).roundToInt() / 20f
+                        com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { s ->
+                            s.copy(commonZoom = rounded)
+                        }
+                    },
+                    valueRange = 0.40f..1.80f,
+                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.2f))
+                )
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    listOf(0.70f to "0.7x", 1.00f to "1.0x", 1.30f to "1.3x").forEach { (preset, label) ->
+                        val isActive = kotlin.math.abs(lyricsSettings.commonZoom - preset) < 0.03f
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(if (isActive) Color.White else Color.White.copy(alpha = 0.08f))
+                                .border(1.dp, if (isActive) Color.White else Color.White.copy(alpha = 0.15f), RoundedCornerShape(999.dp))
+                                .clickable {
+                                    com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { s ->
+                                        s.copy(commonZoom = preset)
+                                    }
+                                }
+                                .padding(horizontal = 14.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isActive) Color.Black else Color.White.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
+                }
+
+                if (lyricsSettings.style == com.nodeplayer.model.LyricsStyle.CINEMATIC_KINETIC) {
+                    // Sparkle Density
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Sparkle Density", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                        Text("%.2f".format(lyricsSettings.sparkleDensity), fontSize = 12.5.sp, color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = lyricsSettings.sparkleDensity,
+                        onValueChange = {
+                            com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { s ->
+                                s.copy(sparkleDensity = it)
+                            }
+                        },
+                        valueRange = 0.00f..1.00f,
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.2f))
+                    )
+
+                    // Left/Right Swing
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Left / Right Swing", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                        Text("%.2f".format(lyricsSettings.lrSwing), fontSize = 12.5.sp, color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = lyricsSettings.lrSwing,
+                        onValueChange = {
+                            com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { s ->
+                                s.copy(lrSwing = it)
+                            }
+                        },
+                        valueRange = 0.00f..1.00f,
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.2f))
+                    )
+
+                    // Vertical Spacing
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Vertical Spacing", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                        Text("%.2fx".format(lyricsSettings.verticalSpacing), fontSize = 12.5.sp, color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = lyricsSettings.verticalSpacing,
+                        onValueChange = {
+                            com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { s ->
+                                s.copy(verticalSpacing = it)
+                            }
+                        },
+                        valueRange = 0.70f..1.60f,
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.2f))
+                    )
+
+                    // Camera Glide
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Camera Glide", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                        Text("%.2f".format(lyricsSettings.cameraGlide), fontSize = 12.5.sp, color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = lyricsSettings.cameraGlide,
+                        onValueChange = {
+                            com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { s ->
+                                s.copy(cameraGlide = it)
+                            }
+                        },
+                        valueRange = 0.30f..1.50f,
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.2f))
+                    )
+
+                    // Sweep & Bounce
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Sweep & Bounce", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                        Text("%.2f".format(lyricsSettings.bounce), fontSize = 12.5.sp, color = accent, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = lyricsSettings.bounce,
+                        onValueChange = {
+                            com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { s ->
+                                s.copy(bounce = it)
+                            }
+                        },
+                        valueRange = 0.00f..1.50f,
+                        colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = Color.White, inactiveTrackColor = Color.White.copy(alpha = 0.2f))
+                    )
+
+                    // Glow Palette
+                    Text("Glow Palette", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = Color.White, modifier = Modifier.padding(bottom = 6.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 12.dp)
+                    ) {
+                        com.nodeplayer.model.LyricsGlowPalette.entries.forEach { p ->
+                            val isSelected = lyricsSettings.palette == p
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.08f))
+                                    .border(1.dp, if (isSelected) Color.White else Color.White.copy(alpha = 0.15f), RoundedCornerShape(999.dp))
+                                    .clickable {
+                                        com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { s ->
+                                            s.copy(palette = p)
+                                        }
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = p.displayName,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (isSelected) Color.Black else Color.White.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Show Top Bar Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Show Header Bar", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Display track info header on lyrics screen", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    LiquidToggle(
+                        checked = lyricsSettings.showTopBar,
+                        onCheckedChange = { checked ->
+                            com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { s ->
+                                s.copy(showTopBar = checked)
+                            }
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                // Hide Status Bar in Lyrics Toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Hide Status Bar", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                        Text("Immersive edge-to-edge full screen during lyrics view", style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f)))
+                    }
+                    LiquidToggle(
+                        checked = lyricsSettings.hideStatusBar,
+                        onCheckedChange = { checked ->
+                            com.nodeplayer.music.data.LyricsSettingsRepository.updateSettingsAsync(context) { s ->
+                                s.copy(hideStatusBar = checked)
+                            }
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1569,6 +1858,60 @@ fun SettingsScreen(
         }
 
         if (shouldShow("customize_ui")) {
+            val appSettings by com.nodeplayer.music.data.AppSettingsRepository.getSettingsFlow(context)
+                .collectAsState(initial = com.nodeplayer.music.data.AppSettingsRepository.AppSettings())
+
+            Text(
+                text = "DISPLAY & IMMERSION",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    letterSpacing = 1.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = accent
+                )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Hide Status Bar (Global Immersive Mode)",
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "Hide status bar system wide for true edge-to-edge immersive playback",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color.White.copy(alpha = 0.65f)
+                            )
+                        )
+                    }
+                    LiquidToggle(
+                        checked = appSettings.hideStatusBar,
+                        onCheckedChange = { checked ->
+                            coroutineScope.launch {
+                                com.nodeplayer.music.data.AppSettingsRepository.updateSetting(
+                                    context,
+                                    com.nodeplayer.music.data.AppSettingsRepository.KEY_HIDE_STATUS_BAR,
+                                    checked
+                                )
+                            }
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+
             com.nodeplayer.ui.screens.CustomizeUiView(
                 themeConfig = themeConfig,
                 onThemeConfigChange = onThemeConfigChange,
@@ -1940,8 +2283,34 @@ fun SettingsScreen(
             val isOnlineMode by com.nodeplayer.common.AppModeState.isOnlineMode.collectAsState()
             val authState by com.nodeplayer.music.auth.YouTubeAccountManager.authState.collectAsState()
 
+            var onlineServicesTab by rememberSaveable { mutableIntStateOf(0) }
+
+            LaunchedEffect(searchQuery) {
+                val q = searchQuery.lowercase()
+                if (q.contains("cloud") || q.contains("sync") || q.contains("drive") || q.contains("gdrive")) {
+                    onlineServicesTab = 1
+                } else if (q.contains("stream") || q.contains("youtube") || q.contains("quality")) {
+                    onlineServicesTab = 0
+                }
+            }
+
+            var streamingAudioQuality by remember {
+                mutableStateOf(
+                    com.nodeplayer.model.StreamingAudioQuality.fromId(
+                        sharedPrefs.getString("streaming_audio_quality", "HIGH")
+                    )
+                )
+            }
+            var albumArtQuality by remember {
+                mutableStateOf(
+                    com.nodeplayer.model.AlbumArtQuality.fromId(
+                        sharedPrefs.getString("album_art_quality", "HIGH")
+                    )
+                )
+            }
+
             Text(
-                text = "ONLINE MODE & YOUTUBE ACCOUNT",
+                text = "ONLINE MUSIC & STREAMING SERVICES",
                 style = MaterialTheme.typography.labelSmall.copy(
                     letterSpacing = 1.5.sp,
                     fontWeight = FontWeight.Bold,
@@ -1950,9 +2319,96 @@ fun SettingsScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
+            // Sub-tabs: Streaming & Accounts vs Cloud Sync (Drive)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color.White.copy(alpha = 0.06f))
+                    .border(1.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(12.dp))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val tab0Selected = onlineServicesTab == 0
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(if (tab0Selected) accent.copy(alpha = 0.25f) else Color.Transparent)
+                        .clickable { onlineServicesTab = 0 }
+                        .padding(vertical = 9.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.GraphicEq,
+                            contentDescription = null,
+                            tint = if (tab0Selected) accent else Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Streaming & Audio",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (tab0Selected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (tab0Selected) Color.White else Color.White.copy(alpha = 0.65f)
+                            )
+                        )
+                    }
+                }
+
+                val tab1Selected = onlineServicesTab == 1
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(9.dp))
+                        .background(if (tab1Selected) accent.copy(alpha = 0.25f) else Color.Transparent)
+                        .clickable { onlineServicesTab = 1 }
+                        .padding(vertical = 9.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.CloudSync,
+                            contentDescription = null,
+                            tint = if (tab1Selected) accent else Color.White.copy(alpha = 0.6f),
+                            modifier = Modifier.size(17.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Cloud Sync (Drive)",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (tab1Selected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (tab1Selected) Color.White else Color.White.copy(alpha = 0.65f)
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (onlineServicesTab == 0) {
+                GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    // Online Mode Toggle
+                    // SECTION 1: SERVICES & ACCOUNTS
+                    Text(
+                        text = "ONLINE SERVICES & ACCOUNTS",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = accent.copy(alpha = 0.85f),
+                            letterSpacing = 1.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // 1. Online Mode Toggle
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -1989,7 +2445,7 @@ fun SettingsScreen(
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 
-                    // YouTube Account Section
+                    // 2. YouTube Account Section
                     when (val currentAuth = authState) {
                         is com.nodeplayer.model.AuthState.LoggedIn -> {
                             Row(
@@ -2137,7 +2593,188 @@ fun SettingsScreen(
 
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = Color.White.copy(alpha = 0.10f))
 
-                    // Video Playback Resolution Setting
+                    // 3. Last.fm Scrobbler Integration
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Last.fm Scrobbler", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White))
+                            Text(
+                                text = if (lastFmSessionKey.isNotBlank()) "Connected as @$lastFmUsername" else "Scrobble listened tracks to Last.fm (>30s & 50%)",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                            )
+                        }
+                        LiquidToggle(
+                            checked = lastFmScrobbleEnabled,
+                            onCheckedChange = {
+                                lastFmScrobbleEnabled = it
+                                sharedPrefs.edit().putBoolean("lastfm_scrobble_enabled", it).apply()
+                            },
+                            colors = SwitchDefaults.colors(checkedThumbColor = accent, checkedTrackColor = accent.copy(alpha = 0.5f))
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 14.dp), color = Color.White.copy(alpha = 0.12f))
+
+                    // SECTION 2: STREAMING AUDIO & MEDIA RESOLUTION
+                    Text(
+                        text = "STREAMING QUALITY & MEDIA RESOLUTION",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = accent.copy(alpha = 0.85f),
+                            letterSpacing = 1.sp
+                        )
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // A. Streaming Audio Quality (Low, Medium, High with real kbps ratings)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Streaming Audio Quality",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                            )
+                            Text(
+                                text = "Audio bitrate & codec: ${streamingAudioQuality.description}",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        com.nodeplayer.model.StreamingAudioQuality.entries.forEach { quality ->
+                            val isSelected = streamingAudioQuality == quality
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) accent.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f))
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) accent.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.12f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable {
+                                        streamingAudioQuality = quality
+                                        sharedPrefs.edit().putString("streaming_audio_quality", quality.id).apply()
+                                        coroutineScope.launch {
+                                            com.nodeplayer.music.data.AppSettingsRepository.updateSetting(
+                                                context,
+                                                com.nodeplayer.music.data.AppSettingsRepository.KEY_STREAMING_AUDIO_QUALITY,
+                                                quality.id
+                                            )
+                                        }
+                                        com.nodeplayer.model.MediaQualitySettingsState.setStreamingAudioQuality(quality)
+                                    }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = quality.displayName,
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.8f)
+                                        )
+                                    )
+                                    Text(
+                                        text = quality.kbpsRating,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 10.sp,
+                                            color = if (isSelected) accent else Color.White.copy(alpha = 0.55f)
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // B. Album Artwork Quality Setting
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Album Artwork Quality",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                            )
+                            Text(
+                                text = "Resolution for online cover art and local embedded rendering",
+                                style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        com.nodeplayer.model.AlbumArtQuality.entries.forEach { artQuality ->
+                            val isSelected = albumArtQuality == artQuality
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) accent.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f))
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) accent.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.12f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable {
+                                        albumArtQuality = artQuality
+                                        sharedPrefs.edit().putString("album_art_quality", artQuality.id).apply()
+                                        coroutineScope.launch {
+                                            com.nodeplayer.music.data.AppSettingsRepository.updateSetting(
+                                                context,
+                                                com.nodeplayer.music.data.AppSettingsRepository.KEY_ALBUM_ART_QUALITY,
+                                                artQuality.id
+                                            )
+                                        }
+                                        com.nodeplayer.model.MediaQualitySettingsState.setAlbumArtQuality(artQuality)
+                                        com.nodeplayer.ui.components.ArtworkCache.clear()
+                                    }
+                                    .padding(vertical = 10.dp, horizontal = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = artQuality.displayName,
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                            color = if (isSelected) Color.White else Color.White.copy(alpha = 0.8f)
+                                        )
+                                    )
+                                    Text(
+                                        text = artQuality.resolutionLabel,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 10.sp,
+                                            color = if (isSelected) accent else Color.White.copy(alpha = 0.55f)
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // C. Video Playback Resolution Setting
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -2218,6 +2855,9 @@ fun SettingsScreen(
                         )
                     )
                 }
+            }
+            } else {
+                CloudSyncSettingsContent(accent = accent)
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -4307,5 +4947,451 @@ private fun SettingsHubCard(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+@Composable
+private fun CloudSyncSettingsContent(accent: Color) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val isLoggedIn by com.nodeplayer.music.auth.GoogleAuthManager.isLoggedIn.collectAsState()
+    val userEmail by com.nodeplayer.music.auth.GoogleAuthManager.userEmail.collectAsState()
+    val isSyncing by com.nodeplayer.music.sync.CloudSyncManager.isSyncing.collectAsState()
+    val syncFreq by com.nodeplayer.music.sync.CloudSyncManager.syncFrequency.collectAsState()
+    val lastSyncedAt by com.nodeplayer.music.sync.CloudSyncManager.lastSyncedAt.collectAsState()
+    val hasUnsynced by com.nodeplayer.music.sync.CloudSyncManager.hasUnsyncedChanges.collectAsState()
+    val statusMsg by com.nodeplayer.music.sync.CloudSyncManager.statusMessage.collectAsState()
+
+    var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+    var showManualCodeDialog by remember { mutableStateOf(false) }
+
+    // Manual code input
+    var manualCodeInput by remember { mutableStateOf("") }
+    var isExchangingCode by remember { mutableStateOf(false) }
+
+    fun launchGoogleSignIn() {
+        val effectiveRedirect = com.nodeplayer.music.auth.GoogleAuthManager.getEffectiveRedirectUri()
+        val authUrl = com.nodeplayer.music.auth.GoogleAuthManager.createAuthorizationUrl(
+            redirectUri = effectiveRedirect
+        )
+        if (authUrl != null) {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(authUrl)).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Toast.makeText(context, "Could not open browser: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        } else {
+            Toast.makeText(context, "Google OAuth Client ID is not configured", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header / Status
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isLoggedIn) accent.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.08f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isLoggedIn) Icons.Rounded.CloudDone else Icons.Rounded.CloudOff,
+                        contentDescription = null,
+                        tint = if (isLoggedIn) accent else Color.White.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(
+                        text = if (isLoggedIn) "Google Drive Connected" else "Cloud Sync (Google Drive)",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                    )
+                    Text(
+                        text = if (isLoggedIn) (userEmail ?: "Hidden appDataFolder sync active")
+                        else "Opt-in, serverless personal cloud sync",
+                        style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.65f))
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (!isLoggedIn) {
+                // Feature benefits & Privacy Callout
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.White.copy(alpha = 0.04f))
+                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                        .padding(12.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Rounded.Security,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Zero-Knowledge & Privacy-First",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, color = accent)
+                            )
+                        }
+                        Text(
+                            text = "• Uses ONLY your Google Drive hidden appDataFolder\n• Node Player NEVER sees your personal files or drive contents\n• 100% serverless: zero developer servers, syncs directly to your own account\n• Backs up playlists, favorites, play counts, and history with safe conflict resolution",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontSize = 11.5.sp,
+                                lineHeight = 16.sp
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Button(
+                    onClick = { launchGoogleSignIn() },
+                    colors = ButtonDefaults.buttonColors(containerColor = accent),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Cloud,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Sign In with Google", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Or enter callback URL / auth code manually",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = accent.copy(alpha = 0.85f),
+                            fontSize = 11.sp
+                        ),
+                        modifier = Modifier
+                            .clickable { showManualCodeDialog = true }
+                            .padding(vertical = 4.dp, horizontal = 8.dp)
+                    )
+                }
+            } else {
+                // Logged in UI: Sync frequency, status, Sync Now, Delete Backup, Sign Out
+                HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Sync frequency selector
+                Text(
+                    text = "SYNC FREQUENCY",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = accent.copy(alpha = 0.85f),
+                        letterSpacing = 1.sp
+                    )
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val frequencies = listOf(
+                        com.nodeplayer.music.sync.CloudSyncManager.FREQ_HOURLY to "Every Hour",
+                        com.nodeplayer.music.sync.CloudSyncManager.FREQ_DAILY to "Once a Day",
+                        com.nodeplayer.music.sync.CloudSyncManager.FREQ_MANUAL to "Manual Only"
+                    )
+                    frequencies.forEach { (freqKey, label) ->
+                        val isSelected = syncFreq == freqKey
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) accent.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) accent.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.12f),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                .clickable {
+                                    com.nodeplayer.music.sync.CloudSyncManager.setSyncFrequency(context, freqKey)
+                                }
+                                .padding(vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.7f)
+                                )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Last synced timestamp & Status info
+                val formattedLastSync = if (lastSyncedAt > 0L) {
+                    val sdf = SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault())
+                    sdf.format(Date(lastSyncedAt))
+                } else {
+                    "Never"
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.White.copy(alpha = 0.04f))
+                        .padding(10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Last Synced: $formattedLastSync",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold, color = Color.White)
+                            )
+                            if (hasUnsynced) {
+                                Text(
+                                    text = "Changes Pending",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = Color(0xFFFFB74D), fontWeight = FontWeight.Bold)
+                                )
+                            } else {
+                                Text(
+                                    text = "Up to Date",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, color = Color(0xFF81C784), fontWeight = FontWeight.Bold)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Status: $statusMsg",
+                            style = MaterialTheme.typography.labelSmall.copy(color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Action Buttons: Sync Now, Sign Out
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            coroutineScope.launch {
+                                com.nodeplayer.music.sync.CloudSyncManager.performSync(context, isManualTrigger = true)
+                            }
+                        },
+                        enabled = !isSyncing,
+                        colors = ButtonDefaults.buttonColors(containerColor = accent),
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Syncing...", style = MaterialTheme.typography.labelMedium)
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.Sync,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Sync Now", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold))
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            com.nodeplayer.music.auth.GoogleAuthManager.signOut(context)
+                            Toast.makeText(context, "Signed out of Google Drive", Toast.LENGTH_SHORT).show()
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White.copy(alpha = 0.8f))
+                    ) {
+                        Text("Sign Out", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Danger action: Delete Cloud Backup
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Delete Cloud Backup (user_music_db.json)",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = Color(0xFFFF5252).copy(alpha = 0.85f),
+                            fontSize = 11.5.sp
+                        ),
+                        modifier = Modifier
+                            .clickable { showDeleteConfirmDialog = true }
+                            .padding(vertical = 4.dp)
+                    )
+
+                    Text(
+                        text = "Enter Code Manually",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = accent.copy(alpha = 0.80f),
+                            fontSize = 11.5.sp
+                        ),
+                        modifier = Modifier
+                            .clickable { showManualCodeDialog = true }
+                            .padding(vertical = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    // Manual Code Exchange Dialog
+    if (showManualCodeDialog) {
+        AlertDialog(
+            onDismissRequest = { showManualCodeDialog = false },
+            title = {
+                Text(
+                    text = "Exchange Code or Callback URL",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "If your browser did not automatically open Node Player after signing in with Google, paste the address bar URL or the code parameter below:",
+                        style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
+                    )
+
+                    OutlinedTextField(
+                        value = manualCodeInput,
+                        onValueChange = { manualCodeInput = it },
+                        label = { Text("Callback URL or Auth Code") },
+                        placeholder = { Text("4/0A... or com.nodeplayer.music:/oauth2redirect?code=...") },
+                        maxLines = 3,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = accent,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val input = manualCodeInput.trim()
+                        if (input.isNotBlank()) {
+                            isExchangingCode = true
+                            coroutineScope.launch {
+                                val res = com.nodeplayer.music.auth.GoogleAuthManager.handleManualCodeOrUrl(context, input)
+                                isExchangingCode = false
+                                if (res.isSuccess) {
+                                    showManualCodeDialog = false
+                                    manualCodeInput = ""
+                                    Toast.makeText(context, "Google Drive connected successfully!", Toast.LENGTH_SHORT).show()
+                                    com.nodeplayer.music.sync.CloudSyncManager.performSync(context, isManualTrigger = true)
+                                } else {
+                                    Toast.makeText(context, "Exchange failed: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                }
+                            }
+                        }
+                    },
+                    enabled = !isExchangingCode && manualCodeInput.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(containerColor = accent)
+                ) {
+                    if (isExchangingCode) {
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Connect")
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showManualCodeDialog = false }) {
+                    Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                }
+            },
+            containerColor = Color(0xFF1E1E28)
+        )
+    }
+
+    // Delete Confirmation Dialog
+    if (showDeleteConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = false },
+            title = {
+                Text(
+                    text = "Delete Cloud Backup?",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = Color(0xFFFF5252))
+                )
+            },
+            text = {
+                Text(
+                    text = "This will permanently remove 'user_music_db.json' from your Google Drive hidden appDataFolder. Your local playlists and statistics on this device will NOT be deleted.",
+                    style = MaterialTheme.typography.bodySmall.copy(color = Color.White.copy(alpha = 0.75f), fontSize = 12.5.sp)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteConfirmDialog = false
+                        coroutineScope.launch {
+                            val res = com.nodeplayer.music.sync.CloudSyncManager.deleteCloudBackup(context)
+                            if (res.isSuccess) {
+                                Toast.makeText(context, "Cloud backup deleted successfully", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Delete failed: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("Delete Backup", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = false }) {
+                    Text("Cancel", color = Color.White.copy(alpha = 0.7f))
+                }
+            },
+            containerColor = Color(0xFF1E1E28)
+        )
     }
 }

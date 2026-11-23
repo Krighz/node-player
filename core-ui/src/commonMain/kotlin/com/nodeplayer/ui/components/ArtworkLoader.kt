@@ -65,8 +65,9 @@ class BoundedLruCache<K : Any, V : Any>(
 object ArtworkCache {
     const val MAX_MEMORY_ENTRIES = 300
     const val MAX_BYTE_ENTRIES = 200
-    const val DEFAULT_TARGET_SIZE_PX = 256
-    const val HERO_TARGET_SIZE_PX = 1080
+    val DEFAULT_TARGET_SIZE_PX: Int
+        get() = com.nodeplayer.model.MediaQualitySettingsState.albumArtQuality.value.targetPx
+    const val HERO_TARGET_SIZE_PX = 1200
 
     private val memoryCache = BoundedLruCache<String, ImageBitmap>(MAX_MEMORY_ENTRIES)
     private val byteCache = BoundedLruCache<String, ByteArray>(MAX_BYTE_ENTRIES)

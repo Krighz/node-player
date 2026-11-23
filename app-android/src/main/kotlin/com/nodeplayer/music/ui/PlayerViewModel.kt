@@ -186,6 +186,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val _isShuffleEnabled = MutableStateFlow(false)
     val isShuffleEnabled: StateFlow<Boolean> = _isShuffleEnabled.asStateFlow()
 
+    private val _repeatMode = MutableStateFlow(0)
+    val repeatMode: StateFlow<Int> = _repeatMode.asStateFlow()
+
     private val _minDurationSeconds = MutableStateFlow(30)
     val minDurationSeconds: StateFlow<Int> = _minDurationSeconds.asStateFlow()
 
@@ -515,6 +518,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     val appSettings = com.nodeplayer.music.data.AppSettingsRepository.getSettingsFlow(app)
         .stateIn(viewModelScope, SharingStarted.Lazily, com.nodeplayer.music.data.AppSettingsRepository.AppSettings())
 
+    val lyricsSettings = com.nodeplayer.music.data.LyricsSettingsRepository.getSettingsFlow(app)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, com.nodeplayer.model.LyricsSettings())
+
+    fun updateLyricsSettings(settings: com.nodeplayer.model.LyricsSettings) {
+        viewModelScope.launch {
+            com.nodeplayer.music.data.LyricsSettingsRepository.updateSettings(app, settings)
+        }
+    }
+
     val dailyListeningStats = dao.getAllDailyStats()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -648,6 +660,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             autoGapless = cfAutoGapless
         )
         _isShuffleEnabled.value = prefs.getBoolean("shuffle_enabled", false)
+        _repeatMode.value = prefs.getInt("repeat_mode", 0)
 
         val sysEq = prefs.getBoolean("system_eq_enabled", false)
         _systemEqEnabled.value = sysEq
@@ -847,6 +860,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             service.crossfadeManager.crossfadeConfig = _crossfadeConfig.value
             service.crossfadeManager.setShuffle(_isShuffleEnabled.value)
+            service.crossfadeManager.activePlayer.repeatMode = _repeatMode.value
+            service.crossfadeManager.standbyPlayer.repeatMode = _repeatMode.value
             service.crossfadeManager.applyEffectConfig(_effectConfig.value)
         }
 
@@ -1034,6 +1049,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (service != null) {
             service.crossfadeManager.crossfadeConfig = _crossfadeConfig.value
             service.crossfadeManager.setShuffle(_isShuffleEnabled.value)
+            service.crossfadeManager.activePlayer.repeatMode = _repeatMode.value
+            service.crossfadeManager.standbyPlayer.repeatMode = _repeatMode.value
             service.crossfadeManager.playQueue(effectiveQueue, targetIndex, 0L)
             _isPlaying.value = true
             startPositionTracking()
@@ -1182,6 +1199,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             _queue.value = service.crossfadeManager.currentQueue.toList()
             _currentTrack.value?.let { com.nodeplayer.music.widget.WidgetUpdateManager.saveLastKnownTrack(getApplication(), it) }
             com.nodeplayer.music.widget.WidgetUpdateManager.updateAllWidgets(getApplication())
+        }
+    }
+
+    fun cycleRepeatMode() {
+        val nextMode = (_repeatMode.value + 1) % 3
+        _repeatMode.value = nextMode
+        prefs.edit().putInt("repeat_mode", nextMode).apply()
+        val service = PlaybackService.instance
+        if (service != null) {
+            service.crossfadeManager.activePlayer.repeatMode = nextMode
+            service.crossfadeManager.standbyPlayer.repeatMode = nextMode
         }
     }
 
@@ -2017,6 +2045,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 com.nodeplayer.common.logging.NodeLog.e("NP_IMPORT", "Error syncing imported playlist to YouTube", e)
             }
         }
+        com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
         playlistId
     }
 
@@ -2031,6 +2060,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     position = existingIds.size
                 )
                 dao.insertPlaylistTracks(listOf(ref))
+                com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
             }
         }
     }
@@ -2038,25 +2068,31 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun deletePlaylist(playlist: com.nodeplayer.music.data.PlaylistEntity) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.deletePlaylist(playlist)
+            com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
         }
     }
 
     fun deletePlaylistById(playlistId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             val p = dao.getAllPlaylistsList().find { it.id == playlistId }
-            if (p != null) dao.deletePlaylist(p)
+            if (p != null) {
+                dao.deletePlaylist(p)
+                com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
+            }
         }
     }
 
     fun renamePlaylist(playlistId: Long, newName: String) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.renamePlaylist(playlistId, newName)
+            com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
         }
     }
 
     fun removeTrackFromPlaylist(playlistId: Long, trackId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             dao.removeTrackFromPlaylist(playlistId, trackId)
+            com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
         }
     }
 
@@ -2071,6 +2107,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
             dao.insertPlaylistTracks(refs)
+            com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
+        }
+    }
+
+    fun setFavorite(trackId: Long, isFav: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            dao.setFavorite(trackId, isFav)
+            com.nodeplayer.music.sync.CloudSyncManager.markUnsyncedChanges(getApplication())
         }
     }
 

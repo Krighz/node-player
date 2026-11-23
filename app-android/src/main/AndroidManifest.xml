@@ -4,6 +4,7 @@
     <!-- Audio & Storage Permissions -->
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
@@ -25,6 +26,7 @@
     <application
         android:name=".NodePlayerApplication"
         android:allowBackup="true"
+        android:requestLegacyExternalStorage="true"
         android:icon="@mipmap/ic_launcher"
         android:label="${appName}"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -55,6 +57,40 @@
                 <data
                     android:host="spotify-callback"
                     android:scheme="nodeplayer" />
+            </intent-filter>
+            <!-- Google Drive OAuth Redirect Scheme (Strict appDataFolder) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="gdrive-callback"
+                    android:scheme="nodeplayer" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="oauth2redirect"
+                    android:scheme="com.nodeplayer.music" />
+                <data
+                    android:pathPrefix="/oauth2redirect"
+                    android:scheme="com.nodeplayer.music" />
+            </intent-filter>
+            <!-- Google Drive OAuth reverse-DNS redirect schemes (RFC 8252 for Android) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:path="/oauth2redirect"
+                    android:pathPrefix="/oauth2redirect"
+                    android:scheme="com.googleusercontent.apps.542352447031-slrlo9rv9ff15f3a4ofsdo6vimrbhose" />
+                <data
+                    android:path="/oauth2redirect"
+                    android:pathPrefix="/oauth2redirect"
+                    android:scheme="com.googleusercontent.apps.542352447031-d1bgori3k039voule9d28ruq8u7m2dnf" />
             </intent-filter>
         </activity>
 

@@ -1,9 +1,243 @@
-# Platform Implementation Changes (v1.6.0)
+# Platform Implementation Changes (v2.1.0)
 
-**Branch:** feature/liquid-dock  
-**Base Release:** v1.5.0  
+**Branch:** features-Peak  
+**Base Release:** v2.0.0  
 
 ---
+
+### [2026-11-23] - Opt-In Privacy-First Cloud Backup & Sync (Google Drive appDataFolder)
+- **Zero Developer-Hosted Servers (Client-Direct Architecture)**:
+  - Backs up and syncs music metadata directly to the user's personal Google Drive account.
+  - Opt-in only: completely disabled by default until the user explicitly signs in.
+- **Strict Scope Isolation (`appDataFolder`)**:
+  - Authenticates via Google OAuth 2.0 PKCE requesting **only** `https://www.googleapis.com/auth/drive.appdata`.
+  - Operates exclusively in Google Drive's hidden `appDataFolder` space (`spaces=appDataFolder`), guaranteeing zero access to personal files or folders.
+- **Data Schema (`user_music_db.json`)**:
+  - Versioned snapshot schema storing `schemaVersion`, `lastSyncedAt`, `playlists`, `savedItems` (favorites), `songStats` (playCount, totalPlayTimeSeconds, lastPlayedAt), and bounded `playbackHistory` (up to 200 entries).
+- **Safe Conflict Resolution Merge Engine (`SyncMergeEngine.kt`)**:
+  - Deterministic conflict resolution before uploading:
+    - Playlists & SavedItems: Newer `updatedAt` timestamp wins.
+    - SongStats: Higher `totalPlayTimeSeconds`, higher `playCount`, and latest `lastPlayedAt` win.
+    - PlaybackHistory: Deduplicated by `(songId, playedAt)`, sorted descending, and capped at 200 items.
+- **Dirty-Flag Optimization**:
+  - Tracks local `hasUnsyncedChanges` flag; skips background cloud uploads if nothing changed locally.
+- **Background Scheduler & REST API v3**:
+  - WorkManager `CloudSyncWorker` supporting **Every Hour**, **Once a Day**, and **Manual Only** schedules with network constraints.
+  - Google Drive REST API v3 client (`GoogleDriveApiClient.kt`) with multipart upload and exponential backoff retry.
+- **Settings UI Integration & Tabs (`SettingsScreen.kt`)**:
+  - Merged **Cloud Sync (Google Drive)** directly into the **Online Music & Streaming Services** hub card and settings section under a dedicated, separate tab.
+  - Sub-tabs: **Streaming & Audio** (Online mode, YouTube login, Last.fm, bitrate quality) and **Cloud Sync (Drive)** (Google Sign-In, sync frequency, "Sync Now", "Delete Cloud Backup").
+  - Cleaned up UI: completely removed manual Client ID configuration buttons/dialogs, providing a seamless one-tap "Sign In with Google" flow.
+  - Auto-switches to Cloud Sync tab when search queries contain `cloud`, `sync`, `drive`, or `gdrive`.
+- **Official Google OAuth Client IDs & Reverse-DNS Scheme (`build.gradle.kts`, `GoogleAuthManager.kt`, `AndroidManifest.xml`)**:
+  - Injected official Google OAuth Client IDs from `local.properties` into `BuildConfig.GDRIVE_CLIENT_ID` (debug vs release/staging build types).
+  - Dynamically constructs the RFC 8252 reverse-DNS redirect URI `com.googleusercontent.apps.<client_id_prefix>:/oauth2redirect` matching Google's Android client requirement.
+  - Registered matching intent filters in `AndroidManifest.xml` for `com.googleusercontent.apps.*` reverse-DNS schemes.
+  - Added manual code / callback URL exchange dialog as fallback in case device browser does not catch custom scheme redirects.
+
+---
+
+### [2026-11-23] - Landscape FullScreen Lyrics, Shapeable Album Art & Multi-Provider Romanization
+- **Landscape Two-Column FullScreenLyricsView (`FullScreenLyricsView.kt`, `LyricsSettingsBottomSheet.kt`, `LyricsSettings.kt`)**:
+  - Implemented responsive landscape detection (`maxWidth > maxHeight && maxWidth >= 600.dp`) splitting the full-screen lyrics UI into a 40/60 two-column layout.
+  - **Left Hero Column**: Interactive shapeable album art hero, song title, artist label, time-seek slider with formatted elapsed/total durations, and Previous / Play-Pause / Next playback controls.
+  - **Right Lyrics Column**: Synchronized lyrics view supporting both Cinematic Kinetic word-by-word visualizer and selectable Classic multi-line view.
+  - **Album Art Shape Customizer**: Added `AlbumArtShape` (`SQUIRCLE`, `CIRCLE`, `HEART`) selectable from the top-right three-dot menu `( ⋮ )` bottom sheet, featuring custom Bezier vector clipping for the heart shape.
+  - **Dynamic Theme Palette & Starfield Preservation**: Preserved dynamic album art palette ambient lighting and cinematic kinetic starfield backdrop.
+- **Selectable Lyrics (`FullScreenLyricsView.kt`)**:
+  - Wrapped classic full-screen and landscape lyrics in `SelectionContainer` for user text highlighting, copy, and gesture interaction.
+- **Multi-Provider Lyrics Expansion (`LyricsRepository.kt`, `Musixmatch.kt`, `Unison.kt`, `FastbootEraseLrcRead.kt`)**:
+  - Integrated **Musixmatch** (with duration tolerance matching `abs(duration - expected) <= 4`) and **Unison** / `FastbootErase` fallback sources.
+  - Visual status indicator icons in the lyrics source selector (Searching, Found & Connected, Fallback).
+- **1200p Ultra-High-Resolution Cover Art Pipeline (`InnerTubeClient.kt`)**:
+  - Automatic URL transformer upgrading `lh3.googleusercontent.com` and `yt3.ggpht.com` covers to 1200×1200p resolution.
+- **Decoder & Audio Engine Reliability**:
+  - 32-bit float audio sink clamp for older Android devices, Vorbis/Opus tag parser resilience, and cold-start replay HTTP 403 prevention.
+
+---
+
+### [2026-11-22] - BitChord 1-to-1 Video Search, Subtitle Extraction & Track Matching
+- **InnerTube Search & Subtitle Parser Parity (`InnerTubeClient.kt`)**:
+  - Replaced naive `subtitleRuns.firstOrNull()` with BitChord's multi-pass `artistNamesFromRuns()` grouping and `TYPE_WORDS` / `TALLY_REGEX` filtering.
+  - Eliminated corrupted `"Song"` / `"Video"` artist names in search results, restoring genuine artist names (e.g. "The Weeknd", "Arijit Singh") and albums across English, Hindi, and regional music.
+  - Added video detection based on `16:9` aspect ratio and non-square thumbnail dimension heuristics (`thumbnails.isNotSquare()`).
+  - Switched `searchMusicVideo` queries to clean BitChord format (`"$title $artist"`, `"$title"`) under `SearchFilter.VIDEOS`, eliminating keyword search traps.
+  - Enhanced `fetchOfficialVersionPair` to strictly prioritize `MUSIC_VIDEO_TYPE_OMV` (Official Music Video) over UGC lyric/cover counterparts.
+- **Video Track Matcher Overhaul (`VideoTrackMatcher.kt`)**:
+  - Implemented BitChord's `allowVideoDrift` duration math: when artist matches, narrative/cinematic intro/outro drift up to 180s carries zero penalty, allowing official music videos like "Blinding Lights" (4:30 vs 3:20) to win.
+  - Added strict anti-lyric/anti-audio penalty (`-800.0`) for `"lyrics"`, `"lyric video"`, `"visualizer"`, and `"audio"`, preventing lyric videos from beating official videos.
+  - Added `+450.0` boost for official music video markers (`"official music video"`, `"official video"`, `"video oficial"`, `"m/v"`).
+  - Added `searchableTitle` and `primaryArtist` functions for clean query decomposition.
+- **Search UI Formatting (`GlobalSearchSheet.kt`)**:
+  - Cleaned subtitle rendering to display `${track.artist} • ${track.album}` with intelligent fallbacks.
+
+### [2026-11-22] - Offline Lyrics Romanization & Dual-Line Translation (Apple Music Style)
+- **Data Models & Script Detection (`:core-model`, `:core-library`)**:
+  - Added `RomanizationScript` enum supporting Korean Hangul, Japanese Romaji, Chinese Pinyin, Urdu Nastaliq, Hindi Devanagari, Cyrillic, and Spanish Latin.
+  - Added `LyricsDisplayMode` enum (`ORIGINAL_ONLY`, `DUAL_LINE`, `ROMANIZED_ONLY`).
+  - Added `val romanizedText: String? = null` to `LyricWord` and `val romanizedText: String? = null`, `val translationText: String? = null`, `val detectedScript: RomanizationScript = RomanizationScript.NONE` to `LyricsLine`.
+  - Implemented pure Kotlin Unicode script detection (`ScriptDetector.kt`) and specialized poetic dictionary / phoneme normalization for Urdu (`UrduMusicalLexicon.kt`).
+  - Created `LyricsRomanizer.kt` providing word-by-word and line-by-line enrichment while strictly preserving timestamps, syllables, and background lines.
+- **Hexagonal Port & Android ICU Adapter (`:core-common`, `:app-android`)**:
+  - Defined pure Kotlin port `LyricsTransliterator` and thread-safe registry `PlatformTransliteratorRegistry` in `:core-common`.
+  - Implemented high-performance native adapter `AndroidIcuTransliterator` in `:app-android` backed by `android.icu.text.Transliterator` with generic Latin-ASCII, Hangul, Cyrillic, Devanagari, and Arabic engines.
+  - Initialized registry inside `NodePlayerApplication.onCreate()`.
+- **Karaoke Timing & UI Renderers (`:core-ui`)**:
+  - Updated `LyricLineItem.kt` with `LyricLineContent` and dual-line/romanized rendering, preserving smooth feathered sweep masks and text layout measurements.
+  - Updated `WordByWordKaraokeText.kt` with Apple Music style dual-line stacked subtitles, maintaining 120 FPS sub-frame sync without audio/visual drift.
+  - Added "Romanize Foreign Lyrics" switch and "Display Mode" segmented control (`Original`, `Dual-Line`, `Romanized`) to `LyricsSettingsBottomSheet.kt`.
+- **Settings Persistence (`LyricsSettingsRepository.kt`)**:
+  - Added `KEY_LYRICS_ROMANIZE_FOREIGN` and `KEY_LYRICS_DISPLAY_MODE` DataStore keys with reactive state propagation.
+
+### [2026-11-22] - Critical Playback, DSP, UI Wiring, and Core Subsystem Fixes
+- **Playback & Queue Loop Control (`CrossfadePlayerManager.kt`)**: Added `repeatMode` evaluation on `Player.STATE_ENDED` to prevent infinite looping when Repeat is OFF (`REPEAT_MODE_OFF`).
+- **Tag Parser Fixes (`AudioHeaderParser.kt`)**: Resolved Vorbis / Opus comment parsing crash by scanning for `"vorbis"` (6-byte) and `"OpusTags"` (8-byte) identifiers and skipping them before parsing the vendor length.
+- **DSP Zero-Allocation Hot Path (`DspChain.kt`, `DspProcessors.kt`)**: Removed per-sample `Pair<Float, Float>` allocations from DSP processing loop by adding in-place `FloatArray` buffers, preventing ~352,800 allocations/sec.
+- **Convolver Anti-Clipping Stage Reordering (`DspChain.kt`)**: Reordered `convolver.processBlock` to execute prior to the 32-bit soft limiter, guaranteeing digital clipping prevention.
+- **Discovery Queue Preservation (`SharedPlayerLayout.kt`)**: Preserved existing playback queue on discovery card taps instead of resetting to a single-item queue.
+- **Artist Double Shuffle Fix (`MainActivity.kt`)**: Shuffled artist top tracks once to ensure initial played track matches the first queue item.
+- **Repeat Mode UI Wiring (`PlayerViewModel.kt`, `MainActivity.kt`)**: Wired `repeatMode` StateFlow and `cycleRepeatMode()` to the playback options sheet.
+- **Playlist Detail Track Resolution (`SharedPlayerLayout.kt`)**: Replaced flawed album title matching with async playlist track fetching via `SharedInnerTubeProvider`.
+- **False Downloaded Flag Fix (`Track.kt`)**: Removed generic `/Music/` directory matching from `isDownloaded`.
+- **LRC Negative Duration Clamping (`LrcParser.kt`)**: Ensured `startMs <= endMs` by clamping word duration to remaining line time.
+- **Output Device Fallback Renaming**: Replaced hardcoded `"krighz's Phone"` and `"This phone"` with neutral `"This Device"`.
+- **Spotify Match Resolution (`MainActivity.kt`)**: Appended user-resolved track candidate to `spotifyMatchedTracks`.
+- **ITU-R BS.1770 LUFS Correction (`LoudnessR128.kt`)**: Corrected BS.1770 loudness calculation to avoid dividing power by channel count.
+- **Audio Profile Serialization Fixes (`DspProcessors.kt`)**: Scoped JSON parsing blocks to eliminate `"enabled"` key collision, and added full `reverbConfig` and `convolverConfig` serialization.
+- **YouTube Auth & Cookie Preservation (`StreamResolver.kt`, `StreamFormatResolver.kt`)**: Defaulted `innerTubeClient` to `SharedInnerTubeProvider.get()`.
+- **Multiplatform File Chooser Decoupling (`PlatformFileDialog.kt`, `SharedPlayerLayout.kt`)**: Created `expect/actual` file dialog abstraction, removing direct `javax.swing.*` dependencies from `commonMain`.
+- **Updater Callback Wiring (`MainActivity.kt`)**: Connected `onStartUpdate` and `onCancelUpdate` to `UpdateDownloadManager`.
+
+---
+- **Album Art 1:1 Aspect Ratio Preservation (`NowPlayingView.kt`)**:
+  - Resized the hero artwork container strictly to the 45%–48% screen height mark (`(screenHeight * 0.46f).coerceIn(340.dp, 440.dp)`), forming a natural 1:1 square container matching phone width.
+  - Eliminated over-zooming and horizontal cropping (`artZoomScale = 1.0f`, blur layer `scaleX = 1.0f, scaleY = 1.0f`).
+  - Retained the seamless progressive gradient blur in the lower portion of the artwork and the alpha dissolve mask (`heroArtworkAlphaBrush` and `gradientBlurAlphaBrush`), keeping the transition into the existing bottom ambient blur and controls completely seamless.
+- **Full-Screen Lyrics 50% Height Bottom Sheet (`LyricsSettingsBottomSheet.kt`)**:
+  - Constrained sheet height to at most 50% of the screen height (`maxHeight * 0.52f`), with top drag handle and internal vertical scrolling.
+  - **Main Menu**:
+    - Top Section: Selectable LRC / Lyrics Providers (Auto, Apple Music TTML, LrcLib, BetterLyrics, LyricsPlus, KuGou, Local File) with single-tap provider switching and immediate reload.
+    - Lyrics Style Bar: Segmented 2-pill toggle between `Cinematic Kinetic` and `Classic Fullscreen`.
+    - Lyrics Style & Settings Menu Item: Glass navigation card with chevron `>` navigating to the customization sub-page within the 50% sheet.
+    - Quick Actions: Sync Offset (`± ms`), Search / Reload Lyrics, Share Lyrics Card.
+  - **Customization Sub-Page**:
+    - Back button (`←`), Mode title, and Close button.
+    - Kinetic Mode: Glow Palette selection, Viewport Zoom, Camera Glide, Word Bounce, Left/Right Swing, Vertical Spacing, Sparkle Density, Shuffle Layout, and Top Bar switch.
+    - Classic Mode: Master Zoom, Line Spacing, and Top Bar switch.
+- **Lyrics Provider Interchange & Status Architecture (`LyricsRepository.kt`, `Musixmatch.kt`, `Unison.kt`, `LyricsSettingsBottomSheet.kt`)**:
+  - Added `Musixmatch` (RichSync word timing & 14M+ song catalog) and `Unison` (Karaoke & Asian synced catalog) clients to `:core-library`.
+  - Added `LRC_RED`, `MUSIXMATCH`, and `UNISON` to `LyricsProviderChoice` enum.
+  - Implemented 3 interactive status indicators on each provider in the provider/source selector:
+    - 🔍 **Click to Search** (`Icons.Rounded.Search`): Idle provider ready to query on click.
+    - 🎵 **Lyrics Found** (`Icons.Rounded.MusicNote`): Green badge confirming lyrics are discovered/cached from this source.
+    - ✓ **Connected • OK** (`Icons.Rounded.Check`): Active provider currently driving playback.
+  - Added Compose `SelectionContainer` around lyrics in `FullScreenLyricsView.kt`, making all lyrics lines and words directly selectable and copyable with native text selection.
+  - Added dedicated "Select Lyrics Lines" action menu item in `LyricsSettingsBottomSheet` to trigger interactive line card multi-selection.
+- **Lyrics Provider Interchange Architecture (`LyricsRepository.kt`, `LyricsManager.kt`, `LyricsSettingsRepository.kt`)**:
+  - Added `LyricsProviderChoice` enum with support for direct targeted fetching from individual providers when automatic discovery returns wrong lyrics.
+  - Added DataStore persistence for `KEY_LYRICS_PREFERRED_PROVIDER`.
+
+---
+
+### [2026-11-22] - High-Resolution Album Art Upgrade, Streaming Quality Hub & Range Chunking Verification
+- **High-Resolution Album Art Pipeline (`AudioArtworkFetcher.kt`, `ArtworkLoader.kt`, `ArtworkUrlResolver.kt`)**:
+  - Replaced legacy 256px downsampling with dynamic target resolution (1200px for High/Ultra, 544px for Medium, 256px for Data Saver).
+  - Fixed local track loading on Android 10+ to directly decode embedded artwork via `MediaMetadataRetriever` at ARGB_8888 full resolution rather than prematurely falling back to low-res MediaStore thumbnails.
+  - Eliminated RGB_565 bit depth downscaling, preserving full 32-bit color fidelity and preventing visual color banding.
+  - Upgraded remote artwork URL handling to replace low-res YouTube thumbnails (`hqdefault.jpg`) with `maxresdefault.jpg` (1280x720) and `hq720.jpg` fallbacks.
+  - Dynamically boosted YouTube Music Google CDN artwork URLs from `=w120-h120` to `=w1200-h1200-l90-rj`.
+- **Online Music & Streaming Services Hub Reorganization (`SettingsScreen.kt`, `SettingsView.kt`)**:
+  - Renamed settings group to `"Online Music & Streaming Services"`, combining YouTube Music and Last.fm into a single unified control hub.
+  - Section 1: Online Services & Accounts (YouTube Music toggle, YouTube sign-in, Last.fm toggle, auth status, offline queue sync).
+  - Section 2: Streaming Quality & Media Resolution:
+    - Audio Quality selection with explicit kbps ratings (`High ~160-256 kbps`, `Medium ~128 kbps`, `Low ~48-70 kbps`).
+    - Album Artwork Quality selection (`1200p HD`, `544p Balanced`, `256p Data Saver`).
+    - Video Stream Resolution selection (`1080p`, `720p`, `480p`, `360p`, `Auto`).
+- **Chunking Range Probing & Multi-Song Quality Verification (`StreamQualityAndChunkingTest.kt`)**:
+  - Implemented unit tests validating format ranking and selection across different songs ("Thunder", "Rock That Body", "Comfortably Numb") for High, Medium, and Low quality presets.
+  - Verified HTTP 206 Partial Content range chunking (`bytes=0-1024`, `bytes=0-2048`, `bytes=0-511`) for audio streams, video streams, and album artwork image header requests.
+
+---
+
+### [2026-11-22] - FLAC to Opus Converter Storage Fix, Location Prompt & Metadata Extraction
+- **Opus Muxer Crash Resolution (`AndroidFFmpegTranscoder.kt`, `DesktopFFmpegTranscoder.kt`)**:
+  - Removed video stream mapping (`-map 0:v:0? -c:v copy -disposition:v:0 attached_pic`) that previously caused FFmpeg's Opus muxer to immediately crash with exit code 1 (`Unsupported codec id in stream 1 / Invalid argument`).
+  - Switched to Vorbis comment cover embedding via `METADATA_BLOCK_PICTURE` (RFC 7845 standard) and `-map_metadata 0`.
+  - Replaced shell string concatenation with `FFmpegKit.executeWithArgumentsAsync(args)` on Android, eliminating command-line quoting issues with paths containing spaces or special characters.
+- **Pre-Conversion Output Destination Prompt (`AudioConverterView.kt`)**:
+  - Before starting conversion, if `destinationFolder == null` and `!outputNextToOriginal`, the app displays an `Output Location Required` modal dialog allowing the user to select an output folder via Browse, save next to original FLACs, or cancel.
+  - Replaced pitch-black window surface (`#000000`) with sleek modern dark charcoal gray (`Color(0xFF141418)`), with integrated status bar and navigation bar padding.
+- **Android Scoped Storage & Permission Safety (`MainActivity.kt`, `AndroidManifest.xml`)**:
+  - Initialized converter destination folder to `context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)/Converted`, ensuring guaranteed write permissions without permission popups across all Android versions (Android 8 to 14+).
+  - Integrated `ActivityResultContracts.OpenDocumentTree()` for custom folder selection.
+  - Added `WRITE_EXTERNAL_STORAGE` (`maxSdkVersion="29"`) and `android:requestLegacyExternalStorage="true"` in `AndroidManifest.xml`.
+- **Pure Kotlin FLAC Metadata, Cover & Lyrics Extraction (`FlacMetadataExtractor.kt`, `TranscodeQueueManager.kt`)**:
+  - Created `FlacMetadataExtractor.kt` in `:core-library` to parse FLAC block 6 (PICTURE) raw bytes/MIME/Base64 and block 4 (VORBIS_COMMENT) lyrics without Android dependencies.
+  - Automatically extracts and exports companion cover art (`${output.nameWithoutExtension}.jpg` / `.png`) and companion lyrics (`${output.nameWithoutExtension}.lrc`) into the destination directory upon verified transcode.
+  - Automatically embeds Vorbis comments `METADATA_BLOCK_PICTURE` and `LYRICS` directly into the transcoded `.opus` file.
+
+### [2026-11-22] - Seamless Album Art Gradient Blur & Bottom Layer Continuity
+- **Continuous Hero Artwork Container (`NowPlayingView.kt`)**:
+  - Expanded hero container to full screen height in audio mode, eliminating the artificial height boundary that produced a hard horizontal line above the timeline scrubber.
+  - Retained 16:9 video presentation mode intact.
+- **Dual-Layer Progressive Gradient Blur (`NowPlayingView.kt`)**:
+  - Overlaid a blurred copy of the artwork (`blur(28.dp)`) over the sharp base artwork using `CompositingStrategy.Offscreen` and `BlendMode.DstIn`.
+  - Applied `gradientBlurAlphaBrush` so the top face and background remain 100% sharp and unblurred, while the blur layer smoothly emerges in the shaded region over the track title, artist name, star/menu buttons, and instrumental chip.
+- **Seamless Alpha Dissolve into Existing Bottom Album Art Gradient (`NowPlayingView.kt`)**:
+  - Replaced opaque black color gradient with an alpha dissolve mask (`heroArtworkAlphaBrush` via `BlendMode.DstIn`), smoothly fading the hero artwork directly into the existing bottom album art gradient (blurred 90dp backdrop + ambient mesh glow).
+  - Added subtle text-contrast scrim (`textContrastScrimBrush`) across the title/artist zone to preserve crisp legibility while keeping the colorful blurred art visible underneath.
+
+### [2026-11-21] - Cinematic Lyrics Dynamic Camera, Pre-Highlight Bugfix, Transparent Top Bar & Seamless Artwork
+- **Monotonic Word Timing & Pre-Highlight Gating (`CinematicKineticLyricsView.kt`)**:
+  - Enforced monotonic sequencing across all word timings (`word[i].startMs >= prevWord.endMs`), preventing overlaps that caused early pre-highlighting of words like "I", "me", "made", "feel".
+  - Created 4-tier visual hierarchy: active word with sweep brush + bloom glow, current phrase sung words with solid crisp white (0.88f), past phrases dimmed (0.32f), and upcoming phrases locked to deep unlit dim (0.18f).
+- **Distance-Adaptive Spring Camera & Lookahead (`CinematicKineticLyricsView.kt`)**:
+  - Distance-boosted spring omega (`dynamicOmega = 5.2f * cameraGlide * (1f + travelDist / (140 * density))`) enables dynamic high-speed camera leaps across the screen.
+  - Anticipatory lookahead in final 240ms of active word shifts camera focus toward next word before it starts.
+- **Instrumental Break Dedicated Placement (`CinematicKineticLyricsView.kt`)**:
+  - Centered pulsing dots at `instCx = 0f` with generous vertical clearance (160f top, 240f bottom), removing them from lyrics text line flow.
+  - Inactive break dots are culled outside their timing window, eliminating ghost dots lingering over lyrics.
+- **100% Transparent Floating Header Overlay (`FullScreenLyricsView.kt`)**:
+  - Made lyrics stage edge-to-edge fullscreen base layer (`fillMaxSize()`, `zIndex(0f)`); top header and bottom controls render as transparent floating overlays (`zIndex(2f)`).
+  - Eliminated opaque brown/yellow drawer container; floating album art thumbnail, share button, title/artist, favorite star, and menu button float cleanly over the starfield.
+- **Seamless Now Playing Album Art Gradient (`NowPlayingView.kt`)**:
+  - Lowered bottom controls reserved height to 310dp so album art extends 75dp deeper behind controls.
+  - Replaced linear fade with 6-stop smooth quadratic gradient, blending artwork seamlessly into 100% pure black with no harsh cutoff seam.
+
+### [2026-11-21] - Cinematic Kinetic Lyrics Engine Optimization & Auto-Hide Gestures
+- **Zero-Lag Engine Optimization (`CinematicKineticLyricsView.kt`)**:
+  - Eliminated per-frame `textMeasurer.measure` calls by caching `TextLayoutResult` directly on `KineticWordNode` during initial layout generation.
+  - Eliminated pointer input cancellation loops by detaching dynamic camera states from `pointerInput` keys.
+  - Added vertical viewport culling, rendering only words and blocks within `[camY - viewHalfH, camY + viewHalfH]` (80–90% draw call reduction).
+  - Reused scratch `Path` for 4-point diamond glint starfield particles, eliminating heap allocations per frame.
+  - Integrated 60–120fps sub-frame position interpolation (`smoothPlaybackMs += dt * 1000f`) reconciling with `currentPositionProvider()`.
+  - Enforced strictly monotonic color stops (`0.0f < s0 < s1 < s2 < 1.0f`) on the horizontal sweep gradient to eliminate Skia/AGSL clamping stalls.
+- **Auto-Hiding Header & Gesture Controls (`FullScreenLyricsView.kt`)**:
+  - Header auto-hides during playback for an unobstructed full-screen lyrics experience.
+  - Single screen touch or movement brings back the header for 2 seconds.
+  - Two-finger downward swipe brings back the header for 3 to 4 seconds (3500ms).
+  - Tapping on the header or menu locks it open ("open and wait").
+  - Dismissing or closing ("cutting") the sheet/menu resets the auto-hide timer to 3.5 seconds before hiding.
+  - Favorite star button (`[ ⭐ Star ]`) and overflow menu (`[ ⋮ Menu ]`) preserved completely intact with spring animated transitions.
+
+### [2026-11-21] - Cinematic Kinetic Lyrics Engine & Unified Overflow Menu
+- **Cinematic Kinetic Lyrics Rendering Engine (`CinematicKineticLyricsView.kt`)**:
+  - Implemented high-refresh-rate Compose Multiplatform hardware-accelerated canvas engine (60–120fps).
+  - TTML & LRC layout architecture with procedural stanza void gaps, intra-phrase clumping, and organic L/R/Center alignment.
+  - Floating 3-dot instrumental breaks (`• • •`) with sinusoidal wave bobbing and progressive illumination (`0.0 → 1.0`).
+  - Glitch-free single-pass feathered `LinearGradient` active word sweep (no double-pass, zero clipRect seams).
+  - Critically-damped 2D camera physics with adaptive hero word framing and `smoothCommonZoom` interpolation.
+  - 3-layer parallax floating starfield modulated by `sparkleDensity`.
+  - Tap-to-seek on words via inverse camera unprojection.
+- **Preserved Classic Full-Screen Mode (`FullScreenLyricsView.kt`)**:
+  - Maintained previous full-screen lyrics scroll view intact as a selectable style (`CLASSIC_FULLSCREEN`), scaled cleanly by `commonZoom`.
+- **Spared Star Button & Option B Unified Overflow Menu (`FullScreenLyricsView.kt`)**:
+  - Kept existing favorite star button (`[ ⭐ Star ]`) completely intact.
+  - Placed unified overflow menu button (`[ ⋮ Menu ]`) opening the frosted-glass `LyricsSettingsBottomSheet` (providing style switching, common zoom, sparkle density, left/right swing, vertical spacing, camera glide, bounce, glow palettes, and top bar visibility).
+  - Added collapsible top bar with compact floating restore pill.
+- **Single Source of Truth Settings (`LyricsSettingsRepository.kt`, `SettingsScreen.kt`, `SettingsView.kt`)**:
+  - Persisted all lyrics settings in DataStore/SharedPreferences with reactive `StateFlow<LyricsSettings>`.
+  - Added matching Lyrics Style & Kinetic settings section to both Android App Settings and Desktop `SettingsView`.
 
 ### [2026-11-19] - BitChord-Inspired Music Video Resolution & Smart Offset Alignment
 - **Tier 1: Official InnerTube Version Pairing (`InnerTubeClient.kt`, `YouTubeModels.kt`)**:

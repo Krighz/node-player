@@ -4,6 +4,7 @@ import com.arthenica.ffmpegkit.FFmpegKit
 import com.arthenica.ffmpegkit.FFprobeKit
 import com.arthenica.ffmpegkit.ReturnCode
 import com.nodeplayer.common.logging.NodeLog
+import com.nodeplayer.library.converter.FlacMetadataExtractor
 import com.nodeplayer.model.converter.AudioTranscoder
 import com.nodeplayer.model.converter.TranscodeJob
 import kotlinx.coroutines.Dispatchers
@@ -14,56 +15,74 @@ import kotlin.coroutines.resume
 
 /**
  * Android FFmpeg transcoding engine using LGPL ffmpeg-kit-audio.
+ * Strictly muxes pure libopus audio into .opus containers with RFC 7845 Vorbis comments
+ * for metadata, cover art (METADATA_BLOCK_PICTURE), and lyrics.
  */
 class AndroidFFmpegTranscoder : AudioTranscoder {
 
     companion object {
         private const val TAG = "converter/android"
 
-        fun buildCommand(job: TranscodeJob): String {
-            val parts = mutableListOf(
+        fun buildArguments(
+            job: TranscodeJob,
+            base64Picture: String? = null,
+            lyrics: String? = null
+        ): List<String> {
+            val args = mutableListOf(
                 "-hide_banner",
                 "-nostdin",
                 "-y",
-                "-i", "\"${job.input.absolutePath}\"",
+                "-i", job.input.absolutePath,
                 "-map", "0:a:0"
             )
 
-            if (job.keepCover) {
-                parts.addAll(listOf("-map", "0:v:0?"))
-            }
-
             if (job.keepTags) {
-                parts.addAll(listOf("-map_metadata", "0"))
+                args.addAll(listOf("-map_metadata", "0"))
             }
 
-            parts.addAll(
+            // In Opus / Ogg containers, cover art must NOT be muxed as a video stream (-c:v copy),
+            // which crashes the Opus muxer. Instead, embed via RFC 7845 Vorbis comment METADATA_BLOCK_PICTURE.
+            if (job.keepCover && !base64Picture.isNullOrBlank()) {
+                args.addAll(listOf("-metadata", "METADATA_BLOCK_PICTURE=$base64Picture"))
+            }
+
+            if (!lyrics.isNullOrBlank()) {
+                args.addAll(listOf("-metadata", "LYRICS=$lyrics"))
+            }
+
+            args.addAll(
                 listOf(
                     "-c:a", "libopus",
                     "-b:a", "${job.bitrateKbps}k",
                     "-vbr", if (job.vbr) "on" else "off",
                     "-compression_level", job.compressionLevel.coerceIn(0, 10).toString(),
-                    "-application", job.application
+                    "-application", job.application,
+                    job.output.absolutePath
                 )
             )
 
-            if (job.keepCover) {
-                parts.addAll(listOf("-c:v", "copy", "-disposition:v:0", "attached_pic"))
-            }
+            return args
+        }
 
-            parts.add("\"${job.output.absolutePath}\"")
-            return parts.joinToString(" ")
+        fun buildCommand(job: TranscodeJob): String {
+            return buildArguments(job).joinToString(" ")
         }
     }
 
     override suspend fun transcode(job: TranscodeJob, onProgress: (Float) -> Unit): Result<File> =
         withContext(Dispatchers.IO) {
             job.output.parentFile?.mkdirs()
-            val command = buildCommand(job)
+
+            // Pre-extract embedded artwork and lyrics for RFC-compliant Vorbis comments
+            val flacPic = if (job.keepCover) FlacMetadataExtractor.extractPicture(job.input) else null
+            val companionLrc = FlacMetadataExtractor.findCompanionLrc(job.input)
+            val lyrics = companionLrc?.readText(Charsets.UTF_8) ?: FlacMetadataExtractor.extractLyrics(job.input)
+
+            val args = buildArguments(job, flacPic?.base64Payload, lyrics).toTypedArray()
 
             suspendCancellableCoroutine { continuation ->
-                val session = FFmpegKit.executeAsync(
-                    command,
+                val session = FFmpegKit.executeWithArgumentsAsync(
+                    args,
                     { completedSession ->
                         val returnCode = completedSession.returnCode
                         if (ReturnCode.isSuccess(returnCode)) {
@@ -71,7 +90,8 @@ class AndroidFFmpegTranscoder : AudioTranscoder {
                             continuation.resume(Result.success(job.output))
                         } else {
                             job.output.delete()
-                            val msg = "FFmpeg failed with return code: $returnCode"
+                            val allLogs = completedSession.allLogsAsString ?: "No FFmpeg logs"
+                            val msg = "FFmpeg failed with return code $returnCode: $allLogs"
                             NodeLog.w(TAG, msg)
                             continuation.resume(Result.failure(IllegalStateException(msg)))
                         }

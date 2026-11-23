@@ -8,8 +8,9 @@ import kotlin.math.abs
 
 /**
  * Intelligent matcher for music videos inspired by BitChord's TrackMatcher algorithm.
- * Decomposes track titles into core recording identity and listing packaging (e.g. "Official Music Video", "4K"),
- * validates artist overlap, checks version markers (remix, live, acoustic), and scores duration proximity.
+ * Decomposes track titles into core recording identity and packaging, validates artist overlap,
+ * strictly rejects lyric/karaoke/visualizer videos in favor of official music videos, and applies
+ * BitChord's duration tolerance allowing narrative/cinematic intros/outros up to 180s without penalty.
  */
 object VideoTrackMatcher {
 
@@ -18,46 +19,41 @@ object VideoTrackMatcher {
     private val WHITESPACE_REGEX = Pattern.compile("""\s+""")
     private val NON_ALPHANUMERIC_REGEX = Pattern.compile("""[^a-zA-Z0-9\s]""")
 
-    private val VIDEO_PACKAGING_TERMS = setOf(
-        "official video",
-        "official music video",
-        "official audio",
-        "official lyric video",
-        "lyric video",
-        "lyrics video",
-        "lyrics",
-        "visualizer",
-        "music video",
-        "video",
-        "clip officiel",
-        "video oficial",
-        "videoclip",
-        "4k",
-        "hd",
-        "uhd",
-        "hq",
-        "mv"
+    private val YOUTUBE_TYPE_LABELS = setOf(
+        "song", "video", "album", "single", "ep", "artist", "playlist", "podcast", "episode"
+    )
+
+    private val NOISE_WORDS = setOf(
+        "official", "video", "audio", "lyrics", "lyric", "lyrical", "visualizer",
+        "song", "songs", "full", "music", "the", "and", "from", "feat", "ft",
+        "featuring", "with", "new", "latest", "free", "download", "remaster",
+        "remastered", "explicit", "clean", "bonus", "track", "deluxe", "original",
+        "album", "single", "hd", "hq", "4k", "mp3", "mv"
     )
 
     private val VERSION_TERMS = setOf(
-        "remix",
-        "acoustic",
-        "live",
-        "unplugged",
-        "instrumental",
-        "orchestral",
-        "karaoke",
-        "slowed",
-        "reverb",
-        "sped up",
-        "extended",
-        "radio edit",
-        "cover"
+        "remix", "remixes", "rmx", "refix", "flip", "bootleg", "mashup", "medley",
+        "live", "concert", "unplugged", "acoustic", "instrumental", "karaoke",
+        "vocals", "vocal", "acapella", "acappella", "backing", "stems", "stem",
+        "cover", "demo", "reprise", "remake", "rework", "extended", "edit",
+        "sped", "slowed", "reverb", "nightcore", "lofi", "orchestral", "symphonic"
+    )
+
+    private val ANTI_VIDEO_TERMS = setOf(
+        "lyrics", "lyric", "lyrical", "lyric video", "lyrics video",
+        "official lyric video", "official lyrics video", "audio", "official audio",
+        "audio only", "visualizer", "official visualizer", "karaoke", "instrumental", "cover"
+    )
+
+    private val OFFICIAL_VIDEO_TERMS = listOf(
+        "official music video", "official video", "music video", "video oficial",
+        "clip officiel", "m/v", "[mv]", "(mv)", "videoclip"
     )
 
     data class TitleParts(
         val coreWords: List<String>,
-        val versions: Set<String>
+        val versions: Set<String>,
+        val rawClean: String
     )
 
     fun normalize(text: String): String {
@@ -65,6 +61,20 @@ object VideoTrackMatcher {
         return decomposed.replace(Regex("""\p{M}"""), "")
             .lowercase(Locale.ROOT)
             .trim()
+    }
+
+    /** Extracts clean searchable title without noise packaging per BitChord's searchableTitle. */
+    fun searchableTitle(title: String, artist: String = ""): String {
+        val parts = parseTitle(title)
+        val core = parts.coreWords.filter { it !in NOISE_WORDS }
+        return (core + parts.versions).joinToString(" ").ifBlank { normalize(title) }
+    }
+
+    /** Extracts primary artist name, skipping YouTube type badges per BitChord's primaryArtist. */
+    fun primaryArtist(artist: String): String {
+        val norm = normalize(artist)
+        val primary = norm.split(Regex("""[,&/+]|\band\b|\bfeat\b|\bft\b""")).firstOrNull()?.trim().orEmpty()
+        return if (primary.lowercase(Locale.ROOT) in YOUTUBE_TYPE_LABELS) "" else primary
     }
 
     fun parseTitle(rawTitle: String): TitleParts {
@@ -93,31 +103,33 @@ object VideoTrackMatcher {
         val parts = DASH_SPLIT_REGEX.split(clean).map { it.trim() }
         val remainingParts = mutableListOf<String>()
         for (part in parts) {
-            var isPackaging = false
-            for (pkg in VIDEO_PACKAGING_TERMS) {
-                if (part == pkg || part.startsWith("$pkg ") || part.endsWith(" $pkg")) {
-                    isPackaging = true
+            var isNoise = false
+            for (noise in NOISE_WORDS) {
+                if (part == noise || part.startsWith("$noise ") || part.endsWith(" $noise")) {
+                    isNoise = true
                     break
                 }
             }
             for (term in VERSION_TERMS) {
                 if (part.contains(term)) versions.add(term)
             }
-            if (!isPackaging) {
+            if (!isNoise) {
                 remainingParts.add(part)
             }
         }
 
         clean = remainingParts.joinToString(" ")
+        val rawClean = clean
         clean = NON_ALPHANUMERIC_REGEX.matcher(clean).replaceAll(" ")
         val coreWords = WHITESPACE_REGEX.split(clean).filter { it.isNotBlank() }
 
-        return TitleParts(coreWords = coreWords, versions = versions)
+        return TitleParts(coreWords = coreWords, versions = versions, rawClean = rawClean)
     }
 
     /**
      * Scores a candidate music video Track against the target audio Track.
-     * Returns null if candidate is rejected due to title divergence, artist mismatch, or duration mismatch.
+     * Implements BitChord's duration tolerance (cinematic intro/outro up to 180s without penalty when artist matches),
+     * strict anti-lyric/anti-audio rejection, and official music video bonuses.
      */
     fun scoreCandidate(wantedTitle: String, wantedArtist: String, wantedDurationMs: Long?, candidate: Track): Double? {
         val wantedParts = parseTitle(wantedTitle)
@@ -138,39 +150,66 @@ object VideoTrackMatcher {
             return null
         }
 
-        // Artist check: at least part of the artist name must appear in candidate's artist or title
-        val normWantedArtist = normalize(wantedArtist)
-        val normCandidateArtist = normalize(candidate.artist)
-        val normCandidateTitle = normalize(candidate.title)
+        val candLower = candidate.title.lowercase(Locale.ROOT)
+        val candArtistLower = candidate.artist.lowercase(Locale.ROOT)
 
-        val artistTokens = normWantedArtist.split(Regex("""[,&/+]|\band\b|\bfeat\b|\bft\b"""))
-            .map { it.trim() }
-            .filter { it.length >= 2 }
-
-        val artistMatches = artistTokens.any { token ->
-            normCandidateArtist.contains(token) || normCandidateTitle.contains(token)
+        // Strict Anti-Lyric & Anti-Audio Penalty:
+        // A video containing "lyrics", "audio", "visualizer", or "karaoke" must NEVER beat an official music video.
+        var isAntiVideo = false
+        for (anti in ANTI_VIDEO_TERMS) {
+            if (candLower.contains(anti)) {
+                isAntiVideo = true
+                break
+            }
         }
 
-        if (!artistMatches && normWantedArtist.isNotBlank() && normWantedArtist != "unknown artist") {
+        // Artist check: at least part of the artist name must appear in candidate's artist or title
+        val normWantedArtist = normalize(wantedArtist)
+        val artistTokens = normWantedArtist.split(Regex("""[,&/+]|\band\b|\bfeat\b|\bft\b"""))
+            .map { it.trim() }
+            .filter { it.length >= 2 && it !in YOUTUBE_TYPE_LABELS }
+
+        val artistMatches = artistTokens.any { token ->
+            candArtistLower.contains(token) || candLower.contains(token)
+        }
+
+        if (!artistMatches && normWantedArtist.isNotBlank() && normWantedArtist != "unknown artist" && normWantedArtist !in YOUTUBE_TYPE_LABELS) {
             return null
         }
 
         var score = 1000.0 * overlapRatio
 
-        // Duration validation: music videos often have intros/outros (tolerance ±120s)
-        if (wantedDurationMs != null && wantedDurationMs > 10_000L && candidate.durationMs > 10_000L) {
-            val driftSec = abs(wantedDurationMs - candidate.durationMs) / 1000
-            if (driftSec > 180) {
-                // Reject hour loops or massive deviations
-                return null
-            }
-            score -= driftSec * 1.5
+        // Penalize lyric/audio videos heavily (-800) so official music videos always win
+        if (isAntiVideo) {
+            score -= 800.0
         }
 
-        // Reward explicit official video tags
-        val candLower = candidate.title.lowercase(Locale.ROOT)
-        if (candLower.contains("official video") || candLower.contains("official music video")) {
-            score += 150.0
+        // BitChord Duration Tolerance:
+        // A music video often includes a visual/narrative intro or outro (e.g. Blinding Lights 4:30 vs 3:20).
+        // When the artist matches, drift up to 180 seconds carries 0 penalty!
+        if (wantedDurationMs != null && wantedDurationMs > 10_000L && candidate.durationMs > 10_000L) {
+            val driftSec = (candidate.durationMs - wantedDurationMs) / 1000
+            if (driftSec < -30) {
+                // Video is significantly shorter than the song (cut off or preview)
+                score -= abs(driftSec) * 3.0
+            } else if (driftSec > 180) {
+                // Excessively long (movie version or loop)
+                score -= (driftSec - 180) * 2.0
+            }
+            // Drift between -30s and +180s gets 0 penalty (BitChord allowVideoDrift rule)
+        }
+
+        // Reward official music video markers (+450)
+        for (official in OFFICIAL_VIDEO_TERMS) {
+            if (candLower.contains(official)) {
+                score += 450.0
+                break
+            }
+        }
+
+        // Channel/Artist verification bonus (+250): candidate channel or artist name matches
+        if (artistTokens.any { candArtistLower.contains(it) } || candArtistLower.contains("vevo") || candArtistLower.contains("official")) {
+            score += 250.0
         }
 
         return score

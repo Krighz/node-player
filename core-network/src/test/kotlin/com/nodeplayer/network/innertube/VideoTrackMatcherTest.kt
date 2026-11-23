@@ -70,4 +70,70 @@ class VideoTrackMatcherTest {
         assertNotNull(match)
         assertEquals(1L, match?.id)
     }
+
+    @Test
+    fun rejectsLyricVideoAndSelectsOfficialMusicVideoDespiteIntroDrift() {
+        val lyricVideo = createTrack(
+            id = 1,
+            title = "The Weeknd - Blinding Lights (Lyrics)",
+            artist = "7clouds",
+            durationMs = 200_000L, // Exact 3:20 duration matching audio
+            path = "nodeplayer://youtube/lyric_vid"
+        )
+        val officialVideo = createTrack(
+            id = 2,
+            title = "The Weeknd - Blinding Lights (Official Music Video)",
+            artist = "TheWeekndVEVO",
+            durationMs = 270_000L, // 4:30 duration with 70s cinematic intro/outro
+            path = "nodeplayer://youtube/4NRXx6U8ABQ"
+        )
+
+        val match = VideoTrackMatcher.bestMatch(
+            wantedTitle = "Blinding Lights",
+            wantedArtist = "The Weeknd",
+            wantedDurationMs = 200_000L,
+            candidates = listOf(lyricVideo, officialVideo)
+        )
+
+        assertNotNull(match)
+        assertEquals(2L, match?.id)
+        assertEquals("nodeplayer://youtube/4NRXx6U8ABQ", match?.path)
+    }
+
+    @Test
+    fun rejectsVisualizerAndAudioOnlyVideos() {
+        val audioOnly = createTrack(
+            id = 1,
+            title = "Diljit Dosanjh - Lover (Official Audio)",
+            artist = "Diljit Dosanjh",
+            durationMs = 190_000L,
+            path = "nodeplayer://youtube/audio_vid"
+        )
+        val officialVideo = createTrack(
+            id = 2,
+            title = "Diljit Dosanjh - Lover (Official Music Video)",
+            artist = "Diljit Dosanjh",
+            durationMs = 240_000L,
+            path = "nodeplayer://youtube/real_mv"
+        )
+
+        val match = VideoTrackMatcher.bestMatch(
+            wantedTitle = "Lover",
+            wantedArtist = "Diljit Dosanjh",
+            wantedDurationMs = 190_000L,
+            candidates = listOf(audioOnly, officialVideo)
+        )
+
+        assertNotNull(match)
+        assertEquals(2L, match?.id)
+    }
+
+    @Test
+    fun testBitChordSearchableTitleAndPrimaryArtist() {
+        assertEquals("blinding lights", VideoTrackMatcher.searchableTitle("The Weeknd - Blinding Lights (Official Video) [4K]"))
+        assertEquals("the weeknd", VideoTrackMatcher.primaryArtist("The Weeknd feat. Daft Punk"))
+        assertEquals("arijit singh", VideoTrackMatcher.primaryArtist("Arijit Singh, Shreya Ghoshal"))
+        assertEquals("", VideoTrackMatcher.primaryArtist("Song"))
+        assertEquals("", VideoTrackMatcher.primaryArtist("Video"))
+    }
 }

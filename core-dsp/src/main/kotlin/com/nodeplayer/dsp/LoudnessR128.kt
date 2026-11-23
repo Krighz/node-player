@@ -89,7 +89,7 @@ object LoudnessR128 {
                     sampleIdx += channels
                 }
             }
-            val meanSquare = (sumSquare / (blockSizeFrames * channels)).toFloat()
+            val meanSquare = (sumSquare / blockSizeFrames).toFloat()
             blockPowers.add(meanSquare)
             frame += hopSizeFrames
         }

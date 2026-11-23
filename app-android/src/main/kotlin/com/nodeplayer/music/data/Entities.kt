@@ -208,3 +208,27 @@ data class FollowedArtistEntity(
     val avatarUrl: String? = null,
     val followedAt: Long = System.currentTimeMillis()
 )
+
+@Entity(
+    tableName = "playback_history",
+    indices = [
+        Index(value = ["songId", "playedAt"]),
+        Index(value = ["playedAt"])
+    ]
+)
+data class PlaybackHistoryEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val songId: String,
+    val playedAt: Long,
+    val durationPlayedSeconds: Long
+)
+
+@Entity(tableName = "song_stats")
+data class SongStatsEntity(
+    @PrimaryKey val songId: String,
+    val title: String,
+    val artist: String,
+    val totalPlayTimeSeconds: Long = 0L,
+    val playCount: Int = 0,
+    val lastPlayedAt: Long = 0L
+)

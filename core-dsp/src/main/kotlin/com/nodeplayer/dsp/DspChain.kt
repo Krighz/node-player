@@ -93,6 +93,8 @@ class DspChain {
         crossfeed.reset()
     }
 
+    private val stereoHolder = FloatArray(2)
+
     /**
      * Process an interleaved Float buffer (Left, Right, Left, Right...) in place.
      */
@@ -111,57 +113,61 @@ class DspChain {
             r = preamp.process(r) * abGainMultiplier
 
             // 2. Parametric EQ
-            val eqOut = equalizer.processStereoSample(l, r)
-            l = eqOut.first
-            r = eqOut.second
+            equalizer.processStereoSample(l, r, stereoHolder)
+            l = stereoHolder[0]
+            r = stereoHolder[1]
 
             // 3. Tone Controls (Bass/Treble Shelf)
-            val toneOut = toneControls.processStereo(l, r)
-            l = toneOut.first
-            r = toneOut.second
+            toneControls.processStereo(l, r, stereoHolder)
+            l = stereoHolder[0]
+            r = stereoHolder[1]
 
             // 4. Loudness Compensation
-            val loudOut = loudness.processStereo(l, r)
-            l = loudOut.first
-            r = loudOut.second
+            loudness.processStereo(l, r, stereoHolder)
+            l = stereoHolder[0]
+            r = stereoHolder[1]
 
             // 5. Harmonic Bass Enhancer
-            val harmOut = harmonicBass.processStereo(l, r)
-            l = harmOut.first
-            r = harmOut.second
+            harmonicBass.processStereo(l, r, stereoHolder)
+            l = stereoHolder[0]
+            r = stereoHolder[1]
 
             // 6. Stereo Width
-            val widthOut = stereoWidth.process(l, r)
-            l = widthOut.first
-            r = widthOut.second
+            stereoWidth.process(l, r, stereoHolder)
+            l = stereoHolder[0]
+            r = stereoHolder[1]
 
             // 7. Algorithmic Reverb & Ambience
-            val revOut = reverb.processStereo(l, r)
-            l = revOut.first
-            r = revOut.second
+            reverb.processStereo(l, r, stereoHolder)
+            l = stereoHolder[0]
+            r = stereoHolder[1]
 
             // 8. Crossfeed
-            val crossOut = crossfeed.process(l, r)
-            l = crossOut.first
-            r = crossOut.second
+            crossfeed.process(l, r, stereoHolder)
+            l = stereoHolder[0]
+            r = stereoHolder[1]
 
             // 9. Direct Volume Control with TPDF Dither
-            val volOut = directVolume.processStereo(l, r)
-            l = volOut.first
-            r = volOut.second
-
-            // 10. Final 32-bit Soft Limiter (guarantees no harsh clipping)
-            l = limiter.process(l)
-            r = limiter.process(r)
+            directVolume.processStereo(l, r, stereoHolder)
+            l = stereoHolder[0]
+            r = stereoHolder[1]
 
             buffer[i] = l
             buffer[i + 1] = r
             i += 2
         }
 
-        // 11. Convolver block processing (if enabled)
+        // 10. Convolver block processing (if enabled) - executed BEFORE limiter to prevent digital clipping
         if (convolver.enabled) {
             convolver.processBlock(buffer, offset, count, sampleRate)
+        }
+
+        // 11. Final 32-bit Soft Limiter (guarantees 0 dBFS ceiling after convolver and all upstream DSP)
+        var j = offset
+        while (j < end) {
+            buffer[j] = limiter.process(buffer[j])
+            buffer[j + 1] = limiter.process(buffer[j + 1])
+            j += 2
         }
     }
 }

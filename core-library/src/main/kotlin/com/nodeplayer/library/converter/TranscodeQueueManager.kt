@@ -254,6 +254,38 @@ class TranscodeQueueManager(
                             totalOutputBytes.addAndGet(job.output.length())
                             succeededCount.incrementAndGet()
 
+                            // 4.1 Save companion cover art (.jpg / .png) in destination folder
+                            try {
+                                val companionCover = FlacMetadataExtractor.findCompanionCover(job.input)
+                                val flacPic = if (companionCover == null) FlacMetadataExtractor.extractPicture(job.input) else null
+                                val picBytes = companionCover?.readBytes() ?: flacPic?.imageBytes
+                                if (picBytes != null && picBytes.isNotEmpty()) {
+                                    val isPng = companionCover?.name?.endsWith(".png", ignoreCase = true) == true ||
+                                            flacPic?.mimeType?.contains("png", ignoreCase = true) == true
+                                    val ext = if (isPng) "png" else "jpg"
+                                    val outputCover = File(job.output.parentFile, "${job.output.nameWithoutExtension}.$ext")
+                                    if (!outputCover.exists()) {
+                                        outputCover.writeBytes(picBytes)
+                                    }
+                                }
+                            } catch (e: Throwable) {
+                                NodeLog.w(TAG, "Companion artwork extraction skipped: ${e.message}")
+                            }
+
+                            // 4.2 Save companion lyrics (.lrc) in destination folder
+                            try {
+                                val companionLrc = FlacMetadataExtractor.findCompanionLrc(job.input)
+                                val lyricsText = companionLrc?.readText(Charsets.UTF_8) ?: FlacMetadataExtractor.extractLyrics(job.input)
+                                if (!lyricsText.isNullOrBlank()) {
+                                    val outputLrc = File(job.output.parentFile, "${job.output.nameWithoutExtension}.lrc")
+                                    if (!outputLrc.exists()) {
+                                        outputLrc.writeText(lyricsText, Charsets.UTF_8)
+                                    }
+                                }
+                            } catch (e: Throwable) {
+                                NodeLog.w(TAG, "Companion lyrics extraction skipped: ${e.message}")
+                            }
+
                             // 5. Replace original safety gate: delete original ONLY if verified and committed
                             if (!keepOriginal) {
                                 onDbUpdate?.invoke(job.input.absolutePath, job.output.absolutePath)

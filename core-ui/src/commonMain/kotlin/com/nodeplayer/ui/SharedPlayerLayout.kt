@@ -161,6 +161,7 @@ fun SharedPlayerLayout(
     var playerPresentationState by remember { mutableStateOf<com.nodeplayer.model.PlayerPresentationState>(com.nodeplayer.model.PlayerPresentationState.Closed) }
     val playerExpansionProgress = remember { androidx.compose.animation.core.Animatable(0f) }
     val springSpec = remember(themeConfig) { MotionTokens.resolveSpringSpec(themeConfig, MotionTokens.Smooth) }
+    var sharedLyricsSettings by remember { mutableStateOf(com.nodeplayer.model.LyricsSettings()) }
 
     var selectedConverterFiles by remember { mutableStateOf<List<java.io.File>>(emptyList()) }
     var converterDestinationFolder by remember { mutableStateOf<java.io.File?>(null) }
@@ -545,8 +546,14 @@ fun SharedPlayerLayout(
                                         isAlbum = false
                                     )
                                     activeDetailTracks = tracks.filter { it.album.equals(pl.title, ignoreCase = true) }
-                                        .ifEmpty { onlineLibraryManager.state.value.songs.filter { it.album.equals(pl.title, ignoreCase = true) } }
-                                        .ifEmpty { onlineLibraryManager.state.value.songs }
+                                    coroutineScope.launch {
+                                        val fetched = runCatching {
+                                            com.nodeplayer.network.innertube.SharedInnerTubeProvider.get().fetchPlaylistTracks(pl.id).getOrNull()
+                                        }.getOrNull()
+                                        if (!fetched.isNullOrEmpty()) {
+                                            activeDetailTracks = fetched
+                                        }
+                                    }
                                 },
                                 onOpenAlbumDetail = { album ->
                                     activeDetailHeader = DetailMediaHeader(
@@ -612,6 +619,8 @@ fun SharedPlayerLayout(
                                     onDiscordAppIdChange = onDiscordAppIdChange,
                                     themeConfig = themeConfig,
                                     onThemeConfigChange = onThemeConfigChange,
+                                    lyricsSettings = sharedLyricsSettings,
+                                    onLyricsSettingsChange = { sharedLyricsSettings = it },
                                     onOpenOpticalTest = { currentNav = PlayerNavDestination.OPTICAL_TEST },
                                     onOpenAudioConverter = { currentNav = PlayerNavDestination.AUDIO_CONVERTER },
                                     isExpanded = true
@@ -630,27 +639,9 @@ fun SharedPlayerLayout(
                                         candidateFiles = candidateFlacs,
                                         onSelectedFilesChange = { selectedConverterFiles = it },
                                         onPickIndividualFiles = {
-                                            try {
-                                                javax.swing.SwingUtilities.invokeLater {
-                                                    try {
-                                                        javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager.getSystemLookAndFeelClassName())
-                                                    } catch (_: Exception) {}
-                                                    val chooser = javax.swing.JFileChooser()
-                                                    chooser.dialogTitle = "Select Individual FLAC Files"
-                                                    chooser.fileSelectionMode = javax.swing.JFileChooser.FILES_ONLY
-                                                    chooser.isMultiSelectionEnabled = true
-                                                    chooser.fileFilter = javax.swing.filechooser.FileNameExtensionFilter("FLAC Audio Files (*.flac)", "flac")
-                                                    if (currentMusicFolder.isNotBlank()) {
-                                                        val f = java.io.File(currentMusicFolder)
-                                                        if (f.exists()) chooser.currentDirectory = f
-                                                    }
-                                                    val res = chooser.showOpenDialog(null)
-                                                    if (res == javax.swing.JFileChooser.APPROVE_OPTION) {
-                                                        val picked = chooser.selectedFiles.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
-                                                        selectedConverterFiles = (selectedConverterFiles + picked).distinctBy { it.absolutePath }
-                                                    }
-                                                }
-                                            } catch (_: Exception) {}
+                                            PlatformFileDialog.pickFlacFiles(currentMusicFolder) { picked ->
+                                                selectedConverterFiles = (selectedConverterFiles + picked).distinctBy { it.absolutePath }
+                                            }
                                         },
                                         onPickFiles = {
                                             selectedConverterFiles = candidateFlacs
@@ -845,8 +836,14 @@ fun SharedPlayerLayout(
                                         isAlbum = false
                                     )
                                     activeDetailTracks = tracks.filter { it.album.equals(pl.title, ignoreCase = true) }
-                                        .ifEmpty { onlineLibraryManager.state.value.songs.filter { it.album.equals(pl.title, ignoreCase = true) } }
-                                        .ifEmpty { onlineLibraryManager.state.value.songs }
+                                    coroutineScope.launch {
+                                        val fetched = runCatching {
+                                            com.nodeplayer.network.innertube.SharedInnerTubeProvider.get().fetchPlaylistTracks(pl.id).getOrNull()
+                                        }.getOrNull()
+                                        if (!fetched.isNullOrEmpty()) {
+                                            activeDetailTracks = fetched
+                                        }
+                                    }
                                 },
                                 onOpenAlbumDetail = { album ->
                                     activeDetailHeader = DetailMediaHeader(
@@ -913,6 +910,8 @@ fun SharedPlayerLayout(
                                 onDiscordAppIdChange = onDiscordAppIdChange,
                                 themeConfig = themeConfig,
                                 onThemeConfigChange = onThemeConfigChange,
+                                lyricsSettings = sharedLyricsSettings,
+                                onLyricsSettingsChange = { sharedLyricsSettings = it },
                                 onOpenOpticalTest = { currentNav = PlayerNavDestination.OPTICAL_TEST },
                                 onOpenAudioConverter = { currentNav = PlayerNavDestination.AUDIO_CONVERTER },
                                 isExpanded = false
@@ -931,27 +930,9 @@ fun SharedPlayerLayout(
                                     candidateFiles = candidateFlacs,
                                     onSelectedFilesChange = { selectedConverterFiles = it },
                                     onPickIndividualFiles = {
-                                        try {
-                                            javax.swing.SwingUtilities.invokeLater {
-                                                try {
-                                                    javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager.getSystemLookAndFeelClassName())
-                                                } catch (_: Exception) {}
-                                                val chooser = javax.swing.JFileChooser()
-                                                chooser.dialogTitle = "Select Individual FLAC Files"
-                                                chooser.fileSelectionMode = javax.swing.JFileChooser.FILES_ONLY
-                                                chooser.isMultiSelectionEnabled = true
-                                                chooser.fileFilter = javax.swing.filechooser.FileNameExtensionFilter("FLAC Audio Files (*.flac)", "flac")
-                                                if (currentMusicFolder.isNotBlank()) {
-                                                    val f = java.io.File(currentMusicFolder)
-                                                    if (f.exists()) chooser.currentDirectory = f
-                                                }
-                                                val res = chooser.showOpenDialog(null)
-                                                if (res == javax.swing.JFileChooser.APPROVE_OPTION) {
-                                                    val picked = chooser.selectedFiles.filter { it.extension.equals("flac", ignoreCase = true) && it.exists() }
-                                                    selectedConverterFiles = (selectedConverterFiles + picked).distinctBy { it.absolutePath }
-                                                }
-                                            }
-                                        } catch (_: Exception) {}
+                                        PlatformFileDialog.pickFlacFiles(currentMusicFolder) { picked ->
+                                            selectedConverterFiles = (selectedConverterFiles + picked).distinctBy { it.absolutePath }
+                                        }
                                     },
                                     onPickFiles = {
                                         selectedConverterFiles = candidateFlacs
@@ -1235,7 +1216,7 @@ fun SharedPlayerLayout(
                                 queue = queue,
                                 currentQueueIndex = currentQueueIndex,
                                 lrcContent = lrcContent,
-                                audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { if (isExpanded) "This PC" else "This phone" },
+                                audioOutputName = audioOutputInfo.outputDeviceName.ifBlank { if (isExpanded) "This PC" else "This Device" },
                                 videoContent = videoContent,
                                 isVideoActive = isVideoActive,
                                 isVideoAvailable = isVideoAvailable,
@@ -1254,7 +1235,10 @@ fun SharedPlayerLayout(
                                 onOpenNodeConnect = { onPairNewDevice() },
                                 onOpenPlaybackOptions = { showPlaybackOptions = true },
                                 onOpenThreeDotsMenu = { showQuickSettings = true },
-                                onPlayTrack = { tr -> onPlayTrack(tr, listOf(tr)) },
+                                onPlayTrack = { tr ->
+                                    val updatedQueue = if (queue.any { it.id == tr.id }) queue else queue + tr
+                                    onPlayTrack(tr, updatedQueue)
+                                },
                                 onArtistClick = onArtistClick ?: { artistName, _ ->
                                     searchQuery = artistName
                                     onSearchQueryChanged?.invoke(artistName)
@@ -1320,7 +1304,7 @@ fun SharedPlayerLayout(
                     com.nodeplayer.ui.player.QuickSettingsSheet(
                         visible = showQuickSettings,
                         volume = volume,
-                        outputDeviceName = audioOutputInfo.outputDeviceName.ifBlank { "This phone" },
+                        outputDeviceName = audioOutputInfo.outputDeviceName.ifBlank { "This Device" },
                         audioFormatDescription = audioOutputInfo.format,
                         sleepTimerRemainingSec = sleepTimerRemainingSec,
                         accentColor = dynamicArtAccent ?: baseAccent,
@@ -1354,6 +1338,8 @@ fun SharedPlayerLayout(
                 com.nodeplayer.ui.lyrics.FullScreenLyricsView(
                     track = currentTrack,
                     lyrics = parsedLyrics,
+                    lyricsSettings = sharedLyricsSettings,
+                    onUpdateLyricsSettings = { sharedLyricsSettings = it },
                     isPlaying = isPlaying,
                     currentPositionMs = positionMs,
                     positionProvider = { positionMs },

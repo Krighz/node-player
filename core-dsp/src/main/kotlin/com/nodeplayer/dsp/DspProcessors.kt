@@ -26,6 +26,22 @@ class ParametricEqualizer {
         filters.forEach { it.reset() }
     }
 
+    fun processStereoSample(left: Float, right: Float, out: FloatArray) {
+        if (!enabled) {
+            out[0] = left
+            out[1] = right
+            return
+        }
+        var l = left
+        var r = right
+        for (i in 0 until 10) {
+            l = filters[i].processLeft(l)
+            r = filters[i].processRight(r)
+        }
+        out[0] = l
+        out[1] = r
+    }
+
     fun processStereoSample(left: Float, right: Float): Pair<Float, Float> {
         if (!enabled) return Pair(left, right)
         var l = left
@@ -117,6 +133,18 @@ class StereoWidthProcessor {
     var width: Float = 1.0f
     private val sqrt2 = sqrt(2.0).toFloat()
 
+    fun process(left: Float, right: Float, out: FloatArray) {
+        if (width == 1.0f) {
+            out[0] = left
+            out[1] = right
+            return
+        }
+        val mid = (left + right) / sqrt2
+        val side = (left - right) / sqrt2 * width
+        out[0] = (mid + side) / sqrt2
+        out[1] = (mid - side) / sqrt2
+    }
+
     fun process(left: Float, right: Float): Pair<Float, Float> {
         if (width == 1.0f) return Pair(left, right)
         val mid = (left + right) / sqrt2
@@ -140,6 +168,23 @@ class CrossfeedFilter {
     fun reset() {
         prevLeft = 0.0f
         prevRight = 0.0f
+    }
+
+    fun process(left: Float, right: Float, out: FloatArray) {
+        if (!enabled || strength <= 0.0f) {
+            out[0] = left
+            out[1] = right
+            return
+        }
+        val alpha = 0.4f
+        val filteredLeft = alpha * left + (1f - alpha) * prevLeft
+        val filteredRight = alpha * right + (1f - alpha) * prevRight
+        prevLeft = filteredLeft
+        prevRight = filteredRight
+
+        val bleed = strength * 0.3f
+        out[0] = left * (1f - bleed * 0.5f) + filteredRight * bleed
+        out[1] = right * (1f - bleed * 0.5f) + filteredLeft * bleed
     }
 
     fun process(left: Float, right: Float): Pair<Float, Float> {
@@ -196,6 +241,16 @@ class DirectVolumeProcessor {
         return scaled + dither
     }
 
+    fun processStereo(left: Float, right: Float, out: FloatArray) {
+        if (!enabled) {
+            out[0] = left
+            out[1] = right
+            return
+        }
+        out[0] = process(left)
+        out[1] = process(right)
+    }
+
     fun processStereo(left: Float, right: Float): Pair<Float, Float> {
         if (!enabled) return Pair(left, right)
         return Pair(process(left), process(right))
@@ -236,6 +291,20 @@ class ToneControlsProcessor {
     fun reset() {
         bassFilter.reset()
         trebleFilter.reset()
+    }
+
+    fun processStereo(left: Float, right: Float, out: FloatArray) {
+        if (bassGainDb == 0.0f && trebleGainDb == 0.0f) {
+            out[0] = left
+            out[1] = right
+            return
+        }
+        var l = bassFilter.processLeft(left)
+        var r = bassFilter.processRight(right)
+        l = trebleFilter.processLeft(l)
+        r = trebleFilter.processRight(r)
+        out[0] = l
+        out[1] = r
     }
 
     fun processStereo(left: Float, right: Float): Pair<Float, Float> {
@@ -288,6 +357,20 @@ class LoudnessCompensator {
     fun reset() {
         bassShelf.reset()
         trebleShelf.reset()
+    }
+
+    fun processStereo(left: Float, right: Float, out: FloatArray) {
+        if (!enabled) {
+            out[0] = left
+            out[1] = right
+            return
+        }
+        var l = bassShelf.processLeft(left)
+        var r = bassShelf.processRight(right)
+        l = trebleShelf.processLeft(l)
+        r = trebleShelf.processRight(r)
+        out[0] = l
+        out[1] = r
     }
 
     fun processStereo(left: Float, right: Float): Pair<Float, Float> {
@@ -343,6 +426,33 @@ class HarmonicBassEnhancer {
         // x + 0.5*x^2 - 0.25*x^3
         val clamped = x.coerceIn(-1.5f, 1.5f)
         return clamped + 0.5f * (clamped * clamped) - 0.25f * (clamped * clamped * clamped)
+    }
+
+    fun processStereo(left: Float, right: Float, out: FloatArray) {
+        if (!enabled || harmonicGain <= 0.0f) {
+            out[0] = left
+            out[1] = right
+            return
+        }
+
+        // 1. Isolate bass fundamental
+        val bassL = lowPassIn.processLeft(left)
+        val bassR = lowPassIn.processRight(right)
+
+        // 2. Synthesize harmonics via non-linear waveshaping
+        val harmL = waveshape(bassL)
+        val harmR = waveshape(bassR)
+
+        // 3. Bandpass harmonics to audible range
+        val filteredHarmL = bandPassHarmonics.processLeft(harmL) * harmonicGain
+        val filteredHarmR = bandPassHarmonics.processRight(harmR) * harmonicGain
+
+        // 4. Optionally highpass the original audio to unload speaker cone
+        val mainL = if (highPassOriginal) highPassOut.processLeft(left) else left
+        val mainR = if (highPassOriginal) highPassOut.processRight(right) else right
+
+        out[0] = mainL + filteredHarmL
+        out[1] = mainR + filteredHarmR
     }
 
     fun processStereo(left: Float, right: Float): Pair<Float, Float> {
@@ -568,7 +678,15 @@ object AudioProfileSerializer {
   "convolverConfig": {
     "enabled": ${config.convolverConfig.enabled},
     "irName": "${config.convolverConfig.irName}",
+    "irPath": "${config.convolverConfig.irPath}",
     "blend": ${config.convolverConfig.blend}
+  },
+  "reverbConfig": {
+    "enabled": ${config.reverbConfig.enabled},
+    "roomSize": ${config.reverbConfig.roomSize},
+    "damping": ${config.reverbConfig.damping},
+    "wetLevel": ${config.reverbConfig.wetLevel},
+    "preset": "${config.reverbConfig.preset}"
   },
   "directVolumeConfig": {
     "enabled": ${config.directVolumeConfig.enabled},
@@ -580,36 +698,61 @@ object AudioProfileSerializer {
     }
 
     fun fromJson(json: String): AudioEffectConfig {
-        fun extractBool(key: String, default: Boolean): Boolean {
-            val m = Regex(""""$key"\s*:\s*(true|false)""").find(json)
+        fun extractBlock(blockName: String): String {
+            val m = Regex(""""$blockName"\s*:\s*\{([^}]*)\}""").find(json)
+            return m?.groupValues?.get(1) ?: ""
+        }
+        fun extractBoolFrom(source: String, key: String, default: Boolean): Boolean {
+            val m = Regex(""""$key"\s*:\s*(true|false)""").find(source)
             return m?.groupValues?.get(1)?.toBoolean() ?: default
         }
-        fun extractFloat(key: String, default: Float): Float {
-            val m = Regex(""""$key"\s*:\s*(-?[\d.]+)""").find(json)
+        fun extractFloatFrom(source: String, key: String, default: Float): Float {
+            val m = Regex(""""$key"\s*:\s*(-?[\d.]+)""").find(source)
             return m?.groupValues?.get(1)?.toFloatOrNull() ?: default
         }
+        fun extractStringFrom(source: String, key: String, default: String): String {
+            val m = Regex(""""$key"\s*:\s*"([^"]*)"""").find(source)
+            return m?.groupValues?.get(1) ?: default
+        }
 
-        val eqEnabled = extractBool("eqEnabled", false)
-        val preampGainDb = extractFloat("preampGainDb", 0.0f)
-        val limiterEnabled = extractBool("limiterEnabled", true)
-        val stereoWidth = extractFloat("stereoWidth", 1.0f)
-        val crossfeedEnabled = extractBool("crossfeedEnabled", false)
-        val crossfeedStrength = extractFloat("crossfeedStrength", 0.5f)
+        val eqEnabled = extractBoolFrom(json, "eqEnabled", false)
+        val preampGainDb = extractFloatFrom(json, "preampGainDb", 0.0f)
+        val limiterEnabled = extractBoolFrom(json, "limiterEnabled", true)
+        val stereoWidth = extractFloatFrom(json, "stereoWidth", 1.0f)
+        val crossfeedEnabled = extractBoolFrom(json, "crossfeedEnabled", false)
+        val crossfeedStrength = extractFloatFrom(json, "crossfeedStrength", 0.5f)
 
-        val bassGain = extractFloat("bassGainDb", 0.0f)
-        val trebleGain = extractFloat("trebleGainDb", 0.0f)
+        val toneBlock = extractBlock("toneControls")
+        val bassGain = extractFloatFrom(toneBlock, "bassGainDb", 0.0f)
+        val trebleGain = extractFloatFrom(toneBlock, "trebleGainDb", 0.0f)
 
-        val loudnessEnabled = extractBool("enabled", false)
-        val loudnessStrength = extractFloat("strength", 0.5f)
+        val loudnessBlock = extractBlock("loudnessConfig")
+        val loudnessEnabled = extractBoolFrom(loudnessBlock, "enabled", false)
+        val loudnessStrength = extractFloatFrom(loudnessBlock, "strength", 0.5f)
 
-        val harmonicEnabled = extractBool("enabled", false)
-        val harmonicFreq = extractFloat("frequencyHz", 60.0f)
-        val harmonicGain = extractFloat("harmonicGain", 0.5f)
-        val highPassOrig = extractBool("highPassOriginal", false)
+        val harmonicBlock = extractBlock("harmonicBassConfig")
+        val harmonicEnabled = extractBoolFrom(harmonicBlock, "enabled", false)
+        val harmonicFreq = extractFloatFrom(harmonicBlock, "frequencyHz", 60.0f)
+        val harmonicGain = extractFloatFrom(harmonicBlock, "harmonicGain", 0.5f)
+        val highPassOrig = extractBoolFrom(harmonicBlock, "highPassOriginal", false)
 
-        val directVolEnabled = extractBool("enabled", true)
-        val directVol = extractFloat("volume", 1.0f)
-        val dither = extractBool("ditherEnabled", true)
+        val convolverBlock = extractBlock("convolverConfig")
+        val convolverEnabled = extractBoolFrom(convolverBlock, "enabled", false)
+        val convolverIrName = extractStringFrom(convolverBlock, "irName", "")
+        val convolverIrPath = extractStringFrom(convolverBlock, "irPath", "")
+        val convolverBlend = extractFloatFrom(convolverBlock, "blend", 1.0f)
+
+        val reverbBlock = extractBlock("reverbConfig")
+        val reverbEnabled = extractBoolFrom(reverbBlock, "enabled", false)
+        val reverbRoomSize = extractFloatFrom(reverbBlock, "roomSize", 0.5f)
+        val reverbDamping = extractFloatFrom(reverbBlock, "damping", 0.5f)
+        val reverbWetLevel = extractFloatFrom(reverbBlock, "wetLevel", 0.25f)
+        val reverbPreset = extractStringFrom(reverbBlock, "preset", "Studio")
+
+        val directVolBlock = extractBlock("directVolumeConfig")
+        val directVolEnabled = extractBoolFrom(directVolBlock, "enabled", true)
+        val directVol = extractFloatFrom(directVolBlock, "volume", 1.0f)
+        val dither = extractBoolFrom(directVolBlock, "ditherEnabled", false)
 
         // Parse bands
         val bands = mutableListOf<EqBandConfig>()
@@ -640,6 +783,19 @@ object AudioProfileSerializer {
                 frequencyHz = harmonicFreq,
                 harmonicGain = harmonicGain,
                 highPassOriginal = highPassOrig
+            ),
+            convolverConfig = ConvolverConfig(
+                enabled = convolverEnabled,
+                irName = convolverIrName,
+                irPath = convolverIrPath,
+                blend = convolverBlend
+            ),
+            reverbConfig = ReverbConfig(
+                enabled = reverbEnabled,
+                roomSize = reverbRoomSize,
+                damping = reverbDamping,
+                wetLevel = reverbWetLevel,
+                preset = reverbPreset
             ),
             directVolumeConfig = DirectVolumeConfig(
                 enabled = directVolEnabled,
@@ -721,6 +877,65 @@ class ReverbProcessor {
             allpassIndicesL[i] = 0
             allpassIndicesR[i] = 0
         }
+    }
+
+    fun processStereo(inputL: Float, inputR: Float, out: FloatArray) {
+        if (!enabled || wet <= 0.001f) {
+            out[0] = inputL
+            out[1] = inputR
+            return
+        }
+
+        val feedback = (0.7f + roomSize.coerceIn(0.0f, 1.0f) * 0.28f)
+        val damp = damping.coerceIn(0.0f, 1.0f) * 0.4f
+        val damp1 = 1.0f - damp
+
+        var outL = 0.0f
+        var outR = 0.0f
+
+        for (i in 0 until 4) {
+            // Left Comb
+            val bufL = combBuffersL[i]
+            val idxL = combIndicesL[i]
+            val outputCombL = bufL[idxL]
+            combFiltersL[i] = outputCombL * damp1 + combFiltersL[i] * damp
+            bufL[idxL] = inputL + combFiltersL[i] * feedback
+            combIndicesL[i] = if (idxL + 1 >= combLengthsL[i]) 0 else idxL + 1
+            outL += outputCombL
+
+            // Right Comb
+            val bufR = combBuffersR[i]
+            val idxR = combIndicesR[i]
+            val outputCombR = bufR[idxR]
+            combFiltersR[i] = outputCombR * damp1 + combFiltersR[i] * damp
+            bufR[idxR] = inputR + combFiltersR[i] * feedback
+            combIndicesR[i] = if (idxR + 1 >= combLengthsR[i]) 0 else idxR + 1
+            outR += outputCombR
+        }
+
+        // Allpass diffusers
+        for (i in 0 until 2) {
+            // Left Allpass
+            val bufL = allpassBuffersL[i]
+            val idxL = allpassIndicesL[i]
+            val bufOutL = bufL[idxL]
+            outL = -outL + bufOutL
+            bufL[idxL] = outL + bufOutL * 0.5f
+            allpassIndicesL[i] = if (idxL + 1 >= allpassLengthsL[i]) 0 else idxL + 1
+
+            // Right Allpass
+            val bufR = allpassBuffersR[i]
+            val idxR = allpassIndicesR[i]
+            val bufOutR = bufR[idxR]
+            outR = -outR + bufOutR
+            bufR[idxR] = outR + bufOutR * 0.5f
+            allpassIndicesR[i] = if (idxR + 1 >= allpassLengthsR[i]) 0 else idxR + 1
+        }
+
+        val wetGain = wet.coerceIn(0.0f, 1.0f) * 0.35f
+        val dryGain = 1.0f - wetGain
+        out[0] = inputL * dryGain + outL * wetGain
+        out[1] = inputR * dryGain + outR * wetGain
     }
 
     fun processStereo(inputL: Float, inputR: Float): Pair<Float, Float> {

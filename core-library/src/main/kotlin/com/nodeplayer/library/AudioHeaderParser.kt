@@ -483,7 +483,7 @@ object AudioHeaderParser {
             title = title,
             artist = artist,
             album = album,
-            trackNumber = trackNumber
+            trackNumber = trackNumber ?: 0
         )
     }
 
@@ -764,7 +764,7 @@ object AudioHeaderParser {
             title = title,
             artist = artist,
             album = album,
-            trackNumber = trackNumber
+            trackNumber = trackNumber ?: 0
         )
     }
 
@@ -916,7 +916,7 @@ object AudioHeaderParser {
     // --------------------------------------------------------------------------
     private fun parseOggStream(raf: RandomAccessFile, fileLength: Long): AudioFormatInfo? {
         raf.seek(0L)
-        val header = ByteArray(minOf(fileLength, 4096L).toInt())
+        val header = ByteArray(minOf(fileLength, 8192L).toInt())
         raf.readFully(header)
 
         var formatName = "OGG"
@@ -928,16 +928,26 @@ object AudioHeaderParser {
             sampleRate = 48000
         }
 
-        // Vorbis Comments
-        val vcIdx = indexOfSubArray(header, "vorbis".toByteArray(Charsets.US_ASCII))
+        // Vorbis Comments / OpusTags
+        var commentOffset = -1
+        val vorbisIdx = indexOfSubArray(header, "vorbis".toByteArray(Charsets.US_ASCII))
+        val opusTagsIdx = indexOfSubArray(header, "OpusTags".toByteArray(Charsets.US_ASCII))
+        if (opusTagsIdx >= 0) {
+            commentOffset = opusTagsIdx + 8 // Skip "OpusTags" (8 bytes)
+        } else if (vorbisIdx >= 0) {
+            commentOffset = vorbisIdx + 6 // Skip "vorbis" (6 bytes)
+        }
+
         var title: String? = null
         var artist: String? = null
         var album: String? = null
-        if (vcIdx >= 0 && vcIdx + 16 < header.size) {
-            val tags = parseVorbisComments(header.copyOfRange(vcIdx, header.size))
+        var trackNumber: Int? = null
+        if (commentOffset >= 0 && commentOffset + 8 < header.size) {
+            val tags = parseVorbisComments(header.copyOfRange(commentOffset, header.size))
             title = tags["TITLE"]
             artist = tags["ARTIST"]
             album = tags["ALBUM"]
+            trackNumber = tags["TRACKNUMBER"]?.toIntOrNull()
         }
 
         // Granule position from last Ogg page at end of file for exact duration
@@ -974,7 +984,8 @@ object AudioHeaderParser {
             durationMs = durationMs,
             title = title,
             artist = artist,
-            album = album
+            album = album,
+            trackNumber = trackNumber ?: 0
         )
     }
 

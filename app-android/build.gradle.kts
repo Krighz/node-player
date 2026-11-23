@@ -31,6 +31,12 @@ val lastFmApiSecret = getPropValue(localProperties, "LASTFM_API_SECRET")
     ?: getPropValue(defaultLastFmProperties, "LASTFM_API_SECRET")
     ?: System.getenv("LASTFM_API_SECRET")
     ?: ""
+val gdriveClientIdDebug = getPropValue(localProperties, "google.drive.clientId.debug")
+    ?: System.getenv("GDRIVE_CLIENT_ID_DEBUG")
+    ?: ""
+val gdriveClientIdRelease = getPropValue(localProperties, "google.drive.clientId.release")
+    ?: System.getenv("GDRIVE_CLIENT_ID_RELEASE")
+    ?: ""
 
 android {
     namespace = "com.nodeplayer.music"
@@ -40,13 +46,14 @@ android {
         applicationId = "com.nodeplayer.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = (project.findProperty("appVersionCode") as? String)?.toInt() ?: 14
-        versionName = (project.findProperty("appVersionName") as? String) ?: "2.0.0"
+        versionCode = (project.findProperty("appVersionCode") as? String)?.toInt() ?: 15
+        versionName = (project.findProperty("appVersionName") as? String) ?: "2.1.0"
 
         manifestPlaceholders["appName"] = "Node Player"
 
         buildConfigField("String", "LASTFM_API_KEY", "\"$lastFmApiKey\"")
         buildConfigField("String", "LASTFM_API_SECRET", "\"$lastFmApiSecret\"")
+        buildConfigField("String", "GDRIVE_CLIENT_ID", "\"$gdriveClientIdDebug\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -100,7 +107,11 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            buildConfigField("String", "GDRIVE_CLIENT_ID", "\"$gdriveClientIdDebug\"")
+        }
         release {
+            buildConfigField("String", "GDRIVE_CLIENT_ID", "\"$gdriveClientIdRelease\"")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -112,6 +123,7 @@ android {
         }
         create("staging") {
             initWith(getByName("release"))
+            buildConfigField("String", "GDRIVE_CLIENT_ID", "\"$gdriveClientIdRelease\"")
             applicationIdSuffix = ".staging"
             manifestPlaceholders["appName"] = "Node Player (Test)"
             matchingFallbacks += listOf("release")

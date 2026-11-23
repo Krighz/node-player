@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -80,6 +81,8 @@ fun SettingsView(
     onDiscordAppIdChange: (String) -> Unit = {},
     themeConfig: GlassThemeConfig = LocalGlassThemeConfig.current,
     onThemeConfigChange: (GlassThemeConfig) -> Unit = {},
+    lyricsSettings: com.nodeplayer.model.LyricsSettings = com.nodeplayer.model.LyricsSettings(),
+    onLyricsSettingsChange: (com.nodeplayer.model.LyricsSettings) -> Unit = {},
     isExpanded: Boolean = true,
     modifier: Modifier = Modifier
 ) {
@@ -267,6 +270,14 @@ fun SettingsView(
                         )
                     }
 
+                    if (matchesFilter("lyrics", "kinetic", "cinematic", "zoom", "sparkle", "words")) {
+                        LyricsSettingsCard(
+                            lyricsSettings = lyricsSettings,
+                            onLyricsSettingsChange = onLyricsSettingsChange,
+                            accent = accent
+                        )
+                    }
+
                     if (matchesFilter("last.fm", "scrobble", "profile", "about", "version", "offline", "security")) {
                         AboutAndScrobblerCard(
                             lastFmEnabled = lastFmEnabled,
@@ -317,6 +328,9 @@ fun SettingsView(
                 }
                 if (matchesFilter("appearance", "glass", "oled", "shader", "diagnostics", "optical", "test")) {
                     AppearanceAndGlassCard(themeConfig, onThemeConfigChange, onOpenCustomizeUi, onOpenOpticalTest, accent)
+                }
+                if (matchesFilter("lyrics", "kinetic", "cinematic", "zoom", "sparkle", "words")) {
+                    LyricsSettingsCard(lyricsSettings, onLyricsSettingsChange, accent)
                 }
                 if (matchesFilter("last.fm", "about", "version")) {
                     AboutAndScrobblerCard(lastFmEnabled, onLastFmToggle, accent)
@@ -777,7 +791,7 @@ private fun AppearanceAndGlassCard(
     }
 }
 
-// 6. Scrobbler & About Card
+// 6. Online Music & Streaming Services Card
 @Composable
 private fun AboutAndScrobblerCard(
     lastFmEnabled: Boolean,
@@ -785,9 +799,21 @@ private fun AboutAndScrobblerCard(
     accent: Color
 ) {
     val isOnlineMode by com.nodeplayer.common.AppModeState.isOnlineMode.collectAsState()
+    val audioQuality by com.nodeplayer.model.MediaQualitySettingsState.streamingAudioQuality.collectAsState()
+    val artQuality by com.nodeplayer.model.MediaQualitySettingsState.albumArtQuality.collectAsState()
 
     GlassCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(18.dp)) {
+            Text(
+                text = "ONLINE MUSIC & STREAMING SERVICES",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = accent,
+                    letterSpacing = 1.2.sp
+                )
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
             // Online Mode (YouTube Music & Cloud Streaming)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -835,6 +861,101 @@ private fun AboutAndScrobblerCard(
             HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
             Spacer(modifier = Modifier.height(14.dp))
 
+            // Streaming Audio Quality Setting
+            Column {
+                Text(
+                    text = "Streaming Audio Quality",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                )
+                Text(
+                    text = "Bitrate & format preference for online playback: ${audioQuality.description}",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    com.nodeplayer.model.StreamingAudioQuality.entries.forEach { q ->
+                        val isSel = audioQuality == q
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSel) accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.06f))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSel) accent else Color.White.copy(alpha = 0.12f),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    com.nodeplayer.model.MediaQualitySettingsState.setStreamingAudioQuality(q)
+                                }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(q.displayName, fontSize = 12.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium, color = Color.White)
+                                Text(q.kbpsRating, fontSize = 10.sp, color = if (isSel) accent else Color.White.copy(alpha = 0.5f))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Album Artwork Quality Setting
+            Column {
+                Text(
+                    text = "Album Artwork Resolution",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = Color.White)
+                )
+                Text(
+                    text = "Quality of fetched online album covers and local embedded art",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    com.nodeplayer.model.AlbumArtQuality.entries.forEach { aq ->
+                        val isSel = artQuality == aq
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isSel) accent.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.06f))
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSel) accent else Color.White.copy(alpha = 0.12f),
+                                    shape = RoundedCornerShape(10.dp)
+                                )
+                                .clickable {
+                                    com.nodeplayer.model.MediaQualitySettingsState.setAlbumArtQuality(aq)
+                                    com.nodeplayer.ui.components.ArtworkCache.clear()
+                                }
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(aq.displayName, fontSize = 12.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium, color = Color.White)
+                                Text(aq.resolutionLabel, fontSize = 10.sp, color = if (isSel) accent else Color.White.copy(alpha = 0.5f))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.08f))
+            Spacer(modifier = Modifier.height(14.dp))
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -846,6 +967,292 @@ private fun AboutAndScrobblerCard(
                 }
             }
             Text("Windows MSI/EXE is Authenticode-unsigned (SmartScreen prompt on first run). Android APK signed with release key.", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.45f))
+        }
+    }
+}
+
+// 7. Lyrics Engine & Style Card
+@Composable
+private fun LyricsSettingsCard(
+    lyricsSettings: com.nodeplayer.model.LyricsSettings,
+    onLyricsSettingsChange: (com.nodeplayer.model.LyricsSettings) -> Unit,
+    accent: Color
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(androidx.compose.material.icons.Icons.Rounded.MusicNote, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Lyrics Engine & Style", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                }
+                GlassBadge(text = if (lyricsSettings.style == com.nodeplayer.model.LyricsStyle.CINEMATIC_KINETIC) "KINETIC" else "CLASSIC", color = accent)
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Style Switcher Cards
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                val isKinetic = lyricsSettings.style == com.nodeplayer.model.LyricsStyle.CINEMATIC_KINETIC
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (isKinetic) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.05f))
+                        .border(1.dp, if (isKinetic) Color.White else Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                        .clickable { onLyricsSettingsChange(lyricsSettings.copy(style = com.nodeplayer.model.LyricsStyle.CINEMATIC_KINETIC)) }
+                        .padding(12.dp)
+                ) {
+                    Column {
+                        Text("Cinematic Kinetic", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                        Text("2x typography + stars", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.65f))
+                    }
+                }
+
+                val isClassic = lyricsSettings.style == com.nodeplayer.model.LyricsStyle.CLASSIC_FULLSCREEN
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(if (isClassic) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.05f))
+                        .border(1.dp, if (isClassic) Color.White else Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                        .clickable { onLyricsSettingsChange(lyricsSettings.copy(style = com.nodeplayer.model.LyricsStyle.CLASSIC_FULLSCREEN)) }
+                        .padding(12.dp)
+                ) {
+                    Column {
+                        Text("Classic Full-Screen", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color.White)
+                        Text("Standard scroll view", fontSize = 10.5.sp, color = Color.White.copy(alpha = 0.65f))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Common Zoom
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Common Zoom (Master Scale)", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("%.2fx".format(lyricsSettings.commonZoom), fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold)
+            }
+            LiquidSlider(
+                value = lyricsSettings.commonZoom,
+                onValueChange = {
+                    val rounded = (it * 20f).toInt() / 20f
+                    onLyricsSettingsChange(lyricsSettings.copy(commonZoom = rounded))
+                },
+                valueRange = 0.40f..1.80f
+            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                listOf(0.70f to "0.7x", 1.00f to "1.0x", 1.30f to "1.3x").forEach { (preset, label) ->
+                    val isActive = kotlin.math.abs(lyricsSettings.commonZoom - preset) < 0.03f
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(if (isActive) Color.White else Color.White.copy(alpha = 0.08f))
+                            .border(1.dp, if (isActive) Color.White else Color.White.copy(alpha = 0.15f), RoundedCornerShape(999.dp))
+                            .clickable { onLyricsSettingsChange(lyricsSettings.copy(commonZoom = preset)) }
+                            .padding(horizontal = 14.dp, vertical = 5.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isActive) Color.Black else Color.White.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+            }
+
+            if (lyricsSettings.style == com.nodeplayer.model.LyricsStyle.CINEMATIC_KINETIC) {
+                // Sparkle Density
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Sparkle Density", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("%.2f".format(lyricsSettings.sparkleDensity), fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold)
+                }
+                LiquidSlider(
+                    value = lyricsSettings.sparkleDensity,
+                    onValueChange = { onLyricsSettingsChange(lyricsSettings.copy(sparkleDensity = it)) },
+                    valueRange = 0.00f..1.00f
+                )
+
+                // Left/Right Swing
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Left / Right Swing", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("%.2f".format(lyricsSettings.lrSwing), fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold)
+                }
+                LiquidSlider(
+                    value = lyricsSettings.lrSwing,
+                    onValueChange = { onLyricsSettingsChange(lyricsSettings.copy(lrSwing = it)) },
+                    valueRange = 0.00f..1.00f
+                )
+
+                // Vertical Spacing
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Vertical Spacing", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("%.2fx".format(lyricsSettings.verticalSpacing), fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold)
+                }
+                LiquidSlider(
+                    value = lyricsSettings.verticalSpacing,
+                    onValueChange = { onLyricsSettingsChange(lyricsSettings.copy(verticalSpacing = it)) },
+                    valueRange = 0.70f..1.60f
+                )
+
+                // Camera Glide
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Camera Glide", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("%.2f".format(lyricsSettings.cameraGlide), fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold)
+                }
+                LiquidSlider(
+                    value = lyricsSettings.cameraGlide,
+                    onValueChange = { onLyricsSettingsChange(lyricsSettings.copy(cameraGlide = it)) },
+                    valueRange = 0.30f..1.50f
+                )
+
+                // Sweep & Bounce
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Sweep & Bounce", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    Text("%.2f".format(lyricsSettings.bounce), fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold)
+                }
+                LiquidSlider(
+                    value = lyricsSettings.bounce,
+                    onValueChange = { onLyricsSettingsChange(lyricsSettings.copy(bounce = it)) },
+                    valueRange = 0.00f..1.50f
+                )
+
+                // Glow Palette
+                Text("Glow Palette", fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 6.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                ) {
+                    com.nodeplayer.model.LyricsGlowPalette.entries.forEach { p ->
+                        val isSelected = lyricsSettings.palette == p
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(if (isSelected) Color.White else Color.White.copy(alpha = 0.08f))
+                                .border(1.dp, if (isSelected) Color.White else Color.White.copy(alpha = 0.15f), RoundedCornerShape(999.dp))
+                            .clickable { onLyricsSettingsChange(lyricsSettings.copy(palette = p)) }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = p.displayName,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isSelected) Color.Black else Color.White.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Preferred Provider & Location Selector
+            Text("Preferred Lyrics Source", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text("Choose default provider or cascade waterfall", fontSize = 11.sp, color = Color.White.copy(alpha = 0.55f))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val providerScroll = rememberScrollState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(providerScroll),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                com.nodeplayer.model.LyricsProviderChoice.entries.forEach { provider ->
+                    val isSelected = lyricsSettings.preferredProvider == provider
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(if (isSelected) Color.White.copy(alpha = 0.20f) else Color.White.copy(alpha = 0.06f))
+                            .border(
+                                width = if (isSelected) 1.5.dp else 1.dp,
+                                color = if (isSelected) Color.White else Color.White.copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .clickable { onLyricsSettingsChange(lyricsSettings.copy(preferredProvider = provider)) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = androidx.compose.material.icons.Icons.Rounded.Check,
+                                    contentDescription = "Selected",
+                                    tint = accent,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = provider.displayName,
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.85f)
+                                )
+                                Text(
+                                    text = if (isSelected) "Connected • OK" else "Click to search",
+                                    fontSize = 9.5.sp,
+                                    color = if (isSelected) accent else Color.White.copy(alpha = 0.45f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Show Top Bar Toggle
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Show Header Bar", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Display track info header on lyrics screen", fontSize = 11.sp, color = Color.White.copy(alpha = 0.55f))
+                }
+                LiquidToggle(
+                    checked = lyricsSettings.showTopBar,
+                    onCheckedChange = { onLyricsSettingsChange(lyricsSettings.copy(showTopBar = it)) }
+                )
+            }
         }
     }
 }

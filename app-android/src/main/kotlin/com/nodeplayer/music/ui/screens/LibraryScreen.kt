@@ -121,13 +121,12 @@ fun LibraryScreen(
         }
     }
 
-    val totalListeningMinutes = remember(dailyStats, tracks) {
+    val totalListeningMinutes = remember(dailyStats) {
         val totalSec = dailyStats.sumOf { it.listeningSeconds }
-        if (totalSec > 0) totalSec / 60L else (tracks.sumOf { it.durationMs } / 60000L).coerceAtLeast(0L)
+        (totalSec / 60L).coerceAtLeast(0L)
     }
     val totalPlayCount = remember(tracks) {
-        val count = tracks.sumOf { it.playCount.toLong() }
-        if (count > 0) count else tracks.size.toLong()
+        tracks.sumOf { it.playCount.toLong() }.coerceAtLeast(0L)
     }
 
     val themeConfig = com.nodeplayer.music.ui.theme.LocalGlassThemeConfig.current

@@ -32,11 +32,14 @@ object AppSettingsRepository {
     val KEY_GLOBAL_LYRICS_OFFSET_MS = longPreferencesKey("global_lyrics_offset_ms")
     val KEY_AUTO_FETCH_LYRICS = booleanPreferencesKey("auto_fetch_lyrics")
     val KEY_YOUTUBE_VIDEO_QUALITY = stringPreferencesKey("youtube_video_quality")
+    val KEY_STREAMING_AUDIO_QUALITY = stringPreferencesKey("streaming_audio_quality")
+    val KEY_ALBUM_ART_QUALITY = stringPreferencesKey("album_art_quality")
     val KEY_SMART_MIXTAPE_ENABLED = booleanPreferencesKey("smart_mixtape_enabled")
     val KEY_SMART_MIXTAPE_SONG_COUNT = intPreferencesKey("smart_mixtape_song_count")
     val KEY_SMART_MIXTAPE_STORAGE_CAP_MB = intPreferencesKey("smart_mixtape_storage_cap_mb")
     val KEY_SMART_MIXTAPE_WIFI_ONLY = booleanPreferencesKey("smart_mixtape_wifi_only")
     val KEY_SMART_MIXTAPE_QUALITY = stringPreferencesKey("smart_mixtape_quality")
+    val KEY_HIDE_STATUS_BAR = booleanPreferencesKey("hide_status_bar")
 
     // Settings
     val KEY_GLASS_CONTROLS_CONFIG = stringPreferencesKey("glass_controls_config_json")
@@ -80,11 +83,14 @@ object AppSettingsRepository {
         val globalLyricsOffsetMs: Long = 0L,
         val autoFetchLyrics: Boolean = true,
         val youtubeVideoQuality: String = "480",
+        val streamingAudioQuality: String = "HIGH",
+        val albumArtQuality: String = "HIGH",
         val smartMixtapeEnabled: Boolean = true,
         val smartMixtapeSongCount: Int = 30,
         val smartMixtapeStorageCapMb: Int = 1024,
         val smartMixtapeWifiOnly: Boolean = true,
-        val smartMixtapeQuality: String = "BALANCED"
+        val smartMixtapeQuality: String = "BALANCED",
+        val hideStatusBar: Boolean = false
     )
 
     fun getSettingsFlow(context: Context): Flow<AppSettings> {
@@ -92,6 +98,15 @@ object AppSettingsRepository {
             val glassControlsConfig = prefs[KEY_GLASS_CONTROLS_CONFIG]?.let {
                 GlassControlsSerializer.fromJson(it)
             } ?: GlassControlsConfig.PRESET_BALANCED
+
+            val audioQualityStr = prefs[KEY_STREAMING_AUDIO_QUALITY] ?: "HIGH"
+            val artQualityStr = prefs[KEY_ALBUM_ART_QUALITY] ?: "HIGH"
+            com.nodeplayer.model.MediaQualitySettingsState.setStreamingAudioQuality(
+                com.nodeplayer.model.StreamingAudioQuality.fromId(audioQualityStr)
+            )
+            com.nodeplayer.model.MediaQualitySettingsState.setAlbumArtQuality(
+                com.nodeplayer.model.AlbumArtQuality.fromId(artQualityStr)
+            )
 
             AppSettings(
                 fakeHiResEnabled = prefs[KEY_FAKE_HIRES_ENABLED] ?: true,
@@ -122,11 +137,14 @@ object AppSettingsRepository {
                 globalLyricsOffsetMs = prefs[KEY_GLOBAL_LYRICS_OFFSET_MS] ?: 0L,
                 autoFetchLyrics = prefs[KEY_AUTO_FETCH_LYRICS] ?: true,
                 youtubeVideoQuality = prefs[KEY_YOUTUBE_VIDEO_QUALITY] ?: "480",
+                streamingAudioQuality = audioQualityStr,
+                albumArtQuality = artQualityStr,
                 smartMixtapeEnabled = prefs[KEY_SMART_MIXTAPE_ENABLED] ?: true,
                 smartMixtapeSongCount = prefs[KEY_SMART_MIXTAPE_SONG_COUNT] ?: 30,
                 smartMixtapeStorageCapMb = prefs[KEY_SMART_MIXTAPE_STORAGE_CAP_MB] ?: 1024,
                 smartMixtapeWifiOnly = prefs[KEY_SMART_MIXTAPE_WIFI_ONLY] ?: true,
-                smartMixtapeQuality = prefs[KEY_SMART_MIXTAPE_QUALITY] ?: "BALANCED"
+                smartMixtapeQuality = prefs[KEY_SMART_MIXTAPE_QUALITY] ?: "BALANCED",
+                hideStatusBar = prefs[KEY_HIDE_STATUS_BAR] ?: false
             )
         }
     }

@@ -276,12 +276,18 @@ class CrossfadePlayerManager(
         if (playbackState == Player.STATE_ENDED) {
             if (isCrossfading) {
                 completeCrossfade()
+            } else if (activePlayer.repeatMode == Player.REPEAT_MODE_ONE) {
+                Log.d(TAG, "[Gapless] Repeat ONE: replaying track $currentQueueIndex")
+                playIndex(currentQueueIndex, 0L)
             } else if (currentQueueIndex + 1 < currentQueue.size) {
                 Log.d(TAG, "[Gapless] Natural end of track reached, advancing gapless to track ${currentQueueIndex + 1}")
                 playIndex(currentQueueIndex + 1, 0L)
-            } else if (currentQueue.isNotEmpty()) {
-                Log.d(TAG, "[Gapless] Natural end of queue reached, wrapping around to track 0")
+            } else if (currentQueue.isNotEmpty() && activePlayer.repeatMode == Player.REPEAT_MODE_ALL) {
+                Log.d(TAG, "[Gapless] Natural end of queue reached, wrapping around to track 0 (REPEAT_MODE_ALL)")
                 playIndex(0, 0L)
+            } else {
+                Log.d(TAG, "[Gapless] Natural end of queue reached with REPEAT_MODE_OFF, stopping playback")
+                activePlayer.pause()
             }
         }
     }

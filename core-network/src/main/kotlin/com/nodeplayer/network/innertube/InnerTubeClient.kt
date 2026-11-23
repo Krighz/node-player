@@ -49,6 +49,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.Closeable
+import java.util.Locale
 import kotlin.math.abs
 
 /**
@@ -873,9 +874,20 @@ class InnerTubeClient(
                 ?: primary["navigationEndpoint"]?.jsonObject?.get("watchEndpoint")?.jsonObject?.get("videoId")?.jsonPrimitive?.contentOrNull
 
             if (primaryVideoId == videoId) {
-                val match = counterparts.firstOrNull { cp ->
-                    val renderer = cp["counterpartRenderer"]?.jsonObject?.get("playlistPanelVideoRenderer")?.jsonObject
-                    renderer?.fits() == true
+                val match = if (!wantAudio) {
+                    counterparts.firstOrNull { cp ->
+                        val renderer = cp["counterpartRenderer"]?.jsonObject?.get("playlistPanelVideoRenderer")?.jsonObject
+                        val type = renderer?.musicVideoType()
+                        type == "MUSIC_VIDEO_TYPE_OMV" || type == "MUSIC_VIDEO_TYPE_OFFICIAL_SOURCE_MUSIC_VIDEO"
+                    } ?: counterparts.firstOrNull { cp ->
+                        val renderer = cp["counterpartRenderer"]?.jsonObject?.get("playlistPanelVideoRenderer")?.jsonObject
+                        renderer?.fits() == true
+                    }
+                } else {
+                    counterparts.firstOrNull { cp ->
+                        val renderer = cp["counterpartRenderer"]?.jsonObject?.get("playlistPanelVideoRenderer")?.jsonObject
+                        renderer?.fits() == true
+                    }
                 }
                 if (match != null) {
                     val renderer = match["counterpartRenderer"]?.jsonObject?.get("playlistPanelVideoRenderer")?.jsonObject ?: continue
@@ -940,18 +952,15 @@ class InnerTubeClient(
 
     /**
      * Searches YouTube Music for an official music video candidate matching [title] and [artist],
-     * scored and verified by [VideoTrackMatcher].
+     * scored and verified by [VideoTrackMatcher] (BitChord algorithm).
      */
     suspend fun searchMusicVideo(title: String, artist: String, durationMs: Long? = null): Track? = runCatching {
-        val cleanTitle = VideoTrackMatcher.normalize(title)
-            .replace(Regex("""[\(\[\{].*?[\)\]\}]"""), " ")
-            .trim()
-        val primaryArtist = artist.split(Regex("""[,&/+]|\band\b|\bfeat\b|\bft\b""")).firstOrNull()?.trim().orEmpty()
+        val cleanTitle = VideoTrackMatcher.searchableTitle(title, artist)
+        val primaryArtist = VideoTrackMatcher.primaryArtist(artist)
 
         val queries = listOfNotNull(
-            if (primaryArtist.isNotBlank()) "$cleanTitle $primaryArtist official video" else null,
             if (primaryArtist.isNotBlank()) "$cleanTitle $primaryArtist" else null,
-            "$cleanTitle official music video"
+            cleanTitle
         ).distinct()
 
         for (query in queries) {
@@ -1413,19 +1422,73 @@ class InnerTubeClient(
         )
     }
 
+    private fun artistNamesFromRuns(runs: List<Run>): String? {
+        val groups = mutableListOf<MutableList<Run>>(mutableListOf())
+        runs.forEach { run ->
+            val text = run.text.trim()
+            if (text == "•" || text == "·" || text == "|") {
+                groups += mutableListOf<Run>()
+            } else {
+                groups.last() += run
+            }
+        }
+        val artistGroup = groups.firstOrNull { group ->
+            group.any { run ->
+                val pageType = run.navigationEndpoint?.browseEndpoint
+                    ?.browseEndpointContextSupportedConfigs
+                    ?.browseEndpointContextMusicConfig?.pageType.orEmpty()
+                "ARTIST" in pageType || run.navigationEndpoint?.browseEndpoint?.browseId?.startsWith("UC") == true
+            }
+        } ?: return null
+        return artistGroup.mapIndexedNotNull { index, run ->
+            if (index % 2 != 0) return@mapIndexedNotNull null
+            run.text.trim().takeIf { it.isNotBlank() }
+        }.distinct().joinToString(", ").ifBlank { null }
+    }
+
     internal fun mapResponsiveListItemToTrack(item: MusicResponsiveListItemRenderer): Track? {
         val videoId = item.videoId ?: return null
         val title = item.flexColumns.firstOrNull()?.musicResponsiveListItemFlexColumnRenderer?.text?.text()
             ?.ifBlank { null } ?: return null
 
         val subtitleRuns = item.flexColumns.getOrNull(1)?.musicResponsiveListItemFlexColumnRenderer?.text?.runs.orEmpty()
-        val artist = subtitleRuns.firstOrNull()?.text?.trim()?.ifBlank { "YouTube Music" } ?: "YouTube Music"
-        val album = subtitleRuns.getOrNull(1)?.text?.trim()?.ifBlank { "YouTube Music" } ?: "YouTube Music"
+        val subtitle = subtitleRuns.joinToString("") { it.text }
+        val parts = subtitle.split(Regex("""\s*[•·|/]\s*""")).map { it.trim() }.filter { it.isNotBlank() }
 
-        val durationStr = subtitleRuns.lastOrNull()?.text?.trim()
+        val durationStr = parts.lastOrNull()?.takeIf { it.matches(DURATION_REGEX) }
+            ?: item.fixedColumns.orEmpty().firstNotNullOfOrNull { col ->
+                col.musicResponsiveListItemFlexColumnRenderer?.text?.text()?.trim()?.takeIf { it.matches(DURATION_REGEX) }
+            }
+            ?: subtitleRuns.lastOrNull { it.text.trim().matches(DURATION_REGEX) }?.text?.trim()
+
+        val rowType = parts.firstOrNull { it.lowercase(Locale.ROOT) in TYPE_WORDS }?.lowercase(Locale.ROOT)
+
+        val creditedArtists = artistNamesFromRuns(subtitleRuns)
+        val fallbackArtist = parts.firstOrNull {
+            !it.matches(DURATION_REGEX) && it.lowercase(Locale.ROOT) !in TYPE_WORDS && !it.matches(TALLY_REGEX)
+        }
+        val artist = creditedArtists ?: fallbackArtist?.ifBlank { "YouTube Music" } ?: "YouTube Music"
+
+        val albumRun = subtitleRuns.firstOrNull { run ->
+            val pageType = run.navigationEndpoint?.browseEndpoint
+                ?.browseEndpointContextSupportedConfigs
+                ?.browseEndpointContextMusicConfig?.pageType.orEmpty()
+            "ALBUM" in pageType
+        }?.text?.trim()
+
+        val fallbackAlbum = parts.firstOrNull { part ->
+            part != artist &&
+            part.lowercase(Locale.ROOT) !in TYPE_WORDS &&
+            !part.matches(DURATION_REGEX) &&
+            !part.matches(TALLY_REGEX)
+        }
+        val album = albumRun ?: fallbackAlbum?.ifBlank { "YouTube Music" } ?: "YouTube Music"
+
         val durationMs = parseDurationMs(durationStr)
-
         val id = generateSyntheticTrackId(videoId)
+
+        val thumbs = item.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails.orEmpty()
+        val isVideo = rowType == "video" || thumbs.any { (it.width ?: 0) > (it.height ?: 0) }
 
         return Track(
             id = id,
@@ -1434,7 +1497,8 @@ class InnerTubeClient(
             album = album,
             durationMs = durationMs,
             path = "nodeplayer://youtube/$videoId",
-            formatDescription = "YouTube Audio"
+            formatDescription = if (isVideo) "YouTube Video" else "YouTube Audio",
+            mimeType = if (isVideo) "video/mp4" else "audio/webm"
         )
     }
 
@@ -1940,6 +2004,16 @@ class InnerTubeClient(
     companion object {
         private const val TAG = "innertube"
         private const val AVATAR_SIZE_PARAM = "=s256-c-k-c0x00ffffff-no-rj"
+
+        private val TYPE_WORDS = setOf(
+            "song", "video", "album", "single", "ep", "artist",
+            "playlist", "podcast", "episode", "station"
+        )
+        private val TALLY_REGEX = Regex(
+            """[\d.,]+\s*[KMB]?\s+(plays|views|likes|songs|tracks|subscribers|hours?|minutes?|seconds?)\b.*""",
+            RegexOption.IGNORE_CASE
+        )
+        private val DURATION_REGEX = Regex("""\d+:\d{2}(:\d{2})?""")
 
         /**
          * Normalizes YouTube/Google account avatar URLs per D-13:
