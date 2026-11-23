@@ -88,9 +88,9 @@ async function initReleaseHub() {
   const apiUrl = `https://api.github.com/repos/${repo}/releases/latest`;
 
   // Fallback defaults in case of network restrictions
-  let version = 'v2.0.0';
-  let apkUrl = `https://github.com/${repo}/releases/tag/v2.0.0`;
-  let winUrl = `https://github.com/${repo}/releases/tag/v2.0.0`;
+  let version = 'v2.1.0';
+  let apkUrl = `https://github.com/${repo}/releases/tag/v2.1.0`;
+  let winUrl = `https://github.com/${repo}/releases/tag/v2.1.0`;
   let apkSize = '~50 MB';
   let winSize = '~120 MB';
   let shaSummary = 'SHA256SUMS.txt verified release key';

@@ -127,7 +127,7 @@
     <div class="section-header">
       <div class="section-badge">Release History</div>
       <h1 class="section-title">Evolution of Node Player</h1>
-      <p class="section-subtitle">Detailed engineering updates and changelogs from v2.0.0 to v0.1.0.</p>
+      <p class="section-subtitle">Detailed engineering updates and changelogs from v2.1.0 to v0.1.0.</p>
     </div>
 
     <!-- Filter Buttons -->
@@ -142,8 +142,32 @@
     <!-- Timeline Entries -->
     <div class="timeline">
 
-      <!-- v2.0.0 Entry -->
+      <!-- v2.1.0 Entry -->
       <article class="changelog-entry" data-tags="latest added performance fixed">
+        <div class="entry-badge-row">
+          <span class="version-tag">v2.1.0</span>
+          <span class="type-pill type-added">Added</span>
+          <span class="type-pill type-perf">Perf</span>
+          <span class="type-pill type-fixed">Fixed</span>
+          <span class="date-tag">2026-11-23</span>
+        </div>
+        <p style="color:var(--text-primary); font-weight:600;">Google Drive Cloud Sync, Landscape FullScreen Lyrics &amp; Audiophile Refinements</p>
+        <ul class="changelog-item-list">
+          <li><strong>Opt-In Privacy-First Google Drive Cloud Sync:</strong> Serverless backup to personal Google Drive using hidden <code>appDataFolder</code> (<code>spaces=appDataFolder</code>) with zero developer-hosted servers. Safe merge conflict resolution, dirty-flag background optimization via WorkManager (Hourly, Daily, Manual), and hardware Keystore AES-256-GCM token encryption.</li>
+          <li><strong>Two-Column Landscape FullScreenLyricsView:</strong> Split-screen architecture featuring shapeable album art hero, song name, time-seek timeline slider, and playback controls on the left, with synchronized lyrics on the right.</li>
+          <li><strong>Auto-Collapsing Left Hero Controls:</strong> 4.5-second inactivity auto-collapse for landscape transport controls that smoothly tucks into the screen edge when playing.</li>
+          <li><strong>Shapeable Album Art Customizer:</strong> Choose between Squircle, Circle, and Heart shapes with smooth cubic Bezier vector clipping via the top-right three-dot menu (⋮).</li>
+          <li><strong>Selectable Lyrics &amp; Highlighting:</strong> Direct on-screen word and line selection across full-screen lyrics with SelectionContainer.</li>
+          <li><strong>Multi-Provider Expansion &amp; State Indicators:</strong> Integrated Musixmatch (with duration tolerance matching) and Unison, with visual status icons (Searching, Found &amp; Connected, Fallback).</li>
+          <li><strong>Offline Romanization &amp; Dual-Line Translation:</strong> Embedded multi-script engine for Japanese, Korean, Chinese, Cyrillic, Greek, Hindi, and Arabic phonetics via an interactive 50% bottom sheet.</li>
+          <li><strong>Genuine Listening Metrics:</strong> Replaced placeholder library listening time and play count fallbacks with real-time statistics from daily stats and track play counters.</li>
+          <li><strong>1200p Ultra-HD Cover Art Pipeline:</strong> InnerTube transformer automatically upscales album covers to crystal-clear 1200×1200p resolution.</li>
+          <li><strong>Audio Engine &amp; Decoder Reliability:</strong> 32-bit float audio sink clamp for older Android devices, Vorbis/Opus tag parser resilience, and cold-start replay HTTP 403 prevention.</li>
+        </ul>
+      </article>
+
+      <!-- v2.0.0 Entry -->
+      <article class="changelog-entry" data-tags="added performance fixed">
         <div class="entry-badge-row">
           <span class="version-tag">v2.0.0</span>
           <span class="type-pill type-added">Added</span>
