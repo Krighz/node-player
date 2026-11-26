@@ -478,7 +478,10 @@ fun WordByWordKaraokeText(
     inactiveColor: Color = Color(0xFFC0C0C0),
     accentSweepColor: Color = activeColor,
     fontSize: TextUnit = 34.sp,
-    positionProvider: () -> Long = { currentPositionMs }
+    positionProvider: () -> Long = { currentPositionMs },
+    glowIntensity: Float = 1.0f,
+    glowColor: Color = Color.White,
+    isBold: Boolean = true
 ) {
     val distance = abs(index - activeIndex)
     val isActive = distance == 0
@@ -513,29 +516,33 @@ fun WordByWordKaraokeText(
 
     val lyricsFontFamily = LocalLyricsFontFamily.current ?: FontFamily.SansSerif
 
-    val subtleGlowShadow = remember {
-        Shadow(
-            color = Color.White.copy(alpha = 0.52f),
-            offset = Offset.Zero,
-            blurRadius = 18f
-        )
+    val subtleGlowShadow = remember(glowIntensity, glowColor) {
+        if (glowIntensity > 0.02f) {
+            Shadow(
+                color = glowColor.copy(alpha = (0.55f * glowIntensity).coerceIn(0f, 1f)),
+                offset = Offset.Zero,
+                blurRadius = (18f * glowIntensity)
+            )
+        } else {
+            null
+        }
     }
 
-    val textStyle = remember(fontSize, isActive, textAlign, lyricsFontFamily) {
+    val textStyle = remember(fontSize, isActive, textAlign, lyricsFontFamily, isBold) {
         TextStyle(
             fontFamily = lyricsFontFamily,
-            fontSize = 36.sp,
-            fontWeight = if (isActive) FontWeight.Black else FontWeight.ExtraBold,
+            fontSize = fontSize,
+            fontWeight = if (isActive) (if (isBold) FontWeight.Black else FontWeight.Bold) else (if (isBold) FontWeight.Bold else FontWeight.Medium),
             fontSynthesis = FontSynthesis.All,
-            lineHeight = 43.sp,
+            lineHeight = (fontSize.value * 1.22f).sp,
             letterSpacing = (-0.85).sp,
             textAlign = textAlign
         )
     }
 
-    val activeGlowTextStyle = remember(textStyle) {
+    val activeGlowTextStyle = remember(textStyle, subtleGlowShadow) {
         textStyle.copy(
-            fontWeight = FontWeight.Black,
+            fontWeight = if (isBold) FontWeight.Black else FontWeight.Bold,
             fontSynthesis = FontSynthesis.All,
             shadow = subtleGlowShadow
         )

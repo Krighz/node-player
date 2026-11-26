@@ -19,6 +19,12 @@ class LyricsSettingsTest {
         assertEquals(LyricsGlowPalette.CINEMA_WHITE, settings.palette)
         assertEquals(true, settings.showTopBar)
         assertEquals(LyricsProviderChoice.AUTO, settings.preferredProvider)
+        assertEquals(LyricsFontChoice.INTER, settings.fontChoice)
+        assertEquals(1.00f, settings.fontSizeScale)
+        assertEquals(LyricsBaseColor.PURE_WHITE, settings.baseColor)
+        assertEquals(1.00f, settings.glowIntensity)
+        assertEquals(0.40f, settings.inactiveOpacity)
+        assertEquals(true, settings.isBold)
     }
 
     @Test
@@ -32,8 +38,25 @@ class LyricsSettingsTest {
     }
 
     @Test
+    fun testLyricsFontChoices() {
+        assertEquals(14, LyricsFontChoice.entries.size)
+        assertEquals(LyricsFontChoice.PAPYRUS, LyricsFontChoice.fromId("papyrus"))
+        assertEquals(LyricsFontChoice.MINECRAFT, LyricsFontChoice.fromId("minecraft"))
+        assertEquals(LyricsFontChoice.PATRICK_HAND, LyricsFontChoice.fromId("patrick_hand"))
+        assertEquals(LyricsFontChoice.INTER, LyricsFontChoice.fromId("unknown"))
+    }
+
+    @Test
+    fun testLyricsBaseColors() {
+        assertEquals(8, LyricsBaseColor.entries.size)
+        assertEquals(LyricsBaseColor.PURE_WHITE, LyricsBaseColor.fromId("white"))
+        assertEquals(LyricsBaseColor.AMBER_GOLD, LyricsBaseColor.fromId("amber"))
+        assertEquals(LyricsBaseColor.PURE_WHITE, LyricsBaseColor.fromId("unknown"))
+    }
+
+    @Test
     fun testLyricsProviderChoices() {
-        assertEquals(7, LyricsProviderChoice.entries.size)
+        assertEquals(10, LyricsProviderChoice.entries.size)
         assertEquals(LyricsProviderChoice.AUTO, LyricsProviderChoice.fromId("auto"))
         assertEquals(LyricsProviderChoice.BINI, LyricsProviderChoice.fromId("bini"))
         assertEquals(LyricsProviderChoice.LRCLIB, LyricsProviderChoice.fromId("lrclib"))

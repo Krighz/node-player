@@ -1,8 +1,13 @@
 package com.nodeplayer.ui.player
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -66,8 +71,8 @@ fun PlaybackOptionsSheet(
 ) {
     AnimatedVisibility(
         visible = visible,
-        enter = slideInVertically { it },
-        exit = slideOutVertically { it },
+        enter = fadeIn(tween(180)),
+        exit = fadeOut(tween(150)),
         modifier = modifier
     ) {
         Box(
@@ -81,6 +86,16 @@ fun PlaybackOptionsSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.65f)
+                    .animateEnterExit(
+                        enter = slideInVertically(
+                            animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f),
+                            initialOffsetY = { it }
+                        ),
+                        exit = slideOutVertically(
+                            animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f),
+                            targetOffsetY = { it }
+                        )
+                    )
                     .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                     .background(Color(0xFF14151C).copy(alpha = 0.95f))
                     .clickable(enabled = false) {}
@@ -217,11 +232,16 @@ fun PlaybackOptionsSheet(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    itemsIndexed(queue) { index, track ->
+                    itemsIndexed(
+                        items = queue,
+                        key = { index, track -> "${track.id}_$index" }
+                    ) { index, track ->
                         val isCurrent = index == currentQueueIndex
+                        @OptIn(ExperimentalFoundationApi::class)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .animateItemPlacement(animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f))
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(if (isCurrent) accentColor.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.04f))
                                 .clickable { onSelectQueueItem(index) }

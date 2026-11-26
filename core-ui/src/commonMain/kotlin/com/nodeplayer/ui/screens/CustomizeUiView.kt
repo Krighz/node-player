@@ -576,6 +576,46 @@ private fun MotionSettingsSection(
     accent: Color
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // 3D Gyroscope Artwork Tilt Parallax (Defaults to OFF)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("3D Gyroscope Artwork Tilt", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "Tilts album art in 3D using device sensors with dynamic liquid glass reflections",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.55f)
+                )
+            }
+            LiquidSwitch(
+                checked = themeConfig.gyroscopeParallaxEnabled,
+                onCheckedChange = { onThemeConfigChange(themeConfig.copy(gyroscopeParallaxEnabled = it)) }
+            )
+        }
+
+        // Haptic Feedback Master Toggle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Tactile Haptic Feedback", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "Subtle vibrations on tapping tracks, queuing, and scrubbing controls",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.55f)
+                )
+            }
+            LiquidSwitch(
+                checked = themeConfig.hapticsEnabled,
+                onCheckedChange = { onThemeConfigChange(themeConfig.copy(hapticsEnabled = it)) }
+            )
+        }
+
         Column {
             Row(
                 modifier = Modifier.fillMaxWidth(),

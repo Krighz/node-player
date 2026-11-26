@@ -528,10 +528,21 @@ fun NowPlayingView(
                                     },
                                     label = "HeroArtworkMorph"
                                 ) { targetTrack ->
+                                    val gyroState = com.nodeplayer.ui.theme.LocalGyroscopeTilt.current
+                                    val tiltRotX = if (gyroState.isEnabled) gyroState.tiltY * 12f else 0f
+                                    val tiltRotY = if (gyroState.isEnabled) -gyroState.tiltX * 12f else 0f
+
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
-                                            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                                            .graphicsLayer {
+                                                compositingStrategy = CompositingStrategy.Offscreen
+                                                if (gyroState.isEnabled) {
+                                                    rotationX = tiltRotX
+                                                    rotationY = tiltRotY
+                                                    cameraDistance = 16f * density
+                                                }
+                                            }
                                             .drawWithContent {
                                                 drawContent()
                                                 drawRect(
@@ -547,12 +558,48 @@ fun NowPlayingView(
                                                 .fillMaxSize()
                                                 .graphicsLayer {
                                                     translationY = artVerticalOffsetDp.dp.toPx()
+                                                    if (gyroState.isEnabled) {
+                                                        rotationX = tiltRotX
+                                                        rotationY = tiltRotY
+                                                        cameraDistance = 16f * density
+                                                    }
                                                 },
                                             contentScale = ContentScale.Crop,
                                             cornerRadius = 0.dp,
                                             targetSizePx = ArtworkCache.HERO_TARGET_SIZE_PX,
                                             scale = artZoomScale
                                         )
+
+                                        // 1b. Specular Sheen (Refractive dynamic sheen when 3D tilt is enabled)
+                                        if (gyroState.isEnabled) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .graphicsLayer {
+                                                        translationY = artVerticalOffsetDp.dp.toPx()
+                                                        rotationX = tiltRotX
+                                                        rotationY = tiltRotY
+                                                        cameraDistance = 16f * density
+                                                    }
+                                                    .background(
+                                                        Brush.linearGradient(
+                                                            colors = listOf(
+                                                                Color.Transparent,
+                                                                Color.White.copy(alpha = 0.14f),
+                                                                Color.Transparent
+                                                            ),
+                                                            start = androidx.compose.ui.geometry.Offset(
+                                                                x = (0.2f + gyroState.specularOffset * 0.5f) * 1000f,
+                                                                y = 0f
+                                                            ),
+                                                            end = androidx.compose.ui.geometry.Offset(
+                                                                x = (0.8f + gyroState.specularOffset * 0.5f) * 1000f,
+                                                                y = 1000f
+                                                            )
+                                                        )
+                                                    )
+                                            )
+                                        }
 
                                         // 2. Overlaid Gradient Blur: Progressively blurs the artwork in the shaded zone
                                         Box(

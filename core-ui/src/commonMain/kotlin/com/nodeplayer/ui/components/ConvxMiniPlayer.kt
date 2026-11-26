@@ -1,6 +1,10 @@
 package com.nodeplayer.ui.components
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -112,21 +116,30 @@ fun ConvxMiniPlayer(
     val containerShape = remember(resolvedMiniPlayer.cornerShapeDp) { ContinuousRoundedRectangle(resolvedMiniPlayer.cornerShapeDp.dp) }
     val artworkShape = remember { ContinuousRoundedRectangle(10.dp) }
 
-    var dragAccumulator by remember { mutableFloatStateOf(0f) }
+    val coroutineScope = rememberCoroutineScope()
+    val dragOffsetX = remember { Animatable(0f) }
 
     val gestureModifier = if (gesturesEnabled) {
         Modifier.draggable(
             orientation = Orientation.Horizontal,
             state = rememberDraggableState { delta ->
-                dragAccumulator += delta
-            },
-            onDragStopped = {
-                if (dragAccumulator > 120f) {
-                    onSkipPreviousClick()
-                } else if (dragAccumulator < -120f) {
-                    onSkipNextClick()
+                coroutineScope.launch {
+                    dragOffsetX.snapTo(dragOffsetX.value + delta * 0.65f)
                 }
-                dragAccumulator = 0f
+            },
+            onDragStopped = { velocity ->
+                coroutineScope.launch {
+                    val current = dragOffsetX.value
+                    if (current > 100f || velocity > 800f) {
+                        onSkipPreviousClick()
+                    } else if (current < -100f || velocity < -800f) {
+                        onSkipNextClick()
+                    }
+                    dragOffsetX.animateTo(
+                        targetValue = 0f,
+                        animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f)
+                    )
+                }
             }
         )
     } else Modifier
@@ -146,6 +159,9 @@ fun ConvxMiniPlayer(
                 }
             )
             .then(gestureModifier)
+            .graphicsLayer {
+                translationX = dragOffsetX.value
+            }
             .then(
                 if (lensActive) {
                     Modifier.drawBackdrop(

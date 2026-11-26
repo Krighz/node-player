@@ -81,6 +81,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -253,6 +254,11 @@ fun FullScreenLyricsView(
     var localLyricsSettings by remember(lyricsSettings) { mutableStateOf(lyricsSettings) }
     var showLyricsSettingsSheet by remember { mutableStateOf(false) }
     var layoutSeed by remember { androidx.compose.runtime.mutableLongStateOf(42L) }
+
+    val fontResolver = LocalLyricsFontResolver.current
+    val activeLyricsFontFamily = remember(localLyricsSettings.fontChoice, fontResolver) {
+        fontResolver(localLyricsSettings.fontChoice)
+    }
 
     val handleUpdateSettings: (com.nodeplayer.model.LyricsSettings) -> Unit = { newSettings ->
         val providerChanged = newSettings.preferredProvider != localLyricsSettings.preferredProvider
@@ -496,8 +502,9 @@ fun FullScreenLyricsView(
             }
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val parentMaxHeight = maxHeight
-            val parentMaxWidth = maxWidth
+            CompositionLocalProvider(LocalLyricsFontFamily provides activeLyricsFontFamily) {
+                val parentMaxHeight = maxHeight
+                val parentMaxWidth = maxWidth
             val isLandscape = parentMaxWidth > parentMaxHeight && parentMaxWidth >= 600.dp
             val columnWidth = if (parentMaxWidth > 640.dp) 580.dp else parentMaxWidth
 
@@ -921,9 +928,12 @@ fun FullScreenLyricsView(
                                                         registerLandscapeHeroInteraction()
                                                         onSeekTo(ts)
                                                     },
-                                                    activeColor = Color.White,
-                                                    inactiveColor = Color.White.copy(alpha = 0.70f),
-                                                    fontSize = (26f * localLyricsSettings.commonZoom).sp
+                                                    activeColor = Color(localLyricsSettings.baseColor.colorArgb),
+                                                    inactiveColor = Color(localLyricsSettings.baseColor.colorArgb).copy(alpha = localLyricsSettings.inactiveOpacity),
+                                                    fontSize = (26f * localLyricsSettings.commonZoom * localLyricsSettings.fontSizeScale).sp,
+                                                    glowIntensity = localLyricsSettings.glowIntensity,
+                                                    glowColor = Color(localLyricsSettings.palette.glowColorArgb),
+                                                    isBold = localLyricsSettings.isBold
                                                 )
                                             }
                                         }
@@ -1482,9 +1492,12 @@ fun FullScreenLyricsView(
                                                 registerInteraction()
                                                 onSeekTo(ts)
                                             },
-                                            activeColor = Color.White,
-                                            inactiveColor = Color.White.copy(alpha = 0.70f),
-                                            fontSize = (34f * localLyricsSettings.commonZoom).sp
+                                            activeColor = Color(localLyricsSettings.baseColor.colorArgb),
+                                            inactiveColor = Color(localLyricsSettings.baseColor.colorArgb).copy(alpha = localLyricsSettings.inactiveOpacity),
+                                            fontSize = (34f * localLyricsSettings.commonZoom * localLyricsSettings.fontSizeScale).sp,
+                                            glowIntensity = localLyricsSettings.glowIntensity,
+                                            glowColor = Color(localLyricsSettings.palette.glowColorArgb),
+                                            isBold = localLyricsSettings.isBold
                                         )
 
                                         // Instrumental gap indicator check
@@ -1732,6 +1745,7 @@ fun FullScreenLyricsView(
                     lines = sortedLines,
                     palette = effectivePalette,
                     coverBitmap = coverBitmap,
+                    fontFamily = activeLyricsFontFamily,
                     onDismiss = { showCardDialog = false },
                     onShareImage = {
                         showCardDialog = false
@@ -1750,6 +1764,7 @@ fun FullScreenLyricsView(
                         // Formatted text
                     }
                 )
+            }
             }
         }
 

@@ -21,6 +21,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -606,8 +608,30 @@ class MainActivity : ComponentActivity() {
                                 } else Modifier
                             )
                     ) {
+                        val gyroTiltState = com.nodeplayer.music.ui.rememberAndroidGyroscopeTiltState(
+                            enabled = effectiveThemeConfig.gyroscopeParallaxEnabled,
+                            tiltStrength = effectiveThemeConfig.artworkTiltStrength
+                        )
+                        val nodeHaptics = com.nodeplayer.ui.haptics.rememberNodeHaptics(effectiveThemeConfig.hapticsEnabled)
+
+                        val handlePlayTrack: (com.nodeplayer.model.Track, List<com.nodeplayer.model.Track>) -> Unit = { track, q ->
+                            nodeHaptics.click()
+                            viewModel.playTrack(track, q)
+                        }
+                        val handleAddToQueue: (com.nodeplayer.model.Track) -> Unit = { track ->
+                            nodeHaptics.impact()
+                            viewModel.addToQueue(track)
+                            safeToast("Added \"${track.title}\" to Up Next", Toast.LENGTH_SHORT)
+                        }
+                        val handlePlayNext: (com.nodeplayer.model.Track) -> Unit = { track ->
+                            nodeHaptics.impact()
+                            viewModel.playNext(track)
+                            safeToast("Playing \"${track.title}\" next", Toast.LENGTH_SHORT)
+                        }
+
                         CompositionLocalProvider(
-                            LocalControlBackdrop provides remember { emptyBackdrop() }
+                            LocalControlBackdrop provides remember { emptyBackdrop() },
+                            com.nodeplayer.ui.theme.LocalGyroscopeTilt provides gyroTiltState
                         ) {
                         LiquidGlassBackground(
                             accentColor = accentColor,
@@ -620,76 +644,99 @@ class MainActivity : ComponentActivity() {
                             themeConfig = effectiveThemeConfig
                         )
 
-                        if (activePlaylistDetail != null) {
-                            val (header, detailTracks) = activePlaylistDetail!!
-                            val playOrOpenTrack: (com.nodeplayer.model.Track, List<com.nodeplayer.model.Track>) -> Unit = { track, q ->
-                                if (track.path.startsWith("nodeplayer://youtube/playlist/")) {
-                                    coroutineScope.launch {
-                                        val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
-                                            com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
-                                                .fetchPlaylistTracks(track.path.removePrefix("nodeplayer://youtube/playlist/"))
-                                        }
-                                        result.onSuccess { songs ->
-                                            activePlaylistDetail = header.copy(id = track.path, title = track.title) to songs
-                                        }.onFailure { safeToast("Couldn't open playlist. Please try again.", Toast.LENGTH_SHORT) }
+                        val mainOverlay = when {
+                            activePlaylistDetail != null -> "playlist_detail"
+                            activeCategory != null -> "category"
+                            else -> "route"
+                        }
+                        AnimatedContent(
+                            targetState = mainOverlay,
+                            transitionSpec = {
+                                if (!routeMotionEnabled) {
+                                    fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                } else if (targetState == "playlist_detail" || targetState == "category") {
+                                    (scaleIn(spring(dampingRatio = 0.82f, stiffness = 380f), initialScale = 0.90f) + fadeIn(tween(220))) togetherWith
+                                        (scaleOut(spring(dampingRatio = 0.82f, stiffness = 380f), targetScale = 0.94f) + fadeOut(tween(180)))
+                                } else {
+                                    (scaleIn(spring(dampingRatio = 0.82f, stiffness = 380f), initialScale = 0.94f) + fadeIn(tween(200))) togetherWith
+                                        (scaleOut(spring(dampingRatio = 0.82f, stiffness = 380f), targetScale = 0.90f) + fadeOut(tween(180)))
+                                }
+                            },
+                            label = "MainOverlayTransition"
+                        ) { overlay ->
+                            when (overlay) {
+                                "playlist_detail" -> {
+                                    val (header, detailTracks) = activePlaylistDetail ?: return@AnimatedContent
+                                    val playOrOpenTrack: (com.nodeplayer.model.Track, List<com.nodeplayer.model.Track>) -> Unit = { track, q ->
+                                        if (track.path.startsWith("nodeplayer://youtube/playlist/")) {
+                                            coroutineScope.launch {
+                                                val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                                    com.nodeplayer.network.innertube.SharedInnerTubeProvider.get()
+                                                        .fetchPlaylistTracks(track.path.removePrefix("nodeplayer://youtube/playlist/"))
+                                                }
+                                                result.onSuccess { songs ->
+                                                    activePlaylistDetail = header.copy(id = track.path, title = track.title) to songs
+                                                }.onFailure { safeToast("Couldn't open playlist. Please try again.", Toast.LENGTH_SHORT) }
+                                            }
+                                        } else viewModel.playTrack(track, q)
                                     }
-                                } else viewModel.playTrack(track, q)
-                            }
-                            com.nodeplayer.ui.screens.PlaylistDetailView(
-                                header = header,
-                                tracks = detailTracks,
-                                currentTrack = currentTrack,
-                                isPlaying = isPlaying,
-                                isSavedInLibrary = false,
-                                isLoading = isPlaylistDetailLoading && detailTracks.isEmpty(),
-                                onBack = { activePlaylistDetail = null },
-                                onPlayTrack = playOrOpenTrack,
-                                onPlayAll = { q -> if (q.isNotEmpty()) playOrOpenTrack(q[0], q) },
-                                onShuffleAll = { q ->
-                                    if (q.isNotEmpty()) {
-                                        val shuffled = q.shuffled()
-                                        playOrOpenTrack(shuffled[0], shuffled)
-                                    }
-                                },
-                                onToggleSaveLibrary = { h ->
-                                    viewModel.createPlaylist(h.title, detailTracks)
-                                    safeToast("Saved ${detailTracks.size} tracks to library", Toast.LENGTH_SHORT)
-                                },
-                                onTrackOptionsClick = { trackForAddToPlaylist = it }
-                            )
-                        } else if (activeCategory != null) {
-                            val (category, playlists) = activeCategory!!
-                            com.nodeplayer.ui.screens.CategoryPlaylistsView(
-                                title = category.title,
-                                playlists = playlists,
-                                onBack = { activeCategory = null },
-                                loadingPlaylistId = loadingCategoryPlaylistId,
-                                isLoading = isCategoryLoading,
-                                onOpenPlaylist = { playlist ->
-                                    val playlistId = playlist.externalId ?: playlist.id.toString()
-                                    navigateToPlaylistDetail(
-                                        id = playlistId,
-                                        title = playlist.name,
-                                        subtitle = category.title,
-                                        artworkUrl = playlist.thumbnailUrl
+                                    com.nodeplayer.ui.screens.PlaylistDetailView(
+                                        header = header,
+                                        tracks = detailTracks,
+                                        currentTrack = currentTrack,
+                                        isPlaying = isPlaying,
+                                        isSavedInLibrary = false,
+                                        isLoading = isPlaylistDetailLoading && detailTracks.isEmpty(),
+                                        onBack = { activePlaylistDetail = null },
+                                        onPlayTrack = handlePlayTrack,
+                                        onPlayAll = { q -> if (q.isNotEmpty()) handlePlayTrack(q[0], q) },
+                                        onShuffleAll = { q ->
+                                            if (q.isNotEmpty()) {
+                                                val shuffled = q.shuffled()
+                                                handlePlayTrack(shuffled[0], shuffled)
+                                            }
+                                        },
+                                        onToggleSaveLibrary = { h ->
+                                            viewModel.createPlaylist(h.title, detailTracks)
+                                            safeToast("Saved ${detailTracks.size} tracks to library", Toast.LENGTH_SHORT)
+                                        },
+                                        onTrackOptionsClick = { trackForAddToPlaylist = it }
                                     )
                                 }
-                            )
-                        } else {
-                            AnimatedContent(
-                                targetState = currentRoute,
-                                transitionSpec = {
-                                    if (!routeMotionEnabled) {
-                                        fadeIn(tween(0)) togetherWith fadeOut(tween(0))
-                                    } else if (effectiveThemeConfig.screenTransitionStyle == "FADE") {
-                                        fadeIn(tween(220)) togetherWith fadeOut(tween(180))
-                                    } else {
-                                        (slideInHorizontally(tween(260, easing = FastOutSlowInEasing)) { it / 10 } + fadeIn(tween(220))) togetherWith
-                                            (slideOutHorizontally(tween(220, easing = FastOutSlowInEasing)) { -it / 10 } + fadeOut(tween(180)))
-                                    }
-                                },
-                                label = "MainRouteTransition"
-                            ) { route ->
+                                "category" -> {
+                                    val (category, playlists) = activeCategory ?: return@AnimatedContent
+                                    com.nodeplayer.ui.screens.CategoryPlaylistsView(
+                                        title = category.title,
+                                        playlists = playlists,
+                                        onBack = { activeCategory = null },
+                                        loadingPlaylistId = loadingCategoryPlaylistId,
+                                        isLoading = isCategoryLoading,
+                                        onOpenPlaylist = { playlist ->
+                                            val playlistId = playlist.externalId ?: playlist.id.toString()
+                                            navigateToPlaylistDetail(
+                                                id = playlistId,
+                                                title = playlist.name,
+                                                subtitle = category.title,
+                                                artworkUrl = playlist.thumbnailUrl
+                                            )
+                                        }
+                                    )
+                                }
+                                else -> {
+                                    AnimatedContent(
+                                        targetState = currentRoute,
+                                        transitionSpec = {
+                                            if (!routeMotionEnabled) {
+                                                fadeIn(tween(0)) togetherWith fadeOut(tween(0))
+                                            } else if (effectiveThemeConfig.screenTransitionStyle == "FADE") {
+                                                fadeIn(tween(220)) togetherWith fadeOut(tween(180))
+                                            } else {
+                                                (slideInHorizontally(spring(dampingRatio = 0.85f, stiffness = 400f)) { it / 4 } + fadeIn(tween(220))) togetherWith
+                                                    (slideOutHorizontally(spring(dampingRatio = 0.85f, stiffness = 400f)) { -it / 4 } + fadeOut(tween(180)))
+                                            }
+                                        },
+                                        label = "MainRouteTransition"
+                                    ) { route ->
                                 when (route) {
                                     "home", "new", "explore" -> com.nodeplayer.music.ui.screens.HomeScreen(
                                         allTracks = allTracks,
@@ -698,8 +745,11 @@ class MainActivity : ComponentActivity() {
                                         currentRoute = route,
                                         dockScrollController = dockScrollController,
                                         onSearchClick = { showSearchSheet = true },
-                                        onTrackClick = { track, q -> viewModel.playTrack(track, q) },
-                                        onPlayPauseClick = { viewModel.togglePlayPause() },
+                                        onTrackClick = handlePlayTrack,
+                                        onPlayPauseClick = {
+                                            nodeHaptics.click()
+                                            viewModel.togglePlayPause()
+                                        },
                                         onOpenSmartPlaylists = { currentRoute = "smart_playlists" },
                                         onOpenStats = { currentRoute = "stats" },
                                         onOpenDuplicateFinder = { currentRoute = "duplicate_finder" },
@@ -755,8 +805,8 @@ class MainActivity : ComponentActivity() {
                                                 isSavedInLibrary = true,
                                                 isLoading = playlistDetailTracks.isEmpty() && !pl.externalId.isNullOrBlank(),
                                                 onBack = { selectedPlaylistForDetail = null },
-                                                onPlayTrack = { tr, q -> viewModel.playTrack(tr, q) },
-                                                onPlayAll = { q -> if (q.isNotEmpty()) viewModel.playTrack(q[0], q) },
+                                                onPlayTrack = handlePlayTrack,
+                                                onPlayAll = { q -> if (q.isNotEmpty()) handlePlayTrack(q[0], q) },
                                                 onShuffleAll = { q ->
                                                     if (q.isNotEmpty()) {
                                                         val shuffled = q.shuffled()
@@ -773,14 +823,14 @@ class MainActivity : ComponentActivity() {
                                                 folders = folders,
                                                 currentTrack = currentTrack,
                                                 isPlaying = isPlaying,
-                                                onTrackClick = { track, q -> viewModel.playTrack(track, q) },
+                                                onTrackClick = handlePlayTrack,
                                                 onRescanClick = {
                                                     checkAndRequestPermissions()
                                                     viewModel.refreshLibrary()
                                                     viewModel.syncYouTubePlaylists(force = true)
                                                 },
-                                                onPlayNext = { viewModel.playNext(it) },
-                                                onAddToQueue = { viewModel.addToQueue(it) },
+                                                onPlayNext = handlePlayNext,
+                                                onAddToQueue = handleAddToQueue,
                                                 qualityBadgeMode = appSettings.qualityBadgesMode,
                                                 audioOutputInfo = audioOutputInfo,
                                                 onAnalyzeTrack = { viewModel.analyzeTrack(it) },
@@ -1096,17 +1146,19 @@ class MainActivity : ComponentActivity() {
                                         currentTrack = currentTrack,
                                         isPlaying = isPlaying,
                                         onBack = { currentRoute = "library" },
-                                        onTrackClick = { t, q -> viewModel.playTrack(t, q) },
-                                        onPlayNext = { viewModel.playNext(it) },
-                                        onAddToQueue = { viewModel.addToQueue(it) },
+                                        onTrackClick = handlePlayTrack,
+                                        onPlayNext = handlePlayNext,
+                                        onAddToQueue = handleAddToQueue,
                                         onAddToPlaylist = { trackForAddToPlaylist = it },
                                         onOpenDownloadQueue = { showDownloadQueueSheet = true }
                                     )
                                 }
                             }
                         }
-                        }
                     }
+                }
+            }
+        }
 
                     if (currentRoute !in listOf("widget_settings", "widgets", "optical_diagnostics", "settings", "equalizer", "audio_converter", "downloads", "storage", "storage_settings")) {
                         val activeTrack = currentTrack ?: com.nodeplayer.music.service.PlaybackService.instance?.crossfadeManager?.currentPlayingTrack
@@ -1178,13 +1230,24 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(isNowPlayingExpanded) {
                         if (isNowPlayingExpanded) {
                             sheetDragOffsetY.snapTo(0f)
+                            isDismissingSheet = false
                         }
                     }
 
                     AnimatedVisibility(
                         visible = isNowPlayingExpanded && activeNowPlayingTrack != null,
-                        enter = slideInVertically(tween(if (playerMotionEnabled) 320 else 0, easing = FastOutSlowInEasing), initialOffsetY = { it }) + fadeIn(tween(if (playerMotionEnabled) 180 else 0)),
-                        exit = slideOutVertically(tween(if (playerMotionEnabled) 280 else 0, easing = FastOutSlowInEasing), targetOffsetY = { it }) + fadeOut(tween(if (playerMotionEnabled) 240 else 0))
+                        enter = slideInVertically(
+                            animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                            initialOffsetY = { it }
+                        ) + fadeIn(tween(if (playerMotionEnabled) 180 else 0)),
+                        exit = if (sheetDragOffsetY.value > screenHeightPx * 0.5f) {
+                            fadeOut(tween(if (playerMotionEnabled) 120 else 0))
+                        } else {
+                            slideOutVertically(
+                                animationSpec = spring(dampingRatio = 0.82f, stiffness = 380f),
+                                targetOffsetY = { it }
+                            ) + fadeOut(tween(if (playerMotionEnabled) 200 else 0))
+                        }
                     ) {
                         activeNowPlayingTrack?.let { track ->
                             var showAndroidPlaybackOptions by remember { mutableStateOf(false) }
@@ -1193,15 +1256,58 @@ class MainActivity : ComponentActivity() {
                                 mutableStateOf(com.nodeplayer.ui.theme.PaletteExtractor.getCachedPalette(track))
                             }
 
-                            val interFontFamily = remember {
-                                androidx.compose.ui.text.font.FontFamily(
-                                    androidx.compose.ui.text.font.Font(R.font.inter, androidx.compose.ui.text.font.FontWeight.Normal),
-                                    androidx.compose.ui.text.font.Font(R.font.inter, androidx.compose.ui.text.font.FontWeight.Medium),
-                                    androidx.compose.ui.text.font.Font(R.font.inter, androidx.compose.ui.text.font.FontWeight.SemiBold),
-                                    androidx.compose.ui.text.font.Font(R.font.inter, androidx.compose.ui.text.font.FontWeight.Bold),
-                                    androidx.compose.ui.text.font.Font(R.font.inter, androidx.compose.ui.text.font.FontWeight.ExtraBold)
+                            val androidLyricsFontMap = remember {
+                                mapOf(
+                                    com.nodeplayer.model.LyricsFontChoice.INTER to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.inter)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.OUTFIT to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.outfit)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.JETBRAINS_MONO to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.jetbrains_mono)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.PAPYRUS to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.papyrus)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.MINECRAFT to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.minecraft)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.PATRICK_HAND to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.patrick_hand)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.COMFORTAA to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.comfortaa)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.CAVEAT to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.caveat)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.LOBSTER to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.lobster)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.BEBAS_NEUE to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.bebas_neue)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.ORBITRON to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.orbitron)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.PLAYFAIR to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.playfair_display)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.DANCING_SCRIPT to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.dancing_script)
+                                    ),
+                                    com.nodeplayer.model.LyricsFontChoice.CINZEL to androidx.compose.ui.text.font.FontFamily(
+                                        androidx.compose.ui.text.font.Font(R.font.cinzel)
+                                    )
                                 )
                             }
+
+                            val androidLyricsFontResolver: (com.nodeplayer.model.LyricsFontChoice) -> androidx.compose.ui.text.font.FontFamily = remember(androidLyricsFontMap) {
+                                { choice -> androidLyricsFontMap[choice] ?: (androidLyricsFontMap[com.nodeplayer.model.LyricsFontChoice.INTER] ?: androidx.compose.ui.text.font.FontFamily.SansSerif) }
+                            }
+
+                            val activeLyricsFont = androidLyricsFontResolver(currentLyricsSettings.fontChoice)
 
                             val isLocalVideo = (track.path.startsWith("/") || track.path.startsWith("file:") || track.path.startsWith("content:")) &&
                                 (track.mimeType.contains("video", ignoreCase = true) ||
@@ -1227,7 +1333,8 @@ class MainActivity : ComponentActivity() {
                             val sheetCornerRadius = (dragProgress * 32f).dp
 
                             CompositionLocalProvider(
-                                com.nodeplayer.ui.lyrics.LocalLyricsFontFamily provides interFontFamily
+                                com.nodeplayer.ui.lyrics.LocalLyricsFontFamily provides activeLyricsFont,
+                                com.nodeplayer.ui.lyrics.LocalLyricsFontResolver provides androidLyricsFontResolver
                             ) {
                                 Box(modifier = Modifier.fillMaxSize()) {
                                     // Deep glass blur that dissolves smoothly along a curve as dragged down
@@ -1352,7 +1459,6 @@ class MainActivity : ComponentActivity() {
                                                                 animationSpec = spring(stiffness = 320f, dampingRatio = 0.85f)
                                                             )
                                                             isNowPlayingExpanded = false
-                                                            sheetDragOffsetY.snapTo(0f)
                                                             isDismissingSheet = false
                                                         } else {
                                                             sheetDragOffsetY.animateTo(
@@ -1378,7 +1484,6 @@ class MainActivity : ComponentActivity() {
                                                             animationSpec = spring(stiffness = 320f, dampingRatio = 0.85f)
                                                         )
                                                         isNowPlayingExpanded = false
-                                                        sheetDragOffsetY.snapTo(0f)
                                                         isDismissingSheet = false
                                                     } catch (_: CancellationException) {}
                                                 }
@@ -2384,10 +2489,10 @@ private fun BoxScope.MainBottomDockOverlay(
         targetValue = if (isNowPlayingExpanded) 1f else 0f,
         animationSpec = tween(if (motionEnabled) 280 else 0, easing = FastOutSlowInEasing), label = "dockPlayerTransition"
     )
-    val dockScrollFractionState = dockScrollController.offsetFraction.collectAsState()
+    val isScrollCollapsed by dockScrollController.isCollapsed.collectAsState()
     val isCollapsedDock by remember(themeConfig.dockAutoHideEnabled, activeTrack, hasActivePlaylistDetail) {
         derivedStateOf {
-            (themeConfig.dockAutoHideEnabled && dockScrollFractionState.value > 0.3f && activeTrack != null) ||
+            (themeConfig.dockAutoHideEnabled && isScrollCollapsed && activeTrack != null) ||
                 (hasActivePlaylistDetail && activeTrack != null)
         }
     }
@@ -2501,9 +2606,13 @@ private fun BoxScope.MainBottomDockOverlay(
                 )
             }
 
-            val dockOffsetPx = with(LocalDensity.current) {
-                if (themeConfig.dockAutoHideEnabled) (80.dp.toPx() * dockScrollFractionState.value) else 0f
-            }
+            val dockOffsetPx by animateFloatAsState(
+                targetValue = with(LocalDensity.current) {
+                    if (themeConfig.dockAutoHideEnabled && isScrollCollapsed) 80.dp.toPx() else 0f
+                },
+                animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f),
+                label = "dockScrollOffset"
+            )
             ConvxLiquidDock(
                 selectedRoute = currentRoute,
                 onRouteChange = onRouteChange,

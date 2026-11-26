@@ -46,8 +46,8 @@ android {
         applicationId = "com.nodeplayer.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = (project.findProperty("appVersionCode") as? String)?.toInt() ?: 15
-        versionName = (project.findProperty("appVersionName") as? String) ?: "2.1.0"
+        versionCode = (project.findProperty("appVersionCode") as? String)?.toInt() ?: 16
+        versionName = (project.findProperty("appVersionName") as? String) ?: "2.2.0"
 
         manifestPlaceholders["appName"] = "Node Player"
 

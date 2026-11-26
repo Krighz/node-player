@@ -127,7 +127,7 @@
     <div class="section-header">
       <div class="section-badge">Release History</div>
       <h1 class="section-title">Evolution of Node Player</h1>
-      <p class="section-subtitle">Detailed engineering updates and changelogs from v2.1.0 to v0.1.0.</p>
+      <p class="section-subtitle">Detailed engineering updates and changelogs from v2.2.0 to v0.1.0.</p>
     </div>
 
     <!-- Filter Buttons -->
@@ -142,8 +142,30 @@
     <!-- Timeline Entries -->
     <div class="timeline">
 
-      <!-- v2.1.0 Entry -->
+      <!-- v2.2.0 Entry -->
       <article class="changelog-entry" data-tags="latest added performance fixed">
+        <div class="entry-badge-row">
+          <span class="version-tag">v2.2.0</span>
+          <span class="type-pill type-added">Merger</span>
+          <span class="type-pill type-added">Added</span>
+          <span class="type-pill type-perf">Perf</span>
+          <span class="type-pill type-fixed">Fixed</span>
+          <span class="date-tag">2026-11-26</span>
+        </div>
+        <p style="color:var(--text-primary); font-weight:600;">Major Merger with Auralis, 3D Gyroscope Artwork Parallax &amp; Fluid Spring Physics</p>
+        <ul class="changelog-item-list">
+          <li><strong>Official Merger with Auralis:</strong> Node Player is joining forces with <a href="https://github.com/voidXatrix-zudz/Auralis" target="_blank" rel="noopener" style="color:var(--accent-teal); text-decoration:underline;">Auralis (voidXatrix-zudz/Auralis)</a>! Combining Node Player's bit-perfect 32-bit floating-point audio DSP, AGSL liquid glass shaders, 5-provider word-by-word karaoke lyrics, and Google Drive cloud sync into one united, next-generation music player.</li>
+          <li><strong>Interactive 3D Gyroscope Artwork Tilt Parallax:</strong> Hardware sensor-driven 3D pitch and roll tilt for hero album art with dynamic liquid glass specular reflections, configurable under Customize UI.</li>
+          <li><strong>Full-Player Tactile Haptics:</strong> Micro-vibrations across track playback taps, queue operations, seekbar scrubbing, and dock navigation tabs.</li>
+          <li><strong>Synchronized Lyric Card Typography:</strong> Exported lyric cards dynamically render with the exact font selected in Full-Screen Lyrics settings.</li>
+          <li><strong>Playlist Card Press-Scale &amp; Spring Pop:</strong> Tactile compression, circular progress indicator over album cover while fetching tracks, and spring popping screen entrance.</li>
+          <li><strong>NowPlaying Double-Dismiss Fix:</strong> Eliminated swipe-down gesture glitch where dismissing the player sheet caused it to reappear and dismiss a second time.</li>
+          <li><strong>Scroll Jitter Elimination:</strong> Converted continuous scroll offset recompositions to discrete threshold states, preventing 60–120 FPS backdrop shader spikes during list flings.</li>
+        </ul>
+      </article>
+
+      <!-- v2.1.0 Entry -->
+      <article class="changelog-entry" data-tags="added performance fixed">
         <div class="entry-badge-row">
           <span class="version-tag">v2.1.0</span>
           <span class="type-pill type-added">Added</span>

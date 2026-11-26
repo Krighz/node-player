@@ -1,6 +1,50 @@
 # Liquid Glass Revamp - Fixes and Status
 
-## Current Status: Privacy-First Google Drive Cloud Backup & Sync (2026-11-23)
+## Current Status: Major Merger with Auralis & v2.2.0 Release (2026-11-26)
+
+### Major Merger with Auralis (2026-11-26)
+
+1. **Official Merger with Auralis (`https://github.com/voidXatrix-zudz/Auralis`)**:
+   - Node Player is officially merging into the Auralis project ecosystem!
+   - Unites Node Player's bit-perfect 32-bit floating-point audio DSP, AGSL liquid glass shaders, multi-provider lyrics engine, and Google Drive cloud sync with Auralis.
+   - Added in-app merger announcement card in `SettingsScreen.kt` and updated documentation, README, and official website.
+
+2. **Version Bump to v2.2.0**:
+   - Updated `gradle.properties` (`appVersionName=2.2.0`, `appVersionCode=16`), `app-android/build.gradle.kts`, `CHANGELOG.md`, `site/index.html`, and `site/changelog.html`.
+
+3. **3D Gyroscope Artwork Parallax Tilt (`NowPlayingView.kt`, `AndroidGyroscopeTilt.kt`, `CustomizeUiView.kt`)**:
+   - Added interactive 3D rotation and dynamic specular highlight sheen on hero album art based on device pitch and roll.
+   - Disabled by default (`gyroscopeParallaxEnabled = false`), configurable via **Customize UI > Spring Dynamics & Motion**.
+
+2. **Full-Player Haptic Feedback (`NodeHaptics.kt`, `MainActivity.kt`)**:
+   - Integrated tactile feedback on track playback taps, queuing actions (`addToQueue`, `playNext`), seeking, and navigation tab switches.
+
+3. **Lyric Card Typography Synchronization (`LyricCardView.kt`, `FullScreenLyricsView.kt`)**:
+   - Fixed font detachment in lyric cards: `LyricCardGeneratorDialog` now receives and applies the exact font selected in Full-Screen Lyrics settings.
+
+4. **NowPlaying Swipe-Down Double-Dismiss Glitch (`MainActivity.kt`)**:
+   - Fixed glitch where slowly swiping down `NowPlayingView` caused the sheet to dismiss, then instantly reappear and dismiss downwards a second time.
+   - Removed premature `sheetDragOffsetY.snapTo(0f)` calls immediately after `animateTo(screenHeightPx)` in `onDragEnd` and `onClose`.
+   - Tuned `AnimatedVisibility` exit transition to fast `fadeOut(tween(120))` when dismissed via drag, avoiding double-slide artifacts.
+
+2. **Playlist Card Circling Loader & Popping Transitions (`OnlineHomeView.kt`, `MainActivity.kt`)**:
+   - Added instant visual feedback to `HomePlaylistCard` with `.pressScale()` and a circular progress spinner centered on the card artwork during track fetching.
+   - Upgraded playlist detail view opening transition to a fluid spring pop: `scaleIn(spring(dampingRatio = 0.82f, stiffness = 380f), initialScale = 0.90f) + fadeIn(tween(220))`.
+
+3. **Scroll Jitter & FPS Drop Elimination (`MainActivity.kt`)**:
+   - Fixed severe frame drops during list scrolling caused by `dockScrollController.offsetFraction` emitting on every scroll pixel, which caused heavy backdrop glass shaders to recompose 60–120 times/sec.
+   - Switched to discrete `dockScrollController.isCollapsed` state with `animateFloatAsState(animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f))`.
+
+4. **Mini-Player Drag Physics (`ConvxMiniPlayer.kt`)**:
+   - Added real-time horizontal drag tracking with rubber-band damping (`delta * 0.65f`) and spring recoil on gesture release.
+
+5. **Queue Sheet Transitions & Staggered Animations (`PlaybackOptionsSheet.kt`)**:
+   - Applied spring entrance transitions and `Modifier.animateItemPlacement(spring(...))` for queue list items.
+
+6. **Optimization & Animation Audit (`docs/audit/OPTIMIZATION_AND_ANIMATION_AUDIT.md`)**:
+   - Published in-depth audit covering bottlenecks, frame drop causes, missing animation hotspots, and Compose Multiplatform animation library research.
+
+---
 
 ### Google Drive AppData Cloud Backup & Sync (2026-11-23)
 

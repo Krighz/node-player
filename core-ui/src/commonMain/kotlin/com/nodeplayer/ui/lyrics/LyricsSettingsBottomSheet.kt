@@ -65,11 +65,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nodeplayer.model.LyricsBaseColor
 import com.nodeplayer.model.LyricsDisplayMode
+import com.nodeplayer.model.LyricsFontChoice
 import com.nodeplayer.model.LyricsGlowPalette
 import com.nodeplayer.model.LyricsProviderChoice
 import com.nodeplayer.model.LyricsSettings
 import com.nodeplayer.model.LyricsStyle
+import com.nodeplayer.ui.lyrics.LocalLyricsFontResolver
 import com.nodeplayer.ui.theme.LocalAccentColor
 import kotlin.math.roundToInt
 
@@ -644,58 +647,287 @@ fun LyricsSettingsBottomSheet(
 
                                 Spacer(modifier = Modifier.height(8.dp))
 
-                                if (settings.style == LyricsStyle.CINEMATIC_KINETIC) {
-                                    // 1. Glow Palette
-                                    Text(
-                                        text = "GLOW PALETTE",
-                                        fontSize = 11.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.8.sp,
-                                        color = Color.White.copy(alpha = 0.55f),
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
+                                val fontResolver = LocalLyricsFontResolver.current
 
-                                    FlowRow(
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.padding(bottom = 16.dp)
-                                    ) {
-                                        LyricsGlowPalette.entries.forEach { p ->
-                                            val isSelected = settings.palette == p
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(999.dp))
-                                                    .background(if (isSelected) Color(p.midColorArgb).copy(alpha = 0.35f) else Color.White.copy(alpha = 0.08f))
-                                                    .border(
-                                                        width = if (isSelected) 1.5.dp else 1.dp,
-                                                        color = if (isSelected) Color(p.litColorArgb) else Color.White.copy(alpha = 0.15f),
-                                                        shape = RoundedCornerShape(999.dp)
-                                                    )
-                                                    .clickable { onUpdateSettings(settings.copy(palette = p)) }
-                                                    .padding(horizontal = 14.dp, vertical = 7.dp)
-                                            ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(10.dp)
-                                                            .clip(CircleShape)
-                                                            .background(Color(p.litColorArgb))
-                                                    )
-                                                    Text(
-                                                        text = p.displayName,
-                                                        fontSize = 12.sp,
-                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                                        color = Color.White
-                                                    )
+                                // 1. Typography & Font Style (14 Distinct Fonts)
+                                Text(
+                                    text = "TYPOGRAPHY & FONT",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.8.sp,
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                                Text(
+                                    text = "Select a font: Papyrus, Minecraft, Patrick Hand & 11 popular styles",
+                                    fontSize = 11.sp,
+                                    color = Color.White.copy(alpha = 0.40f),
+                                    modifier = Modifier.padding(bottom = 10.dp)
+                                )
+
+                                val fontScrollState = rememberScrollState()
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(fontScrollState),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    LyricsFontChoice.entries.forEach { font ->
+                                        val isSelected = settings.fontChoice == font
+                                        val previewFontFamily = fontResolver(font)
+
+                                        Box(
+                                            modifier = Modifier
+                                                .width(160.dp)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(
+                                                    if (isSelected) Color.White.copy(alpha = 0.20f)
+                                                    else Color.White.copy(alpha = 0.05f)
+                                                )
+                                                .border(
+                                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                                    color = if (isSelected) Color.White else Color.White.copy(alpha = 0.12f),
+                                                    shape = RoundedCornerShape(14.dp)
+                                                )
+                                                .clickable {
+                                                    onUpdateSettings(settings.copy(fontChoice = font))
                                                 }
+                                                .padding(12.dp)
+                                        ) {
+                                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = font.displayName,
+                                                        fontSize = 13.sp,
+                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
+                                                        color = if (isSelected) Color.White else Color.White.copy(alpha = 0.90f),
+                                                        maxLines = 1
+                                                    )
+                                                    if (isSelected) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Check,
+                                                            contentDescription = "Selected",
+                                                            tint = accent,
+                                                            modifier = Modifier.size(14.dp)
+                                                        )
+                                                    }
+                                                }
+
+                                                Text(
+                                                    text = font.subtitle,
+                                                    fontSize = 10.sp,
+                                                    color = Color.White.copy(alpha = 0.50f),
+                                                    maxLines = 1
+                                                )
+
+                                                Spacer(modifier = Modifier.height(2.dp))
+
+                                                // Live font preview sample text
+                                                Text(
+                                                    text = "The rhythm of music",
+                                                    fontFamily = previewFontFamily,
+                                                    fontSize = 15.sp,
+                                                    fontWeight = if (settings.isBold) FontWeight.Bold else FontWeight.Normal,
+                                                    color = if (isSelected) Color(settings.baseColor.colorArgb) else Color.White.copy(alpha = 0.75f),
+                                                    maxLines = 1
+                                                )
                                             }
                                         }
                                     }
+                                }
 
-                                    // 2. Camera & Motion Physics Sliders
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                // 2. Lyrics Text Size & Weight
+                                SettingSliderRow(
+                                    label = "Lyrics Text Size",
+                                    valueText = "%.0f%%".format(settings.fontSizeScale * 100f),
+                                    value = settings.fontSizeScale,
+                                    valueRange = 0.70f..1.60f,
+                                    steps = 18,
+                                    accent = accent,
+                                    onValueChange = { onUpdateSettings(settings.copy(fontSizeScale = (it * 20f).roundToInt() / 20f)) }
+                                )
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color.White.copy(alpha = 0.06f))
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "Bold Letterforms",
+                                            fontSize = 13.5.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Color.White
+                                        )
+                                        Text(
+                                            text = "Enhance contrast and weight across backdrop",
+                                            fontSize = 11.sp,
+                                            color = Color.White.copy(alpha = 0.50f)
+                                        )
+                                    }
+                                    Switch(
+                                        checked = settings.isBold,
+                                        onCheckedChange = { onUpdateSettings(settings.copy(isBold = it)) },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color.White,
+                                            checkedTrackColor = accent,
+                                             uncheckedThumbColor = Color.White.copy(alpha = 0.6f),
+                                            uncheckedTrackColor = Color.White.copy(alpha = 0.15f)
+                                        )
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // 3. Base Lyrics Color Swatches
+                                Text(
+                                    text = "BASE LYRICS COLOR",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.8.sp,
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+
+                                val colorScrollState = rememberScrollState()
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(colorScrollState),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    LyricsBaseColor.entries.forEach { col ->
+                                        val isSelected = settings.baseColor == col
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(if (isSelected) Color.White.copy(alpha = 0.16f) else Color.White.copy(alpha = 0.05f))
+                                                .border(
+                                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                                    color = if (isSelected) Color(col.colorArgb) else Color.White.copy(alpha = 0.12f),
+                                                    shape = RoundedCornerShape(12.dp)
+                                                )
+                                                .clickable { onUpdateSettings(settings.copy(baseColor = col)) }
+                                                .padding(horizontal = 10.dp, vertical = 7.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                                            ) {
+                                                 Box(
+                                                     modifier = Modifier
+                                                         .size(16.dp)
+                                                         .clip(CircleShape)
+                                                         .background(Color(col.colorArgb))
+                                                         .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape),
+                                                     contentAlignment = Alignment.Center
+                                                 ) {
+                                                     if (isSelected) {
+                                                         Box(
+                                                             modifier = Modifier
+                                                                 .size(6.dp)
+                                                                 .clip(CircleShape)
+                                                                 .background(if (col == LyricsBaseColor.PURE_WHITE || col == LyricsBaseColor.WARM_CREAM) Color.Black else Color.White)
+                                                         )
+                                                     }
+                                                 }
+                                                 Text(
+                                                     text = col.displayName,
+                                                     fontSize = 12.sp,
+                                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                     color = Color.White
+                                                 )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                // 4. Glow Palette & Bloom Intensity
+                                Text(
+                                    text = "GLOW PALETTE & BLOOM",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.8.sp,
+                                    color = Color.White.copy(alpha = 0.55f),
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.padding(bottom = 10.dp)
+                                ) {
+                                    LyricsGlowPalette.entries.forEach { p ->
+                                        val isSelected = settings.palette == p
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(999.dp))
+                                                .background(if (isSelected) Color(p.midColorArgb).copy(alpha = 0.35f) else Color.White.copy(alpha = 0.08f))
+                                                .border(
+                                                    width = if (isSelected) 1.5.dp else 1.dp,
+                                                    color = if (isSelected) Color(p.litColorArgb) else Color.White.copy(alpha = 0.15f),
+                                                    shape = RoundedCornerShape(999.dp)
+                                                )
+                                                .clickable { onUpdateSettings(settings.copy(palette = p)) }
+                                                .padding(horizontal = 14.dp, vertical = 7.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(10.dp)
+                                                        .clip(CircleShape)
+                                                        .background(Color(p.litColorArgb))
+                                                )
+                                                Text(
+                                                    text = p.displayName,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                                    color = Color.White
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                SettingSliderRow(
+                                    label = "Glow Bloom & Intensity",
+                                    valueText = if (settings.glowIntensity <= 0.05f) "Off (Crisp)" else "%.2fx".format(settings.glowIntensity),
+                                    value = settings.glowIntensity,
+                                    valueRange = 0.00f..2.00f,
+                                    accent = accent,
+                                    onValueChange = { onUpdateSettings(settings.copy(glowIntensity = it)) }
+                                )
+
+                                SettingSliderRow(
+                                    label = "Background Lyrics Opacity",
+                                    valueText = "%.0f%%".format(settings.inactiveOpacity * 100f),
+                                    value = settings.inactiveOpacity,
+                                    valueRange = 0.15f..0.75f,
+                                    accent = accent,
+                                    onValueChange = { onUpdateSettings(settings.copy(inactiveOpacity = it)) }
+                                )
+
+                                Spacer(modifier = Modifier.height(10.dp))
+                                HorizontalDivider(color = Color.White.copy(alpha = 0.10f))
+                                Spacer(modifier = Modifier.height(10.dp))
+
+                                // 5. Motion & Viewport Settings
+                                if (settings.style == LyricsStyle.CINEMATIC_KINETIC) {
                                     SettingSliderRow(
                                         label = "Viewport Zoom",
                                         valueText = "%.2fx".format(settings.commonZoom),

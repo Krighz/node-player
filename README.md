@@ -1,12 +1,26 @@
 # Node Player
 
+> [!IMPORTANT]
+> **Node Player is merging with [Auralis](https://github.com/voidXatrix-zudz/Auralis)!**  
+> We are officially joining forces with the Auralis team to build the ultimate open-source music player, uniting Node Player's 32-bit audiophile DSP, AGSL liquid glass shaders, and synced lyrics with Auralis. Explore the repository: [github.com/voidXatrix-zudz/Auralis](https://github.com/voidXatrix-zudz/Auralis).
+
 Node Player is a local-first, bit-perfect 32-bit floating-point audio player and hybrid YouTube Music client built with Compose Multiplatform for Android and Windows Desktop. Engineered with custom 120 Hz hardware-accelerated AGSL liquid glass shaders, it combines audiophile sound reproduction with fluid iOS-inspired spring physics and deep real-time personalization.
 
 <p align="left">
   <img src="docs/assets/nodeplayer-logo.svg" alt="Node Player Logo" width="64" height="64" />
 </p>
 
-[Website & Docs](https://krighz.github.io/node-player/) • [Download v2.0.0](https://github.com/Krighz/node-player/releases/tag/v2.0.0) • [Features](https://krighz.github.io/node-player/features.html) • [Docs](https://krighz.github.io/node-player/docs.html) • [Changelog](CHANGELOG.md) • [Discussions](https://github.com/Krighz/node-player/discussions)
+[Website & Docs](https://krighz.github.io/node-player/) • [Download v2.2.0](https://github.com/Krighz/node-player/releases/tag/v2.2.0) • [Features](https://krighz.github.io/node-player/features.html) • [Docs](https://krighz.github.io/node-player/docs.html) • [Changelog](CHANGELOG.md) • [Discussions](https://github.com/Krighz/node-player/discussions)
+
+---
+
+### ✨ What's New in v2.2.0 (Auralis Merger Edition)
+
+* **Major Milestone - Merging with Auralis:** Joining forces with [Auralis](https://github.com/voidXatrix-zudz/Auralis) to unite our audiophile DSP engine and liquid glass design into one next-generation player.
+* **Interactive 3D Gyroscope Artwork Parallax:** Sensor-driven 3D pitch and roll tilt for hero album art with dynamic liquid glass specular reflections (opt-in in Settings).
+* **Full-Player Tactile Haptics:** Subtle micro-vibrations across track taps, queue additions, scrubbing, and dock tab navigation.
+* **Synchronized Lyric Card Fonts:** Exported Lyric Cards now dynamically render with the exact font selected in Full-Screen Lyrics settings.
+* **Fluid Spring Physics & Glitch Fixes:** Fixed NowPlaying double-dismiss swipe glitch, eliminated scroll recomposition jitter, and added spring popping card-to-screen transitions.
 
 ---
 

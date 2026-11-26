@@ -34,6 +34,12 @@ object LyricsSettingsRepository {
     val KEY_LYRICS_DISPLAY_MODE = stringPreferencesKey("lyrics_display_mode")
     val KEY_LYRICS_ALBUM_ART_SHAPE = stringPreferencesKey("lyrics_album_art_shape")
     val KEY_LYRICS_HIDE_STATUS_BAR = booleanPreferencesKey("lyrics_hide_status_bar")
+    val KEY_LYRICS_FONT_CHOICE = stringPreferencesKey("lyrics_font_choice")
+    val KEY_LYRICS_FONT_SIZE_SCALE = floatPreferencesKey("lyrics_font_size_scale")
+    val KEY_LYRICS_BASE_COLOR = stringPreferencesKey("lyrics_base_color")
+    val KEY_LYRICS_GLOW_INTENSITY = floatPreferencesKey("lyrics_glow_intensity")
+    val KEY_LYRICS_INACTIVE_OPACITY = floatPreferencesKey("lyrics_inactive_opacity")
+    val KEY_LYRICS_IS_BOLD = booleanPreferencesKey("lyrics_is_bold")
 
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _settingsState = MutableStateFlow(LyricsSettings())
@@ -75,6 +81,15 @@ object LyricsSettingsRepository {
             val shape = com.nodeplayer.model.AlbumArtShape.fromId(shapeId)
             val hideBar = prefs[KEY_LYRICS_HIDE_STATUS_BAR] ?: false
 
+            val fontId = prefs[KEY_LYRICS_FONT_CHOICE] ?: "inter"
+            val fontChoice = com.nodeplayer.model.LyricsFontChoice.fromId(fontId)
+            val fontSizeScale = prefs[KEY_LYRICS_FONT_SIZE_SCALE] ?: 1.00f
+            val baseColorId = prefs[KEY_LYRICS_BASE_COLOR] ?: "white"
+            val baseColor = com.nodeplayer.model.LyricsBaseColor.fromId(baseColorId)
+            val glowIntensity = prefs[KEY_LYRICS_GLOW_INTENSITY] ?: 1.00f
+            val inactiveOpacity = prefs[KEY_LYRICS_INACTIVE_OPACITY] ?: 0.40f
+            val isBold = prefs[KEY_LYRICS_IS_BOLD] ?: true
+
             LyricsSettings(
                 style = style,
                 commonZoom = prefs[KEY_LYRICS_COMMON_ZOOM] ?: 1.00f,
@@ -89,7 +104,13 @@ object LyricsSettingsRepository {
                 romanizeForeignLyrics = romanize,
                 lyricsDisplayMode = displayMode,
                 albumArtShape = shape,
-                hideStatusBar = hideBar
+                hideStatusBar = hideBar,
+                fontChoice = fontChoice,
+                fontSizeScale = fontSizeScale,
+                baseColor = baseColor,
+                glowIntensity = glowIntensity,
+                inactiveOpacity = inactiveOpacity,
+                isBold = isBold
             )
         }.distinctUntilChanged()
     }
@@ -111,6 +132,12 @@ object LyricsSettingsRepository {
             prefs[KEY_LYRICS_DISPLAY_MODE] = settings.lyricsDisplayMode.name
             prefs[KEY_LYRICS_ALBUM_ART_SHAPE] = settings.albumArtShape.id
             prefs[KEY_LYRICS_HIDE_STATUS_BAR] = settings.hideStatusBar
+            prefs[KEY_LYRICS_FONT_CHOICE] = settings.fontChoice.id
+            prefs[KEY_LYRICS_FONT_SIZE_SCALE] = settings.fontSizeScale
+            prefs[KEY_LYRICS_BASE_COLOR] = settings.baseColor.id
+            prefs[KEY_LYRICS_GLOW_INTENSITY] = settings.glowIntensity
+            prefs[KEY_LYRICS_INACTIVE_OPACITY] = settings.inactiveOpacity
+            prefs[KEY_LYRICS_IS_BOLD] = settings.isBold
         }
     }
 

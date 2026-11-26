@@ -176,8 +176,11 @@ fun CinematicKineticLyricsView(
         }
     }
 
+    val fontResolver = LocalLyricsFontResolver.current
+    val chosenFontFamily = remember(settings.fontChoice, fontResolver) { fontResolver(settings.fontChoice) }
+
     // Rebuild procedural layout when lyrics, seed, or layout parameters change
-    LaunchedEffect(lyrics, layoutSeed, settings.lrSwing, settings.verticalSpacing, widthPx, isLandscape) {
+    LaunchedEffect(lyrics, layoutSeed, settings.lrSwing, settings.verticalSpacing, settings.fontChoice, settings.fontSizeScale, settings.isBold, widthPx, isLandscape, chosenFontFamily) {
         if (lyrics == null || lyrics.lines.isEmpty()) {
             layoutBlocks = emptyList()
             allWords = emptyList()
@@ -285,31 +288,18 @@ fun CinematicKineticLyricsView(
                 val isHero = word.text.startsWith("*") && word.text.endsWith("*")
                 val clean = if (isHero) word.text.removeSurrounding("*") else word.text
 
-                val fontStyle: FontStyle
-                val fontWeight: FontWeight
-                val fontFamily: FontFamily
-                val fontSizeSp: Float
-
-                when {
-                    isHero -> {
-                        fontSizeSp = 84f
-                        fontFamily = if ((wIdx + i) % 2 == 0) FontFamily.SansSerif else FontFamily.Serif
-                        fontWeight = FontWeight.ExtraBold
-                        fontStyle = if ((wIdx + i) % 2 != 0) FontStyle.Italic else FontStyle.Normal
-                    }
-                    clean.length <= 3 -> {
-                        fontSizeSp = 58f
-                        fontFamily = FontFamily.Serif
-                        fontWeight = FontWeight.Medium
-                        fontStyle = FontStyle.Italic
-                    }
-                    else -> {
-                        fontSizeSp = 64f
-                        fontFamily = FontFamily.SansSerif
-                        fontWeight = FontWeight.ExtraBold
-                        fontStyle = FontStyle.Normal
-                    }
+                val fontStyle: FontStyle = if (isHero && (wIdx + i) % 2 != 0) FontStyle.Italic else FontStyle.Normal
+                val fontWeight: FontWeight = if (settings.isBold) {
+                    if (isHero) FontWeight.Black else FontWeight.ExtraBold
+                } else {
+                    if (isHero) FontWeight.Bold else FontWeight.Medium
                 }
+                val fontFamily: FontFamily = chosenFontFamily
+                val fontSizeSp: Float = (when {
+                    isHero -> 84f
+                    clean.length <= 3 -> 58f
+                    else -> 64f
+                } * settings.fontSizeScale)
 
                 val layoutResult = textMeasurer.measure(
                     text = clean,
@@ -658,7 +648,7 @@ fun CinematicKineticLyricsView(
                                                 isParentBlockActive = isBlockActive,
                                                 isParentBlockPast = isBlockPast,
                                                 pal = pal,
-                                                bounce = settings.bounce,
+                                                settings = settings,
                                                 density = density.density
                                             )
                                         }
@@ -743,7 +733,7 @@ private fun DrawScope.drawWordSinglePass(
     isParentBlockActive: Boolean,
     isParentBlockPast: Boolean,
     pal: com.nodeplayer.model.LyricsGlowPalette,
-    bounce: Float,
+    settings: com.nodeplayer.model.LyricsSettings,
     density: Float
 ) {
     // If the parent phrase hasn't started yet, all its words are strictly in the future!
@@ -759,14 +749,16 @@ private fun DrawScope.drawWordSinglePass(
     val baseAlpha = when {
         isActive -> 1.0f
         isParentBlockActive && isPast -> 0.88f
-        isPast -> 0.32f
-        else -> 0.18f
+        isPast -> settings.inactiveOpacity
+        else -> (settings.inactiveOpacity * 0.45f).coerceIn(0.08f, 1f)
     }
-    val popScale = if (isActive) (1f + 0.055f * bounce * sin(progress * PI.toFloat())) else 1.0f
-    val liftY = if (isActive) (-5f * bounce * sin(progress * PI.toFloat()) * density) else 0f
+    val popScale = if (isActive) (1f + 0.055f * settings.bounce * sin(progress * PI.toFloat())) else 1.0f
+    val liftY = if (isActive) (-5f * settings.bounce * sin(progress * PI.toFloat()) * density) else 0f
 
     val wordCenterX = word.x + word.width * 0.5f
     val wordCenterY = word.y + liftY
+
+    val baseColor = Color(settings.baseColor.colorArgb)
 
     translate(left = wordCenterX, top = wordCenterY) {
         scale(scale = popScale, pivot = Offset.Zero) {
@@ -776,9 +768,9 @@ private fun DrawScope.drawWordSinglePass(
             if (isActive) {
                 val litColor = Color(pal.litColorArgb)
                 val midColor = Color(pal.midColorArgb)
-                val unlitColor = Color.White.copy(alpha = 0.26f)
-                val glowHaloColor = Color(pal.glowColorArgb)
-                val glowBlur = 18f * (0.4f + 0.6f * sin(progress * PI.toFloat())) * density
+                val unlitColor = baseColor.copy(alpha = 0.26f)
+                val glowHaloColor = if (settings.glowIntensity > 0.02f) Color(pal.glowColorArgb) else Color.Transparent
+                val glowBlur = 18f * (0.4f + 0.6f * sin(progress * PI.toFloat())) * density * settings.glowIntensity
 
                 // Feathered gradient sweep across the active word
                 val p = progress.coerceIn(0f, 1f)
@@ -809,17 +801,17 @@ private fun DrawScope.drawWordSinglePass(
                     textLayoutResult = word.layoutResult,
                     brush = sweepBrush,
                     topLeft = Offset(leftX, -word.height * 0.5f),
-                    shadow = Shadow(
+                    shadow = if (settings.glowIntensity > 0.02f) Shadow(
                         color = glowHaloColor,
                         blurRadius = glowBlur,
                         offset = Offset.Zero
-                    )
+                    ) else null
                 )
             } else {
                 // Inactive or completed word: zero measuring, instantaneous pre-cached draw
                 drawText(
                     textLayoutResult = word.layoutResult,
-                    color = Color.White.copy(alpha = baseAlpha),
+                    color = baseColor.copy(alpha = baseAlpha),
                     topLeft = Offset(leftX, -word.height * 0.5f)
                 )
             }

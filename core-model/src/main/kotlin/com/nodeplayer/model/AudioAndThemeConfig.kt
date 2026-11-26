@@ -275,6 +275,8 @@ data class GlassThemeConfig(
     val lyricsAnimationEnabled: Boolean = true,
     val screenTransitionStyle: String = "SLIDE",           // SLIDE, FADE, SHARED
     val reduceMotion: Boolean = false,
+    val gyroscopeParallaxEnabled: Boolean = false,         // 3D Gyroscope artwork tilt parallax (default: false)
+    val artworkTiltStrength: Float = 1.0f,                 // 0.5f to 2.0f
     val dockGlassLensEnabled: Boolean = true,
     val dockGlassRimEnabled: Boolean = true,
     val dockGlassPuckEnabled: Boolean = true,

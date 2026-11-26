@@ -1,7 +1,46 @@
-# Platform Implementation Changes (v2.1.0)
+# Platform Implementation Changes (v2.2.0)
 
 **Branch:** features-Peak  
-**Base Release:** v2.0.0  
+**Base Release:** v2.1.0  
+
+---
+
+### [2026-11-26] - Major Milestone: Merging with Auralis & v2.2.0 Release
+- **Official Merger with Auralis (`https://github.com/voidXatrix-zudz/Auralis`)**:
+  - Announced the landmark merger between Node Player and Auralis.
+  - Combines Node Player's 32-bit floating-point bit-perfect audio DSP, custom AGSL liquid glass shaders, 5-provider synchronized word-by-word karaoke lyrics, and Google Drive cloud sync with Auralis's next-generation music player platform.
+  - Added in-app merger announcement banner in `SettingsScreen.kt` linking directly to the Auralis GitHub repository.
+- **Interactive 3D Gyroscope Artwork Tilt Parallax (`AndroidGyroscopeTilt.kt`, `NowPlayingView.kt`, `CustomizeUiView.kt`)**:
+  - Added sensor-driven 3D pitch and roll tilt for hero album artwork using Android's `Sensor.TYPE_ROTATION_VECTOR` (with accelerometer fallback).
+  - Dynamically rotates artwork on `rotationX` and `rotationY` with `cameraDistance` projection and shifts a specular liquid glass reflection sheen across the surface.
+  - Defaults to **OFF** (`gyroscopeParallaxEnabled = false`) with zero sensor registrations or background drain until enabled in **Settings > Customize UI > Spring Dynamics & Motion**.
+- **Tactile Haptic Feedback Across the Player (`NodeHaptics.kt`, `MainActivity.kt`, `CustomizeUiView.kt`)**:
+  - Centralized `NodeHaptics` and `rememberNodeHaptics` controller respecting `themeConfig.hapticsEnabled`.
+  - Added tactile haptic ticks and impacts on tapping tracks to play, adding tracks to queue (`addToQueue`), playing next (`playNext`), scrubbing seekbars, and switching navigation tabs.
+- **Lyric Card Typography & Selected Font Synchronization (`LyricCardView.kt`, `FullScreenLyricsView.kt`)**:
+  - Synchronized `LyricCardGeneratorDialog` with the user's selected full-screen lyrics typography.
+  - Passed `activeLyricsFontFamily` directly into `LyricCardGeneratorDialog` and `LyricCardView`, ensuring the exact font chosen in Full-Screen Lyrics Settings (Caveat, Lobster, Bebas Neue, Outfit, Inter, etc.) is preserved in exported lyric cards.
+- **NowPlaying Swipe-Down Double-Dismiss Glitch (`MainActivity.kt`)**:
+  - Eliminated premature `sheetDragOffsetY.snapTo(0f)` calls inside drag and close handlers that previously reset sheet translation back to 0 at the exact moment dismissal exit animations triggered.
+  - Guarded `AnimatedVisibility` exit with distance checks (`sheetDragOffsetY.value > screenHeightPx * 0.5f`), replacing redundant double-animations with an instantaneous `fadeOut(tween(120))` when already dismissed to the screen bottom.
+  - Reset `sheetDragOffsetY` cleanly via `LaunchedEffect(isNowPlayingExpanded)` only when opening the sheet.
+- **Playlist Card Circling Loader & Popping Transitions (`OnlineHomeView.kt`, `MainActivity.kt`)**:
+  - Added immediate tactile press feedback with `.pressScale(onClick = onClick)` on `HomePlaylistCard`.
+  - Added loading indicator state `loadingPlaylistId` rendering a high-contrast circular progress loader over the clicked card's artwork with a smooth semi-transparent scrim while fetching tracks.
+  - Replaced abrupt playlist detail snapping with a physical iOS-inspired spring scale and fade entrance: `scaleIn(spring(dampingRatio = 0.82f, stiffness = 380f), initialScale = 0.90f) + fadeIn(tween(220))`.
+- **Scroll Jitter & Frame-Drop Elimination (`MainActivity.kt`)**:
+  - Replaced continuous per-pixel recompositions from `dockScrollController.offsetFraction.collectAsState()` in `MainBottomDockOverlay` with discrete threshold evaluation `dockScrollController.isCollapsed.collectAsState()`.
+  - Driven dock offset smoothly via `animateFloatAsState(animationSpec = spring(stiffness = 380f, dampingRatio = 0.82f))`, eliminating 60–120 FPS backdrop shader recompositions during flings.
+- **Interactive Mini-Player Gesture Physics (`ConvxMiniPlayer.kt`)**:
+  - Wired `Modifier.draggable` directly to an `Animatable(0f)` with rubber-band gesture damping (`delta * 0.65f`) and real-time translation on `graphicsLayer`.
+  - On gesture release, mini-player triggers playback actions (previous/next) or snaps back into place using natural spring recoil physics.
+- **Queue & Playback Sheet Transitions (`PlaybackOptionsSheet.kt`)**:
+  - Upgraded sheet backdrop with smooth `fadeIn(tween(180))` / `fadeOut(tween(150))`.
+  - Upgraded sheet container with `slideInVertically(spring(stiffness = 380f, dampingRatio = 0.82f))`.
+  - Stabilized queue `LazyColumn` item keys with `Modifier.animateItemPlacement(spring(stiffness = 380f, dampingRatio = 0.82f))`.
+- **System-Wide Optimization & Animation Audit (`docs/audit/OPTIMIZATION_AND_ANIMATION_AUDIT.md`)**:
+  - Comprehensive audit of Android core, UI layers, DSP engine, and background tasks.
+  - Detailed catalog of missing animations, frame-drop triggers, and modern Compose Multiplatform animation library research (`morph-compose`, CMP 1.7.3 `SharedTransitionLayout`, `compottie`, and `convx` spring configs).
 
 ---
 

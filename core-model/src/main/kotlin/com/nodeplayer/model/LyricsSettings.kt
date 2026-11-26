@@ -92,6 +92,54 @@ enum class AlbumArtShape(
     }
 }
 
+enum class LyricsFontChoice(
+    val id: String,
+    val displayName: String,
+    val subtitle: String
+) {
+    INTER("inter", "Inter", "Modern clean sans-serif"),
+    OUTFIT("outfit", "Outfit", "Geometric precision"),
+    JETBRAINS_MONO("jetbrains_mono", "JetBrains Mono", "Cyber terminal monospace"),
+    PAPYRUS("papyrus", "Papyrus", "Organic Egyptian brush script"),
+    MINECRAFT("minecraft", "Minecraft", "8-Bit retro arcade pixel"),
+    PATRICK_HAND("patrick_hand", "Patrick Hand", "Warm whimsical handwriting"),
+    COMFORTAA("comfortaa", "Comfortaa", "Smooth rounded geometric"),
+    CAVEAT("caveat", "Caveat", "Natural expressive cursive"),
+    LOBSTER("lobster", "Lobster", "Bold retro vintage script"),
+    BEBAS_NEUE("bebas_neue", "Bebas Neue", "Impactful cinema poster caps"),
+    ORBITRON("orbitron", "Orbitron", "Futuristic sci-fi synthwave"),
+    PLAYFAIR("playfair", "Playfair Display", "High-contrast luxury editorial"),
+    DANCING_SCRIPT("dancing_script", "Dancing Script", "Lively flowing calligraphy"),
+    CINZEL("cinzel", "Cinzel", "Grand Roman classical serif");
+
+    companion object {
+        fun fromId(id: String?): LyricsFontChoice {
+            return entries.find { it.id.equals(id, ignoreCase = true) } ?: INTER
+        }
+    }
+}
+
+enum class LyricsBaseColor(
+    val id: String,
+    val displayName: String,
+    val colorArgb: Long
+) {
+    PURE_WHITE("white", "Pure White", 0xFFFFFFFF),
+    WARM_CREAM("cream", "Warm Cream", 0xFFFFFBEB),
+    AMBER_GOLD("amber", "Amber Gold", 0xFFFFD54F),
+    ELECTRIC_TEAL("teal", "Electric Teal", 0xFF5EEAD4),
+    NEON_ROSE("rose", "Neon Rose", 0xFFF472B6),
+    GLACIAL_MINT("mint", "Glacial Mint", 0xFF6EE7B7),
+    LAVENDER("lavender", "Lavender Dream", 0xFFC084FC),
+    DEEP_CYAN("cyan", "Deep Cyan", 0xFF38BDF8);
+
+    companion object {
+        fun fromId(id: String?): LyricsBaseColor {
+            return entries.find { it.id.equals(id, ignoreCase = true) } ?: PURE_WHITE
+        }
+    }
+}
+
 data class LyricsSettings(
     val style: LyricsStyle = LyricsStyle.CINEMATIC_KINETIC,
     val commonZoom: Float = 1.00f,
@@ -106,5 +154,11 @@ data class LyricsSettings(
     val romanizeForeignLyrics: Boolean = true,
     val lyricsDisplayMode: LyricsDisplayMode = LyricsDisplayMode.DUAL_LINE,
     val albumArtShape: AlbumArtShape = AlbumArtShape.SQUIRCLE,
-    val hideStatusBar: Boolean = false
+    val hideStatusBar: Boolean = false,
+    val fontChoice: LyricsFontChoice = LyricsFontChoice.INTER,
+    val fontSizeScale: Float = 1.00f,
+    val baseColor: LyricsBaseColor = LyricsBaseColor.PURE_WHITE,
+    val glowIntensity: Float = 1.00f,
+    val inactiveOpacity: Float = 0.40f,
+    val isBold: Boolean = true
 )

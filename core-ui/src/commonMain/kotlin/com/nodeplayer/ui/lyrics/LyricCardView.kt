@@ -76,9 +76,10 @@ fun LyricCardView(
     palette: AlbumArtPalette,
     coverBitmap: ImageBitmap?,
     modifier: Modifier = Modifier,
+    fontFamily: FontFamily? = null,
     appName: String = "Node Player"
 ) {
-    val lyricsFontFamily = LocalLyricsFontFamily.current ?: FontFamily.Default
+    val lyricsFontFamily = fontFamily ?: LocalLyricsFontFamily.current ?: FontFamily.Default
 
     val topGradientColor = remember(palette.darkMuted) {
         Color(palette.darkMuted).copy(alpha = 1f)
@@ -230,7 +231,8 @@ fun LyricCardGeneratorDialog(
     onDismiss: () -> Unit,
     onShareImage: () -> Unit,
     onSaveImage: () -> Unit = {},
-    onCopyText: () -> Unit = {}
+    onCopyText: () -> Unit = {},
+    fontFamily: FontFamily? = null
 ) {
     Dialog(
         onDismissRequest = onDismiss,
@@ -238,16 +240,19 @@ fun LyricCardGeneratorDialog(
             usePlatformDefaultWidth = false
         )
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.82f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { onDismiss() },
-            contentAlignment = Alignment.Center
+        androidx.compose.runtime.CompositionLocalProvider(
+            LocalLyricsFontFamily provides (fontFamily ?: LocalLyricsFontFamily.current)
         ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.82f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onDismiss() },
+                contentAlignment = Alignment.Center
+            ) {
             Column(
                 modifier = Modifier
                     .widthIn(max = 380.dp)
@@ -297,6 +302,7 @@ fun LyricCardGeneratorDialog(
                     lines = lines,
                     palette = palette,
                     coverBitmap = coverBitmap,
+                    fontFamily = fontFamily,
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(3f / 4f)
@@ -375,4 +381,5 @@ fun LyricCardGeneratorDialog(
             }
         }
     }
+}
 }

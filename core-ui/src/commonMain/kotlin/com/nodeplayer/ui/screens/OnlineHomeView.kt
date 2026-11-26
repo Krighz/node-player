@@ -43,6 +43,7 @@ import com.nodeplayer.ui.theme.CarbonZincPalette
 import com.nodeplayer.network.cache.HomeFeedDiskCache
 import com.nodeplayer.network.innertube.SharedInnerTubeProvider
 import com.nodeplayer.network.innertube.YouTubeSection
+import com.nodeplayer.ui.theme.pressScale
 import com.nodeplayer.network.innertube.YouTubePlaylistSummary
 import com.nodeplayer.network.recommender.HomeFeedRecommender
 import com.nodeplayer.ui.LocalBottomBarPadding
@@ -167,6 +168,7 @@ fun OnlineHomeView(
     var categories by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<List<MoodGenreSection>>(emptyList()) }
     var categorySections by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<List<YouTubeSection>?>(null) }
     var actionJob by remember(isLoggedIn, accountId, currentRoute) { mutableStateOf<Job?>(null) }
+    var loadingPlaylistId by remember { mutableStateOf<String?>(null) }
 
     var yourMixTracks by remember(isLoggedIn, accountId) { mutableStateOf<List<Track>>(sessionCachedTasteStation?.tracks ?: emptyList()) }
     var isYourMixLoading by remember(isLoggedIn, accountId) { mutableStateOf(sessionCachedTasteStation == null) }
@@ -692,20 +694,26 @@ fun OnlineHomeView(
                         onPlaylistClick = { playlist ->
                             actionJob?.cancel()
                             errorMessage = null
+                            loadingPlaylistId = playlist.id
                             actionJob = scope.launch {
-                                val result = withContext(Dispatchers.IO) {
-                                    SharedInnerTubeProvider.get().fetchPlaylistTracks(playlist.id)
-                                }
-                                coroutineContext.ensureActive()
-                                result.onSuccess { tracks ->
-                                    if (tracks.isNotEmpty()) {
-                                        onOpenPlaylistDetail?.invoke(playlist.id, playlist.title, playlist.author ?: "YouTube Music", playlist.thumbnailUrl, tracks)
-                                    } else {
-                                        errorMessage = "No tracks available in ${playlist.title}"
+                                try {
+                                    val result = withContext(Dispatchers.IO) {
+                                        SharedInnerTubeProvider.get().fetchPlaylistTracks(playlist.id)
                                     }
-                                }.onFailure { errorMessage = it.message ?: "Unable to load playlist" }
+                                    coroutineContext.ensureActive()
+                                    result.onSuccess { tracks ->
+                                        if (tracks.isNotEmpty()) {
+                                            onOpenPlaylistDetail?.invoke(playlist.id, playlist.title, playlist.author ?: "YouTube Music", playlist.thumbnailUrl, tracks)
+                                        } else {
+                                            errorMessage = "No tracks available in ${playlist.title}"
+                                        }
+                                    }.onFailure { errorMessage = it.message ?: "Unable to load playlist" }
+                                } finally {
+                                    loadingPlaylistId = null
+                                }
                             }
                         },
+                        loadingPlaylistId = loadingPlaylistId,
                         onDismissTrack = { dismissedTrack ->
                             recommender.dismissTrack(dismissedTrack)
                             sections = recommender.filterDismissedSections(sections)
@@ -903,6 +911,7 @@ private fun HomeShelfSection(
     onTrackClick: (Track) -> Unit,
     onShelfClick: ((YouTubeSection) -> Unit)? = null,
     onPlaylistClick: (YouTubePlaylistSummary) -> Unit,
+    loadingPlaylistId: String? = null,
     onDismissTrack: (Track) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -957,7 +966,11 @@ private fun HomeShelfSection(
                 key = { index, playlist -> "playlist_${playlist.id}_$index" },
                 contentType = { _, _ -> "playlist_card" }
             ) { _, playlist ->
-                HomePlaylistCard(playlist, onClick = { onPlaylistClick(playlist) })
+                HomePlaylistCard(
+                    playlist = playlist,
+                    isLoading = loadingPlaylistId == playlist.id,
+                    onClick = { onPlaylistClick(playlist) }
+                )
             }
             itemsIndexed(
                 items = shelf.items,
@@ -988,14 +1001,22 @@ private fun HomeShelfSection(
 }
 
 @Composable
-private fun HomePlaylistCard(playlist: YouTubePlaylistSummary, onClick: () -> Unit) {
+private fun HomePlaylistCard(
+    playlist: YouTubePlaylistSummary,
+    isLoading: Boolean = false,
+    onClick: () -> Unit
+) {
     var artwork by remember(playlist.thumbnailUrl) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(playlist.thumbnailUrl) {
         artwork = playlist.thumbnailUrl?.let { url ->
             withContext(Dispatchers.IO) { PlatformArtworkProvider.loadArtwork(url, maxSizePx = 320) }
         }
     }
-    Column(modifier = Modifier.width(136.dp).clickable { onClick() }) {
+    Column(
+        modifier = Modifier
+            .width(136.dp)
+            .pressScale(onClick = onClick)
+    ) {
         Box(
             modifier = Modifier
                 .size(136.dp)
@@ -1009,6 +1030,20 @@ private fun HomePlaylistCard(playlist: YouTubePlaylistSummary, onClick: () -> Un
                 Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             } else {
                 Icon(Icons.Rounded.LibraryMusic, contentDescription = null, tint = CarbonZincPalette.TextPrimary)
+            }
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.55f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(36.dp),
+                        color = CarbonZincPalette.AccentTeal,
+                        strokeWidth = 3.dp
+                    )
+                }
             }
         }
         Spacer(Modifier.height(8.dp))
